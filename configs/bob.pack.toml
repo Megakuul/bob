@@ -1,0 +1,17 @@
+std = "23"
+compiler_flags = ""
+includes = [
+  "*.h",
+  "*.hpp",
+]
+
+sources = [
+  "*.cpp",
+  "*.cc",
+]
+
+deps = [
+  "github.com/megakuul/bob/someotherpack",
+  "external:gtkmm-4.0",
+  "external:z",
+]

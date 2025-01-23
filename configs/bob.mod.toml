@@ -1,0 +1,18 @@
+static_std = true
+
+[[targets]]
+pack = "github.com/megakuul/bob/myexe"
+
+[[targets]]
+library = true
+pack = "github.com/megakuul/bob/mylib"
+
+[[externals]]
+static = false
+name = "gtkmm-4.0"
+search_paths = ["/usr/include/gtkmm-4.0/"]
+
+[[externals]]
+static = true
+name = "z"
+search_paths = ["/usr/include"]
