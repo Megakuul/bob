@@ -1,18 +1,36 @@
-static_std = true
+module = "github.com/megakuul/bob"
 
-[[targets]]
+[toolchain]
+compiler = "clang++"
+compiler_path.url = "file:///usr/bin/"
+linker = "ld"
+linker_path.url = "file:///usr/bin/"
+std_path.url = "file:///usr/lib/"
+std_static = true
+
+[targets.myexe]
 pack = "github.com/megakuul/bob/myexe"
 
-[[targets]]
+[targets.mylib]
 library = true
 pack = "github.com/megakuul/bob/mylib"
 
-[[externals]]
-static = false
-name = "gtkmm-4.0"
-search_paths = ["/usr/include/gtkmm-4.0/"]
+[[includes]]
+mod = "github.com/megakuul/somelib"
+version = "v1.0.0"
+# Library contains bob files, no overlay required.
+
+[[includes]]
+mod = "github.com/dagobert-duck/somelib"
+version = "v1.0.0"
+overlay = "github.com/megakuul/bob/third_party/overlay/somelib"
 
 [[externals]]
-static = true
+name = "gtkmm-4.0"
+path = "file:///usr/include/gtkmm-4.0/"
+static = false
+
+[[externals]]
 name = "z"
-search_paths = ["/usr/include"]
+path = "file:///usr/include/"
+static = true

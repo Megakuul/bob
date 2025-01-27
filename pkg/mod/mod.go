@@ -40,18 +40,50 @@ func LoadMod(path string) (*Mod, error) {
 }
 
 type Mod struct {
-	StaticStd bool `toml:"static_std"`
-	Targets []Target `toml:"targets"`
+	Module string `toml:"module"`
+	Toolchain Toolchain `toml:"toolchain"`
+	Targets map[string]Target `toml:"targets"`
+	Includes []Include `toml:"includes"`
 	Externals []External `toml:"externals"`
 }
 
+type COMPILER string
+const (
+	COMPILER_GCC COMPILER = "gcc"
+	COMPILER_GPP COMPILER = "g++"
+	COMPILER_CLANG COMPILER = "clang"
+	COMPILER_CLANGPP COMPILER = "clang++"
+	COMPILER_CLANGCL COMPILER = "clang-cl"
+	COMPILER_MSVC COMPILER = "cl"
+)
+
+type Path struct {
+	URL string `toml:"url"`
+}
+
+type Toolchain struct {
+	Compiler string `toml:"compiler"`
+	CompilerPath Path `toml:"compiler_path"`
+	Linker string `toml:"linker"`
+	LinkerPath Path `toml:"linker_path"`
+	Std string `toml:"std"`
+	StdPath Path `toml:"std_path"`
+	StdStatic bool `toml:"std_static"`
+}
+
 type Target struct {
-	Library bool `toml:"library"`
 	Pack string `toml:"pack"`
+	Library bool `toml:"library"`
+}
+
+type Include struct {
+	Mod string `toml:"mod"`
+	Version string `toml:"version"`
+	Overlay string `toml:"overlay"`
 }
 
 type External struct {
-	Static bool `toml:"static"`
 	Name string `toml:"name"`
-	SearchPaths []string `toml:"search_paths"`
+	Path Path `toml:"path"`
+	Static bool `toml:"static"`
 }

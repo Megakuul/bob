@@ -1,5 +1,6 @@
 std = "23"
 compiler_flags = ""
+
 includes = [
   "*.h",
   "*.hpp",
@@ -11,7 +12,7 @@ sources = [
 ]
 
 deps = [
-  "github.com/megakuul/bob/someotherpack",
-  "external:gtkmm-4.0",
-  "external:z",
+  "github.com/dagobert-duck/somelib/money",
+  "github.com/megakuul/bob/@external:gtkmm-4.0",
+  "github.com/megakuul/bob/@external:z",
 ]
