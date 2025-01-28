@@ -17,71 +17,45 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package mod
+package sum
 
 import (
 	"github.com/BurntSushi/toml"
 	"os"
 )
 
-func LoadMod(path string) (*Mod, error) {
-	rawMod, err := os.ReadFile(path)
+func LoadSum(path string) (*Sum, error) {
+	rawSum, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	mod := &Mod{}
-	_, err = toml.Decode(string(rawMod), mod)
+	sum := &Sum{}
+	_, err = toml.Decode(string(rawSum), sum)
 	if err != nil {
 		return nil, err
 	}
 
-	return mod, nil
+	return sum, nil
 }
 
-type Mod struct {
-	Module string `toml:"module"`
+type Sum struct {
 	Toolchain Toolchain `toml:"toolchain"`
-	Targets map[string]Target `toml:"targets"`
-	Includes []Include `toml:"includes"`
-	Externals []External `toml:"externals"`
-}
-
-type COMPILER string
-const (
-	COMPILER_GCC COMPILER = "gcc"
-	COMPILER_GPP COMPILER = "g++"
-	COMPILER_CLANG COMPILER = "clang"
-	COMPILER_CLANGPP COMPILER = "clang++"
-	COMPILER_CLANGCL COMPILER = "clang-cl"
-	COMPILER_MSVC COMPILER = "cl"
-)
-
-type Path struct {
-	URL string `toml:"url"`
+	Includes map[string]Include `toml:"includes"`
+	Externals map[string]External `toml:"externals"`
 }
 
 type Toolchain struct {
-	Compiler string `toml:"compiler"`
-	CompilerPath Path `toml:"compiler_path"`
-	Linker string `toml:"linker"`
-	LinkerPath Path `toml:"linker_path"`
-	Std string `toml:"std"`
-	StdPath Path `toml:"std_path"`
-	StdStatic bool `toml:"std_static"`
-}
-
-type Target struct {
-	Pack string `toml:"pack"`
-	Library bool `toml:"library"`
+	CompilerSHA256 string `toml:"compiler_sha256"`
+	LinkerSHA256 string `toml:"linker_sha256"`
+	StdSHA256 string `toml:"std_sha256"`
 }
 
 type Include struct {
-	Mod string `toml:"mod"`
 	Version string `toml:"version"`
-	Overlay string `toml:"overlay"`
+	SHA256 string `toml:"sha256"`
 }
 
 type External struct {
-	Path Path `toml:"path"`
+	SHA256 string `toml:"sha256"`
 }
