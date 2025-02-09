@@ -41,47 +41,47 @@ func LoadMod(path string) (*Mod, error) {
 
 type Mod struct {
 	Module string `toml:"module"`
-	Toolchain Toolchain `toml:"toolchain"`
-	Targets map[string]Target `toml:"targets"`
+	Toolchains []Toolchain `toml:"toolchains"`
+	Targets []Target `toml:"targets"`
 	Includes []Include `toml:"includes"`
 	Externals []External `toml:"externals"`
 }
 
-type COMPILER string
-const (
-	COMPILER_GCC COMPILER = "gcc"
-	COMPILER_GPP COMPILER = "g++"
-	COMPILER_CLANG COMPILER = "clang"
-	COMPILER_CLANGPP COMPILER = "clang++"
-	COMPILER_CLANGCL COMPILER = "clang-cl"
-	COMPILER_MSVC COMPILER = "cl"
-)
-
 type Path struct {
 	URL string `toml:"url"`
+	Path string `toml:"path"`
+	GitTag string `toml:"git_tag"`
+	GitCommit string `toml:"git_commit"`
 }
 
 type Toolchain struct {
-	Compiler string `toml:"compiler"`
-	CompilerPath Path `toml:"compiler_path"`
-	Linker string `toml:"linker"`
-	LinkerPath Path `toml:"linker_path"`
-	Std string `toml:"std"`
-	StdPath Path `toml:"std_path"`
-	StdStatic bool `toml:"std_static"`
+	Name string `toml:"name"`
+	Platforms []string `toml:"platforms"`
+	Archs []string `toml:"archs"`
+	
+	Compiler Path `toml:"compiler"`
+	Linker Path `toml:"linker"`
+	Stdlib Path `toml:"stdlib"`
+	Stdpplib Path `toml:"stdpplib"`
+	Supportlibs []Path `toml:"supportlibs"`
+	Startfiles []Path `toml:"startfiles"`
 }
 
 type Target struct {
 	Pack string `toml:"pack"`
 	Library bool `toml:"library"`
+	Toolchains []string `toml:"toolchains"`
 }
 
 type Include struct {
-	Mod string `toml:"mod"`
-	Version string `toml:"version"`
+	Mod Path `toml:"mod"`
+	RemoteToolchain bool `toml:"remote_toolchain"`
 	Overlay string `toml:"overlay"`
 }
 
 type External struct {
-	Path Path `toml:"path"`
+	Name string `toml:"name"`
+	RPaths []string `toml:"rpaths"`
+	Headers []Path `toml:"headers"`
+	Libraries []Path `toml:"libraries"`
 }

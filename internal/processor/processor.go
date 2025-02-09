@@ -17,28 +17,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package sum
+package processor
 
-import (
-	"github.com/BurntSushi/toml"
-	"os"
-)
+import "github.com/megakuul/bob/pkg/mod"
 
-func LoadSum(path string) (*Sum, error) {
-	rawSum, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	sum := &Sum{}
-	_, err = toml.Decode(string(rawSum), sum)
-	if err != nil {
-		return nil, err
-	}
-
-	return sum, nil
+type Processor struct {
+	
 }
 
-type Sum struct {
-	Paths map[string]string `toml:"paths"`
+type ProcessorOption func(*Processor)
+
+func NewProcessor(opts ...ProcessorOption) *Processor {
+	processor := &Processor{}
+
+	for _, opt := range opts {
+		opt(processor)
+	}
+
+	return processor
+}
+
+
+func BuildTarget(module *mod.Mod, target, output string) error {
+	
+	
 }

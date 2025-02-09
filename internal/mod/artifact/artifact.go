@@ -17,28 +17,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package sum
+package artifact
 
-import (
-	"github.com/BurntSushi/toml"
-	"os"
-)
-
-func LoadSum(path string) (*Sum, error) {
-	rawSum, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	sum := &Sum{}
-	_, err = toml.Decode(string(rawSum), sum)
-	if err != nil {
-		return nil, err
-	}
-
-	return sum, nil
-}
-
-type Sum struct {
-	Paths map[string]string `toml:"paths"`
+// Artifact abstracts a single arbitary file, independent of the underlying loader mechanism.
+// If the artifact is stored remotely, it is loaded to a local cache on the initial call.
+type Artifact interface {
+	// Creates a symlink at "$rootPath/filename". Returns "$rootPath/filename" if successful.
+	Symlink(rootPath string) (string, error)
+	// Creates a SHA256 hash on the artifact.
+	SHA256() (string, error)
 }

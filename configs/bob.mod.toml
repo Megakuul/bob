@@ -1,36 +1,70 @@
 module = "github.com/megakuul/bob"
 
-[toolchain]
-compiler = "clang++"
-compiler_path.url = "file:///usr/bin/"
-linker = "ld"
-linker_path.url = "file:///usr/bin/"
-std_path.url = "file:///usr/lib/"
-std_static = true
+[toolchains]
+name = "gcc"
+platforms = ["linux"]
+archs = ["arm64", "amd64"]
 
-[targets.myexe]
-pack = "github.com/megakuul/bob/myexe"
+[toolchains.compiler]
+url = "file:///nix/store/zvydhb6x96y62jh0pi92h8bl6iic7cpf-gcc-14.2.0"
+path = "g++"
+[toolchains.linker]
+url = "file:///nix/store/wd1dlav3z5vwwv6yqj69xkzhldk5hpvb-binutils-wrapper-2.43.1/bin"
+path = "ld"
+[toolchains.stdlib]
+url = "file:///nix/store/nqb2ns2d1lahnd5ncwmn6k84qfd7vx2k-glibc-2.40-36/lib"
+path = "libc.so.6"
+[toolchains.stdpplib]
+url = "file:///nix/store/kpqmkabv5hbvi7sl60zjrydgdcijxkby-gcc-14.2.0-lib/lib"
+path = "libstdc++.so.6"
+[[toolchains.supportlibs]]
+url = "file:///nix/store/kpqmkabv5hbvi7sl60zjrydgdcijxkby-gcc-14.2.0-lib/lib"
+path = "libgcc_s.so.1"
+[[toolchains.startfiles]]
+url = "file:///nix/store/nqb2ns2d1lahnd5ncwmn6k84qfd7vx2k-glibc-2.40-36/lib"
+path = "crt1.o"
+[[toolchains.startfiles]]
+url = "file:///nix/store/nqb2ns2d1lahnd5ncwmn6k84qfd7vx2k-glibc-2.40-36/lib"
+path = "crti.o"
+[[toolchains.startfiles]]
+url = "file:///nix/store/nqb2ns2d1lahnd5ncwmn6k84qfd7vx2k-glibc-2.40-36/lib"
+path = "crtn.o"
+[[toolchains.startfiles]]
+url = "file:///nix/store/zvydhb6x96y62jh0pi92h8bl6iic7cpf-gcc-14.2.0/lib/gcc/x86_64-unknown-linux-gnu/14.2.0"
+path = "crtbegin.o"
+[[toolchains.startfiles]]
+url = "file:///nix/store/zvydhb6x96y62jh0pi92h8bl6iic7cpf-gcc-14.2.0/lib/gcc/x86_64-unknown-linux-gnu/14.2.0"
+path = "crtend.o"
 
-[targets.mylib]
+[[targets]]
+pack = "github.com/megakuul/bob/cmd/bobctl"
+remote_toolchain = true
+toolchains = ["gcc"]
+
+[[targets]]
+pack = "github.com/megakuul/bob/cmd/bobctl"
+toolchains = ["gcc"]
+
+[[targets]]
+pack = "github.com/megakuul/bob/pkg/boblib"
 library = true
-pack = "github.com/megakuul/bob/mylib"
+toolchains = ["gcc"]
 
 [[includes]]
-mod = "github.com/megakuul/somelib"
-version = "v1.0.0"
-# Library contains bob files, no overlay required.
-
-[[includes]]
-mod = "github.com/dagobert-duck/somelib"
-version = "v1.0.0"
-overlay = "github.com/megakuul/bob/third_party/overlay/somelib"
+mod = { url = "git://github.com/megakuul/boblibs", git_tag = "v1.0.0" }
+remote_toolchain = false
+overlay = ""
 
 [[externals]]
-name = "gtkmm-4.0"
-path = "file:///usr/include/gtkmm-4.0/"
-static = false
-
-[[externals]]
-name = "z"
-path = "file:///usr/include/"
-static = true
+name = "gtkmm4"
+rpaths = [
+  "/usr/lib",
+  "/usr/lib64",
+  "/nix/store/whrhagvp2rdjajgmwi9dcds25jsbbizw-gtkmm-4.16.0/lib"
+]
+[[externals.headers]]
+url = "file:///nix/store/dlkrl780qfprj8zjxxcbm1nny9kf4skw-gtkmm-4.16.0-dev/include/gtkmm-4.0"
+path = "gtkmm.h"
+[[externals.libraries]]
+url = "file:///nix/store/whrhagvp2rdjajgmwi9dcds25jsbbizw-gtkmm-4.16.0/lib"
+path = "libgtkmm-4.0.so"
