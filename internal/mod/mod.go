@@ -31,6 +31,7 @@ const (
 
 var PLATFORMS = map[string]PLATFORM{
 	"unix": PLATFORM_UNIX,
+	"linux": PLATFORM_UNIX,
 	"windows": PLATFORM_WINDOWS,
 }
 

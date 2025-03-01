@@ -17,10 +17,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package bob
+package main
 
 import (
 	"os"
+
+	"github.com/megakuul/bob/cmd/bob/app"
 )
 
 func main() {

@@ -20,27 +20,33 @@
 package app
 
 import (
+	"github.com/megakuul/bob/cmd/bob/app/run"
+	"github.com/megakuul/bob/cmd/bob/flags"
 	"github.com/spf13/cobra"
 )
 
-type cliFlags struct {
-	debug bool
-}
-
 func NewRootCmd() *cobra.Command {
-	flags := &cliFlags{}
+	options := NewRootOptions(flags.NewGlobalFlags())
 	cmd := &cobra.Command{
 		Use:          "bob",
+		Short: "Bob Building System 🏗️ ",
 		SilenceUsage: true,
-		RunE: Run,
 	}
+	options.globalFlags.AttachFlags(cmd.PersistentFlags())
 
-	cmd.PersistentFlags().BoolVarP(&flags.debug,
-		"debug", "d", false, "enable debug outputs")
-
+	cmd.AddCommand(
+		run.NewRunCmd(run.NewRunOptions(options.globalFlags)),
+	)
+	
 	return cmd
 }
 
-func Run(cmd *cobra.Command, args []string) error {
-	
+type RootOptions struct {
+	globalFlags *flags.GlobalFlags
+}
+
+func NewRootOptions(gFlags *flags.GlobalFlags) *RootOptions {
+	return &RootOptions{
+		globalFlags: gFlags,
+	}
 }

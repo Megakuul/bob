@@ -17,27 +17,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package processor
+package flags
 
-import "github.com/megakuul/bob/pkg/mod"
+import (
+	"runtime"
 
-type Processor struct {
-	
+	"github.com/spf13/pflag"
+)
+
+type GlobalFlags struct {
+	Platform string
+	Arch string
 }
 
-type ProcessorOption func(*Processor)
-
-func NewProcessor(opts ...ProcessorOption) *Processor {
-	processor := &Processor{}
-
-	for _, opt := range opts {
-		opt(processor)
-	}
-
-	return processor
+func NewGlobalFlags() *GlobalFlags {
+	return &GlobalFlags{}
 }
 
-
-func BuildTarget(module *mod.Mod, target, output string) error {
-		
+func (g *GlobalFlags) AttachFlags(flags *pflag.FlagSet) {
+	flags.StringVarP(&g.Platform, "platform", "p", runtime.GOOS, "Specifies the target platform")
+	flags.StringVarP(&g.Arch, "arch", "a", runtime.GOARCH, "Specifies the target cpu arch")
 }

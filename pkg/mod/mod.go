@@ -24,6 +24,8 @@ import (
 	"os"
 )
 
+const MOD_FILE_NAME = "bob.mod.toml"
+
 func LoadMod(path string) (*Mod, error) {
 	rawMod, err := os.ReadFile(path)
 	if err != nil {

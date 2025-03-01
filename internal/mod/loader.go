@@ -26,13 +26,15 @@ import (
 	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
-func LoadMod(cfg modcfg.Mod, platform PLATFORM, arch ARCH) (*Mod, error) {
+func LoadMod(cfg *modcfg.Mod, platform PLATFORM, arch ARCH) (*Mod, error) {
 	toolchains, err := loadToolchains(cfg.Toolchains, platform, arch)
 	if err!=nil {
 		return nil, fmt.Errorf("failed to load toolchains: %w", err)
 	}
 
-	return mod, nil
+	_ = toolchains
+
+	return nil, nil
 }
 
 func loadToolchains(cfgChains []modcfg.Toolchain, platform PLATFORM, arch ARCH) (map[string]Toolchain, error) {
@@ -93,5 +95,5 @@ func checkPlatform(cfgPlatforms []string, platform PLATFORM) (bool, error) {
 }
 
 func createArtifact(path modcfg.Path) (artifact.Artifact, error) {
-	
+	return nil, nil
 }
