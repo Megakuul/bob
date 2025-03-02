@@ -23,11 +23,18 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/megakuul/bob/internal/mod/artifact"
 	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
+// LoadMod loads and validates a configuration module into a internal Mod.
+// Only toolchains compatible with the platform / arch are included.
 func LoadMod(cfg *modcfg.Mod, platform PLATFORM, arch ARCH) (*Mod, error) {
+
+	_, err := createArtifact(modcfg.Path{
+		URL: "git:d//asdf.asca.com/casdf/asdfaFafasdf",
+	})
+	return nil, err
+	
 	toolchains, err := loadToolchains(cfg.Toolchains, platform, arch)
 	if err!=nil {
 		return nil, fmt.Errorf("failed to load toolchains: %w", err)
@@ -55,10 +62,6 @@ func LoadMod(cfg *modcfg.Mod, platform PLATFORM, arch ARCH) (*Mod, error) {
 		Includes: includes,
 		Externals: externals,
 	}, nil
-}
-
-func createArtifact(path modcfg.Path) (artifact.Artifact, error) {
-	return nil, nil
 }
 
 // loadToolchains loads and validates all toolchains that match with the wanted platform & architecture.
@@ -98,6 +101,7 @@ func loadToolchains(cfgChains []modcfg.Toolchain, platform PLATFORM, arch ARCH) 
 	return chains, nil
 }
 
+// checkArch checks if the specified architecture is compatible with the configuration archs.
 func checkArch(cfgArchs []string, arch ARCH) (bool, error) {
 	for _, cfgArch := range cfgArchs {
 		cfgArchType, ok := ARCHS[cfgArch]
@@ -112,6 +116,7 @@ func checkArch(cfgArchs []string, arch ARCH) (bool, error) {
 	return false, nil
 }
 
+// checkPlatform checks if the specified platform is compatible with the configuration platforms.
 func checkPlatform(cfgPlatforms []string, platform PLATFORM) (bool, error) {
 	for _, cfgPlatform := range cfgPlatforms {
 		cfgPlatformType, ok := PLATFORMS[cfgPlatform]
@@ -127,7 +132,7 @@ func checkPlatform(cfgPlatforms []string, platform PLATFORM) (bool, error) {
 }
 
 
-// loadTargets loads and validates all configured targets.
+// loadTargets loads and validates all configured targets that are compatible with the loaded toolchains.
 func loadTargets(cfgTargets []modcfg.Target, toolchains map[string]Toolchain) (map[string]Target, error) {
 	targets := map[string]Target{}
 	for _, cfgTarget := range cfgTargets {

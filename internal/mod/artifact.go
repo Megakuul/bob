@@ -17,19 +17,33 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package artifact
+package mod
 
-import "context"
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
 
-// Artifact abstracts a single arbitary file, independent of the underlying loader mechanism.
-// If the artifact is stored remotely, it is loaded to a local cache on the initial call.
-type Artifact interface {
-	// Clean removes everything in $cacheRoot/<artifact-identifier>/*.
-	Clean(cacheRoot string) error
-	// Load loads the content of the artifact into $cacheRoot/<artifact-identifier>/.
-	Load(ctx context.Context, cacheRoot string) (string, error)
-	// Creates a SHA256 hash on the artifact.
-	SHA256(cacheRoot string) (string, error)
-	// Creates a symlink at "$linkRoot/filename". Returns "$linkRoot/filename" if successful.
-	Symlink(linkRoot, cacheRoot string) (string, error)
+	"github.com/megakuul/bob/internal/mod/artifact"
+	"github.com/megakuul/bob/internal/mod/artifact/file"
+	modcfg "github.com/megakuul/bob/pkg/mod"
+)
+
+func createArtifact(path modcfg.Path) (artifact.Artifact, error) {
+	urlSegments := strings.SplitN(path.URL, "://", 2)
+	if len(urlSegments) < 2 {
+		return nil, fmt.Errorf("invalid url: expected '<protocol>://<url>' got '%.22s...'", path.URL)
+	}
+	protocol, location := urlSegments[0], urlSegments[1]
+
+	switch strings.ToLower(protocol) {
+	case "file":
+		return file.NewFileArtifact(filepath.Join(location, path.Path)), nil
+	case "git":
+		
+	case "http":
+	case "https":
+	default:
+		return nil, fmt.Errorf("unsupported protocol '%s'", protocol)
+	}
 }

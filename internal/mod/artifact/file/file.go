@@ -20,7 +20,9 @@
 package file
 
 import (
+	"context"
 	"crypto/sha256"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -33,24 +35,25 @@ type FileArtifact struct {
 type FileArtifactOption func(*FileArtifact)
 
 func NewFileArtifact(path string, opts ...FileArtifactOption) *FileArtifact {
-	fileArtifact := &FileArtifact{
+	pathHash := sha256.Sum256([]byte(path))
+	artifact := &FileArtifact{
+		identifier: fmt.Sprintf("file-%s", string(pathHash[:])),
 		path: path,
 	}
 
 	for _, opt := range opts {
-		opt(fileArtifact)
+		opt(artifact)
 	}
 
-	return fileArtifact
+	return artifact
 }
 
-func (f *FileArtifact) Symlink(rootPath string) (string, error) {
-	targetPath := filepath.Join(rootPath, filepath.Base(f.path))
-	err := os.Symlink(f.path, targetPath)
-	if err!=nil {
-		return "", err
-	}
-	return targetPath, err
+func (f *FileArtifact) Clean(cacheRoot string) error {
+	return nil
+}
+
+func (f *FileArtifact) Load(ctx context.Context, cacheRoot string) (string, error) {
+	return "", nil
 }
 
 func (f *FileArtifact) SHA256() (string, error) {
@@ -65,4 +68,21 @@ func (f *FileArtifact) SHA256() (string, error) {
 	}
 
 	return string(hash.Sum(nil)), nil
+}
+
+func (f *FileArtifact) Symlink(rootPath string) (string, error) {
+	stat, err := os.Stat(f.path)
+	if err!=nil {
+		return "", err
+	}
+	if stat.IsDir() {
+		return "", fmt.Errorf("artifact is not a file: directories are not supported")
+	}
+	
+	targetPath := filepath.Join(rootPath, filepath.Base(f.path))
+	err = os.Symlink(f.path, targetPath)
+	if err!=nil {
+		return "", err
+	}
+	return targetPath, err
 }
