@@ -19,33 +19,32 @@
 
 package mod
 
-type PLATFORM int64
-const (
-	PLATFORM_UNIX PLATFORM = iota
-	PLATFORM_WINDOWS
+import (
+	"fmt"
+	
+	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
-var PLATFORMS = map[string]PLATFORM{
-	"unix": PLATFORM_UNIX,
-	"linux": PLATFORM_UNIX,
-	"windows": PLATFORM_WINDOWS,
+type Target struct {
+	Library bool
+	Toolchain *Toolchain
 }
 
-type ARCH int64
-const (
-	ARCH_AMD64 ARCH = iota
-	ARCH_ARM64
-)
+func createTarget(target *modcfg.Target, toolchains map[string]Toolchain) (*Target, error) {
+	output := &Target{
+		Toolchain: nil,
+		Library: target.Library,
+	}
+	
+	for _, toolchain := range target.Toolchains {
+		if chain, ok := toolchains[toolchain]; ok {
+			output.Toolchain = &chain
+			break
+		}
+	}
 
-var ARCHS = map[string]ARCH{
-	"amd64": ARCH_AMD64,
-	"arm64": ARCH_ARM64,
-}
-
-type Mod struct {
-	Module string
-	Toolchains map[string]Toolchain
-	Targets map[string]Target
-	Includes map[string]Include
-	Externals map[string]External
+	if output.Toolchain == nil {
+		return nil, fmt.Errorf("none of the toolchains '%v' is available", target.Toolchains)
+	}
+	return output, nil
 }

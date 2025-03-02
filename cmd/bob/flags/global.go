@@ -26,6 +26,10 @@ import (
 )
 
 type GlobalFlags struct {
+	Verbose bool
+	Traces bool
+	Json bool
+	Mod string
 	Platform string
 	Arch string
 }
@@ -35,6 +39,10 @@ func NewGlobalFlags() *GlobalFlags {
 }
 
 func (g *GlobalFlags) AttachFlags(flags *pflag.FlagSet) {
+	flags.BoolVarP(&g.Verbose, "verbose", "v", false, "Enable verbose outputs")
+	flags.BoolVarP(&g.Traces, "traces", "t", false, "Enable log traces")
+	flags.BoolVarP(&g.Json, "json", "j", false, "Enable json formatted output")
+	flags.StringVarP(&g.Mod, "mod", "m", "", "Specifies the path of the bob module")
 	flags.StringVarP(&g.Platform, "platform", "p", runtime.GOOS, "Specifies the target platform")
 	flags.StringVarP(&g.Arch, "arch", "a", runtime.GOARCH, "Specifies the target cpu arch")
 }

@@ -19,7 +19,7 @@
 
 package processor
 
-import "github.com/megakuul/bob/pkg/mod"
+import "github.com/megakuul/bob/internal/mod"
 
 type Processor struct {
 	
@@ -38,6 +38,6 @@ func NewProcessor(opts ...ProcessorOption) *Processor {
 }
 
 
-func BuildTarget(module *mod.Mod, target, output string) error {
-		
+func (p *Processor) BuildTarget(module *mod.Mod, target, modPath string) error {
+	return nil
 }

@@ -19,33 +19,26 @@
 
 package mod
 
-type PLATFORM int64
-const (
-	PLATFORM_UNIX PLATFORM = iota
-	PLATFORM_WINDOWS
+import (
+	"fmt"
+	
+	"github.com/megakuul/bob/internal/mod/artifact"
+	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
-var PLATFORMS = map[string]PLATFORM{
-	"unix": PLATFORM_UNIX,
-	"linux": PLATFORM_UNIX,
-	"windows": PLATFORM_WINDOWS,
+type Include struct {
+	Source artifact.Artifact
+	RemoteToolchain bool
 }
 
-type ARCH int64
-const (
-	ARCH_AMD64 ARCH = iota
-	ARCH_ARM64
-)
-
-var ARCHS = map[string]ARCH{
-	"amd64": ARCH_AMD64,
-	"arm64": ARCH_ARM64,
-}
-
-type Mod struct {
-	Module string
-	Toolchains map[string]Toolchain
-	Targets map[string]Target
-	Includes map[string]Include
-	Externals map[string]External
+func createInclude(include *modcfg.Include) (*Include, error) {
+	source, err := createArtifact(include.Source)
+	if err!=nil {
+		return nil, fmt.Errorf("cannot create source artifact: %w", err)
+	}
+	
+	return &Include{
+		Source: source,
+		RemoteToolchain: include.RemoteToolchain,
+	}, nil
 }

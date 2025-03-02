@@ -21,13 +21,12 @@ package run
 
 import (
 	"fmt"
-	"os"
-	"path"
+	"log/slog"
 	"path/filepath"
-	"strings"
 
 	"github.com/megakuul/bob/cmd/bob/flags"
 	"github.com/megakuul/bob/internal/mod"
+	"github.com/megakuul/bob/internal/processor"
 	modcfg "github.com/megakuul/bob/pkg/mod"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -37,7 +36,14 @@ func NewRunCmd(options *RunOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "run",
 		SilenceUsage: true,
-		RunE: options.Run,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := options.Run(args); err!=nil {
+				slog.Error(err.Error())
+				return err
+			}
+			return nil
+		},
 	}
 	options.AttachFlags(cmd.Flags())
 
@@ -46,6 +52,7 @@ func NewRunCmd(options *RunOptions) *cobra.Command {
 
 type RunOptions struct {
 	globalFlags *flags.GlobalFlags
+	output string
 	clean bool
 }
 
@@ -56,19 +63,18 @@ func NewRunOptions(gFlags *flags.GlobalFlags) *RunOptions {
 }
 
 func (r *RunOptions) AttachFlags(flagSet *pflag.FlagSet) {
-	flagSet.BoolVarP(&r.clean,
-		"cache", "c", false, "cleanup cache before execution") 
+	flagSet.BoolVarP(&r.clean, "clean", "c", false, "cleanup cache before execution") 
 }
 
-func (r *RunOptions) Run(cmd *cobra.Command, args []string) error {
-	modPath, err := getMod()
-	if err!=nil {
-		return fmt.Errorf("cannot acquire bob mod: %w", err)
+func (r *RunOptions) Run(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("expected exactly '%d' argument got '%d'", 1, len(args))
 	}
-
-	modCfg, err := modcfg.LoadMod(modPath)
+	target := args[0]
+	
+	modCfg, err := modcfg.LoadMod(r.globalFlags.Mod)
 	if err!=nil {
-		return fmt.Errorf("cannot read bob mod: %w")
+		return fmt.Errorf("cannot read bob mod: %w", err)
 	}
 
 	modPlatform, ok := mod.PLATFORMS[r.globalFlags.Platform]
@@ -83,35 +89,17 @@ func (r *RunOptions) Run(cmd *cobra.Command, args []string) error {
 
 	mod, err := mod.LoadMod(modCfg, modPlatform, modArch)
 	if err!=nil {
-		return fmt.Errorf("cannot load bob mod: %w")
+		return fmt.Errorf("cannot load bob mod: %w", err)
 	}
 
-	_ = mod
+	proc := processor.NewProcessor()
+
+	err = proc.BuildTarget(mod, target, filepath.Dir(r.globalFlags.Mod))
+	if err!=nil {
+		return err
+	}
 
 	return nil
 }
 
-// getMod performs a reverse directory traversal to find the current bob module.
-func getMod() (string, error) {
-	searchPath, err := filepath.Abs(".")
-	if err!=nil {
-		return "", fmt.Errorf("failed to read absolute directory path: %w", err)
-	}
-	for {
-		entries, err := os.ReadDir(searchPath)
-		if err!=nil {
-			return "", fmt.Errorf("failed to reverse traverse directory: %w", err)
-		}
 
-		for _, entry := range entries {
-			if entry.Name() == modcfg.MOD_FILE_NAME {
-				return path.Join(searchPath, entry.Name()), nil
-			}
-		}
-
-		if len(strings.Split(searchPath, string(filepath.Separator))) <= 2 {
-			return "", fmt.Errorf("not inside a bob module...")
-		}
-		searchPath = filepath.Dir(searchPath)
-	}
-}

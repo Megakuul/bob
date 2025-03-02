@@ -76,9 +76,9 @@ type Target struct {
 }
 
 type Include struct {
-	Mod Path `toml:"mod"`
+	Mod string `toml:"mod"`
+	Source Path `toml:"source"`
 	RemoteToolchain bool `toml:"remote_toolchain"`
-	Overlay string `toml:"overlay"`
 }
 
 type External struct {
