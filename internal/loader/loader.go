@@ -24,22 +24,20 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/mholt/archives"
 )
 
 type LOAD_TYPE int64
 const (
 	LOAD_GIT LOAD_TYPE = iota
 	LOAD_HTTP
+	LOAD_FILE
 )
 
 type job struct {
@@ -98,6 +96,8 @@ func (l *Loader) Load(typ LOAD_TYPE, url string, clean bool) (string, error) {
 				return downloadGit(l.rootCtx, url, outputPath, clean)
 			case LOAD_HTTP:
 				return downloadHTTP(l.rootCtx, url, outputPath, clean)
+			case LOAD_FILE:
+				return downloadFile(l.rootCtx, url, outputPath, clean)
 			default:
 				return fmt.Errorf("unsupported load type '%d'", typ)
 			}
@@ -109,86 +109,8 @@ func (l *Loader) Load(typ LOAD_TYPE, url string, clean bool) (string, error) {
 	return outputPath, activeJob.group.Wait()
 }
 
-func downloadGit(ctx context.Context, url, out string, clean bool) error {
-	cached, err := prepare(out, clean)
-	if err!=nil {
-		return err
-	}
-	if cached {
-		return nil
-	}
-
-	urlSegments := strings.SplitN(url, "@", 2)
-	if len(urlSegments) != 2 {
-		return fmt.Errorf("expected 'git://<host>/<path>@<revision>' found %d '@' characters", len(urlSegments))
-	}
-	httpUrl := fmt.Sprintf("https://%s", strings.TrimPrefix("git://", urlSegments[0]))
-	revision := urlSegments[1]
-
-	repo, err := git.PlainCloneContext(ctx, out, false, &git.CloneOptions{URL: httpUrl})
-	if err!=nil {
-		return err
-	}
-
-	// check if $revision is a commit hash, if not, it is considered a lightweight tag.
-	if !regexp.MustCompile("^[a-f0-9]{40}$").MatchString(revision) {
-		tagRef, err := repo.Reference(plumbing.NewTagReferenceName(revision), true)
-		if err!=nil {
-			return err
-		}
-		revision = tagRef.Hash().String()
-	}
-
-	worktree, err := repo.Worktree()
-	if err!=nil {
-		return err
-	}
-
-	err = worktree.Checkout(&git.CheckoutOptions{
-		Hash: plumbing.NewHash(revision),
-	})
-	if err!=nil {
-		return err
-	}
-
-	return nil
-}
-
-func downloadHTTP(ctx context.Context, url, out string, clean bool) error {
-	cached, err := prepare(out, clean)
-	if err!=nil {
-		return err
-	}
-	if cached {
-		return nil
-	}
-
-	client := http.Client{}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err!=nil {
-		return err
-	}
-	resp, err := client.Do(req)
-	if err!=nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	archivePath := filepath.Join(out, fmt.Sprintf("__internal.bob.blob"))
-	archive, err := os.Create(archivePath)
-	if err!=nil {
-		return err
-	}
-	_, err = io.Copy(archive, resp.Body)
-	if err!=nil {
-		return err
-	}
-
-	// TODO unpack archive
-
-	return nil
-}
-
+// prepare sets up the output directory for an asset. Specifying $clean ensures that the output directory
+// is cleaned up first.
 func prepare(path string, clean bool) (cached bool, err error) {
 	if clean {
 		if err:=os.RemoveAll(path); err!=nil {
@@ -205,4 +127,60 @@ func prepare(path string, clean bool) (cached bool, err error) {
 		return false, err
 	}
 	return false, nil
+}
+
+// unpack decompresses and extracts an archive to the $outputPath. It uses mholt/archives to detect and unpack
+// the archive. Support depends on this library: https://github.com/mholt/archives#supported-archive-formats.
+func unpack(ctx context.Context, archivePath, outputPath string) error {
+	archive, err := os.Open(archivePath)
+	if err!=nil {
+		return err
+	}
+	defer archive.Close()
+
+	format, reader, err := archives.Identify(ctx, filepath.Base(archivePath), archive)
+	if err!=nil {
+		return err
+	}
+
+	extractor, ok := format.(archives.Extractor)
+	if !ok {
+		return fmt.Errorf("format %s does not support extraction", format.MediaType())
+	}
+
+	err = extractor.Extract(ctx, reader, func(ctx context.Context, f archives.FileInfo) error {
+		if f.IsDir() {
+			return nil
+		}
+
+		outputPath := filepath.Join(outputPath, f.NameInArchive)
+		err := os.MkdirAll(filepath.Dir(outputPath), 0755)
+		if err!=nil {
+			return err
+		}
+		
+		inputFile, err := f.Open()
+		if err!=nil {
+			return err
+		}
+		defer inputFile.Close()
+
+		outputFile, err := os.Create(outputPath)
+		if err!=nil {
+			return err
+		}
+		defer outputFile.Close()
+
+		_, err = io.Copy(outputFile, inputFile)
+		if err!=nil {
+			return err
+		}
+
+		return nil
+	})
+	if err!=nil {
+		return err
+	}
+
+	return nil
 }
