@@ -22,34 +22,33 @@ package mod
 import (
 	"fmt"
 
-	"github.com/megakuul/bob/internal/mod/artifact"
 	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
 type External struct {
 	RPaths []string
-	Headers []artifact.Artifact
-	Libraries []artifact.Artifact
+	Headers []Artifact
+	Libraries []Artifact
 }
 
 
 func createExternal(external *modcfg.External) (*External, error) {
-	headers := []artifact.Artifact{}
+	headers := []Artifact{}
 	for _, header := range external.Headers {
 		artifact, err := createArtifact(header)
 		if err!=nil {
 			return nil, fmt.Errorf("cannot create header artifact: %w", err)
 		}
-		headers = append(headers, artifact)
+		headers = append(headers, *artifact)
 	}
 
-	libraries := []artifact.Artifact{}
+	libraries := []Artifact{}
 	for _, lib := range external.Libraries {
 		artifact, err := createArtifact(lib)
 		if err!=nil {
 			return nil, fmt.Errorf("cannot create library artifact: %w", err)
 		}
-		libraries = append(libraries, artifact)
+		libraries = append(libraries, *artifact)
 	}
 	
 	return &External{

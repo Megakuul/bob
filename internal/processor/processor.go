@@ -38,6 +38,14 @@ func NewProcessor(opts ...ProcessorOption) *Processor {
 }
 
 
-func (p *Processor) BuildTarget(module *mod.Mod, target, modPath string) error {
+func (p *Processor) BuildTarget(module *mod.Mod, modPath string, target string) error {
+	// 1. resolve target find all packs that must be processed and all includes / externals that must be present
+	// 2. download and load all includes and perform step 1 adding all dependent includes etc.
+	// 3. now we have a list of externals and a list of toolchains, download them.
+	// 4. now we have a list of packs and external headers all downloaded. Compile them!
+	// 4,5. compile every pack seperate with its depending headers and cache it anywhere.
+	// 5. now we have various objectfiles / libs (compiled packs, external sources, toolchains) use the linker and link all of them in one fat big blob.
+	// 6. pray to god that the linker does not do stupid linker things.
+	// 7. output the final executable
 	return nil
 }

@@ -22,17 +22,16 @@ package mod
 import (
 	"fmt"
 	
-	"github.com/megakuul/bob/internal/mod/artifact"
 	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
 type Toolchain struct {
-	Compiler artifact.Artifact
-	Linker artifact.Artifact
-	Stdlib artifact.Artifact
-	Stdpplib artifact.Artifact
-	Supportlibs []artifact.Artifact
-	Startfiles []artifact.Artifact
+	Compiler Artifact
+	Linker Artifact
+	Stdlib Artifact
+	Stdpplib Artifact
+	Supportlibs []Artifact
+	Startfiles []Artifact
 }
 
 func createToolchain(toolchain *modcfg.Toolchain) (*Toolchain, error) {
@@ -56,29 +55,29 @@ func createToolchain(toolchain *modcfg.Toolchain) (*Toolchain, error) {
 		return nil, fmt.Errorf("cannot create std++lib artifact: %w", err)
 	}
 
-	supportlibs := []artifact.Artifact{}
+	supportlibs := []Artifact{}
 	for _, lib := range toolchain.Supportlibs {
 		artifact, err := createArtifact(lib)
 		if err!=nil {
 			return nil, fmt.Errorf("cannot create supportlib artifact: %w", err)
 		}
-		supportlibs = append(supportlibs, artifact)
+		supportlibs = append(supportlibs, *artifact)
 	}
 
-	startfiles := []artifact.Artifact{}
+	startfiles := []Artifact{}
 	for _, lib := range toolchain.Startfiles {
 		artifact, err := createArtifact(lib)
 		if err!=nil {
 			return nil, fmt.Errorf("cannot create startfiles artifact: %w", err)
 		}
-		startfiles = append(startfiles, artifact)
+		startfiles = append(startfiles, *artifact)
 	}
 	
 	return &Toolchain{
-		Compiler: compiler,
-		Linker: linker,
-		Stdlib: stdlib,
-		Stdpplib: stdpplib,
+		Compiler: *compiler,
+		Linker: *linker,
+		Stdlib: *stdlib,
+		Stdpplib: *stdpplib,
 		Supportlibs: supportlibs,
 		Startfiles: startfiles,
 	}, nil

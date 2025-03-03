@@ -20,30 +20,17 @@
 package mod
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
-
-	"github.com/megakuul/bob/internal/mod/artifact"
-	"github.com/megakuul/bob/internal/mod/artifact/file"
 	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
-func createArtifact(path modcfg.Path) (artifact.Artifact, error) {
-	urlSegments := strings.SplitN(path.URL, "://", 2)
-	if len(urlSegments) < 2 {
-		return nil, fmt.Errorf("invalid url: expected '<protocol>://<url>' got '%.22s...'", path.URL)
-	}
-	protocol, location := urlSegments[0], urlSegments[1]
+type Artifact struct {
+	URL string
+	Path string
+}
 
-	switch strings.ToLower(protocol) {
-	case "file":
-		return file.NewFileArtifact(filepath.Join(location, path.Path)), nil
-	case "git":
-		
-	case "http":
-	case "https":
-	default:
-		return nil, fmt.Errorf("unsupported protocol '%s'", protocol)
-	}
+func createArtifact(path modcfg.Path) (*Artifact, error)  {
+	return &Artifact{
+		URL: path.URL,
+		Path: path.Path,
+	}, nil
 }

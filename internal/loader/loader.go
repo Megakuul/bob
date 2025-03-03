@@ -47,6 +47,7 @@ type job struct {
 	group *errgroup.Group
 }
 
+// Loader is used to download different assets in parallel while avoiding downloading artifacts twice.
 type Loader struct {
 	rootCtx context.Context
 	rootPath string

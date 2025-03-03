@@ -22,12 +22,11 @@ package mod
 import (
 	"fmt"
 	
-	"github.com/megakuul/bob/internal/mod/artifact"
 	modcfg "github.com/megakuul/bob/pkg/mod"
 )
 
 type Include struct {
-	Source artifact.Artifact
+	Source Artifact
 	RemoteToolchain bool
 }
 
@@ -38,7 +37,7 @@ func createInclude(include *modcfg.Include) (*Include, error) {
 	}
 	
 	return &Include{
-		Source: source,
+		Source: *source,
 		RemoteToolchain: include.RemoteToolchain,
 	}, nil
 }

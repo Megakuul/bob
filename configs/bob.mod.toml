@@ -52,9 +52,8 @@ toolchains = ["gcc"]
 
 [[includes]]
 mod = "github.com/megakuul/boblibs"
-source = { url = "git://github.com/megakuul/boblibs", git_tag = "v1.0.0" }
+source = { url = "git://github.com/megakuul/boblibs@v1.0.0" }
 remote_toolchain = false
-overlay = ""
 
 [[externals]]
 name = "gtkmm4"

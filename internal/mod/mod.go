@@ -60,12 +60,6 @@ type Mod struct {
 // CreateMod loads and validates a configuration module into a internal Mod.
 // Only toolchains compatible with the platform / arch are included.
 func CreateMod(cfg *modcfg.Mod, platform PLATFORM, arch ARCH) (*Mod, error) {
-
-	_, err := createArtifact(modcfg.Path{
-		URL: "git:d//asdf.asca.com/casdf/asdfaFafasdf",
-	})
-	return nil, err
-	
 	toolchains, err := getToolchains(cfg.Toolchains, platform, arch)
 	if err!=nil {
 		return nil, fmt.Errorf("failed to load toolchains: %w", err)

@@ -52,8 +52,6 @@ type Mod struct {
 type Path struct {
 	URL string `toml:"url"`
 	Path string `toml:"path"`
-	GitTag string `toml:"git_tag"`
-	GitCommit string `toml:"git_commit"`
 }
 
 type Toolchain struct {
