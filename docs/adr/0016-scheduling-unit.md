@@ -1,6 +1,6 @@
 # ADR 0016 — Scheduling unit: closure job by default, ready-set batches when it pays
 
-- **Status:** Accepted (Gate S pending), 2026-10-21 (owner decision O-S14-1 = c, D53)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Date:** 2026-10-21
 - **Requirements:** R-FLEET-003/004/005, R-SRV-004, R-REG-002, R-NFR-004/005/007/008
 - **Evidence:** `docs/spikes/s14-sched.md`, code in `spikes/s14-sched/`

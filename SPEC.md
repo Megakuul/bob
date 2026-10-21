@@ -27,7 +27,7 @@ server API error details are `BOB-API-NNNN` (§06 §6.1).
 | §06 | Server API: `proto/`, RBAC, identity, Nix cache and OCI registry, download proxy, promotion, releases, forges, UI |
 
 **Precedence.** When two sources disagree: owner decisions (REQUIREMENTS.md §24, D1–D64) >
-this SPEC > ADRs (`docs/adr/`, status `Accepted (Gate S pending)`) > spike write-ups
+this SPEC > ADRs (`docs/adr/`, status `Accepted (locked)`) > spike write-ups
 (`docs/spikes/`). Inside the SPEC, the owning section of a topic wins (records, keys and state
 machines: §05; error codes and CLI: §02; proto texts: §06, except `bob/worker/v1`: §05). The
 integration changes are listed in `spec/00-integration-log.md`.
@@ -1668,9 +1668,9 @@ Stage 3 records the new numbers and may tighten them. Incremental budgets per ec
 
 ## 1.18 ADR status changes (this section)
 
-- ADR 0003 → **Accepted (Gate S pending)**; owner amendments: D59 (cd + editor must work → gopls
+- ADR 0003 → **Accepted (locked at Gate S)**; owner amendments: D59 (cd + editor must work → gopls
   shim and settings carry the tag), A14 (next-to-code accepted), rules extended to R6/R7.
-- ADR 0009 → **Accepted (Gate S pending)** for the model part (§04 updates the cross part);
+- ADR 0009 → **Accepted (locked at Gate S)** for the model part (§04 updates the cross part);
   amendments A18 (foreign-arch tests), A19 (target libraries default).
 
 ## Open points
@@ -1699,7 +1699,7 @@ the fixup as prevention + BOB-E-9003; §03's error names map to §02 codes (§02
 Scope: the `bob` command line (commands, flags, output, exit codes), the error taxonomy and its
 message templates, `bob dev`, `bob env`, the shell hook, `.bob/bin` shims, the LSP
 path-rewriting proxy, editor settings, `bob install`, and `--remote`.
-ADR: 0017 (Accepted, Gate S pending). Builds on ADR 0002 Decision 5 (locked), D51, D59.
+ADR: 0017 (Accepted, locked). Builds on ADR 0002 Decision 5 (locked), D51, D59.
 
 ## Interfaces
 
@@ -3065,7 +3065,7 @@ Scope: the public API of `pkg/cc`, `pkg/golang`, `pkg/rust`, `pkg/npm`, `pkg/oca
 `bob.lock` entry schemas; generated tooling files and drift rules; quirks tables; materialisation
 of generated code; ecosystem budgets.
 ADRs: 0004 (Go), 0005 (Rust), 0006 (npm), 0007 (OCaml), 0008 (codegen + materialisation), all
-`Accepted (Gate S pending)` with owner amendments.
+`Accepted (locked at Gate S)` with owner amendments.
 
 ## Interfaces
 
@@ -5748,7 +5748,7 @@ epochs, polling plus wake-up (D54), scheduling and batch splitting (D53), worker
 and authentication (D57), worker isolation (D56), logs in lake with live pull (D55), and
 orchestrator HA without a coordinator.
 
-ADRs: 0011, 0012, 0013, 0015, 0016, 0019 (all `Accepted (Gate S pending)` with owner amendments).
+ADRs: 0011, 0012, 0013, 0015, 0016, 0019 (all `Accepted (locked at Gate S)` with owner amendments).
 Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
 `/root/scratch-spec05/RESULTS.txt` (V1–V4 below).
 

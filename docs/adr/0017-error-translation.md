@@ -1,6 +1,6 @@
 # ADR 0017 — Error translation: Nix's structured log → bob errors
 
-- **Status:** Accepted (Gate S pending). SPEC §02 (`spec/02-cli-dev.md`) holds the taxonomy,
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
   templates, exit codes and event schema.
 - **Date:** 2026-10-20
 - **Requirements:** R-NIX-010…013 (Nix never leaks), R-CLI-002 (concise output, `-v`, JSON mode),

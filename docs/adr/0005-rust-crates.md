@@ -1,6 +1,6 @@
 # ADR 0005 — Rust: per-crate derivations, bob's own crate resolver, bob-builder runs build scripts
 
-- **Status:** Accepted (Gate S pending); was Proposed (spike S3, 2026-10-20)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Requirements:** R-RS-001…004, R-FW-004/006/020, R-CC-001, R-NFR-001/002/008, R-NIX-010…012
 - **Evidence:** `docs/spikes/s03-rust.md`, code in `spikes/s03-rust/`, numbers in
   `spikes/s03-rust/measure-results.md`.
@@ -71,7 +71,7 @@ nixpkgs + pkg-config.
   the source needs a stable store path. rust-analyzer needs the same sources.
 - `builtin:fetchurl` with `unpack`: it unpacks NAR archives only, not tarballs (tried; failed).
 
-## Owner amendments (Gate S pending)
+## Owner amendments
 
 - **D58** (O-S3-1 a): bob.lock may contain crate dependency edges, feature tables and the
   needed Cargo.toml facts. Decision 2 stands as written; schema `lock.Crate` /

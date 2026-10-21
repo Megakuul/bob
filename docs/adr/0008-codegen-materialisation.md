@@ -1,6 +1,6 @@
 # ADR 0008 — Code generators as packages and materialisation into the working tree
 
-- **Status:** Accepted (Gate S pending); was Proposed (spike S6, 2026-10-20)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Requirements:** R-GEN-001…004, R-FW-007, R-FW-021, R-FW-010/011, R-DEV-002, R-NPM-010,
   R-API-001/003, D25, D2, D34
 - **Evidence:** `docs/spikes/s06-codegen.md`, code in `spikes/s06-codegen/`
@@ -64,7 +64,7 @@ define when and how bob writes their outputs into the tree.
   Decision 5, and tsserver needs `node_modules` (S4).
 - Per-module Go builds still rebuild the whole module after any codegen change (S2).
 
-## Owner amendments (Gate S pending)
+## Owner amendments
 
 - **A11** (owner decision in S6 §6, option b): bob-level early cutoff for codegen outputs is
   **adopted by default**: consumers are planned against a content-addressed copy of each

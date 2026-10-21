@@ -1,6 +1,6 @@
 # ADR 0009 — Platforms, cross-compilation and build variants
 
-Status: **Accepted (Gate S pending)** (spike S7, 2026-10-21; SPEC §04 cross part, §01 model part). Evidence: `docs/spikes/s07-cross.md`, code `spikes/s07-cross/`.
+Status: **Accepted (locked) — owner at Gate S, 2026-10-21** (spike S7, 2026-10-21; SPEC §04 cross part, §01 model part). Evidence: `docs/spikes/s07-cross.md`, code `spikes/s07-cross/`.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0004 — How bob builds Go
 
-- **Status:** Accepted (Gate S pending); was Proposed (spike S2, 2026-10-20)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Requirements:** R-GO-001…004, R-FW-006/007, R-FW-020, R-NFR-001/002/006/008
 - **Evidence:** `docs/spikes/s02-go.md`, code and `measure-results.md` in `spikes/s02-go/`
 - **Builds on:** ADR 0001 (strategy B: bob computes derivations), ADR 0002 (embedded Nix, `bob dev` env)
@@ -71,7 +71,7 @@ are blocked (read-only + bob-only proxy) or detected (drift).
   (`-linkobj`, export data added to the store by content, verified working in the spike) is the
   planned improvement and needs a follow-up spike on real code before it becomes the default.
 
-## Owner amendments (Gate S pending)
+## Owner amendments
 
 - **D49** (strategy B) confirms Decision 1: bob computes every Go derivation itself.
 - **D51 / D59** (dev environment, "cd + editor just works"): the user env of Decision 5

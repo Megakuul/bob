@@ -1,6 +1,6 @@
 # ADR 0018 — Forge adapters
 
-- **Status:** Accepted (Gate S pending)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Date:** 2026-10-21
 - **Requirements:** R-PIPE-001, R-PIPE-002, R-PIPE-003, R-PIPE-007 (D48), R-FLEET-006, R-SEC-004, R-SEC-005
 - **Evidence:** `docs/spikes/s16-forges.md`, code in `spikes/s16-forges/`

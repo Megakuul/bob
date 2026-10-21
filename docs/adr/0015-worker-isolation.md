@@ -1,6 +1,6 @@
 # ADR 0015 — Worker isolation: evaluator sandbox and build hardening
 
-- **Status:** Accepted (Gate S pending), 2026-10-21 (S13, 2026-10-20; decision 4 rewritten by D56)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Requirements:** R-FLEET-008, R-SEC-000, R-SEC-001, R-SEC-004, R-FW-008, R-FW-025
 - **Evidence:** `docs/spikes/s13-sandbox.md`, code in `spikes/s13-sandbox/`
 

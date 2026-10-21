@@ -684,3 +684,8 @@ for the questions to answer, not commitments):
 | D62 | Forgejo checkout: bob stores the bot password, mints a per-job repo-scoped token, revokes it at job end, a sweeper removes leftovers (ADR 0018 O1 a). |
 | D63 | Supported storage: only AWS-S3-compatible backends with full conditional-write semantics (If-Match / If-None-Match). SeaweedFS and Garage are not supported. RustFS is the reference test backend. |
 | D64 | dynamitedb: no upstream changes required for bob; compliant S3 servers always return the ETag. |
+| D65 | Gate S: SPEC.md approved (incl. budgets [proposal]); ADRs 0003–0019 locked; HARNESS.md and the execution plan approved. |
+| D66 | Platforms in tests: arm64 is tested natively; no native x86_64 test machines needed (cross builds + qemu-user are enough). No GitHub runners or cloud VMs; the real-distro rootless matrix stays (manual). |
+| D67 | Stage 3: local git commits per task on branch `bob-v1`; never pushed without asking. |
+| D68 | Protected test files: changes are reported by CI (hash manifest), not blocked; no signing key. |
+| D69 | Host setup for rootless podman/OCI tests (setuid newuidmap/newgidmap, subuid ranges) is approved. |

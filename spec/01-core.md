@@ -1347,9 +1347,9 @@ Stage 3 records the new numbers and may tighten them. Incremental budgets per ec
 
 ## 1.18 ADR status changes (this section)
 
-- ADR 0003 → **Accepted (Gate S pending)**; owner amendments: D59 (cd + editor must work → gopls
+- ADR 0003 → **Accepted (locked at Gate S)**; owner amendments: D59 (cd + editor must work → gopls
   shim and settings carry the tag), A14 (next-to-code accepted), rules extended to R6/R7.
-- ADR 0009 → **Accepted (Gate S pending)** for the model part (§04 updates the cross part);
+- ADR 0009 → **Accepted (locked at Gate S)** for the model part (§04 updates the cross part);
   amendments A18 (foreign-arch tests), A19 (target libraries default).
 
 ## Open points

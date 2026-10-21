@@ -8,7 +8,7 @@ epochs, polling plus wake-up (D54), scheduling and batch splitting (D53), worker
 and authentication (D57), worker isolation (D56), logs in lake with live pull (D55), and
 orchestrator HA without a coordinator.
 
-ADRs: 0011, 0012, 0013, 0015, 0016, 0019 (all `Accepted (Gate S pending)` with owner amendments).
+ADRs: 0011, 0012, 0013, 0015, 0016, 0019 (all `Accepted (locked at Gate S)` with owner amendments).
 Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
 `/root/scratch-spec05/RESULTS.txt` (V1–V4 below).
 

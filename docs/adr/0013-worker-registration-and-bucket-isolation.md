@@ -1,6 +1,6 @@
 # ADR 0013: Worker registration, token sealing and S3 bucket isolation
 
-Status: **Accepted (Gate S pending)**, 2026-10-21 (spike S11, 2026-10-20; decision 8 struck by D57, decisions 3 and 6 amended). Evidence: `docs/spikes/s11-workers.md`,
+Status: **Accepted (locked) — owner at Gate S, 2026-10-21**, 2026-10-21 (spike S11, 2026-10-20; decision 8 struck by D57, decisions 3 and 6 amended). Evidence: `docs/spikes/s11-workers.md`,
 code `spikes/s11-workers/`.
 
 ## Context

@@ -1,6 +1,6 @@
 # ADR 0014 — Nix cache and OCI registry on the artifacts bucket
 
-- **Status:** Accepted (Gate S pending)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Date:** 2026-10-20
 - **Requirements:** R-REG-001..005, R-STORE-002/006/007, R-AUTH-005, R-SEC-001/002/004/005, R-NFR-003/006/007
 - **Evidence:** `docs/spikes/s12-cache.md`, code in `spikes/s12-cache/`

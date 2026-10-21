@@ -7,7 +7,7 @@ Scope: the public API of `pkg/cc`, `pkg/golang`, `pkg/rust`, `pkg/npm`, `pkg/oca
 `bob.lock` entry schemas; generated tooling files and drift rules; quirks tables; materialisation
 of generated code; ecosystem budgets.
 ADRs: 0004 (Go), 0005 (Rust), 0006 (npm), 0007 (OCaml), 0008 (codegen + materialisation), all
-`Accepted (Gate S pending)` with owner amendments.
+`Accepted (locked at Gate S)` with owner amendments.
 
 ## Interfaces
 

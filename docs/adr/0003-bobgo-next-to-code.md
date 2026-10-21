@@ -1,6 +1,6 @@
 # ADR 0003 — `bob.go` next to the code, behind the `bob` build tag
 
-- **Status:** Accepted (Gate S pending) — 2026-10-21; option (a) agent-accepted (A14), SPEC §01 (spec/01-core.md §1.2).
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Requirements:** R-FW-001 (typed Go, gopls), R-FW-002 (next to code, else `bob/` tree), R-FW-008
   (deterministic), R-FW-010/011 (values, memoised constructors), R-FW-015/016 (labels, source
   positions), R-FW-022 (cross-repo through Go modules), R-DEV-001/002, ADR 0002 Decision 5 (shims).

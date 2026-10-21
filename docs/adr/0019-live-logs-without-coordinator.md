@@ -1,6 +1,6 @@
 # ADR 0019: Live build logs without a coordinator
 
-Status: **Accepted (Gate S pending)**, 2026-10-21. Decision rewritten by D55 (O-S17-1 superseded: neither fan-out push nor peering).
+Status: **Accepted (locked) — owner at Gate S, 2026-10-21**, 2026-10-21. Decision rewritten by D55 (O-S17-1 superseded: neither fan-out push nor peering).
 Evidence: `docs/spikes/s17-peering.md`, code `spikes/s17-peering/`.
 
 ## Context

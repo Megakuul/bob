@@ -1,6 +1,6 @@
 # ADR 0012: Build logs and analytics in lake
 
-Status: **Accepted (Gate S pending)**, 2026-10-21 (spike S10, 2026-10-20; amended by D55 and the owner's lake fix 045e301)
+Status: **Accepted (locked) — owner at Gate S, 2026-10-21**, 2026-10-21 (spike S10, 2026-10-20; amended by D55 and the owner's lake fix 045e301)
 Evidence: `docs/spikes/s10-lake.md`, code `spikes/s10-lake/`.
 
 ## Context

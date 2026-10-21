@@ -5,7 +5,7 @@
 Scope: the `bob` command line (commands, flags, output, exit codes), the error taxonomy and its
 message templates, `bob dev`, `bob env`, the shell hook, `.bob/bin` shims, the LSP
 path-rewriting proxy, editor settings, `bob install`, and `--remote`.
-ADR: 0017 (Accepted, Gate S pending). Builds on ADR 0002 Decision 5 (locked), D51, D59.
+ADR: 0017 (Accepted, locked). Builds on ADR 0002 Decision 5 (locked), D51, D59.
 
 ## Interfaces
 

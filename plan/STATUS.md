@@ -1,14 +1,21 @@
 # STATUS
 
-- **Stage:** 2 — Refinement
-- **Phase:** 2.4 — Harness design & plan (started 2026-10-21). Phase 2.3 done: `SPEC.md`
-  (9,472 lines, 260 R-ids, 38 open items in App. A, 97 budgets in App. B; generated from
-  `spec/*.md`, integration log `spec/00-integration-log.md`), `docs/out-of-scope.md`.
-- **Current task:** **waiting for Gate S** (asked in chat 2026-10-21). Phase 2.4 done:
-  `HARNESS.md` (40 suites, 32 self-check faults), `plan/architecture.md`, `plan/execution-plan.md`
-  (20 milestones, 110 tasks, 252/252 R-ids covered), `ROADMAP.md`, `.claude/agents/`, `plan/usage.md`.
-- **Last gate passed:** **Gate 0** (2026-10-20): ADR 0001 and 0002 Accepted (locked), D49–D52.
-- **Next:** Gate S (owner approves SPEC incl. budgets, ADRs, HARNESS.md, plan) → BOOTSTRAP.md becomes AGENTS.md → Stage 3.
+- **Stage:** 3 — Build
+- **Phase:** 3.1 — Harness first (M0 → M1) → Gate H. Phase 3.0 kickoff: owner said "If there are
+  open questions ask them now or auto decide them" → SPEC Appendix A / HARNESS open items are
+  auto-decided by their recommendations (A24); Gate H handling asked in chat 2026-10-21.
+- **Current task:** M0.1 workspace skeleton (architect agent), then M0.2–M0.7 in parallel.
+- **Last gate passed:** **Gate S** (2026-10-21): SPEC, budgets, ADRs 0003–0019 (locked), HARNESS.md,
+  plan approved → D65–D69. AGENTS.md replaces BOOTSTRAP.md.
+- **Next:** finish M0/M1 → Gate H.
+
+## Gate S answers (owner, 2026-10-21, verbatim)
+
+"1. approve 2. lock them 3. approve 4. test for arm no need for x86_64 in most situations and
+modern compilers that shouldnt be a problem 5. a use local commits 6. changes are reported not
+blocked. I approve the setup for other things you need with OCI. Please start now with stage 3 and
+implement everything. If there are open questions ask them now or auto decide them"
+
 
 ## Gate 0 answers (owner, 2026-10-20, verbatim)
 

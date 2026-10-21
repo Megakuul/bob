@@ -1,6 +1,6 @@
 # ADR 0011 — dynamitedb as the reconciliation store
 
-Status: **Accepted (Gate S pending)**, 2026-10-21; decisions 3, 6 and 7 rewritten by owner decisions (see
+Status: **Accepted (locked) — owner at Gate S, 2026-10-21**, 2026-10-21; decisions 3, 6 and 7 rewritten by owner decisions (see
 "Owner amendments"). Evidence: `docs/spikes/s09-dynamitedb.md`, SPEC §05 verifications V1–V2.
 
 ## Context

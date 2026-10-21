@@ -1,6 +1,6 @@
 # ADR 0010 — OCI images and AppImages from closures
 
-Status: **Accepted (Gate S pending)** (spike S8, 2026-10-21; SPEC §04). Evidence: `docs/spikes/s08-bundles.md`.
+Status: **Accepted (locked) — owner at Gate S, 2026-10-21** (spike S8, 2026-10-21; SPEC §04). Evidence: `docs/spikes/s08-bundles.md`.
 
 ## Context
 

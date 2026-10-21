@@ -1,6 +1,6 @@
 # ADR 0007 — OCaml: opam packages resolved by bob, one derivation per opam package, own code compiled by bob
 
-- **Status:** Accepted (Gate S pending); was Proposed (spike S5, 2026-10-21)
+- **Status:** Accepted (locked) — owner at Gate S, 2026-10-21
 - **Requirements:** R-ML-001, §7 ecosystem rules (bob replaces the native build system, generates
   tooling files), R-FW-006, R-NIX-010…012, R-NFR-001/008
 - **Evidence:** `docs/spikes/s05-ocaml.md`, code in `spikes/s05-ocaml/`.
@@ -60,7 +60,7 @@ Go; ADR 0005 set the pattern for Rust (bob's own resolver, one derivation per un
 - No dune early cutoff between packages: a change in a library rebuilds that library and its
   dependents' derivations (measured ≈ 2 s for lib + exe).
 
-## Owner amendments (Gate S pending)
+## Owner amendments
 
 - **A21** (S5 1a, 2a): Decisions 1 and 6 confirmed (opam repository + bob resolver; bob
   compiles own code directly, dune mode opt-in).
