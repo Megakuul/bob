@@ -1,0 +1,3 @@
+built $REPO/pkg at <t>
+cache $HOME/.cache
+store /nix/store/0abc-hello
