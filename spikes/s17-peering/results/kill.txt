@@ -1,0 +1,36 @@
+scenario=kill mode=peer build=k-0825001 home=B killed=B
+  follower: done=true gaps=0 dups=0 restarts=0 reconnects=0 max_stall=1.744s finish_after_end=139.307802ms
+  vs lake truth: EQUAL (2985 lines)
+  latency ms p50=103 p99=1430 max=1738 (n=2985)
+  C: push_in=304428B peer_in=0B peer_out=302812B lake_polls=0 s3_get=42786B
+  A: push_in=0B peer_in=451491B peer_out=0B lake_polls=3 s3_get=197764B
+scenario=killclient mode=peer build=k-0825320 home=B killed=A
+  follower: done=true gaps=0 dups=0 restarts=0 reconnects=1 max_stall=519ms finish_after_end=140.313167ms
+  vs lake truth: EQUAL (2988 lines)
+  latency ms p50=102 p99=225 max=515 (n=2988)
+  B: push_in=457400B peer_in=0B peer_out=606204B lake_polls=0 s3_get=42809B
+  C: push_in=0B peer_in=454636B peer_out=0B lake_polls=1 s3_get=195703B
+scenario=kill mode=pushall build=k-0826053 home=B killed=B
+  follower: done=true gaps=0 dups=0 restarts=0 reconnects=0 max_stall=250ms finish_after_end=130.32572ms
+  vs lake truth: EQUAL (2988 lines)
+  latency ms p50=101 p99=194 max=242 (n=2988)
+  A: push_in=457383B peer_in=0B peer_out=0B lake_polls=1 s3_get=43033B
+  C: push_in=457383B peer_in=0B peer_out=0B lake_polls=0 s3_get=42775B
+scenario=killclient mode=pushall build=k-0826372 home=B killed=A
+  follower: done=true gaps=0 dups=0 restarts=0 reconnects=1 max_stall=506ms finish_after_end=139.880545ms
+  vs lake truth: EQUAL (2987 lines)
+  latency ms p50=102 p99=208 max=498 (n=2987)
+  C: push_in=457248B peer_in=0B peer_out=0B lake_polls=0 s3_get=42444B
+  B: push_in=457248B peer_in=0B peer_out=0B lake_polls=0 s3_get=42808B
+scenario=kill mode=lakeonly build=k-0827090 home=B killed=B
+  follower: done=true gaps=0 dups=0 restarts=0 reconnects=0 max_stall=6.052s finish_after_end=368.964564ms
+  vs lake truth: EQUAL (2991 lines)
+  latency ms p50=3655 p99=7006 max=7212 (n=2991)
+  C: push_in=0B peer_in=0B peer_out=0B lake_polls=0 s3_get=42772B
+  A: push_in=0B peer_in=0B peer_out=0B lake_polls=11 s3_get=520972B
+scenario=killclient mode=lakeonly build=k-0827410 home=B killed=A
+  follower: done=true gaps=0 dups=0 restarts=0 reconnects=1 max_stall=6.061s finish_after_end=1.629593292s
+  vs lake truth: EQUAL (2986 lines)
+  latency ms p50=3694 p99=7118 max=7396 (n=2986)
+  B: push_in=0B peer_in=0B peer_out=0B lake_polls=0 s3_get=44148B
+  C: push_in=0B peer_in=0B peer_out=0B lake_polls=8 s3_get=521288B

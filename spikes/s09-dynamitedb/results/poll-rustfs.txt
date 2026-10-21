@@ -1,0 +1,9 @@
+[rustfs] poll: workers=100 interval=2s enqueue every 1s for 1m0s: enqueued=55 claimed=46
+[rustfs]   requests 59.6/s (LIST=3032 GET=406 PUT=155 DELETE=121 other=0 (412=37 404=62 5xx=0)); AWS-list-price equivalent $669/month
+[rustfs]   enqueue->claim latency p50=90.8ms p90=165.6ms p99=248.9ms max=248.9ms
+[rustfs] poll: workers=100 interval=5s enqueue every 1s for 1m0s: enqueued=49 claimed=43
+[rustfs]   requests 27.2/s (LIST=1239 GET=305 PUT=136 DELETE=105 other=0 (412=20 404=26 5xx=0)); AWS-list-price equivalent $276/month
+[rustfs]   enqueue->claim latency p50=139.1ms p90=219ms p99=289.3ms max=289.3ms
+[rustfs] poll: workers=100 interval=10s enqueue every 1s for 1m0s: enqueued=39 claimed=38
+[rustfs]   requests 14.7/s (LIST=633 GET=216 PUT=118 DELETE=81 other=0 (412=8 404=5 5xx=0)); AWS-list-price equivalent $140/month
+[rustfs]   enqueue->claim latency p50=166.5ms p90=356.9ms p99=509ms max=509ms

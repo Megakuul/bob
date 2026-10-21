@@ -1,0 +1,9 @@
+[31;1m✗[0m //api:api
+
+[31;1merror[BOB-E-2001]:[0m [1m//api:api: compile error in fixture/api/cmd/api/main.go[0m
+  [36m-->[0m fixture/api/cmd/api/main.go:59:28
+  package defined at fixture/api/bob.go:13:11
+   [2m│[0m cmd/api/main.go:59:28: cannot use "not a number" (untyped string constant) as int value in return statement
+  [2mfull log: bob log //api:api[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

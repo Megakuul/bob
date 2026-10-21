@@ -1,0 +1,3 @@
+✗ //libfoo:foo  nixpkgs package "openssl_1_1" has known vulnerabilities at this revision   (defined at fixture.go:101)
+  upgrade it, or allow it explicitly (not supported in this spike)
+exit=1

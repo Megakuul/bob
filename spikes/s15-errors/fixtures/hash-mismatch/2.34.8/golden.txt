@@ -1,0 +1,14 @@
+FAILED  //third_party:itoa-1.0.18.crate
+skipped //rcore:rcore  (a dependency failed)
+skipped //third_party/crates:itoa-1.0.18  (a dependency failed)
+
+error[BOB-E-3001]: //third_party:itoa-1.0.18.crate: download does not match bob.lock
+  package defined at fixture/rcore/bob.go:9:9
+  cause: the downloaded file has a different sha256 than bob.lock pins
+   | url:        https://static.crates.io/crates/itoa/itoa-1.0.18.crate
+   | bob.lock:   sha256-ewAv6f9RBP823dlDOUt+E/q8Fbcm8sE+UwJElO8qq3g=
+   | downloaded: sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI=
+  hint: if the upstream file legitimately changed, run bob lock; otherwise the source was tampered with
+  full log: bob log //third_party:itoa-1.0.18.crate
+
+bob: 1 failed, 2 skipped (exit 4)

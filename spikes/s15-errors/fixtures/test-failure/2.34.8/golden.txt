@@ -1,0 +1,14 @@
+FAILED  //api:api
+
+error[BOB-E-2005]: //api:api: tests failed
+  package defined at fixture/api/bob.go:13:11
+  cause: test TestDigest failed
+   | --- FAIL: TestDigest (0.00s)
+   |     main_test.go:7: sha256Hex(bob) = 81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9, want 0000
+   | FAIL
+   | FAIL	example.com/api/cmd/api	0.031s
+   | FAIL
+  hint: run bob test //api:api -v to see the full test output
+  full log: bob log //api:api
+
+bob: 1 failed (exit 1)

@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:structured"]}
+{"v":1,"event":"package.start","label":"//tools:structured","action":"build"}
+{"v":1,"event":"warning","error":{"code":"BOB-E-9999","severity":"warning","class":"internal","message":"unrecognised Nix error","cause":"builder says error","hint":"this is a bob bug; the raw message is shown with -v"}}
+{"v":1,"event":"package.finish","label":"//tools:structured","status":"built"}
+{"v":1,"event":"run.finish","exitCode":0,"counts":{"built":1,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":3}}

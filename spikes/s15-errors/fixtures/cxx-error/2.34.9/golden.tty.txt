@@ -1,0 +1,13 @@
+[31;1m✗[0m //libfoo:foo
+
+[31;1merror[BOB-E-2001]:[0m [1m//libfoo:foo: compile error in fixture/libfoo/src/foo.cpp[0m
+  [36m-->[0m fixture/libfoo/src/foo.cpp:13:13
+  package defined at fixture/libfoo/bob.go:8:11
+   [2m│[0m fixture/libfoo/src/foo.cpp:13:13: error: expected ';' before '}' token
+   [2m│[0m    13 |     return 0
+   [2m│[0m       |             ^
+   [2m│[0m       |             ;
+   [2m│[0m    14 | }
+  [2mfull log: bob log //libfoo:foo[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

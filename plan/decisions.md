@@ -1,0 +1,27 @@
+# Agent decisions (side questions answered from BOOTSTRAP §2; owner may overturn)
+
+| # | Date | Decision | Reason |
+|---|---|---|---|
+| A1 | 2026-10-20 | No git commits unless the owner asks; old prototype deletions left untouched. | Owner: "ignore the old git data". |
+| A2 | 2026-10-20 | Tools are installed into root's Nix profile (`nix profile add`). | Owner allowed installing through Nix. |
+| A3 | 2026-10-20 | Spikes pin nixpkgs `nixos-26.05@cd4ea8d5`; the bump test uses `nixos-25.11@b6018f87`. | Latest stable release; "one release" bump = previous stable. |
+| A4 | 2026-10-20 | S0a uses one shared fixture (sources) and one shared Go graph IR, with two backends (A′, B), so the comparison is fair and measures only the backend. | Principle 9 (measure, don't assume). |
+| A5 | 2026-10-20 | S0a and S0b run in parallel; A′ and B backends are built by parallel subagents. | Owner: use the machine, run slow work in parallel. |
+| A6 | 2026-10-20 | Low-power numbers measured via cgroup limit 2 vCPU / 4 GiB. | R-NFR-008. |
+| A7 | 2026-10-20 | Phase 2.2 spikes run as parallel subagents in three waves with a shared brief (`docs/spikes/BRIEF.md`): own dirs, own XDG caches, own port ranges, ADR number = spike number + 2; only the coordinator edits plan/ and REQUIREMENTS. | Use the machine without agents interfering. |
+| A8 | 2026-10-20 | D51 interpreted: environment variables can't point straight to store paths for tools outside the namespace (paths don't exist there), so outside variables point to shims; inside `bob dev` they point to store paths like `nix develop`. | S0b verification; owner wanted nix-develop-like env. |
+| A9 | 2026-10-20 | After hitting the account rate limit with 11 parallel agents, run at most 6 spike agents at once and resume stopped agents instead of restarting them. | Same total work, lower burst rate; no lost work. |
+| A10 | 2026-10-20 | Rust tooling (S3 O-S3-2): generate rust-project.json **and** Cargo.toml/Cargo.lock (+ vendor dir) for tooling. | Agent's recommendation; tooling-only, reversible; rust-project.json gives store proc-macros, Cargo files keep cargo-based tools working. |
+| A11 | 2026-10-20 | Early cutoff at bob level (S6 option b): consumers reference a content-addressed copy of producer outputs where it pays off (codegen outputs, Go export data per S2). Not Nix CA derivations (experimental). Exact scope set in SPEC after quiet measurements. | Internal build-engine design, no user-visible contract; S6: whitespace change 20 s → 1.6 s; S2 found `-linkobj` cutoff feasible. |
+| A12 | 2026-10-21 | Forgejo adapter uses the community `forgejo-sdk` v3 (S16 O2 a); licence to be confirmed compatible in ATTRIBUTION before Stage 3 use. | Forgejo has no official Go SDK; the Forgejo-specific SDK tracks Forgejo's API; D48's intent is "use the forge's SDK, not hand-rolled HTTP". |
+| A13 | 2026-10-21 | GitLab live tests run in the slow/nightly suite; fast CI replays recorded deliveries (S16 O3 a). | GitLab takes 3.8 GiB and minutes to start; still a live test per R-PIPE-007. |
+| A14 | 2026-10-21 | `bob.go` lives next to code with `//go:build bob` and rules R1–R6 (S1 option a); the `bob/` tree fallback is not needed. Owner is informed in the next batch. | BOOTSTRAP table: owner decision only if fallback; S1 verified gopls incl. through the shim. |
+| A15 | 2026-10-21 | AppImage runtime: bob's own static Go runtime (S8 O-S8-1 a). | Avoids statically linked LGPL libfuse in shipped bundles (owner: avoid GPL-family obligations) and works without fusermount; verified on 5 distros. |
+| A16 | 2026-10-21 | squashfs via nixpkgs `mksquashfs` as a build-time tool inside the bundle derivation (O-S8-2 a). | Build tool only, not shipped in bob or the bundle; mature and reproducible. |
+| A17 | 2026-10-21 | OCI layers gzip-only in v1; zstd later (O-S8-3 a). | Widest client compatibility; reversible. |
+| A18 | 2026-10-21 | Tests for a foreign architecture run on workers of that architecture, else under qemu-user; sanitiser tests only on native workers (S7 O-S7-1 b). | Verified the fixture runs correctly under qemu-user; sanitisers fail under qemu. |
+| A19 | 2026-10-21 | Target C/C++ libraries come from the target system's own nixpkgs by default (cached), switchable per package to pkgsCross (O-S7-2 c). | Cached (pkgsCross openssl took 369 s from source); +38 MB second glibc accepted as default trade-off. |
+| A20 | 2026-10-21 | Vite under bob: bob generates a wrapper config adding `/nix/store` to `server.fs.allow` (S4 O-S4-1 a). | Verified; no user edits to vite.config. |
+| A21 | 2026-10-21 | OCaml: packages from a pinned opam-repository + bob's resolver; nixpkgs only for the toolchain; bob compiles own code directly, generated-dune mode as opt-in fallback (S5 1a, 2a). | Same pattern as Rust/npm (owner: bob replaces native build systems); nixpkgs covers 12 % of opam at the same version. |
+| A22 | 2026-10-21 | Harness details (HARNESS.md open items 4, 5, 6, 8): R-ARCH-001 check runs with `GOWORK=off` and allows `tests/`; SPEC `examples/<x>` = `tests/fixtures/repos/<x>`, `fixtures/<fault>` = `tests/faults/<fault>`; `web/` built with pinned Node + `npm ci` until bob builds it; the all-in-one dev mode is a harness tool `tools/devstack`, not a product command. | Harness-internal, reversible; keeps product surface minimal. |
+| A23 | 2026-10-21 | SPEC R-ARCH-003 layer table aligned with §03/§04 package names (`pkg/output/*`, `pkg/{proto,connect,graphql,openapi}`); SPEC.md regenerated. | Integration error found by the planning agent. |

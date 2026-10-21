@@ -1,0 +1,8 @@
+FAILED  //tools:memory
+
+error[BOB-E-6003]: bob's build engine was killed by signal SIGKILL
+  cause: the Nix process stopped before it could report; on Linux SIGKILL usually means the out-of-memory killer or a service manager
+   | was building: //tools:memory
+  hint: run the build again; if it repeats, reduce parallel jobs (bob build -j)
+
+bob: 1 failed (exit 6)

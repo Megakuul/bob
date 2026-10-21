@@ -1,0 +1,4 @@
+✗ bob  internal error while preparing the build (this is a bob bug, please report it)
+  │ error: infinite recursion encountered
+  rerun with -v for the raw Nix trace
+exit=70

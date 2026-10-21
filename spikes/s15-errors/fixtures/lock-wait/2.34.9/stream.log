@@ -1,0 +1,26 @@
+@nix {"action":"start","id":2772208116039680,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2772208116039680}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/hjhk4y9s3fzrgr9jyqm6v8fd06pkr3c3-tools-lock.drv"}
+@nix {"action":"start","id":2772208116039681,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2772208116039682,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2772208116039683,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2772208116039682,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2772208116039683,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2772208116039681,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2772208116039681,"type":106}
+@nix {"action":"start","id":2772208116039684,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2772208116039684}
+@nix {"action":"result","fields":[0,1,0,0],"id":2772208116039682,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2772208116039683,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2772208116039681,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2772208116039681,"type":106}
+@nix {"action":"start","id":2772208116039685,"level":1,"parent":0,"text":"waiting for lock on \u001b[35;1m'/nix/store/8v703ljjglgvlfw0pgnbblwck0816zyv-tools-lock'\u001b[0m","type":111}
+@nix {"action":"stop","id":2772208116039685}
+@nix {"action":"result","fields":[0,1,0,0],"id":2772208116039682,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2772208116039683,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2772208116039681,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2772208116039681,"type":106}
+@nix {"action":"stop","id":2772208116039683}
+@nix {"action":"stop","id":2772208116039682}
+@nix {"action":"stop","id":2772208116039681}

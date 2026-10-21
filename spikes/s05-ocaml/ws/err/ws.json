@@ -1,0 +1,4 @@
+{"opam": ["cmdliner", "fmt", "yojson", "lwt"],
+ "c": [{"Name": "cfoo", "Src": "cfoo"}],
+ "libs": [{"name": "geom", "src": "geom", "libs": ["fmt"], "stubs": ["geom_stubs"], "clibs": ["cfoo"]}],
+ "exes": [{"name": "demo", "src": "app", "main": "main", "libs": ["geom", "cmdliner", "yojson", "lwt.unix", "fmt"]}]}

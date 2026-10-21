@@ -1,0 +1,9 @@
+FAILED  //api:api
+
+error[BOB-E-2004]: //api:api: library zstd_s15 not found
+  package defined at fixture/api/bob.go:13:11
+   | cannot find -lzstd_s15: No such file or directory
+  hint: add the package that provides libzstd_s15 to Deps, or remove the link flag
+  full log: bob log //api:api
+
+bob: 1 failed (exit 1)

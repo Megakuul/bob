@@ -1,0 +1,12 @@
+  building //libfoo:foo
+✗ //libfoo:foo  package failed   (defined at fixture.go:101)
+  │ src/foo.cpp: In function 'int foo_sha256_hex(const char*, char*)':
+  │ fixture/libfoo/src/foo.cpp:13:13: error: expected ';' before '}' token
+  │    13 |     return 0
+  │       |             ^
+  │       |             ;
+  │    14 | }
+  │       | ~            
+  hint: compiler error in the package sources
+  full log: nix log /nix/store/hgkiwh6903nf4vbla7rp53ga5g2bn34p-libfoo-foo.drv
+exit=1

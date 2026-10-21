@@ -1,0 +1,100 @@
+{
+ "opamRepository": "af5ddb0addf6e75660ee9d7485b27425459d1d66",
+ "packages": {
+  "base-bytes": {
+   "name": "base-bytes",
+   "version": "base",
+   "opam": "0a7ed34c742ddc72e8fed9b16314091884b60a758ff0d32f6ee140b857df9506"
+  },
+  "cmdliner": {
+   "name": "cmdliner",
+   "version": "2.1.1",
+   "url": "https://erratique.ch/software/cmdliner/releases/cmdliner-2.1.1.tbz",
+   "hash": "sha512-zcM4ri5Wpyt8ddrpVkxXzKTh+/rEVKq7+DA/y2EjRihK7eWYTf3n6KeklsyHC71X3fKMqzo4ZnJ5sxZX+FwV3Q==",
+   "opam": "5b42cef589eb058dbb4dcfcdd49b6bfe6333df0a4a8e1a4fddfd4b7496c30038"
+  },
+  "cppo": {
+   "name": "cppo",
+   "version": "1.8.0",
+   "url": "https://github.com/ocaml-community/cppo/archive/v1.8.0.tar.gz",
+   "hash": "sha512-OEByW3Z6AwC9xI8R0m15i9yuCnZO1nmN86CN/IzHb+EksUoZ1HybXqjiKdaLAxFRCvznfA5NkTH72lEW3CaJog==",
+   "opam": "fc835b1428df3835c5fc2bf4909badfa089a9b2de4eb41c65baf7676f73e5861"
+  },
+  "csexp": {
+   "name": "csexp",
+   "version": "1.5.2",
+   "url": "https://github.com/ocaml-dune/csexp/releases/download/1.5.2/csexp-1.5.2.tbz",
+   "hash": "sha512-vigQGLz8INTbFIlO9RxLg21jONL9/iLmPUb0BfjepzSeFvHA7NZfc9TIWiqA5hjNu4ydr8u58inwTxrcpbGXPA==",
+   "opam": "f2cc6a37e347cd9147f1477eba1705354b360a43014ea46b8cad9ff4a971a0ed"
+  },
+  "dune-configurator": {
+   "name": "dune-configurator",
+   "version": "3.21.1",
+   "url": "https://github.com/ocaml/dune/releases/download/3.21.1/dune-3.21.1.tbz",
+   "hash": "sha512-2fpE4kA20lk63+WeUuCtZPPn6XPSP4SvV/x544+iEGMLDLVVkPMU1u9FUzO5ao4M4YjCcg6q5EV2IiVBunjvsw==",
+   "opam": "f87a11273051e75b1ab450b10fa9f5b6294badf836dbb190bc6301d1dc2449aa",
+   "deps": [
+    "csexp"
+   ]
+  },
+  "fmt": {
+   "name": "fmt",
+   "version": "0.11.0",
+   "url": "https://erratique.ch/software/fmt/releases/fmt-0.11.0.tbz",
+   "hash": "sha512-P0AVX8anMVIC5BBYWWQwfWNBbIAB/SQ2Z+2djRoCtn3uyssl6cL+tAnFN7vft4F9kRaN5N3WQ1Mv9R1sHGlqSg==",
+   "opam": "02bb57a07d169eef9bde16e0a50a00423a4f756d589f7d1fed0d4d3aa367d11c",
+   "deps": [
+    "cmdliner",
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "lwt": {
+   "name": "lwt",
+   "version": "6.1.2",
+   "url": "https://github.com/ocsigen/lwt/archive/refs/tags/6.1.2.tar.gz",
+   "hash": "sha512-pHN6L8RKru3KRuxhNMBwE9XPRAOamIpueaQHFaU+Q2AdTJG78RqOiVQFKNkSuPpIfjBoRlwTbBFWqHIljrNEOw==",
+   "opam": "faa40e23ae18817fd6423b94e7e274c239d385c70999f99232f19d7343efa7b3",
+   "deps": [
+    "cppo",
+    "dune-configurator",
+    "ocplib-endian"
+   ]
+  },
+  "ocamlbuild": {
+   "name": "ocamlbuild",
+   "version": "0.16.1",
+   "url": "https://github.com/ocaml/ocamlbuild/archive/refs/tags/0.16.1.tar.gz",
+   "hash": "sha512-6Ri5oAgfJx5QfHpPTV1afN+BjKUcUqzsG6yF3a1fbK0HjLPFaCUvvPVAHC11Mj7Y9Q/diBvaHJYyhAMgQIOTrg==",
+   "opam": "de1f5bf2745606bea4ce99dd8f0c86cf62a61e64f0cab383e6c58d5822663f0e"
+  },
+  "ocplib-endian": {
+   "name": "ocplib-endian",
+   "version": "1.2",
+   "url": "https://github.com/OCamlPro/ocplib-endian/archive/refs/tags/1.2.tar.gz",
+   "hash": "sha512-LnC+Xz1uN3SFxgZkoOI1w7mySo1ragOJXQksbkDVOBC/4fKS7mnlGBzm2qilgr/j1Z86+In0FxNPZYgSvluLhQ==",
+   "opam": "3524f22749813e86241547ead0959176df55a09d4737e50fe702f1a97a495c3b",
+   "deps": [
+    "base-bytes",
+    "cppo"
+   ]
+  },
+  "topkg": {
+   "name": "topkg",
+   "version": "1.1.1",
+   "url": "https://erratique.ch/software/topkg/releases/topkg-1.1.1.tbz",
+   "hash": "sha512-w2xUmjYt31t/4/b/kceberUxxDYzu5c3V2NwvL1p234WJdJHwnioabUD1FoXXpdTIxzPWV5b+k47fiYCrD07Qg==",
+   "opam": "99f9976bd0f745d0fb1f7f767e1f98644128e89d7350ebbb7f701305d4f4f4db",
+   "deps": [
+    "ocamlbuild"
+   ]
+  },
+  "yojson": {
+   "name": "yojson",
+   "version": "3.0.0",
+   "url": "https://github.com/ocaml-community/yojson/releases/download/3.0.0/yojson-3.0.0.tbz",
+   "hash": "sha512-iW0OqCmjbMrbpmKIADacGjq558ZNvai3YzGInJ20gc1k4Tf0Z0ga6AqN1fykXXSL+nH1hkGAbMG7GgB/gpF4nw==",
+   "opam": "41a25f885b8ab0ae3276ac1797bf68b43d994c0134d66b5aa84b3638ded29eaa"
+  }
+ }
+}

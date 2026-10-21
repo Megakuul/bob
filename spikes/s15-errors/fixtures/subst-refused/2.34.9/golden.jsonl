@@ -1,0 +1,4 @@
+{"v":1,"event":"run.start","requested":["//tools:payload"]}
+{"v":1,"event":"error","error":{"code":"BOB-E-4003","class":"cache","message":"cache http://127.0.0.1:21598 is unreachable: connection refused","label":"//tools:payload","definedAt":"fixture/tools/bob.go:23:15","hint":"bob builds locally when a cache is down; check the network or the cache URL","args":{"cache":"http://127.0.0.1:21598","reason":"connection refused"}}}
+{"v":1,"event":"package.finish","label":"//tools:payload","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":4,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

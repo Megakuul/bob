@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:diskfull"]}
+{"v":1,"event":"package.start","label":"//tools:diskfull","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-6001","class":"resource","message":"no space left on device while building //tools:diskfull","label":"//tools:diskfull","definedAt":"fixture/tools/bob.go:15:15","cause":"the disk holding bob's store is full","hint":"free disk space (bob gc) or move bob's store to a larger disk","args":{"what":"//tools:diskfull"}}}
+{"v":1,"event":"package.finish","label":"//tools:diskfull","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":6,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

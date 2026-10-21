@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:memory"]}
+{"v":1,"event":"package.start","label":"//tools:memory","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-8001","class":"interrupt","message":"build cancelled","cause":"Nix received a termination signal from outside bob (for example a service manager, a container runtime or an OOM policy)","excerpt":["stopped while building: //tools:memory"]}}
+{"v":1,"event":"package.finish","label":"//tools:memory","status":"cancelled"}
+{"v":1,"event":"run.finish","exitCode":130,"counts":{"built":0,"cached":0,"failed":0,"skipped":0,"cancelled":1,"upstream":0,"downloaded":0}}

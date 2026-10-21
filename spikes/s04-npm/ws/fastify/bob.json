@@ -1,0 +1,17 @@
+{
+ "targets": [
+  {
+   "name": "server",
+   "importer": ".",
+   "cmd": "tsc -p . && mkdir -p $out/bin $out/lib && esbuild src/server.ts --bundle --platform=node --format=esm --target=node24 --log-level=warning --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\" --outfile=$out/lib/server.mjs && sed -i -E 's#/nix/store/[a-z0-9]{32}-npm-#/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-npm-#g' $out/lib/server.mjs && printf '#!%s\\nexec %s %s/lib/server.mjs \"$@\"\\n' \"$(command -v bash)\" \"$tool_nodejs_slim/bin/node\" \"$out\" > $out/bin/server && chmod +x $out/bin/server",
+   "tools": [
+    "nodejs-slim"
+   ]
+  }
+ ],
+ "extend": {
+  "@fastify/cors": {
+   "fastify": "*"
+  }
+ }
+}

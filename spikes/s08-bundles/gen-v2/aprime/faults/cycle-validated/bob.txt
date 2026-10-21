@@ -1,0 +1,2 @@
+✗ graph  fixture.go:101: //libfoo:foo depends on //api:api which is unknown or defined later (cycle?)
+exit=1

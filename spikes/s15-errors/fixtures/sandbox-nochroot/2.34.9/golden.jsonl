@@ -1,0 +1,4 @@
+{"v":1,"event":"run.start","requested":["//tools:nochroot"]}
+{"v":1,"event":"error","error":{"code":"BOB-E-9004","class":"internal","message":"bob generated an invalid build step for //tools:nochroot: it asks to run outside the sandbox","label":"//tools:nochroot","definedAt":"fixture/tools/bob.go:13:15","hint":"this is a bob bug; please report it with bob build -v","log":"bob log //tools:nochroot","args":{"label":"//tools:nochroot","reason":"it asks to run outside the sandbox"}}}
+{"v":1,"event":"package.finish","label":"//tools:nochroot","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":70,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

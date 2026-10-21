@@ -1,0 +1,26 @@
+{
+  "name": "cycle",
+  "nix": "2.34.8",
+  "outcome": {
+    "exitCode": -1,
+    "durationMs": 0,
+    "nixVersion": ""
+  },
+  "precheck": [
+    {
+      "code": "BOB-E-1006",
+      "class": "definition",
+      "message": "dependency cycle: //api:api → //libfoo:foo → //api:api",
+      "label": "//api:api",
+      "definedAt": "fixture/api/bob.go:13:11",
+      "excerpt": [
+        "//api:api  defined at fixture/api/bob.go:13:11",
+        "//libfoo:foo  defined at fixture/libfoo/bob.go:8:11"
+      ],
+      "hint": "a package cannot depend on itself; move the shared code into its own package",
+      "args": {
+        "cycle": "//api:api → //libfoo:foo → //api:api"
+      }
+    }
+  ]
+}

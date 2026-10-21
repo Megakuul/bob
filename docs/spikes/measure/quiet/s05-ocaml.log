@@ -1,0 +1,22 @@
+== s05-ocaml start 2026-10-21T09:01:00Z load 1.53 3.02 4.16
+[8c] direct cold demo (11 opam + C + lib + exe): 15900 ms
+[8c] direct no-op: 326 ms
+[8c] direct incr-app: 1460 ms
+[8c] direct incr-lib: 1861 ms
+[8c] dune cold demo (11 opam + C + lib + exe): 16062 ms
+[8c] dune no-op: 324 ms
+[8c] dune incr-app: 1578 ms
+[8c] dune incr-lib: 2169 ms
+[8c] in-tree dune cold (own code only): 804 ms
+[8c] in-tree dune incr-lib: 123 ms
+[2c] direct cold demo (11 opam + C + lib + exe): 25489 ms
+[2c] direct no-op: 293 ms
+[2c] direct incr-app: 1362 ms
+[2c] direct incr-lib: 1773 ms
+[2c] dune cold demo (11 opam + C + lib + exe): 26011 ms
+[2c] dune no-op: 283 ms
+[2c] dune incr-app: 1417 ms
+[2c] dune incr-lib: 2007 ms
+[2c] in-tree dune cold (own code only): 749 ms
+[2c] in-tree dune incr-lib: 141 ms
+== s05-ocaml exit 0 end 2026-10-21T09:02:51Z

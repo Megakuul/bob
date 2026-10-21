@@ -1,0 +1,8 @@
+FAILED  //tools:payload
+
+error[BOB-E-4005]: cache http://127.0.0.1:21516 served corrupted data for //tools:payload
+   | expected: sha256:1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d
+   | received: sha256:1wpfk610awzyixjivxwmhq4dvzv102a3q0p3f7nqkahp79k87inn
+  hint: report this to the cache admin; bob refused the download
+
+bob: 1 failed (exit 4)

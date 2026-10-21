@@ -1,0 +1,7 @@
+FAILED  //tools:payload
+
+error[BOB-E-4004]: cache http://127.0.0.1:21515 served //tools:payload without a trusted signature
+  package defined at fixture/tools/bob.go:23:15
+  hint: the cache's signing key is not trusted; run bob login again or check the server key
+
+bob: 1 failed (exit 4)

@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:payload
+
+[31;1merror[BOB-E-4001]:[0m [1mcache http://127.0.0.1:21511 rejected bob's credentials[0m
+  package defined at fixture/tools/bob.go:23:15
+  cause: the cache answered HTTP 401 to http://127.0.0.1:21511/nix-cache-info
+  [32mhint:[0m run bob login
+
+[31;1mbob: 1 failed[0m (exit 4)

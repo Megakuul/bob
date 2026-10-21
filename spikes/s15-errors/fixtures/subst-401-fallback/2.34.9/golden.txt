@@ -1,0 +1,7 @@
+built   //tools:payload
+
+warning[BOB-E-4001]: cache http://127.0.0.1:21512 rejected bob's credentials
+  cause: the cache answered HTTP 401 to http://127.0.0.1:21512/nix-cache-info
+  hint: bob built locally instead, which is slower; run bob login
+
+bob: 1 built

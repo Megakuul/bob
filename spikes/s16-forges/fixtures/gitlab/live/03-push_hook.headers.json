@@ -1,0 +1,16 @@
+{
+  "Accept": "*/*",
+  "Accept-Encoding": "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+  "Connection": "close",
+  "Content-Length": "1582",
+  "Content-Type": "application/json",
+  "Idempotency-Key": "5cde9237-9ea6-4893-bfa0-37b75993e280",
+  "User-Agent": "GitLab/19.4.2",
+  "Webhook-Id": "5cde9237-9ea6-4893-bfa0-37b75993e280",
+  "Webhook-Signature": "v1,BVN3XGkzWp5qHeZPtwwmSoOx7AbItzU6kz6oe7xHmAs=",
+  "Webhook-Timestamp": "1792535241",
+  "X-Gitlab-Event": "Push Hook",
+  "X-Gitlab-Event-Uuid": "ca942598-88fa-4700-85b7-09f3204ba1eb",
+  "X-Gitlab-Instance": "https://127.0.0.1:21610",
+  "X-Gitlab-Webhook-Uuid": "77959553-e045-4fe9-80dd-4d7712bbfbaf"
+}

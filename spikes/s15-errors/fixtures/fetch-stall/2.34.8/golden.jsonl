@@ -1,0 +1,7 @@
+{"v":1,"event":"run.start","requested":["//rcore:rcore"]}
+{"v":1,"event":"package.start","label":"//third_party:itoa-1.0.18.crate","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-3002","class":"fetch","message":"//third_party:itoa-1.0.18.crate: download failed: timed out","label":"//third_party:itoa-1.0.18.crate","definedAt":"fixture/rcore/bob.go:9:9","excerpt":["url: http://127.0.0.1:21503/itoa-1.0.18.crate"],"hint":"check the URL and your network; bob retried 2 times","log":"bob log //third_party:itoa-1.0.18.crate","args":{"attempts":"2","label":"//third_party:itoa-1.0.18.crate","reason":"timed out"}}}
+{"v":1,"event":"package.finish","label":"//third_party:itoa-1.0.18.crate","status":"failed"}
+{"v":1,"event":"package.finish","label":"//rcore:rcore","status":"skipped"}
+{"v":1,"event":"package.finish","label":"//third_party/crates:itoa-1.0.18","status":"skipped"}
+{"v":1,"event":"run.finish","exitCode":4,"counts":{"built":0,"cached":0,"failed":1,"skipped":2,"cancelled":0,"upstream":0,"downloaded":0}}

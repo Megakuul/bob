@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//rcore:rcore"]}
+{"v":1,"event":"package.start","label":"//rcore:rcore","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2001","class":"build","message":"//rcore:rcore: compile error in fixture/rcore/src/lib.rs","label":"//rcore:rcore","definedAt":"fixture/rcore/bob.go:13:13","location":"fixture/rcore/src/lib.rs:30:5","excerpt":["error[E0308]: mismatched types","  --> fixture/rcore/src/lib.rs:30:5","   |","29 | pub fn broken() -> u32 {","   |                    --- expected `u32` because of return type","30 |     \"not a number\"","   |     ^^^^^^^^^^^^^^ expected `u32`, found `&str`"],"log":"bob log //rcore:rcore","args":{"file":"fixture/rcore/src/lib.rs","label":"//rcore:rcore"}}}
+{"v":1,"event":"package.finish","label":"//rcore:rcore","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

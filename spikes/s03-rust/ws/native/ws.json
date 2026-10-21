@@ -1,0 +1,4 @@
+{"root": "/root/bob/spikes/s03-rust/ws/native",
+ "crates": [{"name": "app", "version": "0.1.0", "edition": "2021", "type": "bin", "src": "app", "root": "src/main.rs",
+   "deps": [{"name": "openssl", "req": "0.10"}]}],
+ "native": {"openssl-sys": ["openssl", "pkg-config"]}}

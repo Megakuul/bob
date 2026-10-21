@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package common.v1;
+
+// Meta is attached to every response.
+message Meta {
+  string request_id = 1;
+  int64 unix_millis = 2;
+}

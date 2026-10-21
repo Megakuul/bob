@@ -1,0 +1,25 @@
+{
+  "name": "insecure-pkg",
+  "nix": "2.34.9",
+  "outcome": {
+    "exitCode": -1,
+    "durationMs": 0,
+    "nixVersion": ""
+  },
+  "precheck": [
+    {
+      "code": "BOB-E-1003",
+      "class": "definition",
+      "message": "nixpkgs package \"bzip2_1_1\" (2020-08-11) is marked insecure: CVE-2026-42250",
+      "label": "//libfoo:foo",
+      "definedAt": "fixture/libfoo/bob.go:8:11",
+      "hint": "use a fixed version; bob refuses known-vulnerable packages unless allowed per package",
+      "args": {
+        "attr": "bzip2_1_1",
+        "cves": "CVE-2026-42250",
+        "label": "//libfoo:foo",
+        "version": "2020-08-11"
+      }
+    }
+  ]
+}

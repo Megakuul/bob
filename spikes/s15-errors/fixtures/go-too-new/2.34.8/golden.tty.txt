@@ -1,0 +1,5 @@
+[31;1merror[BOB-E-1008]:[0m [1m//api:api needs Go 1.27 but nixpkgs cd4ea8d57de1 provides Go 1.26.8[0m
+  package defined at fixture/api/bob.go:13:11
+  [32mhint:[0m lower GoVersion or pin a newer nixpkgs
+
+[31;1mbob: nothing was built[0m (exit 3)

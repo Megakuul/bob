@@ -1,0 +1,9 @@
+FAILED  //tools:memory
+
+error[BOB-E-6002]: //tools:memory was killed: out of memory
+  package defined at fixture/tools/bob.go:14:15
+  cause: the build step was killed with SIGKILL; on Linux this is almost always the out-of-memory killer
+  hint: reduce parallel jobs (bob build -j) or raise the memory limit
+  full log: bob log //tools:memory
+
+bob: 1 failed (exit 6)

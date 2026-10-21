@@ -1,0 +1,24 @@
+{
+  "name": "broken-pkg",
+  "nix": "2.34.9",
+  "outcome": {
+    "exitCode": -1,
+    "durationMs": 0,
+    "nixVersion": ""
+  },
+  "precheck": [
+    {
+      "code": "BOB-E-1002",
+      "class": "definition",
+      "message": "nixpkgs package \"aranym\" (1.1.0) is marked broken",
+      "label": "//libfoo:foo",
+      "definedAt": "fixture/libfoo/bob.go:8:11",
+      "hint": "pin a nixpkgs revision where it builds, or use another package",
+      "args": {
+        "attr": "aranym",
+        "label": "//libfoo:foo",
+        "version": "1.1.0"
+      }
+    }
+  ]
+}

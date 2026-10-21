@@ -1,0 +1,6 @@
+✗ //third_party:uuid-v1.6.0.zip  downloaded file does not match the hash in bob.lock   (defined at fixture.go:77)
+  │ url: https://proxy.golang.org/github.com/google/uuid/@v/v1.6.0.zip
+  │ expected: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  │ got:      sha256-0PAvN3IX9CcC4lloTgZEHtv1FA3dzDS6m+pWA4s4pu0=
+  the upstream file changed or the lock is stale; re-lock with: bob lock
+exit=1

@@ -1,0 +1,26 @@
+[seaweedfs] PASS create-if-none-match                         first=<nil> second=already exists
+[seaweedfs] PASS put-stale-etag-rejected                      err=optimistic lock failed
+[seaweedfs] PASS update-stale-etag-rejected                   err=optimistic lock failed
+[seaweedfs] PASS delete-stale-etag-rejected                   err=optimistic lock failed
+[seaweedfs] PASS backend-get-if-match                         err=operation error S3: GetObject, https response error StatusCode: 412, RequestID: 18E06D21763DFD2F478312FE, HostID: , api error PreconditionFailed: At least one o…
+[seaweedfs] PASS backend-delete-if-match                      err=operation error S3: DeleteObject, https response error StatusCode: 412, RequestID: 18E06D217651D3F585948A97, HostID: , api error PreconditionFailed: At least on… objectStillThere=true
+[seaweedfs] PASS raw-put-if-match-race-20                     rounds=100 histogram(winners->rounds)=map[1:100]
+[seaweedfs] PASS raw-put-if-none-match-race-20                rounds=100 histogram=map[1:100]
+[seaweedfs] PASS raw-delete-if-match-race-20                  rounds=50 histogram(successful deletes->rounds)=map[1:50] (info: >1 means deletes are not exclusive)
+[seaweedfs] FAIL with-expires-deletes-object                  Get after expiry: err=<nil> (nil = object still readable)
+[seaweedfs] FAIL static-field-stored-on-create                static="" (README: allowed but immutable)
+[seaweedfs] FAIL filter-LessOrEqThan-int                      N=5 LessOrEqThan(5): err=filter mismatch
+[seaweedfs] PASS filter-LessThan-int                          N=5 LessThan(6): err=<nil>
+[seaweedfs] FAIL filter-GreaterThan-duration                  Dur=1h GreaterThan(1m): err=filter mismatch
+[seaweedfs] PASS filter-LessOrEqThan-duration                 Dur=1h LessOrEqThan(1h): err=<nil>
+[seaweedfs] FAIL update-writes-back-model                     after Update: model.ETag=<nil> (doc: 'Update will modify v')
+[seaweedfs] FAIL query-exact-filter-mismatch-empty            len=1 err=filter mismatch
+[seaweedfs] seeding 2500 items for list-limit check...
+[seaweedfs] FAIL query-limit-stops-listing                    items=5 requests: LIST=3 GET=5 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0)
+[seaweedfs] FAIL query-tolerates-concurrent-delete            failed 9/20 queries; last=operation error S3: GetObject, https response error StatusCode: 404, RequestID: 18E06D23C42D951002437A93, HostID: , NoSuchKey: The specified key does not exist.
+[seaweedfs] FAIL query-on-emptied-partition                   len=0 err=EOF
+[seaweedfs] FAIL get-empty-sort-key-not-found                 Get sk="" err=EOF
+[seaweedfs] PASS key-with-plus-rejected-as-error              err=database sort key is malformed or contains unsafe characters
+[seaweedfs] PASS key-101-chars-rejected                       err=database sort key is malformed or contains unsafe characters
+[seaweedfs] FAIL ctx-cancel-errors-is                         errors.Is(err, context.Canceled)=false err=operation error S3: GetObject, context canceled
+[seaweedfs] PASS put-etag-on-missing                          err=optimistic lock failed

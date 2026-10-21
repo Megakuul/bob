@@ -1,0 +1,11 @@
+FAILED  //third_party:itoa-1.0.18.crate
+skipped //rcore:rcore  (a dependency failed)
+skipped //third_party/crates:itoa-1.0.18  (a dependency failed)
+
+error[BOB-E-3002]: //third_party:itoa-1.0.18.crate: download failed: connection refused
+  package defined at fixture/rcore/bob.go:9:9
+   | url: http://127.0.0.1:21599/itoa-1.0.18.crate
+  hint: check the URL and your network; bob retried 5 times
+  full log: bob log //third_party:itoa-1.0.18.crate
+
+bob: 1 failed, 2 skipped (exit 4)

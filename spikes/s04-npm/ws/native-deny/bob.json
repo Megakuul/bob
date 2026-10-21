@@ -1,0 +1,10 @@
+{
+  "allow": [],
+  "targets": [
+    {
+      "name": "app",
+      "importer": ".",
+      "cmd": "node src/main.mjs > result.json && cat result.json && mkdir -p $out && cp result.json $out/"
+    }
+  ]
+}

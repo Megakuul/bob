@@ -1,0 +1,7 @@
+profile [8c/15G]  2026-10-21T03:11:46+00:00  load: 0.69 0.41 0.37  go: go1.26.8
+1000   cold         wall= 10.77s user= 34.57s sys=10.65s  build=10671.5ms run=18.9ms  gocache=96M
+1000   noop         wall=  0.34s user=  0.53s sys= 0.45s  build=262.0ms run=15.6ms  gocache=104M
+1000   leaf-body    wall=  0.69s user=  0.87s sys= 0.41s  build=614.3ms run=20.1ms  gocache=105M
+1000   root-body    wall=  0.76s user=  0.93s sys= 0.48s  build=683.0ms run=18.8ms  gocache=105M
+1000   root-api     wall=  0.81s user=  1.13s sys= 0.55s  build=730.6ms run=15.3ms  gocache=106M
+1000   new-repo     wall= 30.51s user= 24.96s sys=12.58s  build=30430.7ms run=16.3ms  gocache=200M

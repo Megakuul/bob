@@ -1,0 +1,63 @@
+{
+  "name": "subst-corrupt",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "--option",
+    "substituters",
+    "http://127.0.0.1:21516",
+    "--option",
+    "trusted-public-keys",
+    "s15-cache-1:77aMaV8xuke8t8CAgnQOsUJZjqO1tL6KQbPRYCLEe10=",
+    "--option",
+    "netrc-file",
+    "/root/bob/spikes/s15-errors/tmp/work/cache/netrc.good",
+    "--option",
+    "narinfo-cache-negative-ttl",
+    "0",
+    "--option",
+    "max-jobs",
+    "0",
+    "/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 37,
+    "nixVersion": "2.34.9"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv": {
+        "label": "//tools:payload",
+        "definedAt": "fixture/tools/bob.go:23:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload": "/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:payload"
+    ],
+    "limits": {
+      "localBuilds": false
+    },
+    "substituters": [
+      {
+        "url": "http://127.0.0.1:21516",
+        "name": "http://127.0.0.1:21516",
+        "auth": true
+      }
+    ]
+  }
+}

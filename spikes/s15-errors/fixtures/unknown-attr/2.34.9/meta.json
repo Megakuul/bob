@@ -1,0 +1,24 @@
+{
+  "name": "unknown-attr",
+  "nix": "2.34.9",
+  "outcome": {
+    "exitCode": -1,
+    "durationMs": 0,
+    "nixVersion": ""
+  },
+  "precheck": [
+    {
+      "code": "BOB-E-1001",
+      "class": "definition",
+      "message": "nixpkgs has no package \"opensll\"",
+      "label": "//libfoo:foo",
+      "definedAt": "fixture/libfoo/bob.go:8:11",
+      "hint": "did you mean openslp, openssl, openal?",
+      "args": {
+        "attr": "opensll",
+        "label": "//libfoo:foo",
+        "suggest": "openslp, openssl, openal"
+      }
+    }
+  ]
+}

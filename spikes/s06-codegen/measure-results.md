@@ -1,0 +1,18 @@
+| Measurement | [8c/15G] | [2c/4G] | rebuilt ([8c/15G] run) |
+|---|---|---|---|
+| gen cold (all codegen) | 1.34 s / 101 MB | 1.58 s / 103 MB | built 5: //proto/common/v1:go //proto/common/v1:ts //proto/greet/v1:ts //schema:graphql_ts //schema:openapi_go  |
+| gen no-op | 0.16 s / 32 MB | 0.16 s / 31 MB | nothing built |
+| gen after billing.proto change | 0.84 s / 53 MB | 0.85 s / 54 MB | built 1: //proto/billing/v1:go  |
+| gen after common.proto change | 1.35 s / 101 MB | 1.56 s / 102 MB | built 4: //proto/common/v1:go //proto/common/v1:ts //proto/greet/v1:go //proto/greet/v1:ts  |
+| gen after schema.graphqls change | 12.58 s / 281 MB | 23.75 s / 262 MB | built 3: //schema:gqlgen_go //schema:graphql_ts //svc:goproxy  |
+| build cold (codegen + Go + TS) | 25.73 s / 395 MB | 56.48 s / 397 MB | built 7: //proto/common/v1:go //proto/common/v1:ts //schema:gqlgen_go //schema:openapi_go //svc:bin //svc:goproxy //web:client  |
+| build no-op | 0.17 s / 32 MB | 0.16 s / 31 MB | nothing built |
+| build after billing.proto change | 14.06 s / 282 MB | 31.27 s / 263 MB | built 2: //proto/billing/v1:go //svc:bin  |
+| build after greet.proto change | 14.63 s / 396 MB | 33.86 s / 394 MB | built 4: //proto/greet/v1:go //proto/greet/v1:ts //svc:bin //web:client  |
+| build after whitespace-only greet.proto change | 14.51 s / 396 MB | 33.98 s / 392 MB | built 4: //proto/greet/v1:go //proto/greet/v1:ts //svc:bin //web:client  |
+| build -cutoff (prime) | 14.00 s / 279 MB | 30.97 s / 270 MB | built 1: //svc:bin  |
+| build -cutoff after whitespace-only change | 1.43 s / 101 MB | 1.36 s / 102 MB | built 2: //proto/greet/v1:go //proto/greet/v1:ts  |
+| status (no build) | 0.13 s / 31 MB | 0.13 s / 31 MB | nothing built |
+| dev: greet.proto edit → Go+TS files updated in tree | 1.39 s | 1.35 s | built 2: //proto/greet/v1:go //proto/greet/v1:ts |
+
+Run 2026-10-21T09:08:13Z on vibe-engine. Downloads kept in 'cold'.

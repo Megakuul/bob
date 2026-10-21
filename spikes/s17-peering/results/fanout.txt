@@ -1,0 +1,24 @@
+scenario=fanout mode=peer builds=20 followers(build0)=50 other_followers=19 rate=200 lines/s/build dur=1m0s
+  correctness: gaps=0 dups=0 not_done=0 mismatches_vs_lake(first 3 builds)=0
+  latency build0 ms p50=109 p99=398 max=580 | all builds p50=108 p99=382 (n=791790)
+  bytes (JSON payload): worker->orch 35.6 MB, orch->orch 30.2 MB, orch->clients 122.5 MB
+  S3 by orchestrators: 907 req (15.1 req/s), 199 LIST, GET 0.2 MB, lake polls 22 | S3 by workers: 1657 req, PUT 35.4 MB
+  orchestrator CPU total 16.9 s (28% of one core)
+scenario=fanout mode=pushall builds=20 followers(build0)=50 other_followers=19 rate=200 lines/s/build dur=1m0s
+  correctness: gaps=0 dups=0 not_done=0 mismatches_vs_lake(first 3 builds)=0
+  latency build0 ms p50=113 p99=223 max=446 | all builds p50=113 p99=236 (n=798490)
+  bytes (JSON payload): worker->orch 107.7 MB, orch->orch 0.0 MB, orch->clients 123.5 MB
+  S3 by orchestrators: 907 req (15.1 req/s), 199 LIST, GET 0.2 MB, lake polls 22 | S3 by workers: 1659 req, PUT 35.8 MB
+  orchestrator CPU total 21.3 s (36% of one core)
+scenario=fanout mode=lakeonly builds=20 followers(build0)=50 other_followers=19 rate=200 lines/s/build dur=1m0s
+  correctness: gaps=0 dups=0 not_done=0 mismatches_vs_lake(first 3 builds)=0
+  latency build0 ms p50=4100 p99=7489 max=7955 | all builds p50=4084 p99=7495 (n=775246)
+  bytes (JSON payload): worker->orch 0.0 MB, orch->orch 0.0 MB, orch->clients 119.8 MB
+  S3 by orchestrators: 2712 req (45.2 req/s), 642 LIST, GET 41.6 MB, lake polls 462 | S3 by workers: 1661 req, PUT 34.7 MB
+  orchestrator CPU total 8.1 s (13% of one core)
+scenario=fanout mode=lakeprivate builds=20 followers(build0)=50 other_followers=19 rate=200 lines/s/build dur=1m0s
+  correctness: gaps=0 dups=0 not_done=0 mismatches_vs_lake(first 3 builds)=0
+  latency build0 ms p50=4045 p99=7474 max=8078 | all builds p50=4041 p99=7467 (n=802776)
+  bytes (JSON payload): worker->orch 0.0 MB, orch->orch 0.0 MB, orch->clients 124.1 MB
+  S3 by orchestrators: 6566 req (109.4 req/s), 1629 LIST, GET 134.3 MB, lake polls 1449 | S3 by workers: 1659 req, PUT 36.0 MB
+  orchestrator CPU total 15.4 s (26% of one core)

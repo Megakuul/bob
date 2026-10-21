@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:cross
+
+[31;1merror[BOB-E-1010]:[0m [1m//tools:cross targets x86_64-linux, which this machine cannot build[0m
+  package defined at fixture/tools/bob.go:21:15
+  cause: this machine is aarch64-linux
+  [32mhint:[0m build it remotely (bob build --remote) or for this machine's platform
+
+[31;1mbob: 1 failed[0m (exit 3)

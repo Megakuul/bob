@@ -1,0 +1,2635 @@
+{
+ "version": 1,
+ "crates": [
+  {
+   "name": "aho-corasick",
+   "version": "1.1.5",
+   "checksum": "sha256-yYJkL6noYGBWgo7pqFBXNyMBELsQmRU8ee/oZcWdEro=",
+   "narHash": "sha256-kBaZfkaJladqzTZb2Fq3CiKcZ1IA9Yac9lf+PR8ZTrQ=",
+   "deps": [
+    {
+     "name": "memchr",
+     "crate": "memchr@2.8.3",
+     "optional": true,
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "default": [
+     "std",
+     "perf-literal"
+    ],
+    "logging": [
+     "dep:log"
+    ],
+    "perf-literal": [
+     "dep:memchr"
+    ],
+    "std": [
+     "memchr?/std"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "anstream",
+   "version": "1.0.0",
+   "checksum": "sha256-gkohL6+W6ays29Cf69NEOPj3EfuE4JqJFgE814Fcoo0=",
+   "narHash": "sha256-iEoNwgRf2KNMcOD/SIA+xSnufo38I09hOoeSk/uVDf8=",
+   "deps": [
+    {
+     "name": "anstyle",
+     "crate": "anstyle@1.0.14"
+    },
+    {
+     "name": "anstyle-parse",
+     "crate": "anstyle-parse@1.0.0"
+    },
+    {
+     "name": "anstyle-query",
+     "crate": "anstyle-query@1.1.5",
+     "optional": true
+    },
+    {
+     "name": "anstyle-wincon",
+     "crate": "anstyle-wincon@3.0.11",
+     "target": "cfg(windows)",
+     "optional": true
+    },
+    {
+     "name": "colorchoice",
+     "crate": "colorchoice@1.0.5"
+    },
+    {
+     "name": "is_terminal_polyfill",
+     "crate": "is_terminal_polyfill@1.70.2"
+    },
+    {
+     "name": "utf8parse",
+     "crate": "utf8parse@0.2.2"
+    }
+   ],
+   "features": {
+    "auto": [
+     "dep:anstyle-query"
+    ],
+    "default": [
+     "auto",
+     "wincon"
+    ],
+    "test": [],
+    "wincon": [
+     "dep:anstyle-wincon"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "anstyle",
+   "version": "1.0.14",
+   "checksum": "sha256-lAs6DKYD0ereUKSEair//V71ep/qwsDi7C4U+erXYAA=",
+   "narHash": "sha256-/sFHDWsbOA9cvySSE5Z8unh9O5AxMkJTP1dlV7Y4D1k=",
+   "features": {
+    "default": [
+     "std"
+    ],
+    "std": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "anstyle-parse",
+   "version": "1.0.0",
+   "checksum": "sha256-Us5/OLJCMZ98q6poEwVUZwY+zcnTVbu0zgxokIzYEw4=",
+   "narHash": "sha256-3VAkSxRGjpwt9OT63k03aqAqkCdpOCUWG+ckABITOT8=",
+   "deps": [
+    {
+     "name": "utf8parse",
+     "crate": "utf8parse@0.2.2",
+     "optional": true
+    }
+   ],
+   "features": {
+    "core": [
+     "dep:arrayvec"
+    ],
+    "default": [
+     "utf8"
+    ],
+    "utf8": [
+     "dep:utf8parse"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "anstyle-query",
+   "version": "1.1.5",
+   "checksum": "sha256-QMSPcv1TzSiRBPxkCZq8pz20FmrYbqC0NBq+Za+D2tw=",
+   "narHash": "sha256-U8blwejqmAhSpEu10jYg3lxWvG3fJ8XF43TGTnw8u/U=",
+   "deps": [
+    {
+     "name": "windows-sys",
+     "crate": "windows-sys@0.61.2",
+     "target": "cfg(windows)",
+     "features": [
+      "Win32_System_Console",
+      "Win32_Foundation"
+     ]
+    }
+   ],
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "anstyle-wincon",
+   "version": "3.0.11",
+   "checksum": "sha256-KR5qJQ/4bNSoIBEvuImICKNm2Pn1jOFtH1ODU61VdH0=",
+   "narHash": "sha256-EQGoHaOvr4BTTxnzvlrywUSfeMJLWfM6Ly7CSKs2iFU=",
+   "deps": [
+    {
+     "name": "anstyle",
+     "crate": "anstyle@1.0.14"
+    },
+    {
+     "name": "once_cell_polyfill",
+     "crate": "once_cell_polyfill@1.70.2",
+     "target": "cfg(windows)"
+    },
+    {
+     "name": "windows-sys",
+     "crate": "windows-sys@0.61.2",
+     "target": "cfg(windows)",
+     "features": [
+      "Win32_System_Console",
+      "Win32_Foundation"
+     ]
+    }
+   ],
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "anyhow",
+   "version": "1.0.104",
+   "checksum": "sha256-Mwpe0H+lTkcCydbEF090Qn/A724hS71neuUKUJmUZHA=",
+   "narHash": "sha256-TeuEvx1w6kkozVeBlmhmG7E+QokvfUzmMzPI7+Y40sU=",
+   "features": {
+    "backtrace": [],
+    "default": [
+     "std"
+    ],
+    "std": []
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "cc",
+   "version": "1.9.0",
+   "checksum": "sha256-h3v2esjlJEnrL56Yo0TqFjvrcN0fnuvjzFNX3P6u5N8=",
+   "narHash": "sha256-yDpf6k8O5rg/aGLB6CIoMsBSHgeWlVccOqe7j8QY3KQ=",
+   "deps": [
+    {
+     "name": "find-msvc-tools",
+     "crate": "find-msvc-tools@0.1.15"
+    },
+    {
+     "name": "jobserver",
+     "crate": "jobserver@0.1.35",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(unix)",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "shlex",
+     "crate": "shlex@2.0.1"
+    }
+   ],
+   "features": {
+    "compile-commands": [],
+    "jobserver": [],
+    "parallel": [
+     "dep:jobserver",
+     "dep:libc"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "cfg-if",
+   "version": "1.0.5",
+   "checksum": "sha256-TnZIF1tFqaSFNtZ29o2RgnBpkQKqjatUlt8GkEyRRgA=",
+   "narHash": "sha256-7R6Ocx3jgZmY4pWPBo9YyScfsGDiavkqfTkHTmkXzR4=",
+   "features": {
+    "rustc-dep-of-std": [
+     "core"
+    ]
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "clap",
+   "version": "4.6.7",
+   "checksum": "sha256-qoh2swCrNbqSGt6j39cBV6RiSbM/lckISuVwl4VHiUY=",
+   "narHash": "sha256-5+idQ2CEBwsRDjEGx7LVb8UNYz+ZMtk5oeyDtIb2o+c=",
+   "deps": [
+    {
+     "name": "clap_builder",
+     "crate": "clap_builder@4.6.7",
+     "noDefault": true
+    },
+    {
+     "name": "clap_derive",
+     "crate": "clap_derive@4.6.7",
+     "optional": true
+    }
+   ],
+   "features": {
+    "cargo": [
+     "clap_builder/cargo"
+    ],
+    "color": [
+     "clap_builder/color"
+    ],
+    "debug": [
+     "clap_builder/debug",
+     "clap_derive?/debug"
+    ],
+    "default": [
+     "std",
+     "color",
+     "help",
+     "usage",
+     "error-context",
+     "suggestions"
+    ],
+    "deprecated": [
+     "clap_builder/deprecated",
+     "clap_derive?/deprecated"
+    ],
+    "derive": [
+     "dep:clap_derive"
+    ],
+    "env": [
+     "clap_builder/env"
+    ],
+    "error-context": [
+     "clap_builder/error-context"
+    ],
+    "help": [
+     "clap_builder/help"
+    ],
+    "std": [
+     "clap_builder/std"
+    ],
+    "string": [
+     "clap_builder/string"
+    ],
+    "suggestions": [
+     "clap_builder/suggestions"
+    ],
+    "unicode": [
+     "clap_builder/unicode"
+    ],
+    "unstable-derive-ui-tests": [],
+    "unstable-doc": [
+     "clap_builder/unstable-doc",
+     "derive"
+    ],
+    "unstable-ext": [
+     "clap_builder/unstable-ext"
+    ],
+    "unstable-markdown": [
+     "clap_derive/unstable-markdown"
+    ],
+    "unstable-styles": [
+     "clap_builder/unstable-styles"
+    ],
+    "unstable-v5": [
+     "clap_builder/unstable-v5",
+     "clap_derive?/unstable-v5",
+     "deprecated"
+    ],
+    "usage": [
+     "clap_builder/usage"
+    ],
+    "wrap_help": [
+     "clap_builder/wrap_help"
+    ]
+   },
+   "meta": {
+    "edition": "2024"
+   }
+  },
+  {
+   "name": "clap_builder",
+   "version": "4.6.7",
+   "checksum": "sha256-7AeX+3rrFAbITvrFJpAffsPq0hJPlGtJTnKHnUtUcE0=",
+   "narHash": "sha256-w38YJWcvi2tyo3s1ibZAC9YT4dshUpiL7MYxnWerh5A=",
+   "deps": [
+    {
+     "name": "anstream",
+     "crate": "anstream@1.0.0",
+     "optional": true
+    },
+    {
+     "name": "anstyle",
+     "crate": "anstyle@1.0.14"
+    },
+    {
+     "name": "clap_lex",
+     "crate": "clap_lex@1.1.1"
+    },
+    {
+     "name": "strsim",
+     "crate": "strsim@0.11.1",
+     "optional": true
+    }
+   ],
+   "features": {
+    "cargo": [],
+    "color": [
+     "dep:anstream"
+    ],
+    "debug": [
+     "dep:backtrace"
+    ],
+    "default": [
+     "std",
+     "color",
+     "help",
+     "usage",
+     "error-context",
+     "suggestions"
+    ],
+    "deprecated": [],
+    "env": [],
+    "error-context": [],
+    "help": [],
+    "std": [
+     "anstyle/std"
+    ],
+    "string": [],
+    "suggestions": [
+     "dep:strsim",
+     "error-context"
+    ],
+    "unicode": [
+     "dep:unicode-width",
+     "dep:unicase"
+    ],
+    "unstable-doc": [
+     "cargo",
+     "wrap_help",
+     "env",
+     "unicode",
+     "string",
+     "unstable-ext"
+    ],
+    "unstable-ext": [],
+    "unstable-styles": [
+     "color"
+    ],
+    "unstable-v5": [
+     "deprecated"
+    ],
+    "usage": [],
+    "wrap_help": [
+     "help",
+     "dep:terminal_size"
+    ]
+   },
+   "meta": {
+    "edition": "2024"
+   }
+  },
+  {
+   "name": "clap_derive",
+   "version": "4.6.7",
+   "checksum": "sha256-+cdRt5QV1OVZ49H88SjgnnIOtnOgbSbPbzktN9dbZuA=",
+   "narHash": "sha256-Lf7eCqNgZb1iJGUgeaCMW8k6Ft/qQAD1tsNMr/W2OPQ=",
+   "deps": [
+    {
+     "name": "heck",
+     "crate": "heck@0.5.0"
+    },
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107"
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47"
+    },
+    {
+     "name": "syn",
+     "crate": "syn@3.0.9",
+     "features": [
+      "full"
+     ]
+    }
+   ],
+   "features": {
+    "debug": [],
+    "default": [],
+    "deprecated": [],
+    "raw-deprecated": [
+     "deprecated"
+    ],
+    "unstable-markdown": [
+     "dep:pulldown-cmark",
+     "dep:anstyle"
+    ],
+    "unstable-v5": [
+     "deprecated"
+    ]
+   },
+   "meta": {
+    "edition": "2024",
+    "procMacro": true
+   }
+  },
+  {
+   "name": "clap_lex",
+   "version": "1.1.1",
+   "checksum": "sha256-HBM7xqQb4NGUwwa1UG0V5v7up7HWYEvT+DEN+yypZIY=",
+   "narHash": "sha256-x9XpmUDoDzNgiuJXIKg2zf6s16OqMI2n3GjKTWNv7lk=",
+   "meta": {
+    "edition": "2024"
+   }
+  },
+  {
+   "name": "colorchoice",
+   "version": "1.0.5",
+   "checksum": "sha256-HQdVDJA2vyrgxoTEKX1QP4OCh8g8U2htBTcNDhOa5XA=",
+   "narHash": "sha256-VEEHBZvH86a6+IpGonLGsctj+S1M5/Hul4DHZoO31rg=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "find-msvc-tools",
+   "version": "0.1.15",
+   "checksum": "sha256-HGaRXMU5EJfeeisLly6FBaozwN9AH9OmgR29syiBukg=",
+   "narHash": "sha256-ZTWlNm4MA7VV1gvac09RHqGVSf+cdYFKDhQUsJ31FsQ=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "getrandom",
+   "version": "0.4.3",
+   "checksum": "sha256-MA6IPXVrLk7JTgJ5HzmwS1IidhOIUs/EHZ+36QQQYJk=",
+   "narHash": "sha256-mrq7A2TXUKj7Bq72bae8Os3IFmrYvr3a8JssWKNiYNA=",
+   "deps": [
+    {
+     "name": "cfg-if",
+     "crate": "cfg-if@1.0.5"
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(all(any(target_os = \"linux\", target_os = \"android\"), not(any(all(target_os = \"linux\", target_env = \"\"), getrandom_backend = \"custom\", getrandom_backend = \"linux_raw\", getrandom_backend = \"rdrand\", getrandom_backend = \"rndr\"))))",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(any(target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"hurd\", target_os = \"illumos\", target_os = \"cygwin\", all(target_os = \"horizon\", target_arch = \"arm\")))",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(any(target_os = \"haiku\", target_os = \"redox\", target_os = \"nto\", target_os = \"aix\"))",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(any(target_os = \"ios\", target_os = \"visionos\", target_os = \"watchos\", target_os = \"tvos\"))",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(any(target_os = \"macos\", target_os = \"openbsd\", target_os = \"vita\", target_os = \"emscripten\"))",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(target_os = \"netbsd\")",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(target_os = \"solaris\")",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(target_os = \"vxworks\")",
+     "noDefault": true
+    },
+    {
+     "name": "r-efi",
+     "crate": "r-efi@6.0.0",
+     "target": "cfg(all(target_os = \"uefi\", getrandom_backend = \"efi_rng\"))",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "std": [],
+    "sys_rng": [
+     "dep:rand_core"
+    ],
+    "wasm_js": [
+     "dep:wasm-bindgen",
+     "dep:js-sys"
+    ]
+   },
+   "meta": {
+    "edition": "2024",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "heck",
+   "version": "0.5.0",
+   "checksum": "sha256-IwTgCYP4f/s4tVtES147YKiEtdMMD8p9gv4zRJu+Veo=",
+   "narHash": "sha256-vVMnzH1Jabhj7DZIjmlhH1Jdvp9NLxoSyb5eEhFQafU=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "hex",
+   "version": "0.4.3",
+   "checksum": "sha256-fyQlSqmlS1yFjq7i9bzNtGqvDkhqWV7V/Y+GulUjKnA=",
+   "narHash": "sha256-llCsvm54GCeIPOcSqNeASYy3BqViXYjfeddcD46a7xM=",
+   "features": {
+    "alloc": [],
+    "default": [
+     "std"
+    ],
+    "std": [
+     "alloc"
+    ]
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "is_terminal_polyfill",
+   "version": "1.70.2",
+   "checksum": "sha256-pssTi7eaFGwb1GAAViPhQu8BgePQIZy0k+AvfQijVpU=",
+   "narHash": "sha256-Vu3w/R5fOvlv74BYClKfP+q03lxvPlIaufJC0+OnwhE=",
+   "features": {
+    "default": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "itoa",
+   "version": "1.0.18",
+   "checksum": "sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI=",
+   "narHash": "sha256-ZGL6/oZCSvfKkpfHOij7AjkgrBqwhd/HN3I+h/9vEoY=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "jobserver",
+   "version": "0.1.35",
+   "checksum": "sha256-HACsvSnqutSiOS+g6SHIdJNNu/QZQxKtIPBKDtZ6PLM=",
+   "narHash": "sha256-30MfDjjhKAvTJTF0QB/39wR3EJqtijKiA5lg3a+W3ow=",
+   "deps": [
+    {
+     "name": "getrandom",
+     "crate": "getrandom@0.4.3",
+     "target": "cfg(windows)",
+     "features": [
+      "std"
+     ]
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(unix)"
+    }
+   ],
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "libc",
+   "version": "0.2.191",
+   "checksum": "sha256-Zc2HyabWBTZYCzFq2YVyYQRzClFRyZhF8kkEKO+RJAo=",
+   "narHash": "sha256-aFoX9t+V0NhNMEsEHMZrcKJ1NkOuaP3OigOAHvFxZN8=",
+   "features": {
+    "align": [],
+    "const-extern-fn": [],
+    "default": [
+     "std"
+    ],
+    "extra_traits": [],
+    "rustc-dep-of-std": [
+     "align",
+     "rustc-std-workspace-core"
+    ],
+    "std": [],
+    "use_std": [
+     "std"
+    ]
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "log",
+   "version": "0.4.34",
+   "checksum": "sha256-+fi9PlbOTfwVPPRw//v6mMdiCVizEspcOkuNUYH9E8Y=",
+   "narHash": "sha256-lhQAGgyQSYTxfJ+W9Mh8uL2AOKNB8aV6Z/6Sz1hvTQs=",
+   "features": {
+    "alloc": [],
+    "kv": [],
+    "kv_serde": [
+     "kv_std",
+     "value-bag/serde",
+     "serde"
+    ],
+    "kv_std": [
+     "std",
+     "kv",
+     "value-bag/error"
+    ],
+    "kv_sval": [
+     "kv",
+     "value-bag/sval",
+     "sval",
+     "sval_ref"
+    ],
+    "kv_unstable": [
+     "kv",
+     "value-bag"
+    ],
+    "kv_unstable_serde": [
+     "kv_serde",
+     "kv_unstable_std"
+    ],
+    "kv_unstable_std": [
+     "kv_std",
+     "kv_unstable"
+    ],
+    "kv_unstable_sval": [
+     "kv_sval",
+     "kv_unstable"
+    ],
+    "max_level_debug": [],
+    "max_level_error": [],
+    "max_level_info": [],
+    "max_level_off": [],
+    "max_level_trace": [],
+    "max_level_warn": [],
+    "release_max_level_debug": [],
+    "release_max_level_error": [],
+    "release_max_level_info": [],
+    "release_max_level_off": [],
+    "release_max_level_trace": [],
+    "release_max_level_warn": [],
+    "serde": [
+     "serde_core"
+    ],
+    "std": [
+     "alloc"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "memchr",
+   "version": "2.8.3",
+   "checksum": "sha256-z4uvHFXmL/ys56nwb0vZzT8MS+sCLTs2cla5G4dRPZg=",
+   "narHash": "sha256-kFqEpDSFGuLDWFECp8ySxqYSPlo6otrKaXm6UuJVhCo=",
+   "features": {
+    "alloc": [],
+    "default": [
+     "std"
+    ],
+    "libc": [],
+    "logging": [
+     "dep:log"
+    ],
+    "rustc-dep-of-std": [
+     "core"
+    ],
+    "std": [
+     "alloc"
+    ],
+    "use_std": [
+     "std"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "once_cell_polyfill",
+   "version": "1.70.2",
+   "checksum": "sha256-OEuKttNyFfPFMBqVpKzLXWSqYH8fyyahG1MDh4RRtP4=",
+   "narHash": "sha256-4NVX2+GUAjhv6T9D0UjP0k3h/toEty1GfJY/d8VU7i4=",
+   "features": {
+    "default": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "pin-project-lite",
+   "version": "0.2.17",
+   "checksum": "sha256-qJMi356+HBV41onJIxjgcJZ9EEK1Eq++SVGHI/Tm1c0=",
+   "narHash": "sha256-AHE+rKJhLXKKHwVRyu7DpP8czhYJMTbIdgpHicpTJlQ=",
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "pkg-config",
+   "version": "0.3.34",
+   "checksum": "sha256-9rRk+8dOFJo5JDaxfVI/dp4FfLaHf2pcRhi8bxGABUg=",
+   "narHash": "sha256-ukt8CWxZoTEeN3rA/RzXxR0l1rXtXSpRk8N1iHhZGEU=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "proc-macro2",
+   "version": "1.0.107",
+   "checksum": "sha256-mF5+ybt0XmzmU1tUTYTWzW962L1xHDmJOK6YO5GnZtk=",
+   "narHash": "sha256-lnZW6+iEkJqaPzpiYC1KKHyXkSmgcKZLLa7V/onUD8s=",
+   "deps": [
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "nightly": [],
+    "proc-macro": [],
+    "span-locations": []
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "quote",
+   "version": "1.0.47",
+   "checksum": "sha256-H79NsUKkc6jYDCa78YRU7UWL+NJsghnDMdrs/b0HkAE=",
+   "narHash": "sha256-4qohUUekSU2KcdbWn1sNXe4pzr9uCS4RGolAmSSGszQ=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro"
+    ]
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "r-efi",
+   "version": "6.0.0",
+   "checksum": "sha256-+NzJx9UqgRaX0hUccB4NCJVvkrDiQTbPTPJ7V6ag2b8=",
+   "narHash": "sha256-uO4fmFUms1GAdaMHe8TiwWAl+cDbCj53beSXeRzwBR4=",
+   "features": {
+    "native": [],
+    "rustc-dep-of-std": [
+     "core"
+    ]
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "regex",
+   "version": "1.13.1",
+   "checksum": "sha256-8CAje2yO7ZPbLiy1PADGCo4bxz2n0HMZmhGAQBRQIY0=",
+   "narHash": "sha256-nT4yricbb3DSdH2jQmiVLAEc3WawOGpuZydKmrNrLqc=",
+   "deps": [
+    {
+     "name": "aho-corasick",
+     "crate": "aho-corasick@1.1.5",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "memchr",
+     "crate": "memchr@2.8.3",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "regex-automata",
+     "crate": "regex-automata@0.4.18",
+     "noDefault": true,
+     "features": [
+      "alloc",
+      "syntax",
+      "meta",
+      "nfa-pikevm"
+     ]
+    },
+    {
+     "name": "regex-syntax",
+     "crate": "regex-syntax@0.8.11",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "default": [
+     "std",
+     "perf",
+     "unicode",
+     "regex-syntax/default"
+    ],
+    "logging": [
+     "aho-corasick?/logging",
+     "memchr?/logging",
+     "regex-automata/logging"
+    ],
+    "pattern": [],
+    "perf": [
+     "perf-cache",
+     "perf-dfa",
+     "perf-onepass",
+     "perf-backtrack",
+     "perf-inline",
+     "perf-literal"
+    ],
+    "perf-backtrack": [
+     "regex-automata/nfa-backtrack"
+    ],
+    "perf-cache": [],
+    "perf-dfa": [
+     "regex-automata/hybrid"
+    ],
+    "perf-dfa-full": [
+     "regex-automata/dfa-build",
+     "regex-automata/dfa-search"
+    ],
+    "perf-inline": [
+     "regex-automata/perf-inline"
+    ],
+    "perf-literal": [
+     "dep:aho-corasick",
+     "dep:memchr",
+     "regex-automata/perf-literal"
+    ],
+    "perf-onepass": [
+     "regex-automata/dfa-onepass"
+    ],
+    "std": [
+     "aho-corasick?/std",
+     "memchr?/std",
+     "regex-automata/std",
+     "regex-syntax/std"
+    ],
+    "unicode": [
+     "unicode-age",
+     "unicode-bool",
+     "unicode-case",
+     "unicode-gencat",
+     "unicode-perl",
+     "unicode-script",
+     "unicode-segment",
+     "regex-automata/unicode",
+     "regex-syntax/unicode"
+    ],
+    "unicode-age": [
+     "regex-automata/unicode-age",
+     "regex-syntax/unicode-age"
+    ],
+    "unicode-bool": [
+     "regex-automata/unicode-bool",
+     "regex-syntax/unicode-bool"
+    ],
+    "unicode-case": [
+     "regex-automata/unicode-case",
+     "regex-syntax/unicode-case"
+    ],
+    "unicode-gencat": [
+     "regex-automata/unicode-gencat",
+     "regex-syntax/unicode-gencat"
+    ],
+    "unicode-perl": [
+     "regex-automata/unicode-perl",
+     "regex-automata/unicode-word-boundary",
+     "regex-syntax/unicode-perl"
+    ],
+    "unicode-script": [
+     "regex-automata/unicode-script",
+     "regex-syntax/unicode-script"
+    ],
+    "unicode-segment": [
+     "regex-automata/unicode-segment",
+     "regex-syntax/unicode-segment"
+    ],
+    "unstable": [
+     "pattern"
+    ],
+    "use_std": [
+     "std"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "regex-automata",
+   "version": "0.4.18",
+   "checksum": "sha256-rYVTubJkEyUcvzDmIFlcekGziH8D2gRXnA5rDWoGtLI=",
+   "narHash": "sha256-aEQQbe5kFJnQFxMiNlbj9kUgBNqXa9Gd9FRSI6rykxk=",
+   "deps": [
+    {
+     "name": "aho-corasick",
+     "crate": "aho-corasick@1.1.5",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "memchr",
+     "crate": "memchr@2.8.3",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "regex-syntax",
+     "crate": "regex-syntax@0.8.11",
+     "optional": true,
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "alloc": [],
+    "default": [
+     "std",
+     "syntax",
+     "perf",
+     "unicode",
+     "meta",
+     "nfa",
+     "dfa",
+     "hybrid"
+    ],
+    "dfa": [
+     "dfa-build",
+     "dfa-search",
+     "dfa-onepass"
+    ],
+    "dfa-build": [
+     "nfa-thompson",
+     "dfa-search"
+    ],
+    "dfa-onepass": [
+     "nfa-thompson"
+    ],
+    "dfa-search": [],
+    "hybrid": [
+     "alloc",
+     "nfa-thompson"
+    ],
+    "internal-instrument": [
+     "internal-instrument-pikevm"
+    ],
+    "internal-instrument-pikevm": [
+     "logging",
+     "std"
+    ],
+    "logging": [
+     "dep:log",
+     "aho-corasick?/logging",
+     "memchr?/logging"
+    ],
+    "meta": [
+     "syntax",
+     "nfa-pikevm"
+    ],
+    "nfa": [
+     "nfa-thompson",
+     "nfa-pikevm",
+     "nfa-backtrack"
+    ],
+    "nfa-backtrack": [
+     "nfa-thompson"
+    ],
+    "nfa-pikevm": [
+     "nfa-thompson"
+    ],
+    "nfa-thompson": [
+     "alloc"
+    ],
+    "perf": [
+     "perf-inline",
+     "perf-literal"
+    ],
+    "perf-inline": [],
+    "perf-literal": [
+     "perf-literal-substring",
+     "perf-literal-multisubstring"
+    ],
+    "perf-literal-multisubstring": [
+     "dep:aho-corasick"
+    ],
+    "perf-literal-substring": [
+     "aho-corasick?/perf-literal",
+     "dep:memchr"
+    ],
+    "std": [
+     "regex-syntax?/std",
+     "memchr?/std",
+     "aho-corasick?/std",
+     "alloc"
+    ],
+    "syntax": [
+     "dep:regex-syntax",
+     "alloc"
+    ],
+    "unicode": [
+     "unicode-age",
+     "unicode-bool",
+     "unicode-case",
+     "unicode-gencat",
+     "unicode-perl",
+     "unicode-script",
+     "unicode-segment",
+     "unicode-word-boundary",
+     "regex-syntax?/unicode"
+    ],
+    "unicode-age": [
+     "regex-syntax?/unicode-age"
+    ],
+    "unicode-bool": [
+     "regex-syntax?/unicode-bool"
+    ],
+    "unicode-case": [
+     "regex-syntax?/unicode-case"
+    ],
+    "unicode-gencat": [
+     "regex-syntax?/unicode-gencat"
+    ],
+    "unicode-perl": [
+     "regex-syntax?/unicode-perl"
+    ],
+    "unicode-script": [
+     "regex-syntax?/unicode-script"
+    ],
+    "unicode-segment": [
+     "regex-syntax?/unicode-segment"
+    ],
+    "unicode-word-boundary": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "regex-syntax",
+   "version": "0.8.11",
+   "checksum": "sha256-1vb/mjeEhbKYpShmVtpmW6dEE9NtsJeWMyddLnCBRdQ=",
+   "narHash": "sha256-5Ivmv51xTRWLH4x7PY6T5YUDc01tdSsZblVrSeeKA8U=",
+   "features": {
+    "arbitrary": [
+     "dep:arbitrary"
+    ],
+    "default": [
+     "std",
+     "unicode"
+    ],
+    "std": [],
+    "unicode": [
+     "unicode-age",
+     "unicode-bool",
+     "unicode-case",
+     "unicode-gencat",
+     "unicode-perl",
+     "unicode-script",
+     "unicode-segment"
+    ],
+    "unicode-age": [],
+    "unicode-bool": [],
+    "unicode-case": [],
+    "unicode-gencat": [],
+    "unicode-perl": [],
+    "unicode-script": [],
+    "unicode-segment": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "serde",
+   "version": "1.0.229",
+   "checksum": "sha256-QUhZCv662jhmiPGHc9phd5K/LvA//B5MvSsdRbAj4Lo=",
+   "narHash": "sha256-T1H9DwcawNJR4dsg1tZoVH09Aw52l+e9UoVHk6EQgnM=",
+   "deps": [
+    {
+     "name": "serde_core",
+     "crate": "serde_core@1.0.229",
+     "noDefault": true,
+     "features": [
+      "result"
+     ]
+    },
+    {
+     "name": "serde_derive",
+     "crate": "serde_derive@1.0.229",
+     "optional": true
+    }
+   ],
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "serde_core",
+   "version": "1.0.229",
+   "checksum": "sha256-Z9yiycUeWKR5Gkse1YMIs5xkIk00mpNatQOao2CUKkg=",
+   "narHash": "sha256-xn5jwANquLLIvLnPF0viVRGyMyMSp8rjzm6IPApaEKM=",
+   "deps": [
+    {
+     "name": "serde_derive",
+     "crate": "serde_derive@1.0.229",
+     "target": "cfg(any())"
+    }
+   ],
+   "features": {
+    "alloc": [],
+    "default": [
+     "std",
+     "result"
+    ],
+    "rc": [],
+    "result": [],
+    "std": [],
+    "unstable": []
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "serde_derive",
+   "version": "1.0.229",
+   "checksum": "sha256-56XXEmOlp9R7Qfaz8GuidvEMwYsJMfF5n3EFeOIwk0g=",
+   "narHash": "sha256-dcHOdgqvNXlhDlyV+crpzueMO4bc+wVSj92Buk0HcYQ=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true,
+     "features": [
+      "proc-macro"
+     ]
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "noDefault": true,
+     "features": [
+      "proc-macro"
+     ]
+    },
+    {
+     "name": "syn",
+     "crate": "syn@3.0.9",
+     "noDefault": true,
+     "features": [
+      "clone-impls",
+      "derive",
+      "parsing",
+      "printing",
+      "proc-macro"
+     ]
+    }
+   ],
+   "features": {
+    "default": [],
+    "deserialize_in_place": []
+   },
+   "meta": {
+    "edition": "2021",
+    "procMacro": true
+   }
+  },
+  {
+   "name": "serde_json",
+   "version": "1.0.154",
+   "checksum": "sha256-5+nMixuFJkB0+8wCqIaAxAlrHkffj3OdzrA79ILwS9Y=",
+   "narHash": "sha256-LFtsX30lltauu/s/3BLVgGO6ND0IXWvDulf3fd9AzIs=",
+   "deps": [
+    {
+     "name": "itoa",
+     "crate": "itoa@1.0.18"
+    },
+    {
+     "name": "memchr",
+     "crate": "memchr@2.8.3",
+     "noDefault": true
+    },
+    {
+     "name": "serde",
+     "crate": "serde@1.0.229",
+     "target": "cfg(any())",
+     "noDefault": true
+    },
+    {
+     "name": "serde_core",
+     "crate": "serde_core@1.0.229",
+     "noDefault": true
+    },
+    {
+     "name": "zmij",
+     "crate": "zmij@1.0.23"
+    }
+   ],
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "arbitrary_precision": [],
+    "default": [
+     "std"
+    ],
+    "float_roundtrip": [],
+    "preserve_order": [
+     "indexmap",
+     "alloc",
+     "dep:foldhash"
+    ],
+    "raw_value": [],
+    "std": [
+     "memchr/std",
+     "serde_core/std"
+    ],
+    "unbounded_depth": []
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "shlex",
+   "version": "2.0.1",
+   "checksum": "sha256-+PrdWchV7yCA3s3vj/Fh62ZhuGkzydguW6KdxgKlWro=",
+   "narHash": "sha256-/OUUB3jcUb//illY9sP5lDFsItmIdIXO8HKj7kzLSjo=",
+   "features": {
+    "default": [
+     "std"
+    ],
+    "std": []
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "strsim",
+   "version": "0.11.1",
+   "checksum": "sha256-fai1c2hF2fL8uDfqXZ4mKFZLOwQ6cJSKPwt3iDjF+08=",
+   "narHash": "sha256-RqMWnA9H7bWXrkWFtsp+ImypxBEuJpIeWAcdy5u+W8A=",
+   "meta": {
+    "edition": "2015"
+   }
+  },
+  {
+   "name": "syn",
+   "version": "2.0.119",
+   "checksum": "sha256-hygxtkLRoHmZqWKjUe01uVXqLPyPOGIJHiokCoTxcpc=",
+   "narHash": "sha256-jgtRuCtasz+YryAyeOpxdZuIyzVoYAKcCeEvG3fj55k=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "clone-impls": [],
+    "default": [
+     "derive",
+     "parsing",
+     "printing",
+     "clone-impls",
+     "proc-macro"
+    ],
+    "derive": [],
+    "extra-traits": [],
+    "fold": [],
+    "full": [],
+    "parsing": [],
+    "printing": [
+     "dep:quote"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro",
+     "quote?/proc-macro"
+    ],
+    "test": [
+     "syn-test-suite/all-features"
+    ],
+    "visit": [],
+    "visit-mut": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "syn",
+   "version": "3.0.9",
+   "checksum": "sha256-14yN7kx78OFGcwlyVv7WFCzp07haQIGJ0HSCRCFFgjs=",
+   "narHash": "sha256-15tAqEcgBRjsdzhVk1Lo3J+wlupPk/gvseURotWTt9w=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "clone-impls": [],
+    "default": [
+     "derive",
+     "parsing",
+     "printing",
+     "clone-impls",
+     "proc-macro"
+    ],
+    "derive": [],
+    "extra-traits": [],
+    "fold": [],
+    "full": [],
+    "parsing": [],
+    "printing": [
+     "dep:quote"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro",
+     "quote?/proc-macro"
+    ],
+    "test": [
+     "syn-test-suite/all-features"
+    ],
+    "visit": [],
+    "visit-mut": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "thiserror",
+   "version": "2.0.21",
+   "checksum": "sha256-CeUsuGo2zt5csQG/iQiDez5Mbl5Z/n/YXCP7ViANGJ4=",
+   "narHash": "sha256-y3Wx4o22VmmlQ+P653psq3hw2aPiYxcM2EMA393nmQI=",
+   "deps": [
+    {
+     "name": "thiserror-impl",
+     "crate": "thiserror-impl@2.0.21"
+    }
+   ],
+   "features": {
+    "default": [
+     "std"
+    ],
+    "std": []
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "thiserror-impl",
+   "version": "2.0.21",
+   "checksum": "sha256-/lGXkjKH2yClgSXwvIXAYvfyyJLel7GMNW+e+xSyhSQ=",
+   "narHash": "sha256-LSnwWLJf4dDvKOaR0kNM7QMHYqzWSAR3sW4LeoXg56Y=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107"
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47"
+    },
+    {
+     "name": "syn",
+     "crate": "syn@3.0.9"
+    }
+   ],
+   "meta": {
+    "edition": "2021",
+    "procMacro": true
+   }
+  },
+  {
+   "name": "tokio",
+   "version": "1.54.0",
+   "checksum": "sha256-oMFopHS5W/7P6QimXUvf/FIxRLZJp0wJwoavs11T4Lw=",
+   "narHash": "sha256-9heqC+gr+aJe7dB20lJ2mhqeS3lOg3bBgp6xwPDJBHs=",
+   "deps": [
+    {
+     "name": "pin-project-lite",
+     "crate": "pin-project-lite@0.2.17"
+    },
+    {
+     "name": "tokio-macros",
+     "crate": "tokio-macros@2.7.2",
+     "optional": true
+    }
+   ],
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "schedule-latency": [],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "tokio-macros",
+   "version": "2.7.2",
+   "checksum": "sha256-eHc6Kjl/RRWCzgaAFZhcMxk89t6ot00qY5/kV7Lwew4=",
+   "narHash": "sha256-ncCJ+RrG9jkp0Q6LlXN9TPtilK5I//0EAhi0C/NL8zQ=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107"
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47"
+    },
+    {
+     "name": "syn",
+     "crate": "syn@3.0.9",
+     "features": [
+      "full"
+     ]
+    }
+   ],
+   "meta": {
+    "edition": "2021",
+    "procMacro": true
+   }
+  },
+  {
+   "name": "unicode-ident",
+   "version": "1.0.27",
+   "checksum": "sha256-osdU1sM3laHDJHJ0KOWn3ttbBhlfmJC9vLp2DT4kZWM=",
+   "narHash": "sha256-bRUtw8cGjIVRR6+Nl2d3J3G6eggw0tb2BFN2fEqjQ5o=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "utf8parse",
+   "version": "0.2.2",
+   "checksum": "sha256-BqveNhFlet9m04PwCwk9f67Mf6VwccziV4ZgyfEBCCE=",
+   "narHash": "sha256-h+XZ48STfds73DVffc3YFS3S0fJrK9xWXoSdow7auk4=",
+   "features": {
+    "default": [],
+    "nightly": []
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "windows-link",
+   "version": "0.2.1",
+   "checksum": "sha256-8IBSIuV/dSHWpi42+pFjvIkazUIvlx3v6X1k5w0KT+U=",
+   "narHash": "sha256-wxBf6m5IAvhw845BDmeeQG+aeNbxrFFmv2AXNg5Gsq8=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "windows-sys",
+   "version": "0.61.2",
+   "checksum": "sha256-rhNyKby9bN8Pe4CjHfYXZhRQd930lBanKLAss5If8/w=",
+   "narHash": "sha256-u41eiRzZY1jzGpNAswmSx8iL3/V/ni3zAP3qm2fFLVU=",
+   "deps": [
+    {
+     "name": "windows-link",
+     "crate": "windows-link@0.2.1",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "Wdk": [
+     "Win32_Foundation"
+    ],
+    "Wdk_Devices": [
+     "Wdk"
+    ],
+    "Wdk_Devices_Bluetooth": [
+     "Wdk_Devices"
+    ],
+    "Wdk_Devices_HumanInterfaceDevice": [
+     "Wdk_Devices"
+    ],
+    "Wdk_Foundation": [
+     "Wdk"
+    ],
+    "Wdk_Graphics": [
+     "Wdk"
+    ],
+    "Wdk_Graphics_Direct3D": [
+     "Wdk_Graphics"
+    ],
+    "Wdk_NetworkManagement": [
+     "Wdk"
+    ],
+    "Wdk_NetworkManagement_Ndis": [
+     "Wdk_NetworkManagement"
+    ],
+    "Wdk_NetworkManagement_WindowsFilteringPlatform": [
+     "Wdk_NetworkManagement"
+    ],
+    "Wdk_Storage": [
+     "Wdk"
+    ],
+    "Wdk_Storage_FileSystem": [
+     "Wdk_Storage"
+    ],
+    "Wdk_Storage_FileSystem_Minifilters": [
+     "Wdk_Storage_FileSystem"
+    ],
+    "Wdk_System": [
+     "Wdk"
+    ],
+    "Wdk_System_IO": [
+     "Wdk_System"
+    ],
+    "Wdk_System_Memory": [
+     "Wdk_System"
+    ],
+    "Wdk_System_OfflineRegistry": [
+     "Wdk_System"
+    ],
+    "Wdk_System_Registry": [
+     "Wdk_System"
+    ],
+    "Wdk_System_SystemInformation": [
+     "Wdk_System"
+    ],
+    "Wdk_System_SystemServices": [
+     "Wdk_System"
+    ],
+    "Wdk_System_Threading": [
+     "Wdk_System"
+    ],
+    "Win32": [
+     "Win32_Foundation"
+    ],
+    "Win32_Data": [
+     "Win32"
+    ],
+    "Win32_Data_HtmlHelp": [
+     "Win32_Data"
+    ],
+    "Win32_Data_RightsManagement": [
+     "Win32_Data"
+    ],
+    "Win32_Devices": [
+     "Win32"
+    ],
+    "Win32_Devices_AllJoyn": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Beep": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_BiometricFramework": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Bluetooth": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Cdrom": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Communication": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_DeviceAndDriverInstallation": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_DeviceQuery": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Display": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Dvd": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Enumeration": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Enumeration_Pnp": [
+     "Win32_Devices_Enumeration"
+    ],
+    "Win32_Devices_Fax": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_HumanInterfaceDevice": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Nfc": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Nfp": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_PortableDevices": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Properties": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Pwm": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Sensors": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_SerialCommunication": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Tapi": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Usb": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_WebServicesOnDevices": [
+     "Win32_Devices"
+    ],
+    "Win32_Foundation": [
+     "Win32"
+    ],
+    "Win32_Gaming": [
+     "Win32"
+    ],
+    "Win32_Globalization": [
+     "Win32"
+    ],
+    "Win32_Graphics": [
+     "Win32"
+    ],
+    "Win32_Graphics_Dwm": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Gdi": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_GdiPlus": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Hlsl": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_OpenGL": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Printing": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Printing_PrintTicket": [
+     "Win32_Graphics_Printing"
+    ],
+    "Win32_Management": [
+     "Win32"
+    ],
+    "Win32_Management_MobileDeviceManagementRegistration": [
+     "Win32_Management"
+    ],
+    "Win32_Media": [
+     "Win32"
+    ],
+    "Win32_Media_Audio": [
+     "Win32_Media"
+    ],
+    "Win32_Media_DxMediaObjects": [
+     "Win32_Media"
+    ],
+    "Win32_Media_KernelStreaming": [
+     "Win32_Media"
+    ],
+    "Win32_Media_Multimedia": [
+     "Win32_Media"
+    ],
+    "Win32_Media_Streaming": [
+     "Win32_Media"
+    ],
+    "Win32_Media_WindowsMediaFormat": [
+     "Win32_Media"
+    ],
+    "Win32_NetworkManagement": [
+     "Win32"
+    ],
+    "Win32_NetworkManagement_Dhcp": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Dns": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_InternetConnectionWizard": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_IpHelper": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Multicast": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Ndis": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetBios": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetManagement": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetShell": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetworkDiagnosticsFramework": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_P2P": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_QoS": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Rras": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Snmp": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WNet": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WebDav": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WiFi": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsConnectionManager": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsFilteringPlatform": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsFirewall": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsNetworkVirtualization": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_Networking": [
+     "Win32"
+    ],
+    "Win32_Networking_ActiveDirectory": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_Clustering": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_HttpServer": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_Ldap": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WebSocket": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WinHttp": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WinInet": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WinSock": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WindowsWebServices": [
+     "Win32_Networking"
+    ],
+    "Win32_Security": [
+     "Win32"
+    ],
+    "Win32_Security_AppLocker": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Authentication": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Authentication_Identity": [
+     "Win32_Security_Authentication"
+    ],
+    "Win32_Security_Authorization": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Credentials": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Cryptography": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Cryptography_Catalog": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_Cryptography_Certificates": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_Cryptography_Sip": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_Cryptography_UI": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_DiagnosticDataQuery": [
+     "Win32_Security"
+    ],
+    "Win32_Security_DirectoryServices": [
+     "Win32_Security"
+    ],
+    "Win32_Security_EnterpriseData": [
+     "Win32_Security"
+    ],
+    "Win32_Security_ExtensibleAuthenticationProtocol": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Isolation": [
+     "Win32_Security"
+    ],
+    "Win32_Security_LicenseProtection": [
+     "Win32_Security"
+    ],
+    "Win32_Security_NetworkAccessProtection": [
+     "Win32_Security"
+    ],
+    "Win32_Security_WinTrust": [
+     "Win32_Security"
+    ],
+    "Win32_Security_WinWlx": [
+     "Win32_Security"
+    ],
+    "Win32_Storage": [
+     "Win32"
+    ],
+    "Win32_Storage_Cabinets": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_CloudFilters": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Compression": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_DistributedFileSystem": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_FileHistory": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_FileSystem": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Imapi": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_IndexServer": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_InstallableFileSystems": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_IscsiDisc": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Jet": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Nvme": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_OfflineFiles": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_OperationRecorder": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Packaging": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Packaging_Appx": [
+     "Win32_Storage_Packaging"
+    ],
+    "Win32_Storage_ProjectedFileSystem": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_StructuredStorage": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Vhd": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Xps": [
+     "Win32_Storage"
+    ],
+    "Win32_System": [
+     "Win32"
+    ],
+    "Win32_System_AddressBook": [
+     "Win32_System"
+    ],
+    "Win32_System_Antimalware": [
+     "Win32_System"
+    ],
+    "Win32_System_ApplicationInstallationAndServicing": [
+     "Win32_System"
+    ],
+    "Win32_System_ApplicationVerifier": [
+     "Win32_System"
+    ],
+    "Win32_System_ClrHosting": [
+     "Win32_System"
+    ],
+    "Win32_System_Com": [
+     "Win32_System"
+    ],
+    "Win32_System_Com_Marshal": [
+     "Win32_System_Com"
+    ],
+    "Win32_System_Com_StructuredStorage": [
+     "Win32_System_Com"
+    ],
+    "Win32_System_Com_Urlmon": [
+     "Win32_System_Com"
+    ],
+    "Win32_System_ComponentServices": [
+     "Win32_System"
+    ],
+    "Win32_System_Console": [
+     "Win32_System"
+    ],
+    "Win32_System_CorrelationVector": [
+     "Win32_System"
+    ],
+    "Win32_System_DataExchange": [
+     "Win32_System"
+    ],
+    "Win32_System_DeploymentServices": [
+     "Win32_System"
+    ],
+    "Win32_System_DeveloperLicensing": [
+     "Win32_System"
+    ],
+    "Win32_System_Diagnostics": [
+     "Win32_System"
+    ],
+    "Win32_System_Diagnostics_Ceip": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_Debug": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_Debug_Extensions": [
+     "Win32_System_Diagnostics_Debug"
+    ],
+    "Win32_System_Diagnostics_Etw": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_ProcessSnapshotting": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_ToolHelp": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_TraceLogging": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_DistributedTransactionCoordinator": [
+     "Win32_System"
+    ],
+    "Win32_System_Environment": [
+     "Win32_System"
+    ],
+    "Win32_System_ErrorReporting": [
+     "Win32_System"
+    ],
+    "Win32_System_EventCollector": [
+     "Win32_System"
+    ],
+    "Win32_System_EventLog": [
+     "Win32_System"
+    ],
+    "Win32_System_EventNotificationService": [
+     "Win32_System"
+    ],
+    "Win32_System_GroupPolicy": [
+     "Win32_System"
+    ],
+    "Win32_System_HostCompute": [
+     "Win32_System"
+    ],
+    "Win32_System_HostComputeNetwork": [
+     "Win32_System"
+    ],
+    "Win32_System_HostComputeSystem": [
+     "Win32_System"
+    ],
+    "Win32_System_Hypervisor": [
+     "Win32_System"
+    ],
+    "Win32_System_IO": [
+     "Win32_System"
+    ],
+    "Win32_System_Iis": [
+     "Win32_System"
+    ],
+    "Win32_System_Ioctl": [
+     "Win32_System"
+    ],
+    "Win32_System_JobObjects": [
+     "Win32_System"
+    ],
+    "Win32_System_Js": [
+     "Win32_System"
+    ],
+    "Win32_System_Kernel": [
+     "Win32_System"
+    ],
+    "Win32_System_LibraryLoader": [
+     "Win32_System"
+    ],
+    "Win32_System_Mailslots": [
+     "Win32_System"
+    ],
+    "Win32_System_Mapi": [
+     "Win32_System"
+    ],
+    "Win32_System_Memory": [
+     "Win32_System"
+    ],
+    "Win32_System_Memory_NonVolatile": [
+     "Win32_System_Memory"
+    ],
+    "Win32_System_MessageQueuing": [
+     "Win32_System"
+    ],
+    "Win32_System_MixedReality": [
+     "Win32_System"
+    ],
+    "Win32_System_Ole": [
+     "Win32_System"
+    ],
+    "Win32_System_PasswordManagement": [
+     "Win32_System"
+    ],
+    "Win32_System_Performance": [
+     "Win32_System"
+    ],
+    "Win32_System_Performance_HardwareCounterProfiling": [
+     "Win32_System_Performance"
+    ],
+    "Win32_System_Pipes": [
+     "Win32_System"
+    ],
+    "Win32_System_Power": [
+     "Win32_System"
+    ],
+    "Win32_System_ProcessStatus": [
+     "Win32_System"
+    ],
+    "Win32_System_Recovery": [
+     "Win32_System"
+    ],
+    "Win32_System_Registry": [
+     "Win32_System"
+    ],
+    "Win32_System_RemoteDesktop": [
+     "Win32_System"
+    ],
+    "Win32_System_RemoteManagement": [
+     "Win32_System"
+    ],
+    "Win32_System_RestartManager": [
+     "Win32_System"
+    ],
+    "Win32_System_Restore": [
+     "Win32_System"
+    ],
+    "Win32_System_Rpc": [
+     "Win32_System"
+    ],
+    "Win32_System_Search": [
+     "Win32_System"
+    ],
+    "Win32_System_Search_Common": [
+     "Win32_System_Search"
+    ],
+    "Win32_System_SecurityCenter": [
+     "Win32_System"
+    ],
+    "Win32_System_Services": [
+     "Win32_System"
+    ],
+    "Win32_System_SetupAndMigration": [
+     "Win32_System"
+    ],
+    "Win32_System_Shutdown": [
+     "Win32_System"
+    ],
+    "Win32_System_StationsAndDesktops": [
+     "Win32_System"
+    ],
+    "Win32_System_SubsystemForLinux": [
+     "Win32_System"
+    ],
+    "Win32_System_SystemInformation": [
+     "Win32_System"
+    ],
+    "Win32_System_SystemServices": [
+     "Win32_System"
+    ],
+    "Win32_System_Threading": [
+     "Win32_System"
+    ],
+    "Win32_System_Time": [
+     "Win32_System"
+    ],
+    "Win32_System_TpmBaseServices": [
+     "Win32_System"
+    ],
+    "Win32_System_UserAccessLogging": [
+     "Win32_System"
+    ],
+    "Win32_System_Variant": [
+     "Win32_System"
+    ],
+    "Win32_System_VirtualDosMachines": [
+     "Win32_System"
+    ],
+    "Win32_System_WindowsProgramming": [
+     "Win32_System"
+    ],
+    "Win32_System_Wmi": [
+     "Win32_System"
+    ],
+    "Win32_UI": [
+     "Win32"
+    ],
+    "Win32_UI_Accessibility": [
+     "Win32_UI"
+    ],
+    "Win32_UI_ColorSystem": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Controls": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Controls_Dialogs": [
+     "Win32_UI_Controls"
+    ],
+    "Win32_UI_HiDpi": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Input": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Input_Ime": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_KeyboardAndMouse": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_Pointer": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_Touch": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_XboxController": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_InteractionContext": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Magnification": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Shell": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Shell_Common": [
+     "Win32_UI_Shell"
+    ],
+    "Win32_UI_Shell_PropertiesSystem": [
+     "Win32_UI_Shell"
+    ],
+    "Win32_UI_TabletPC": [
+     "Win32_UI"
+    ],
+    "Win32_UI_TextServices": [
+     "Win32_UI"
+    ],
+    "Win32_UI_WindowsAndMessaging": [
+     "Win32_UI"
+    ],
+    "Win32_Web": [
+     "Win32"
+    ],
+    "Win32_Web_InternetExplorer": [
+     "Win32_Web"
+    ],
+    "default": [],
+    "docs": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "zmij",
+   "version": "1.0.23",
+   "checksum": "sha256-KWZtCrv60ePcTc9hRHMN06OrIlu72sgzGTRbG0TM/Bs=",
+   "narHash": "sha256-MiFKU1jGitx/Wx815c2/26m+qfzrcGQ7B8R2j6eS0ho=",
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "zstd",
+   "version": "0.13.3",
+   "checksum": "sha256-6R7jEaVpwycXFlFWbgeXIgDnb8/iJCpPpEYUmjiBwIo=",
+   "narHash": "sha256-OkfZFgS9t/A9k9zoSPAmf1eHkT5HyKyPA0+HRSXuzEc=",
+   "deps": [
+    {
+     "name": "zstd-safe",
+     "crate": "zstd-safe@7.3.0",
+     "noDefault": true,
+     "features": [
+      "std"
+     ]
+    }
+   ],
+   "features": {
+    "arrays": [
+     "zstd-safe/arrays"
+    ],
+    "bindgen": [
+     "zstd-safe/bindgen"
+    ],
+    "debug": [
+     "zstd-safe/debug"
+    ],
+    "default": [
+     "legacy",
+     "arrays",
+     "zdict_builder"
+    ],
+    "doc-cfg": [],
+    "experimental": [
+     "zstd-safe/experimental"
+    ],
+    "fat-lto": [
+     "zstd-safe/fat-lto"
+    ],
+    "legacy": [
+     "zstd-safe/legacy"
+    ],
+    "no_asm": [
+     "zstd-safe/no_asm"
+    ],
+    "pkg-config": [
+     "zstd-safe/pkg-config"
+    ],
+    "thin": [
+     "zstd-safe/thin"
+    ],
+    "thin-lto": [
+     "zstd-safe/thin-lto"
+    ],
+    "wasm": [],
+    "zdict_builder": [
+     "zstd-safe/zdict_builder"
+    ],
+    "zstdmt": [
+     "zstd-safe/zstdmt"
+    ]
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "zstd-safe",
+   "version": "7.3.0",
+   "checksum": "sha256-ZNgGSattudn2+cgKQL7NlI7aRxSgpayMTRV6MiMceII=",
+   "narHash": "sha256-GdUFWrgrUkq1vJcYowWXE5HJZJ+O0O5jjB2Xm4PhxoQ=",
+   "deps": [
+    {
+     "name": "zstd-sys",
+     "crate": "zstd-sys@2.1.2+zstd.1.5.7",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "arrays": [],
+    "bindgen": [
+     "zstd-sys/bindgen"
+    ],
+    "debug": [
+     "zstd-sys/debug"
+    ],
+    "default": [
+     "legacy",
+     "arrays",
+     "zdict_builder"
+    ],
+    "doc-cfg": [],
+    "experimental": [
+     "zstd-sys/experimental"
+    ],
+    "fat-lto": [
+     "zstd-sys/fat-lto"
+    ],
+    "legacy": [
+     "zstd-sys/legacy"
+    ],
+    "no_asm": [
+     "zstd-sys/no_asm"
+    ],
+    "pkg-config": [
+     "zstd-sys/pkg-config"
+    ],
+    "seekable": [
+     "zstd-sys/seekable"
+    ],
+    "std": [
+     "zstd-sys/std"
+    ],
+    "thin": [
+     "zstd-sys/thin"
+    ],
+    "thin-lto": [
+     "zstd-sys/thin-lto"
+    ],
+    "zdict_builder": [
+     "zstd-sys/zdict_builder"
+    ],
+    "zstdmt": [
+     "zstd-sys/zstdmt"
+    ]
+   },
+   "meta": {
+    "edition": "2018",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "zstd-sys",
+   "version": "2.1.2+zstd.1.5.7",
+   "checksum": "sha256-SBranFQ7IyPLt7vbtSSRd/vwGI7ZWe0sFeSyJCHITtM=",
+   "narHash": "sha256-uQTfBw5nXEUrOTW0UY9fbKzVnYOU5x1IwZwZnw2J9D0=",
+   "deps": [
+    {
+     "name": "cc",
+     "crate": "cc@1.9.0",
+     "kind": "build",
+     "features": [
+      "parallel"
+     ]
+    },
+    {
+     "name": "pkg-config",
+     "crate": "pkg-config@0.3.34",
+     "kind": "build"
+    }
+   ],
+   "features": {
+    "cmake": [
+     "dep:cmake"
+    ],
+    "debug": [],
+    "default": [
+     "legacy",
+     "zdict_builder"
+    ],
+    "experimental": [],
+    "fat-lto": [],
+    "legacy": [],
+    "no_asm": [],
+    "no_wasm_shim": [],
+    "non-cargo": [],
+    "pkg-config": [],
+    "seekable": [],
+    "std": [],
+    "thin": [],
+    "thin-lto": [],
+    "vendored": [],
+    "zdict_builder": [],
+    "zstdmt": []
+   },
+   "links": "zstd",
+   "meta": {
+    "edition": "2018",
+    "build": "build.rs"
+   }
+  }
+ ]
+}

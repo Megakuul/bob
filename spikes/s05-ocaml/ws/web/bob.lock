@@ -1,0 +1,639 @@
+{
+ "opamRepository": "af5ddb0addf6e75660ee9d7485b27425459d1d66",
+ "packages": {
+  "angstrom": {
+   "name": "angstrom",
+   "version": "0.16.1",
+   "url": "https://github.com/inhabitedtype/angstrom/archive/0.16.1.tar.gz",
+   "hash": "sha256-FDU2+00ElXTFObmZCEBhXgeO092U4dJIiCk/aDSaEAs=",
+   "opam": "ba84e85c99f91ed0adebface04e9ee699b7c3f5241d495d0a68f0498a58ec9e2",
+   "deps": [
+    "bigstringaf",
+    "ocaml-syntax-shims"
+   ]
+  },
+  "asn1-combinators": {
+   "name": "asn1-combinators",
+   "version": "0.3.3",
+   "url": "https://github.com/mirleft/ocaml-asn1-combinators/releases/download/v0.3.3/asn1-combinators-0.3.3.tbz",
+   "hash": "sha512-EAGHg4Mnoeh45Pw4BDfzxcKAHKKQuj3mjjNVsJfrBT8bMe2LEk3ceGcbWd/lckq4JPm5mpfPiDPx5BntKXA8vw==",
+   "opam": "c7ad85391eed665bed83d18adae4932635a94422fbbeec37ae58ae887caa1220",
+   "deps": [
+    "ptime"
+   ]
+  },
+  "astring": {
+   "name": "astring",
+   "version": "0.8.5",
+   "url": "https://erratique.ch/software/astring/releases/astring-0.8.5.tbz",
+   "hash": "sha256-hlaSYwwHw6uHxmzfwnNMD9/Jw0pX+Oif/sfH0V56cPo=",
+   "opam": "0bb5e2787320a0fef938597029f2911f17ef0f7bc2652567d36fd370d5f5164d",
+   "deps": [
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "base": {
+   "name": "base",
+   "version": "v0.17.3",
+   "url": "https://github.com/janestreet/base/archive/refs/tags/v0.17.3.tar.gz",
+   "hash": "sha512-YoYQyv9+EkYxhw+h4pZhyqwovf2xh1DuQ7hoA32j1l1t2QI7S+fExSQFZ577XoZaZjLZVgaiKyijZjamv3Bu8w==",
+   "opam": "272be33188051b961d44db98f798d041ec4e6133185efbd29f7dea369e03f974",
+   "deps": [
+    "dune-configurator",
+    "ocaml_intrinsics_kernel",
+    "sexplib0"
+   ]
+  },
+  "base-bytes": {
+   "name": "base-bytes",
+   "version": "base",
+   "opam": "0a7ed34c742ddc72e8fed9b16314091884b60a758ff0d32f6ee140b857df9506"
+  },
+  "base64": {
+   "name": "base64",
+   "version": "3.5.2",
+   "url": "https://github.com/mirage/ocaml-base64/releases/download/v3.5.2/base64-3.5.2.tbz",
+   "hash": "sha512-ghSKH+/slJOq6sAyyNRrlUg2nX/ZCleGXgCaMsig7vlQ8PjbtSt0u0aIClkKC0ny2qerSFcjNzSu6OOD9aFk7A==",
+   "opam": "c393b2c2aa299c544ffd5593a9967e6104668ac4f49dbfc4ec8470f64721fd27"
+  },
+  "bigstringaf": {
+   "name": "bigstringaf",
+   "version": "0.10.0",
+   "url": "https://github.com/inhabitedtype/bigstringaf/archive/0.10.0.tar.gz",
+   "hash": "sha512-tRx1aSXXAW/9fqxJ5pOToYlzkcomhajDDHtuORe01myUALSeiYbQ8DMpGXuVrVLglv+D3qXgNXHLW8PZpRcGAg==",
+   "opam": "bfd6a49a12c58894a97294d70dc58f8bec46bbd1b9c10950bfad873fda2c7d5f",
+   "deps": [
+    "dune-configurator"
+   ]
+  },
+  "bos": {
+   "name": "bos",
+   "version": "0.3.0",
+   "url": "https://erratique.ch/software/bos/releases/bos-0.3.0.tbz",
+   "hash": "sha512-d0FkQkSEYvsxa5tk7CEwOBU+gsbeAw1RGDihW7E7gHAFmMG8+uHJDvdm1PQsm/Xc8jHu/yNwlVgkbXlGlihYzA==",
+   "opam": "6dd7b22f693393c7ebed027c7cccb3ba2326e4496a2313aa14a9263964d430c4",
+   "deps": [
+    "astring",
+    "fmt",
+    "fpath",
+    "logs",
+    "ocamlbuild",
+    "rresult",
+    "topkg"
+   ]
+  },
+  "ca-certs": {
+   "name": "ca-certs",
+   "version": "1.0.3",
+   "url": "https://github.com/mirage/ca-certs/releases/download/v1.0.3/ca-certs-1.0.3.tbz",
+   "hash": "sha512-m8yylDB6fm3HzFTnxwWtVQRgMyZcbl+EWdLjR4H2YqzXkn2a/x7s5D1YFt2uQdzTSVtud9COhHDleu8bnEdpLw==",
+   "opam": "ea6cceb9b65ed18771a6f6cde8bb24b793482a2f2333685c907a67bd61744c31",
+   "deps": [
+    "bos",
+    "digestif",
+    "fpath",
+    "logs",
+    "mirage-crypto",
+    "ohex",
+    "ptime",
+    "x509"
+   ]
+  },
+  "cohttp": {
+   "name": "cohttp",
+   "version": "6.3.0",
+   "url": "https://github.com/mirage/ocaml-cohttp/releases/download/v6.3.0/cohttp-6.3.0.tbz",
+   "hash": "sha512-GxRXG4rvEq5R+U636UqPxuJrZN/+3Yb4+cI3R5uYA5WiQkynqc49woVgi853AXBojoa0um2oI3DKX+epZJzRnw==",
+   "opam": "9fddce6b16b5cc79047979ddc8e6ad392fd8c9cb79df5dd5c564702282a1daa9",
+   "deps": [
+    "base64",
+    "http",
+    "ipaddr",
+    "logs",
+    "ppx_sexp_conv",
+    "re",
+    "sexplib0",
+    "stringext",
+    "uri",
+    "uri-sexp"
+   ]
+  },
+  "cohttp-lwt": {
+   "name": "cohttp-lwt",
+   "version": "6.3.0",
+   "url": "https://github.com/mirage/ocaml-cohttp/releases/download/v6.3.0/cohttp-6.3.0.tbz",
+   "hash": "sha512-GxRXG4rvEq5R+U636UqPxuJrZN/+3Yb4+cI3R5uYA5WiQkynqc49woVgi853AXBojoa0um2oI3DKX+epZJzRnw==",
+   "opam": "a5242f1f18c04a7816d5f4f88830dcc07ae5c9193950ba7e1c8f1354e1539be2",
+   "deps": [
+    "cohttp",
+    "http",
+    "ipaddr",
+    "logs",
+    "lwt",
+    "ppx_sexp_conv",
+    "sexplib0",
+    "uri"
+   ]
+  },
+  "cohttp-lwt-unix": {
+   "name": "cohttp-lwt-unix",
+   "version": "6.3.0",
+   "url": "https://github.com/mirage/ocaml-cohttp/releases/download/v6.3.0/cohttp-6.3.0.tbz",
+   "hash": "sha512-GxRXG4rvEq5R+U636UqPxuJrZN/+3Yb4+cI3R5uYA5WiQkynqc49woVgi853AXBojoa0um2oI3DKX+epZJzRnw==",
+   "opam": "758880f023bb12981010f58827505fc31da376fd827050c59a7bff3f1eeda1ba",
+   "deps": [
+    "cohttp",
+    "cohttp-lwt",
+    "conduit-lwt",
+    "conduit-lwt-unix",
+    "fmt",
+    "http",
+    "logs",
+    "lwt",
+    "magic-mime",
+    "ppx_sexp_conv"
+   ]
+  },
+  "conduit": {
+   "name": "conduit",
+   "version": "8.0.0",
+   "url": "https://github.com/mirage/ocaml-conduit/releases/download/v8.0.0/conduit-8.0.0.tbz",
+   "hash": "sha512-Y8c2FsWkpkNqqaHI0ncdcOFXicY5quxrmpViKu4LNk8YJ46I7XafuuhP77gXvvHJyB/kHpafA9uZYSKVoVm1Ng==",
+   "opam": "5550ff706c72203adb2ce56c4344c730d2bfb15adca31d679af842404a073d9d",
+   "deps": [
+    "astring",
+    "ipaddr",
+    "ipaddr-sexp",
+    "logs",
+    "ppx_sexp_conv",
+    "sexplib0",
+    "uri"
+   ]
+  },
+  "conduit-lwt": {
+   "name": "conduit-lwt",
+   "version": "8.0.0",
+   "url": "https://github.com/mirage/ocaml-conduit/releases/download/v8.0.0/conduit-8.0.0.tbz",
+   "hash": "sha512-Y8c2FsWkpkNqqaHI0ncdcOFXicY5quxrmpViKu4LNk8YJ46I7XafuuhP77gXvvHJyB/kHpafA9uZYSKVoVm1Ng==",
+   "opam": "785faec931e3838ba031c871c50c219e51ade6c8432f6d9fd8f812b9ecce13e6",
+   "deps": [
+    "conduit",
+    "lwt",
+    "ppx_sexp_conv",
+    "sexplib0"
+   ]
+  },
+  "conduit-lwt-unix": {
+   "name": "conduit-lwt-unix",
+   "version": "8.0.0",
+   "url": "https://github.com/mirage/ocaml-conduit/releases/download/v8.0.0/conduit-8.0.0.tbz",
+   "hash": "sha512-Y8c2FsWkpkNqqaHI0ncdcOFXicY5quxrmpViKu4LNk8YJ46I7XafuuhP77gXvvHJyB/kHpafA9uZYSKVoVm1Ng==",
+   "opam": "19e9ec8a5725c94544a5cf3961db45c887cf4989950147726868863f6ccbafcb",
+   "deps": [
+    "ca-certs",
+    "conduit-lwt",
+    "ipaddr",
+    "ipaddr-sexp",
+    "logs",
+    "lwt",
+    "ppx_sexp_conv",
+    "uri"
+   ]
+  },
+  "conf-gmp": {
+   "name": "conf-gmp",
+   "version": "5",
+   "opam": "0b84f83c98bc73e52fe57b44dc5f7eef62def903cda780ce4d3123756a86d5b1"
+  },
+  "conf-gmp-powm-sec": {
+   "name": "conf-gmp-powm-sec",
+   "version": "4",
+   "opam": "8740c6d9e388a8d2081e3702b64826663dd0411a2e5004e612d5e2bed31877ba",
+   "deps": [
+    "conf-gmp"
+   ]
+  },
+  "conf-pkg-config": {
+   "name": "conf-pkg-config",
+   "version": "5",
+   "opam": "7826bafd660abb2925edb6821518c34aeee31eab692a45345c7331dc58a69816"
+  },
+  "cppo": {
+   "name": "cppo",
+   "version": "1.8.0",
+   "url": "https://github.com/ocaml-community/cppo/archive/v1.8.0.tar.gz",
+   "hash": "sha512-OEByW3Z6AwC9xI8R0m15i9yuCnZO1nmN86CN/IzHb+EksUoZ1HybXqjiKdaLAxFRCvznfA5NkTH72lEW3CaJog==",
+   "opam": "fc835b1428df3835c5fc2bf4909badfa089a9b2de4eb41c65baf7676f73e5861"
+  },
+  "csexp": {
+   "name": "csexp",
+   "version": "1.5.2",
+   "url": "https://github.com/ocaml-dune/csexp/releases/download/1.5.2/csexp-1.5.2.tbz",
+   "hash": "sha512-vigQGLz8INTbFIlO9RxLg21jONL9/iLmPUb0BfjepzSeFvHA7NZfc9TIWiqA5hjNu4ydr8u58inwTxrcpbGXPA==",
+   "opam": "f2cc6a37e347cd9147f1477eba1705354b360a43014ea46b8cad9ff4a971a0ed"
+  },
+  "digestif": {
+   "name": "digestif",
+   "version": "1.4.1",
+   "url": "https://github.com/mirage/digestif/releases/download/v1.4.1/digestif-1.4.1.tbz",
+   "hash": "sha512-zZTmxXo/jDSK3iaYZ1YXlWS78b36yqhvtmISdIqo/Ur2mUCBZiImWnj9V8t52a8c0uiqOsJwreCn2D/IyRUrEQ==",
+   "opam": "669fd866fc4be013876c84212c5b462d9280f9e7392e0082ff35f34896a15579",
+   "deps": [
+    "eqaf"
+   ]
+  },
+  "domain-name": {
+   "name": "domain-name",
+   "version": "0.5.0",
+   "url": "https://github.com/hannesm/domain-name/releases/download/v0.5.0/domain-name-0.5.0.tbz",
+   "hash": "sha512-kjrKtDTrsZf0QHVxEDD9G39heD4gzG90OHzgrPG8X0jriopeKdNEDnwkmrAGc+JQ3f3H5T1xxaFhPx27VXwK4Q==",
+   "opam": "e08d909422aca7772c0f25f2c6ed41a60dcd15a571110b4c9c781b4842c55eaf"
+  },
+  "dune-configurator": {
+   "name": "dune-configurator",
+   "version": "3.21.1",
+   "url": "https://github.com/ocaml/dune/releases/download/3.21.1/dune-3.21.1.tbz",
+   "hash": "sha512-2fpE4kA20lk63+WeUuCtZPPn6XPSP4SvV/x544+iEGMLDLVVkPMU1u9FUzO5ao4M4YjCcg6q5EV2IiVBunjvsw==",
+   "opam": "f87a11273051e75b1ab450b10fa9f5b6294badf836dbb190bc6301d1dc2449aa",
+   "deps": [
+    "csexp"
+   ]
+  },
+  "duration": {
+   "name": "duration",
+   "version": "0.3.1",
+   "url": "https://github.com/hannesm/duration/releases/download/v0.3.1/duration-0.3.1.tbz",
+   "hash": "sha512-JI/si6nr9qx8yRBVMHSWZYl05AK7nebTcCf75RtnCCR1MDksxg+VTPjX7YoDzg0tpED72fhyDjmKRG4KQ/WQrQ==",
+   "opam": "226e6946cd854c77ef24e81ee1c4cfefcca754bf0cde5035e29dad6f11d9f9b3"
+  },
+  "eqaf": {
+   "name": "eqaf",
+   "version": "0.10",
+   "url": "https://github.com/mirage/eqaf/releases/download/v0.10/eqaf-0.10.tbz",
+   "hash": "sha512-f3W11WZ+NgX42V4tb9pAlTEpAz5qNC7iyY7kE1wkKOHbh1R5cYaGBauYk3R1fEfCHFOX1MPaV4lS1xaCahVpeQ==",
+   "opam": "9c241a094a644994e253574a3269bdd108c05ff97a25dad2407bb35ec87af29d"
+  },
+  "fmt": {
+   "name": "fmt",
+   "version": "0.11.0",
+   "url": "https://erratique.ch/software/fmt/releases/fmt-0.11.0.tbz",
+   "hash": "sha512-P0AVX8anMVIC5BBYWWQwfWNBbIAB/SQ2Z+2djRoCtn3uyssl6cL+tAnFN7vft4F9kRaN5N3WQ1Mv9R1sHGlqSg==",
+   "opam": "02bb57a07d169eef9bde16e0a50a00423a4f756d589f7d1fed0d4d3aa367d11c",
+   "deps": [
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "fpath": {
+   "name": "fpath",
+   "version": "0.7.3",
+   "url": "https://erratique.ch/software/fpath/releases/fpath-0.7.3.tbz",
+   "hash": "sha256-ErCP8ZLQN9m21p6coZ0dOFGE8gsyN8JyMeQ3rIGs5w8=",
+   "opam": "5edc24b261e73ad45bd825c9b802ea31c660d7d1ddc3333b5af1ad5b108ea701",
+   "deps": [
+    "astring",
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "gmap": {
+   "name": "gmap",
+   "version": "0.3.0",
+   "url": "https://github.com/hannesm/gmap/releases/download/0.3.0/gmap-0.3.0.tbz",
+   "hash": "sha512-cWFpgfWhXWsqR+GHAgg+UugfZUcHYIWxSJ9nb1CwzEfHwsT6GctYHih43D1PcTPQxQ2LUag5C+Dm4wMYkH2B0w==",
+   "opam": "29ba8d90fbbf4e862bda9adeb03fe44daecb63b915eca615a39f9ba5e520ae0f"
+  },
+  "http": {
+   "name": "http",
+   "version": "6.3.0",
+   "url": "https://github.com/mirage/ocaml-cohttp/releases/download/v6.3.0/cohttp-6.3.0.tbz",
+   "hash": "sha512-GxRXG4rvEq5R+U636UqPxuJrZN/+3Yb4+cI3R5uYA5WiQkynqc49woVgi853AXBojoa0um2oI3DKX+epZJzRnw==",
+   "opam": "0d2546d0a03addf1b330aa13aadfe5d211bb36328c824ecbdb13039a7fd72eee"
+  },
+  "ipaddr": {
+   "name": "ipaddr",
+   "version": "5.6.2",
+   "url": "https://github.com/mirage/ocaml-ipaddr/releases/download/v5.6.2/ipaddr-5.6.2.tbz",
+   "hash": "sha512-cZ8y/VpchU/1ryxmjSD5xN5GWaPX0D0mDlN6tALZ3YWlNQ5hG/w7jfEPa+ArWUHVWpbNK03MwK0nEMlaUTc72A==",
+   "opam": "aa84040f3fe3953f02f02d159b50f0d9c9500b70308ede54b278155c8a4baeb3",
+   "deps": [
+    "domain-name",
+    "macaddr"
+   ]
+  },
+  "ipaddr-sexp": {
+   "name": "ipaddr-sexp",
+   "version": "5.6.2",
+   "url": "https://github.com/mirage/ocaml-ipaddr/releases/download/v5.6.2/ipaddr-5.6.2.tbz",
+   "hash": "sha512-cZ8y/VpchU/1ryxmjSD5xN5GWaPX0D0mDlN6tALZ3YWlNQ5hG/w7jfEPa+ArWUHVWpbNK03MwK0nEMlaUTc72A==",
+   "opam": "943120ffa484d675ce7a5638baa59b1509616d5b428f30f87beff1b8a5fac741",
+   "deps": [
+    "ipaddr",
+    "ppx_sexp_conv",
+    "sexplib0"
+   ]
+  },
+  "kdf": {
+   "name": "kdf",
+   "version": "1.1.2",
+   "url": "https://github.com/robur-coop/kdf/releases/download/v1.1.2/kdf-1.1.2.tbz",
+   "hash": "sha512-H2RPaj3HNNmB4YZ61rVmLA1eELcbAgKfeZjLVKrwN/LgPptfFWLpiGK6PUktW3i4mNEm+rRu0DBlOtu0P/UJ3Q==",
+   "opam": "24f3e26e51b124b1f9d32e433f5faec3b959a0adb4fd3ee09be74cf4f77bdc0a",
+   "deps": [
+    "digestif",
+    "mirage-crypto"
+   ]
+  },
+  "logs": {
+   "name": "logs",
+   "version": "0.10.0",
+   "url": "https://erratique.ch/software/logs/releases/logs-0.10.0.tbz",
+   "hash": "sha512-Eit6d70HruHgy44H6CsZWhJSjPAV5y+g3Vr6ribOBLrZsp8yptO9NUf+UiuKA2YIeF6K25AOMVgKDVVXGbu35w==",
+   "opam": "a3c0756c225461a635d0b28b240554ec763a6a6371f6fa83e67f0d7e151d3048",
+   "deps": [
+    "fmt",
+    "lwt",
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "lwt": {
+   "name": "lwt",
+   "version": "6.1.2",
+   "url": "https://github.com/ocsigen/lwt/archive/refs/tags/6.1.2.tar.gz",
+   "hash": "sha512-pHN6L8RKru3KRuxhNMBwE9XPRAOamIpueaQHFaU+Q2AdTJG78RqOiVQFKNkSuPpIfjBoRlwTbBFWqHIljrNEOw==",
+   "opam": "faa40e23ae18817fd6423b94e7e274c239d385c70999f99232f19d7343efa7b3",
+   "deps": [
+    "cppo",
+    "dune-configurator",
+    "ocplib-endian"
+   ]
+  },
+  "macaddr": {
+   "name": "macaddr",
+   "version": "5.6.2",
+   "url": "https://github.com/mirage/ocaml-ipaddr/releases/download/v5.6.2/ipaddr-5.6.2.tbz",
+   "hash": "sha512-cZ8y/VpchU/1ryxmjSD5xN5GWaPX0D0mDlN6tALZ3YWlNQ5hG/w7jfEPa+ArWUHVWpbNK03MwK0nEMlaUTc72A==",
+   "opam": "599921c315e6553d4e725bbe4a546c9ec72d83417438cd2ffb46d694f9aed4de"
+  },
+  "magic-mime": {
+   "name": "magic-mime",
+   "version": "1.3.1",
+   "url": "https://github.com/mirage/ocaml-magic-mime/releases/download/v1.3.1/magic-mime-1.3.1.tbz",
+   "hash": "sha512-YH90acqi6ACpLjxSSBJRCPrV4FE/QjCjftd0yGES6s2uDuUzxceOwnUuk56D4iAd1O4Cy7/5KuMuJWg3ENezZQ==",
+   "opam": "c146a5d4644c8e3a318dcd568d41ec828689d8e7af2a59fe564dd1a758cb6d06"
+  },
+  "mirage-crypto": {
+   "name": "mirage-crypto",
+   "version": "2.4.1",
+   "url": "https://github.com/mirage/mirage-crypto/releases/download/v2.4.1/mirage-crypto-2.4.1.tbz",
+   "hash": "sha512-y49N6TJBzeBYK80Cg3ZsaBoC28ufO0eG6wZWxlH0K6LbRn/2O/95xerP1BDkENd9wxv8UQScOeHoZoXsCohMHw==",
+   "opam": "256bca536ce0a3f3d786069314d18f05355ced422c9d1f06193eb8a4dd1d16d8",
+   "deps": [
+    "dune-configurator",
+    "eqaf"
+   ]
+  },
+  "mirage-crypto-ec": {
+   "name": "mirage-crypto-ec",
+   "version": "2.4.1",
+   "url": "https://github.com/mirage/mirage-crypto/releases/download/v2.4.1/mirage-crypto-2.4.1.tbz",
+   "hash": "sha512-y49N6TJBzeBYK80Cg3ZsaBoC28ufO0eG6wZWxlH0K6LbRn/2O/95xerP1BDkENd9wxv8UQScOeHoZoXsCohMHw==",
+   "opam": "470a04b1c394d8dec8c70e54d5b639f1a9b1fb310f6560c386d88cf2989e793d",
+   "deps": [
+    "digestif",
+    "dune-configurator",
+    "eqaf",
+    "mirage-crypto-rng"
+   ]
+  },
+  "mirage-crypto-pk": {
+   "name": "mirage-crypto-pk",
+   "version": "2.4.1",
+   "url": "https://github.com/mirage/mirage-crypto/releases/download/v2.4.1/mirage-crypto-2.4.1.tbz",
+   "hash": "sha512-y49N6TJBzeBYK80Cg3ZsaBoC28ufO0eG6wZWxlH0K6LbRn/2O/95xerP1BDkENd9wxv8UQScOeHoZoXsCohMHw==",
+   "opam": "fd79477a4356419408a5fd0bd6063ea5f235a8a65077d88df652df56b79d7dca",
+   "deps": [
+    "conf-gmp-powm-sec",
+    "digestif",
+    "eqaf",
+    "mirage-crypto",
+    "mirage-crypto-rng",
+    "zarith"
+   ]
+  },
+  "mirage-crypto-rng": {
+   "name": "mirage-crypto-rng",
+   "version": "2.4.1",
+   "url": "https://github.com/mirage/mirage-crypto/releases/download/v2.4.1/mirage-crypto-2.4.1.tbz",
+   "hash": "sha512-y49N6TJBzeBYK80Cg3ZsaBoC28ufO0eG6wZWxlH0K6LbRn/2O/95xerP1BDkENd9wxv8UQScOeHoZoXsCohMHw==",
+   "opam": "f30d3909d91e612481f78a59ed27cff178f8773039f23f104d854772a8561cc3",
+   "deps": [
+    "digestif",
+    "dune-configurator",
+    "duration",
+    "logs",
+    "mirage-crypto"
+   ]
+  },
+  "ocaml-compiler-libs": {
+   "name": "ocaml-compiler-libs",
+   "version": "v0.17.0",
+   "url": "https://github.com/janestreet/ocaml-compiler-libs/archive/refs/tags/v0.17.0.tar.gz",
+   "hash": "sha512-xc1Biw63TgDD9jI1dUu9s6MyisdD1q6IVCTYxQtO2qcGhXLmics0VtIieTKDkn8phKH/hAsbw4F/gQtTFPr4lw==",
+   "opam": "96fb1957aa2f53e7021300ad84094342625e5955cdc84154d0798398b906294c"
+  },
+  "ocaml-syntax-shims": {
+   "name": "ocaml-syntax-shims",
+   "version": "1.0.0",
+   "url": "https://github.com/ocaml-ppx/ocaml-syntax-shims/releases/download/1.0.0/ocaml-syntax-shims-1.0.0.tbz",
+   "hash": "sha512-dcTGsL+hJnqKSagrpJTQjPCCP8g1CGPW09SXFSjLCeWiop4pgdBMdedq0PSTYLBaQyye/v+aT7wexrKJYDmYUg==",
+   "opam": "072a33c0070c7ab5bbc1ffef2e0edd268457906dcb18734a882df2ba5975816f"
+  },
+  "ocaml_intrinsics_kernel": {
+   "name": "ocaml_intrinsics_kernel",
+   "version": "v0.17.2",
+   "url": "https://github.com/janestreet/ocaml_intrinsics_kernel/archive/refs/tags/v0.17.2.tar.gz",
+   "hash": "sha512-ITlzQGVtn76NwHnVdyu0yj6cjJwjX+K927q+df/304r8lfENFvca0Ktn+eb8tM4Ivs6LVssrN5BMchDEWqRLtQ==",
+   "opam": "ef180d0965de1c92f43f25bc84cc3ea0ddf280b2154eda8c4f6cd41bbe2c2832"
+  },
+  "ocamlbuild": {
+   "name": "ocamlbuild",
+   "version": "0.16.1",
+   "url": "https://github.com/ocaml/ocamlbuild/archive/refs/tags/0.16.1.tar.gz",
+   "hash": "sha512-6Ri5oAgfJx5QfHpPTV1afN+BjKUcUqzsG6yF3a1fbK0HjLPFaCUvvPVAHC11Mj7Y9Q/diBvaHJYyhAMgQIOTrg==",
+   "opam": "de1f5bf2745606bea4ce99dd8f0c86cf62a61e64f0cab383e6c58d5822663f0e"
+  },
+  "ocplib-endian": {
+   "name": "ocplib-endian",
+   "version": "1.2",
+   "url": "https://github.com/OCamlPro/ocplib-endian/archive/refs/tags/1.2.tar.gz",
+   "hash": "sha512-LnC+Xz1uN3SFxgZkoOI1w7mySo1ragOJXQksbkDVOBC/4fKS7mnlGBzm2qilgr/j1Z86+In0FxNPZYgSvluLhQ==",
+   "opam": "3524f22749813e86241547ead0959176df55a09d4737e50fe702f1a97a495c3b",
+   "deps": [
+    "base-bytes",
+    "cppo"
+   ]
+  },
+  "ohex": {
+   "name": "ohex",
+   "version": "0.2.0",
+   "url": "https://github.com/ocaml/opam-source-archives/raw/main/ohex-0.2.0.tar.gz",
+   "hash": "sha512-r3KpaZ+Bh4zH0kepKigzKo408keta9R3+MeufylwtzxHUKMe7fjutDyo0ZrjxMT4qdVCGkC3PrHxcR9EsU/z5g==",
+   "opam": "f4d26efd98c9609b4afb9e0109eb9e442ca7e7a96fefc99c70859c6ca123773b"
+  },
+  "ppx_derivers": {
+   "name": "ppx_derivers",
+   "version": "1.2.1",
+   "url": "https://github.com/ocaml-ppx/ppx_derivers/archive/1.2.1.tar.gz",
+   "hash": "sha256-tlle4Yfep5KzH8VKDhUkqx5IvGBo0wZsRSFaE4zHO5U=",
+   "opam": "95969d319b1d464289cac2767be445a65b6f7107b9d9772b3de37a17287978ef"
+  },
+  "ppx_sexp_conv": {
+   "name": "ppx_sexp_conv",
+   "version": "v0.17.1",
+   "url": "https://github.com/janestreet/ppx_sexp_conv/archive/refs/tags/v0.17.1.tar.gz",
+   "hash": "sha512-A2WCy81JqtBze7vfX2gBkuVanzBRyN7OQ5psbqmJtZB3yIEw2DOwGjjZkOVj993p9b5+HND/qvWb2RPW+9Y7sw==",
+   "opam": "83c0565d4154913133e0e88d0e98a9fbdc442fe8b08dad0d45f53a64604b5ba0",
+   "deps": [
+    "base",
+    "ppxlib",
+    "ppxlib_jane",
+    "sexplib0"
+   ]
+  },
+  "ppxlib": {
+   "name": "ppxlib",
+   "version": "0.39.0",
+   "url": "https://github.com/ocaml-ppx/ppxlib/releases/download/0.39.0/ppxlib-0.39.0.tbz",
+   "hash": "sha512-Vazo+cjdtrSVrOEFwbWUuYP8N5Rr09lTHBxFFgNB0rBuZ5eF4tt22IXq9IHb8RgG59lnQoHBWZ8ow485umt65g==",
+   "opam": "9be4826519b810f77c2d2215659deeb06548292356a44717739ce7c22b4aaf65",
+   "deps": [
+    "ocaml-compiler-libs",
+    "ppx_derivers",
+    "sexplib0"
+   ]
+  },
+  "ppxlib_jane": {
+   "name": "ppxlib_jane",
+   "version": "v0.17.4",
+   "url": "https://github.com/janestreet/ppxlib_jane/archive/refs/tags/v0.17.4.tar.gz",
+   "hash": "sha512-4pMd5jPZ3M4soSHhzxF+FZr0zMUqfkIMMoAh2gFFtrkBlORUX5ev6c0DLATGvCVj+qLYUq1FsEGwFMaIFTeZ1g==",
+   "opam": "21c387c55683e61b380f2e68c94ffb1bad40cfde59db414bff64b2f026ec45db",
+   "deps": [
+    "ppxlib"
+   ]
+  },
+  "ptime": {
+   "name": "ptime",
+   "version": "1.2.0",
+   "url": "https://erratique.ch/software/ptime/releases/ptime-1.2.0.tbz",
+   "hash": "sha512-sMMkDdnnd6XmC1Jp6y4xL8ZE0p71XiV9LyU4wDv2InQXPtNuE4WMRNLb7o/jdcnEg+cFcG5KpbO1xGCcpjJKXA==",
+   "opam": "665d69832df4363a3ef7c861df965e80737f5d59b00544b1d41df0064bec6b56",
+   "deps": [
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "re": {
+   "name": "re",
+   "version": "1.14.0",
+   "url": "https://github.com/ocaml/ocaml-re/archive/refs/tags/1.14.0.tar.gz",
+   "hash": "sha512-zSzDn5Ucpre+Yxu7VTHtE7wEDmKYQmcb9v7zkRsg7xZT+pofCqI7CU0lLP/Jqe/n/8pp5Q02Krk1vAzER1SBJA==",
+   "opam": "ed60ef62d570db5b5f5c83947221b91a339db862d4b9122b127916c23047aefd"
+  },
+  "rresult": {
+   "name": "rresult",
+   "version": "0.7.0",
+   "url": "https://erratique.ch/software/rresult/releases/rresult-0.7.0.tbz",
+   "hash": "sha512-8btjHJhpljiOlobUnVrk2KrxQDT2hlxiqI+1jEjOGa0ut4UyfWnKJ8Ay+DWYTgvS79lptBVDhiijHz6E7EVR0w==",
+   "opam": "84d51703a6b76b7f08157bcfb2513e20340f73a46d3e2d019b35bf2cfa89ae7e",
+   "deps": [
+    "ocamlbuild",
+    "topkg"
+   ]
+  },
+  "sexplib0": {
+   "name": "sexplib0",
+   "version": "v0.17.0",
+   "url": "https://github.com/janestreet/sexplib0/archive/refs/tags/v0.17.0.tar.gz",
+   "hash": "sha512-rTh+QHif5woRRz236F/gF7gBWSYkQU6QMHMLLpLqCPmAlftukjZDDzPIAWBevuCipihOD2GKJqfaRZnU/Z05XQ==",
+   "opam": "4de4fe85b23a4ea02da9b80274aed2e1ffecf0463b3046641d0a7fe9c8c18f84"
+  },
+  "stringext": {
+   "name": "stringext",
+   "version": "1.6.0",
+   "url": "https://github.com/rgrinberg/stringext/releases/download/1.6.0/stringext-1.6.0.tbz",
+   "hash": "sha512-2OvkD0K1mKm9mfHvSwC6k0WDhaSszRIa9moL87P41xNfV2dArfGkMIHdQJl3wiGf1L27Wz0TCIkNMB1VPtSZAA==",
+   "opam": "3ce8af06fb4575a0da412c78fb3227e7ee252108ac92091ca705a0eb73ff5c60"
+  },
+  "topkg": {
+   "name": "topkg",
+   "version": "1.1.1",
+   "url": "https://erratique.ch/software/topkg/releases/topkg-1.1.1.tbz",
+   "hash": "sha512-w2xUmjYt31t/4/b/kceberUxxDYzu5c3V2NwvL1p234WJdJHwnioabUD1FoXXpdTIxzPWV5b+k47fiYCrD07Qg==",
+   "opam": "99f9976bd0f745d0fb1f7f767e1f98644128e89d7350ebbb7f701305d4f4f4db",
+   "deps": [
+    "ocamlbuild"
+   ]
+  },
+  "uri": {
+   "name": "uri",
+   "version": "4.4.0",
+   "url": "https://github.com/mirage/ocaml-uri/releases/download/v4.4.0/uri-4.4.0.tbz",
+   "hash": "sha512-iDdBQ+DYqvbUCqPL11k/mDLpyXJ3OMbmUUmBJRUMg9VkbhO1c31cPoFITdBBEn9n+KzqE/3AMArE5GEHVZ+K4g==",
+   "opam": "6de9475163c915385552afb7cbbabe8d273dfc5951c52678d919e4f3e86ba032",
+   "deps": [
+    "angstrom",
+    "stringext"
+   ]
+  },
+  "uri-sexp": {
+   "name": "uri-sexp",
+   "version": "4.4.0",
+   "url": "https://github.com/mirage/ocaml-uri/releases/download/v4.4.0/uri-4.4.0.tbz",
+   "hash": "sha512-iDdBQ+DYqvbUCqPL11k/mDLpyXJ3OMbmUUmBJRUMg9VkbhO1c31cPoFITdBBEn9n+KzqE/3AMArE5GEHVZ+K4g==",
+   "opam": "e69b41700610366ed0caabcc1a1ee6e84a422782a04a4633b1312a5f29d5a295",
+   "deps": [
+    "ppx_sexp_conv",
+    "sexplib0",
+    "uri"
+   ]
+  },
+  "x509": {
+   "name": "x509",
+   "version": "1.2.0",
+   "url": "https://github.com/mirleft/ocaml-x509/releases/download/v1.2.0/x509-1.2.0.tbz",
+   "hash": "sha512-ZPxpaSDQi/BdRFhxNU7tFGUXP9yUtuqy8Gn/Em/hIY3FqmYLVgp71HlWrmoDtozP52X4B3fNyUgvDv4lM2+itA==",
+   "opam": "f9a1670c2c5be31a1a907517915073e94527fbf81c5ff14e5b7ccf6aae34a1d1",
+   "deps": [
+    "asn1-combinators",
+    "base64",
+    "domain-name",
+    "fmt",
+    "gmap",
+    "ipaddr",
+    "kdf",
+    "logs",
+    "mirage-crypto",
+    "mirage-crypto-ec",
+    "mirage-crypto-pk",
+    "mirage-crypto-rng",
+    "ohex",
+    "ptime"
+   ]
+  },
+  "zarith": {
+   "name": "zarith",
+   "version": "1.14",
+   "url": "https://github.com/ocaml/Zarith/archive/release-1.14.tar.gz",
+   "hash": "sha512-in8+gt+laZyN2lTdU5jHEvOsT+BPUgjUPYuhmPuBUt5fkcu1nBXApLoBDU38x59S5AW90Ku/J5gWfp5CFryz3Q==",
+   "opam": "9c859185d289c38dcb1c216aea751afa28bebf5d653e8af3d10aabb252ebe4bb",
+   "deps": [
+    "conf-gmp",
+    "conf-pkg-config"
+   ]
+  }
+ }
+}

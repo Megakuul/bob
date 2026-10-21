@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:leak-ref"]}
+{"v":1,"event":"package.start","label":"//tools:leak-ref","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-9003","class":"internal","message":"//tools:leak-ref refers to //tools:base, which it must not reference","label":"//tools:leak-ref","definedAt":"fixture/tools/bob.go:20:15","hint":"this is a bob bug (missing fixup); please report it","log":"bob log //tools:leak-ref","args":{"label":"//tools:leak-ref","ref":"//tools:base"}}}
+{"v":1,"event":"package.finish","label":"//tools:leak-ref","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":70,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

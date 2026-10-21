@@ -1,0 +1,54 @@
+{
+  "name": "ok-structured",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/n0937qa9gl74b07arsbgfjx7hj37j0bv-tools-structured.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 0,
+    "durationMs": 253,
+    "nixVersion": "2.34.9",
+    "valid": [
+      "/nix/store/n0937qa9gl74b07arsbgfjx7hj37j0bv-tools-structured.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/n0937qa9gl74b07arsbgfjx7hj37j0bv-tools-structured.drv": {
+        "label": "//tools:structured",
+        "definedAt": "fixture/tools/bob.go:26:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/dcf6qr5n5290fd27smv9fgqrh31mc4q9-tools-structured": "/nix/store/n0937qa9gl74b07arsbgfjx7hj37j0bv-tools-structured.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:structured"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  },
+  "stdout": [
+    "/nix/store/dcf6qr5n5290fd27smv9fgqrh31mc4q9-tools-structured"
+  ]
+}

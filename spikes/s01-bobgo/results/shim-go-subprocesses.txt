@@ -1,0 +1,7 @@
+go subprocesses started by gopls: 154
+with uid_map 0 1000 1: 144
+     29 mntns=mnt:[4026532554]
+     86 mntns=mnt:[4026532555]
+     27 mntns=mnt:[4026532556]
+      2 mntns=mnt:[4026532557]
+host mntns: mnt:[4026531832]

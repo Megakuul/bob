@@ -1,0 +1,9 @@
+[31;1m✗[0m //tools:silent
+
+[31;1merror[BOB-E-2008]:[0m [1m//tools:silent produced no output for 3s and was stopped[0m
+  package defined at fixture/tools/bob.go:11:15
+   [2m│[0m start
+  [32mhint:[0m a step is probably waiting for input or hanging
+  [2mfull log: bob log //tools:silent[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

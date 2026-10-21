@@ -1,0 +1,13 @@
+built   //api:api
+built   //libfoo:foo
+built   //proto:greeting_go
+built   //rcore:rcore
+built   //third_party/crates:hex-0.4.3
+built   //third_party/crates:itoa-1.0.18
+built   //third_party:hex-0.4.3.crate
+built   //third_party:itoa-1.0.18.crate
+built   //third_party:protobuf-v1.36.11.zip
+built   //third_party:sync-v0.24.0.zip
+built   //third_party:uuid-v1.6.0.zip
+
+bob: 11 built

@@ -1,0 +1,4 @@
+{"v":1,"event":"run.start","requested":["//third_party:itoa-1.0.18.crate"]}
+{"v":1,"event":"package.start","label":"//third_party:itoa-1.0.18.crate","action":"build"}
+{"v":1,"event":"package.finish","label":"//third_party:itoa-1.0.18.crate","status":"built"}
+{"v":1,"event":"run.finish","exitCode":0,"counts":{"built":1,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":15935}}

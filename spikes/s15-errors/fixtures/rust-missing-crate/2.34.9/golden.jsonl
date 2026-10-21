@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//rcore:rcore"]}
+{"v":1,"event":"package.start","label":"//rcore:rcore","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2010","class":"build","message":"//rcore:rcore: Rust crate serde not found","label":"//rcore:rcore","definedAt":"fixture/rcore/bob.go:13:13","location":"fixture/rcore/src/lib.rs:2:5","excerpt":["error[E0432]: unresolved import `serde`"," --> fixture/rcore/src/lib.rs:2:5","  |","2 | use serde::Serialize;","  |     ^^^^^ use of unresolved module or unlinked crate `serde`","  |","  = help: you might be missing a crate named `serde`"],"hint":"add the crate to the package's dependencies","log":"bob log //rcore:rcore","args":{"crate":"serde","label":"//rcore:rcore"}}}
+{"v":1,"event":"package.finish","label":"//rcore:rcore","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

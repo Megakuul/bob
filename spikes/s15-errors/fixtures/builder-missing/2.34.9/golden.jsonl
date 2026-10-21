@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:missing-builder"]}
+{"v":1,"event":"package.start","label":"//tools:missing-builder","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-9001","class":"internal","message":"bob's builder for //tools:missing-builder is broken: cannot execute …/bob-builder/bin/bob-builder: No such file or directory","label":"//tools:missing-builder","definedAt":"fixture/tools/bob.go:17:15","hint":"this is a bob bug; please report it with bob log //tools:missing-builder","log":"bob log //tools:missing-builder","args":{"label":"//tools:missing-builder","reason":"cannot execute …/bob-builder/bin/bob-builder: No such file or directory"}}}
+{"v":1,"event":"package.finish","label":"//tools:missing-builder","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":70,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

@@ -1,0 +1,21 @@
+== s01-bobgo start 2026-10-21T08:57:22Z load 2.46 4.64 4.86
+profile [8c/15G]  2026-10-21T08:57:22+00:00  load: 2.46 4.64 4.86  go: go1.26.8
+10     cold         wall=  5.92s user= 16.32s sys= 2.41s  build=5903.9ms run=4.4ms  gocache=39M
+10     noop         wall=  0.09s user=  0.11s sys= 0.11s  build=76.3ms run=3.5ms  gocache=39M
+10     leaf-body    wall=  0.34s user=  0.34s sys= 0.18s  build=327.1ms run=4.2ms  gocache=39M
+10     root-body    wall=  0.39s user=  0.43s sys= 0.19s  build=369.5ms run=4.0ms  gocache=40M
+10     root-api     wall=  0.53s user=  0.53s sys= 0.28s  build=514.2ms run=4.2ms  gocache=40M
+10     new-repo     wall=  0.52s user=  0.51s sys= 0.27s  build=499.8ms run=3.9ms  gocache=41M
+100    cold         wall=  8.24s user= 18.29s sys= 3.47s  build=8207.0ms run=6.7ms  gocache=45M
+100    noop         wall=  0.12s user=  0.13s sys= 0.15s  build=97.0ms run=5.8ms  gocache=45M
+100    leaf-body    wall=  0.39s user=  0.44s sys= 0.20s  build=365.7ms run=4.9ms  gocache=46M
+100    root-body    wall=  0.50s user=  0.55s sys= 0.25s  build=471.9ms run=5.6ms  gocache=46M
+100    root-api     wall=  0.84s user=  0.85s sys= 0.41s  build=814.3ms run=5.7ms  gocache=47M
+100    new-repo     wall=  2.88s user=  2.72s sys= 1.31s  build=2846.9ms run=6.8ms  gocache=53M
+1000   cold         wall= 37.18s user= 43.13s sys=16.51s  build=37042.3ms run=19.9ms  gocache=133M
+1000   noop         wall=  0.47s user=  0.70s sys= 0.46s  build=345.8ms run=19.0ms  gocache=140M
+1000   leaf-body    wall=  0.93s user=  1.03s sys= 0.64s  build=803.4ms run=19.1ms  gocache=141M
+1000   root-body    wall=  0.99s user=  1.08s sys= 0.53s  build=867.1ms run=23.2ms  gocache=141M
+1000   root-api     wall=  1.32s user=  1.35s sys= 0.70s  build=1198.5ms run=21.0ms  gocache=142M
+1000   new-repo     wall= 31.43s user= 27.31s sys=13.92s  build=31297.0ms run=18.8ms  gocache=236M
+== s01-bobgo exit 0 end 2026-10-21T08:58:57Z

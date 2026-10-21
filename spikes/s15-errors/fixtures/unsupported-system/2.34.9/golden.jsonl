@@ -1,0 +1,4 @@
+{"v":1,"event":"run.start","requested":["//tools:cross"]}
+{"v":1,"event":"error","error":{"code":"BOB-E-1010","class":"definition","message":"//tools:cross targets x86_64-linux, which this machine cannot build","label":"//tools:cross","definedAt":"fixture/tools/bob.go:21:15","cause":"this machine is aarch64-linux","hint":"build it remotely (bob build --remote) or for this machine's platform","args":{"label":"//tools:cross","system":"x86_64-linux"}}}
+{"v":1,"event":"package.finish","label":"//tools:cross","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":3,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

@@ -1,0 +1,12 @@
+FAILED  //api:api
+
+error[BOB-E-2003]: //api:api: header rcore.h not found
+  --> fixture/api/cmd/api/main.go:7:10
+  package defined at fixture/api/bob.go:13:11
+   | cmd/api/main.go:7:10: fatal error: rcore.h: No such file or directory
+   |     7 | #include "rcore.h"
+   |       |          ^~~~~~~~~
+  hint: add the package that provides rcore.h to Deps
+  full log: bob log //api:api
+
+bob: 1 failed (exit 1)

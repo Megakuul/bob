@@ -1,0 +1,16 @@
+[31;1m✗[0m //rcore:rcore
+
+[31;1merror[BOB-E-2010]:[0m [1m//rcore:rcore: Rust crate serde not found[0m
+  [36m-->[0m fixture/rcore/src/lib.rs:2:5
+  package defined at fixture/rcore/bob.go:13:13
+   [2m│[0m error[E0432]: unresolved import `serde`
+   [2m│[0m  --> fixture/rcore/src/lib.rs:2:5
+   [2m│[0m   |
+   [2m│[0m 2 | use serde::Serialize;
+   [2m│[0m   |     ^^^^^ use of unresolved module or unlinked crate `serde`
+   [2m│[0m   |
+   [2m│[0m   = help: you might be missing a crate named `serde`
+  [32mhint:[0m add the crate to the package's dependencies
+  [2mfull log: bob log //rcore:rcore[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

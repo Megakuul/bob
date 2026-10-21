@@ -1,0 +1,8 @@
+cmdliner fmt yojson lwt                  bob= 11 opam= 11 bob 0.01s opam 7.30s IDENTICAL
+ppx_deriving ppx_deriving_yojson logs    bob= 11 opam= 11 bob 0.01s opam 7.43s IDENTICAL
+cohttp-lwt-unix                          bob= 60 opam= 60 bob 0.06s opam 7.19s IDENTICAL
+dream                                    bob=109 opam= 90 bob 0.15s opam 7.92s < asn1-combinators.0.3.3 < caqti-lwt.2.3.2 < caqti.2.3.2 < conf-gmp-powm-sec.4 < conf-gmp.5 > caqti-lwt.2.0.1 > caqti.2.0.1 < dune-private-libs.3.21.1 < dune-site.3.21.1 < dyn.3.21.1 < fs-io.3.21.1 < gmap.0.3.0 < h2-lwt-unix.0.13.0 > h2-lwt-unix.0.10.0 < httpun-types.0.2.0 > httpun-types.0.1.0 < kdf.1.1.2 < lru.0.3.1 < 
+core core_unix                           bob= 70 opam= 70 bob 0.07s opam 7.66s IDENTICAL
+irmin-fs                                 bob= 36 opam= 36 bob 0.09s opam 8.17s IDENTICAL
+ocaml-lsp-server                         bob= 32 opam= 30 bob 0.06s opam 10.13s < dune-rpc.3.21.1 < dyn.3.21.1 > dune-rpc.3.20.2 > dyn.3.20.2 < fs-io.3.21.1 < jsonrpc.1.27.0 < lsp.1.27.0 > jsonrpc.1.25.0 > lsp.1.25.0 < ocamlc-loc.3.21.1 > ocamlc-loc.3.20.2 < ordering.3.21.1 > ordering.3.20.2 < stdune.3.21.1 < top-closure.3.21.1 > stdune.3.20.2 
+eio_main                                 bob= 21 opam= 21 bob 0.06s opam 8.60s IDENTICAL

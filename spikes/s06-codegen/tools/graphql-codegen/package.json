@@ -1,0 +1,2 @@
+{ "name": "bob-graphql-codegen", "private": true,
+  "dependencies": { "@graphql-codegen/core": "*", "@graphql-codegen/typescript": "*", "@graphql-codegen/typescript-operations": "*", "graphql": "^16" } }

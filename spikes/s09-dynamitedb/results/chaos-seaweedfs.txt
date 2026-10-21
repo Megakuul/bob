@@ -1,0 +1,12 @@
+[seaweedfs] chaos (no leader, every orchestrator reconciles): orch=3 workers=20 jobs=300 ttl=3s pdie=0.20 -> done in 3m11.388s
+[seaweedfs]   deaths=37 pauses=28 renewLost=0 staleCompletionsRejected=28 | lostJobs=0 doubleAcceptedCompletions=0 overlappingExecutions=17 maxAttempts=4
+[seaweedfs]   orch0 passes=191 led=0 requeued=21 finalized=0 conflicts=45 requests: LIST=191 GET=4654 PUT=152 DELETE=0 other=0 (412=45 404=2 5xx=0) (26.1 req/s)
+[seaweedfs]   orch1 passes=191 led=0 requeued=21 finalized=0 conflicts=46 requests: LIST=191 GET=4655 PUT=153 DELETE=0 other=0 (412=46 404=2 5xx=0) (26.1 req/s)
+[seaweedfs]   orch2 passes=191 led=0 requeued=23 finalized=0 conflicts=43 requests: LIST=191 GET=4654 PUT=154 DELETE=0 other=0 (412=43 404=3 5xx=0) (26.1 req/s)
+[seaweedfs]   total requeues=65 finalized-by-reconciler=0 reconciler conflicts=134; worker requests: LIST=15763 GET=2715 PUT=1955 DELETE=677 other=0 (412=41 404=12 5xx=0)
+[seaweedfs] chaos (leader lease ctl/requeue): orch=3 workers=20 jobs=300 ttl=3s pdie=0.20 -> done in 2m57.372s
+[seaweedfs]   deaths=38 pauses=48 renewLost=0 staleCompletionsRejected=48 | lostJobs=0 doubleAcceptedCompletions=0 overlappingExecutions=28 maxAttempts=5
+[seaweedfs]   orch0 passes=0 led=0 requeued=0 finalized=0 conflicts=0 requests: LIST=0 GET=177 PUT=177 DELETE=0 other=0 (412=177 404=0 5xx=0) (2.0 req/s)
+[seaweedfs]   orch1 passes=0 led=0 requeued=0 finalized=0 conflicts=0 requests: LIST=0 GET=177 PUT=177 DELETE=0 other=0 (412=177 404=0 5xx=0) (2.0 req/s)
+[seaweedfs]   orch2 passes=177 led=177 requeued=86 finalized=0 conflicts=2 requests: LIST=177 GET=5878 PUT=613 DELETE=0 other=0 (412=178 404=2 5xx=0) (37.6 req/s)
+[seaweedfs]   total requeues=86 finalized-by-reconciler=0 reconciler conflicts=2; worker requests: LIST=13640 GET=2767 PUT=1994 DELETE=688 other=0 (412=25 404=15 5xx=0)

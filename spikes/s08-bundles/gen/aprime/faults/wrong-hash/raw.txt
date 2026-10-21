@@ -1,0 +1,17 @@
+these 4 derivations will be built:
+  /nix/store/2pgb0c3c1drmvdsch0m5zc4xfwjycsic-uuid-v1.6.0.zip.drv
+  /nix/store/vjrqc7fyx7y22abp2zg287siwqlixfqz-third_party-uuid-v1.6.0.zip.drv
+  /nix/store/2wj87jr9vs7bna5zm2aizjj2q036b5pl-api-api-goproxy.drv
+  /nix/store/vsjrik92skcgxicpgxqwfmkvhlz0nxn4-api-api.drv
+building '/nix/store/2pgb0c3c1drmvdsch0m5zc4xfwjycsic-uuid-v1.6.0.zip.drv'...
+error: hash mismatch in fixed-output derivation '/nix/store/2pgb0c3c1drmvdsch0m5zc4xfwjycsic-uuid-v1.6.0.zip.drv':
+         specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            got:    sha256-0PAvN3IX9CcC4lloTgZEHtv1FA3dzDS6m+pWA4s4pu0=
+error: Cannot build '/nix/store/2wj87jr9vs7bna5zm2aizjj2q036b5pl-api-api-goproxy.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/lckqp4vwn03y83dvych2knxj3j6w5r3y-api-api-goproxy
+error: Cannot build '/nix/store/vsjrik92skcgxicpgxqwfmkvhlz0nxn4-api-api.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/mjl43d86wks9m6za2r31lzla7qd8g0yj-api-api

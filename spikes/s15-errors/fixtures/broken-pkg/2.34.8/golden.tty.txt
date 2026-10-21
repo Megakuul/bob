@@ -1,0 +1,5 @@
+[31;1merror[BOB-E-1002]:[0m [1mnixpkgs package "aranym" (1.1.0) is marked broken[0m
+  package defined at fixture/libfoo/bob.go:8:11
+  [32mhint:[0m pin a nixpkgs revision where it builds, or use another package
+
+[31;1mbob: nothing was built[0m (exit 3)

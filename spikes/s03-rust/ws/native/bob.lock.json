@@ -1,0 +1,396 @@
+{
+ "version": 1,
+ "crates": [
+  {
+   "name": "bitflags",
+   "version": "2.13.2",
+   "checksum": "sha256-Pe1AV8JYuhmeLSY4bTrzeAlX7K7mxO9AQca0uLl8CwY=",
+   "narHash": "sha256-Q2WhqSIZbJXoMNZXRS+u0vUwaSew9jiNzY6vpRM7Dw8=",
+   "features": {
+    "example_generated": [],
+    "serde": [
+     "serde_core"
+    ],
+    "std": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "cc",
+   "version": "1.9.0",
+   "checksum": "sha256-h3v2esjlJEnrL56Yo0TqFjvrcN0fnuvjzFNX3P6u5N8=",
+   "narHash": "sha256-yDpf6k8O5rg/aGLB6CIoMsBSHgeWlVccOqe7j8QY3KQ=",
+   "deps": [
+    {
+     "name": "find-msvc-tools",
+     "crate": "find-msvc-tools@0.1.15"
+    },
+    {
+     "name": "shlex",
+     "crate": "shlex@2.0.1"
+    }
+   ],
+   "features": {
+    "compile-commands": [],
+    "jobserver": [],
+    "parallel": [
+     "dep:jobserver",
+     "dep:libc"
+    ]
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "cfg-if",
+   "version": "1.0.5",
+   "checksum": "sha256-TnZIF1tFqaSFNtZ29o2RgnBpkQKqjatUlt8GkEyRRgA=",
+   "narHash": "sha256-7R6Ocx3jgZmY4pWPBo9YyScfsGDiavkqfTkHTmkXzR4=",
+   "features": {
+    "rustc-dep-of-std": [
+     "core"
+    ]
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "find-msvc-tools",
+   "version": "0.1.15",
+   "checksum": "sha256-HGaRXMU5EJfeeisLly6FBaozwN9AH9OmgR29syiBukg=",
+   "narHash": "sha256-ZTWlNm4MA7VV1gvac09RHqGVSf+cdYFKDhQUsJ31FsQ=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "foreign-types",
+   "version": "0.3.2",
+   "checksum": "sha256-9vM564rcBSzSyniRD9qGmu+jjSLVy2SOZIXk0/wG87E=",
+   "narHash": "sha256-6IrK94DWpNGtr1axoXDJkLWh9bkE8Pxp0WHJJq5GtoA=",
+   "deps": [
+    {
+     "name": "foreign-types-shared",
+     "crate": "foreign-types-shared@0.1.1"
+    }
+   ],
+   "meta": {
+    "edition": "2015"
+   }
+  },
+  {
+   "name": "foreign-types-shared",
+   "version": "0.1.1",
+   "checksum": "sha256-ALAihBGQjKhoXbp/ws3XDsmZCm51Pom2rJGoTED7r0s=",
+   "narHash": "sha256-5ZM32r1BE+9aeqGTTxMBAP31dkKFTO57Q5pTt/C2zCw=",
+   "meta": {
+    "edition": "2015"
+   }
+  },
+  {
+   "name": "libc",
+   "version": "0.2.191",
+   "checksum": "sha256-Zc2HyabWBTZYCzFq2YVyYQRzClFRyZhF8kkEKO+RJAo=",
+   "narHash": "sha256-aFoX9t+V0NhNMEsEHMZrcKJ1NkOuaP3OigOAHvFxZN8=",
+   "features": {
+    "align": [],
+    "const-extern-fn": [],
+    "default": [
+     "std"
+    ],
+    "extra_traits": [],
+    "rustc-dep-of-std": [
+     "align",
+     "rustc-std-workspace-core"
+    ],
+    "std": [],
+    "use_std": [
+     "std"
+    ]
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "openssl",
+   "version": "0.10.81",
+   "checksum": "sha256-d4I6J/C6uwMJHLntnvgK87OdvIL5fo+lMDdLfa/YekU=",
+   "narHash": "sha256-PbUfofSSzmsFbIrCWUb1elTkQRDIzX7Zrpa4E0iw1FM=",
+   "deps": [
+    {
+     "name": "bitflags",
+     "crate": "bitflags@2.13.2"
+    },
+    {
+     "name": "cfg-if",
+     "crate": "cfg-if@1.0.5"
+    },
+    {
+     "name": "ffi",
+     "crate": "openssl-sys@0.9.117"
+    },
+    {
+     "name": "foreign-types",
+     "crate": "foreign-types@0.3.2"
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191"
+    },
+    {
+     "name": "openssl-macros",
+     "crate": "openssl-macros@0.1.1"
+    }
+   ],
+   "features": {
+    "aws-lc": [
+     "ffi/aws-lc"
+    ],
+    "aws-lc-fips": [
+     "ffi/aws-lc-fips"
+    ],
+    "bindgen": [
+     "ffi/bindgen"
+    ],
+    "default": [],
+    "unstable_boringssl": [
+     "ffi/unstable_boringssl"
+    ],
+    "v101": [],
+    "v102": [],
+    "v110": [],
+    "v111": [],
+    "vendored": [
+     "ffi/vendored"
+    ]
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "openssl-macros",
+   "version": "0.1.1",
+   "checksum": "sha256-qUhma2N6D0ZehWTHPonU3eANctTUc8yXLzkPw9zufZw=",
+   "narHash": "sha256-l4Eu+tv1KCn1bucU16v42bhrqlGZn9pHa/3xzbJlowM=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107"
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47"
+    },
+    {
+     "name": "syn",
+     "crate": "syn@2.0.119",
+     "features": [
+      "full"
+     ]
+    }
+   ],
+   "meta": {
+    "edition": "2018",
+    "procMacro": true
+   }
+  },
+  {
+   "name": "openssl-sys",
+   "version": "0.9.117",
+   "checksum": "sha256-tH5+a7LDjNkw0lojtA+lLgaMEOhfPgOn9bparKVxNpU=",
+   "narHash": "sha256-hi/bhqGC3hYBM9JAxHYpKZQzGSD2dKfdxPGNKA2ltu4=",
+   "deps": [
+    {
+     "name": "cc",
+     "crate": "cc@1.9.0",
+     "kind": "build"
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191"
+    },
+    {
+     "name": "pkg-config",
+     "crate": "pkg-config@0.3.34",
+     "kind": "build"
+    },
+    {
+     "name": "vcpkg",
+     "crate": "vcpkg@0.2.15",
+     "kind": "build"
+    }
+   ],
+   "features": {
+    "aws-lc": [
+     "dep:aws-lc-sys"
+    ],
+    "aws-lc-fips": [
+     "dep:aws-lc-fips-sys"
+    ],
+    "unstable_boringssl": [
+     "bssl-sys"
+    ],
+    "vendored": [
+     "openssl-src"
+    ]
+   },
+   "links": "openssl",
+   "meta": {
+    "edition": "2021",
+    "build": "build/main.rs"
+   }
+  },
+  {
+   "name": "pkg-config",
+   "version": "0.3.34",
+   "checksum": "sha256-9rRk+8dOFJo5JDaxfVI/dp4FfLaHf2pcRhi8bxGABUg=",
+   "narHash": "sha256-ukt8CWxZoTEeN3rA/RzXxR0l1rXtXSpRk8N1iHhZGEU=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "proc-macro2",
+   "version": "1.0.107",
+   "checksum": "sha256-mF5+ybt0XmzmU1tUTYTWzW962L1xHDmJOK6YO5GnZtk=",
+   "narHash": "sha256-lnZW6+iEkJqaPzpiYC1KKHyXkSmgcKZLLa7V/onUD8s=",
+   "deps": [
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "nightly": [],
+    "proc-macro": [],
+    "span-locations": []
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "quote",
+   "version": "1.0.47",
+   "checksum": "sha256-H79NsUKkc6jYDCa78YRU7UWL+NJsghnDMdrs/b0HkAE=",
+   "narHash": "sha256-4qohUUekSU2KcdbWn1sNXe4pzr9uCS4RGolAmSSGszQ=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro"
+    ]
+   },
+   "meta": {
+    "edition": "2021",
+    "build": "build.rs"
+   }
+  },
+  {
+   "name": "shlex",
+   "version": "2.0.1",
+   "checksum": "sha256-+PrdWchV7yCA3s3vj/Fh62ZhuGkzydguW6KdxgKlWro=",
+   "narHash": "sha256-/OUUB3jcUb//illY9sP5lDFsItmIdIXO8HKj7kzLSjo=",
+   "features": {
+    "default": [
+     "std"
+    ],
+    "std": []
+   },
+   "meta": {
+    "edition": "2018"
+   }
+  },
+  {
+   "name": "syn",
+   "version": "2.0.119",
+   "checksum": "sha256-hygxtkLRoHmZqWKjUe01uVXqLPyPOGIJHiokCoTxcpc=",
+   "narHash": "sha256-jgtRuCtasz+YryAyeOpxdZuIyzVoYAKcCeEvG3fj55k=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "clone-impls": [],
+    "default": [
+     "derive",
+     "parsing",
+     "printing",
+     "clone-impls",
+     "proc-macro"
+    ],
+    "derive": [],
+    "extra-traits": [],
+    "fold": [],
+    "full": [],
+    "parsing": [],
+    "printing": [
+     "dep:quote"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro",
+     "quote?/proc-macro"
+    ],
+    "test": [
+     "syn-test-suite/all-features"
+    ],
+    "visit": [],
+    "visit-mut": []
+   },
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "unicode-ident",
+   "version": "1.0.27",
+   "checksum": "sha256-osdU1sM3laHDJHJ0KOWn3ttbBhlfmJC9vLp2DT4kZWM=",
+   "narHash": "sha256-bRUtw8cGjIVRR6+Nl2d3J3G6eggw0tb2BFN2fEqjQ5o=",
+   "meta": {
+    "edition": "2021"
+   }
+  },
+  {
+   "name": "vcpkg",
+   "version": "0.2.15",
+   "checksum": "sha256-rM1Opi97t6gv4jBm+wlX1I72d/buuCFfNy9S5IuzJCY=",
+   "narHash": "sha256-xW7jaHpS07vKH56hv7JxDT6CGSTOayZK//hkHAx15to=",
+   "meta": {
+    "edition": "2015"
+   }
+  }
+ ]
+}

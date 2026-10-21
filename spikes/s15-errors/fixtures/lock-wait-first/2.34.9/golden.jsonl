@@ -1,0 +1,4 @@
+{"v":1,"event":"run.start","requested":["//tools:lock"]}
+{"v":1,"event":"package.start","label":"//tools:lock","action":"build"}
+{"v":1,"event":"package.finish","label":"//tools:lock","status":"built"}
+{"v":1,"event":"run.finish","exitCode":0,"counts":{"built":1,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":3}}

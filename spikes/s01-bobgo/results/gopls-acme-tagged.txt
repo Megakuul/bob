@@ -1,0 +1,23 @@
+{"ok":true,"step":"initialize","t_ms":140}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":141}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":2047}
+{"count":1,"items":["Lib"],"latency_ms":1,"step":"complete cmd/api/bob.go \"foo.\"","t_ms":2049}
+{"latency_ms":0,"locations":["/libs/foo/bob.go:12"],"step":"def cmd/api/bob.go \"foo.Lib\"","t_ms":2050}
+{"count":1,"items":["CGo"],"latency_ms":0,"step":"complete cmd/api/bob.go \"golang.BinaryOpts{\\n\\t\\tC\"","t_ms":2051}
+{"hover":"var rcore.Crate func(p *bob.P) *rust.StaticLib\nCrate is the rcore staticlib (label //crates/rcore:rcore).\n","latency_ms":2,"step":"hover cmd/api/bob.go \"rcore.Crate\"","t_ms":2053}
+{"ok":true,"step":"change cmd/api/bob.go \"rcore.Crate(p)}\" \"rcore.Crate(p), Binary(p)}\"","t_ms":2053}
+{"diagnostics":["14:5 sev1 compiler: initialization cycle: Binary refers to itself","17:51 sev1 compiler: cannot use Binary(p) (value of type *golang.Binary) as cc.Linkable value in array or slice literal: *golang.Binary does not implement cc.Linkable (missing method LinkInfo)"],"step":"diag cmd/api/bob.go","t_ms":3558}
+{"ok":true,"step":"change cmd/api/bob.go \"rcore.Crate(p), Binary(p)}\" \"rcore.Crate(p)}\"","t_ms":3558}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":5064}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":5064}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":6670}
+{"count":2,"items":["Hello","Test"],"latency_ms":2,"step":"complete cmd/api/main.go \"greet.\"","t_ms":6673}
+{"latency_ms":1,"locations":["/internal/greet/greet.go:5"],"step":"def cmd/api/main.go \"greet.Hello\"","t_ms":6674}
+{"count":5,"items":["greet","golang","fmt.GoStringer","greet.Hello","greet.Test"],"latency_ms":29,"step":"complete cmd/api/main.go \"fmt.Println(g\"","t_ms":6703}
+{"ok":true,"step":"open libs/foo/bob.go","t_ms":6704}
+{"diagnostics":null,"step":"diag libs/foo/bob.go","t_ms":8212}
+{"latency_ms":2,"locations":["/root/bob/spikes/s01-bobgo/fw/pkg/cc/cc.go:47"],"step":"def libs/foo/bob.go \"cc.SharedLibrary\"","t_ms":8215}
+{"ok":true,"step":"open internal/greet/greet_test.go","t_ms":8215}
+{"diagnostics":null,"step":"diag internal/greet/greet_test.go","t_ms":9721}
+{"messages":null,"step":"server-messages","t_ms":9721}
+{"server_maxrss_mb":167,"step":"exit","t_ms":9747}

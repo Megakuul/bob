@@ -1,0 +1,25 @@
+{
+  "name": "go-too-new",
+  "nix": "2.34.8",
+  "outcome": {
+    "exitCode": -1,
+    "durationMs": 0,
+    "nixVersion": ""
+  },
+  "precheck": [
+    {
+      "code": "BOB-E-1008",
+      "class": "definition",
+      "message": "//api:api needs Go 1.27 but nixpkgs cd4ea8d57de1 provides Go 1.26.8",
+      "label": "//api:api",
+      "definedAt": "fixture/api/bob.go:13:11",
+      "hint": "lower GoVersion or pin a newer nixpkgs",
+      "args": {
+        "have": "1.26.8",
+        "label": "//api:api",
+        "rev": "cd4ea8d57de1",
+        "want": "1.27"
+      }
+    }
+  ]
+}

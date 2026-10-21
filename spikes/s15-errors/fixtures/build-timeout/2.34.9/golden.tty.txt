@@ -1,0 +1,9 @@
+[31;1m✗[0m //tools:sleep
+
+[31;1merror[BOB-E-2007]:[0m [1m//tools:sleep timed out after 3s[0m
+  package defined at fixture/tools/bob.go:10:15
+   [2m│[0m start
+  [32mhint:[0m raise the package's timeout if the step is legitimately slow
+  [2mfull log: bob log //tools:sleep[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

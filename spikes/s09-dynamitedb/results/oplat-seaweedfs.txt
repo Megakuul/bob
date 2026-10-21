@@ -1,0 +1,9 @@
+[seaweedfs] Create                       p50=5.2ms    p90=10.6ms   p99=20.1ms   req/op=1.0 errs=0
+[seaweedfs] Get                          p50=2.4ms    p90=8.7ms    p99=14.3ms   req/op=1.0 errs=0
+[seaweedfs] Put                          p50=5.4ms    p90=10ms     p99=20.3ms   req/op=1.0 errs=0
+[seaweedfs] Update(Increment)            p50=8.5ms    p90=18.5ms   p99=31.6ms   req/op=2.0 errs=0
+[seaweedfs] Get+Put(ETag) CAS            p50=10.4ms   p90=25.7ms   p99=38.4ms   req/op=2.0 errs=0
+[seaweedfs] Query 10 items               p50=25.2ms   p90=40.7ms   p99=58.6ms   req/op=11.0 errs=0
+[seaweedfs] ListKeys 10 items            p50=6.9ms    p90=17.9ms   p99=34.8ms   req/op=1.0 errs=0
+[seaweedfs] Query empty partition        p50=1.2ms    p90=2ms      p99=5.5ms    req/op=1.0 errs=0
+[seaweedfs] Delete                       p50=4.3ms    p90=7.6ms    p99=19.7ms   req/op=2.0 errs=0

@@ -1,0 +1,7 @@
+open cmd/api/bob.go
+diag cmd/api/bob.go
+complete cmd/api/bob.go "foo."
+def cmd/api/bob.go "foo.Lib"
+open cmd/api/main.go
+diag cmd/api/main.go
+complete cmd/api/main.go "greet."

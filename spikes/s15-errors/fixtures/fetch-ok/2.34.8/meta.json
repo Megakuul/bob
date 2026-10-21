@@ -1,0 +1,93 @@
+{
+  "name": "fetch-ok",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "--option",
+    "substituters",
+    "",
+    "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 0,
+    "durationMs": 410,
+    "nixVersion": "2.34.8",
+    "valid": [
+      "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv": {
+        "label": "//third_party:itoa-1.0.18.crate",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "fetch",
+        "url": "https://static.crates.io/crates/itoa/itoa-1.0.18.crate",
+        "lockHash": "sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI="
+      }
+    },
+    "outputs": {
+      "/nix/store/lhgqs203zn6wxpk5xshrckrkvh6fjl44-itoa-1.0.18.crate": "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv"
+    },
+    "sources": {},
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/8k2irddrjwgjmhibgydvv99ffcwiaf7w-gnutar-1.35.drv": "gnutar",
+      "/nix/store/cd9p0dbcdpxilrvpa0bgfqmj6hix3jf2-gzip-1.14.drv": "gzip",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/m5996sqiprjlzymgmb67ckyj67df86f7-unzip-6.0.drv": "unzip",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/8k2irddrjwgjmhibgydvv99ffcwiaf7w-gnutar-1.35.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/cd9p0dbcdpxilrvpa0bgfqmj6hix3jf2-gzip-1.14.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/m5996sqiprjlzymgmb67ckyj67df86f7-unzip-6.0.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//third_party:itoa-1.0.18.crate"
+      ]
+    },
+    "requested": [
+      "//third_party:itoa-1.0.18.crate"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  },
+  "stdout": [
+    "/nix/store/lhgqs203zn6wxpk5xshrckrkvh6fjl44-itoa-1.0.18.crate"
+  ]
+}

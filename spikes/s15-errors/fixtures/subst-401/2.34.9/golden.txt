@@ -1,0 +1,8 @@
+FAILED  //tools:payload
+
+error[BOB-E-4001]: cache http://127.0.0.1:21511 rejected bob's credentials
+  package defined at fixture/tools/bob.go:23:15
+  cause: the cache answered HTTP 401 to http://127.0.0.1:21511/nix-cache-info
+  hint: run bob login
+
+bob: 1 failed (exit 4)

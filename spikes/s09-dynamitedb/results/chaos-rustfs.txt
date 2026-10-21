@@ -1,0 +1,12 @@
+[rustfs] chaos (no leader, every orchestrator reconciles): orch=3 workers=20 jobs=300 ttl=3s pdie=0.20 -> done in 51.145s
+[rustfs]   deaths=42 pauses=29 renewLost=0 staleCompletionsRejected=29 | lostJobs=0 doubleAcceptedCompletions=0 overlappingExecutions=20 maxAttempts=4
+[rustfs]   orch0 passes=51 led=0 requeued=21 finalized=21 conflicts=50 requests: LIST=51 GET=6473 PUT=184 DELETE=0 other=0 (412=50 404=99 5xx=0) (131.2 req/s)
+[rustfs]   orch1 passes=51 led=0 requeued=27 finalized=17 conflicts=44 requests: LIST=51 GET=6471 PUT=186 DELETE=0 other=0 (412=44 404=99 5xx=0) (131.2 req/s)
+[rustfs]   orch2 passes=51 led=0 requeued=23 finalized=22 conflicts=46 requests: LIST=51 GET=6476 PUT=183 DELETE=0 other=0 (412=46 404=94 5xx=0) (131.2 req/s)
+[rustfs]   total requeues=71 finalized-by-reconciler=60 reconciler conflicts=140; worker requests: LIST=1183 GET=2821 PUT=1949 DELETE=696 other=0 (412=71 404=33 5xx=0)
+[rustfs] chaos (leader lease ctl/requeue): orch=3 workers=20 jobs=300 ttl=3s pdie=0.20 -> done in 45.445s
+[rustfs]   deaths=42 pauses=36 renewLost=0 staleCompletionsRejected=36 | lostJobs=0 doubleAcceptedCompletions=0 overlappingExecutions=25 maxAttempts=4
+[rustfs]   orch0 passes=45 led=45 requeued=78 finalized=12 conflicts=0 requests: LIST=45 GET=5446 PUT=335 DELETE=0 other=0 (412=44 404=41 5xx=0) (128.2 req/s)
+[rustfs]   orch1 passes=0 led=0 requeued=0 finalized=0 conflicts=0 requests: LIST=0 GET=45 PUT=45 DELETE=0 other=0 (412=45 404=0 5xx=0) (2.0 req/s)
+[rustfs]   orch2 passes=0 led=0 requeued=0 finalized=0 conflicts=0 requests: LIST=0 GET=45 PUT=45 DELETE=0 other=0 (412=45 404=0 5xx=0) (2.0 req/s)
+[rustfs]   total requeues=78 finalized-by-reconciler=12 reconciler conflicts=0; worker requests: LIST=1043 GET=2765 PUT=1956 DELETE=691 other=0 (412=23 404=39 5xx=0)

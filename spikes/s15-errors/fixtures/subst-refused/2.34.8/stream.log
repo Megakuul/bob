@@ -1,0 +1,47 @@
+@nix {"action":"start","id":3166580603092992,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"start","fields":["http://127.0.0.1:21598/nix-cache-info"],"id":3166580603092993,"level":4,"parent":0,"text":"downloading 'http://127.0.0.1:21598/nix-cache-info'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"msg","level":1,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\u001b[0m': \u001b[35;1mCould not connect to server\u001b[0m (\u001b[35;1m7\u001b[0m) \u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 0 ms: Could not connect to server\u001b[0m; retrying in 289 ms (attempt 1/5)"}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"msg","level":1,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\u001b[0m': \u001b[35;1mCould not connect to server\u001b[0m (\u001b[35;1m7\u001b[0m) \u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 1 ms: Could not connect to server\u001b[0m; retrying in 660 ms (attempt 2/5)"}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"msg","level":1,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\u001b[0m': \u001b[35;1mCould not connect to server\u001b[0m (\u001b[35;1m7\u001b[0m) \u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 0 ms: Could not connect to server\u001b[0m; retrying in 1002 ms (attempt 3/5)"}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"msg","level":1,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\u001b[0m': \u001b[35;1mCould not connect to server\u001b[0m (\u001b[35;1m7\u001b[0m) \u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 0 ms: Could not connect to server\u001b[0m; retrying in 2388 ms (attempt 4/5)"}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092993,"type":105}
+@nix {"action":"stop","id":3166580603092993}
+@nix {"action":"msg","column":null,"file":null,"level":1,"line":null,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\u001b[0m': \u001b[35;1mCould not connect to server\u001b[0m (\u001b[35;1m7\u001b[0m) \u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 0 ms: Could not connect to server\u001b[0m","raw_msg":"unable to download '\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\u001b[0m': \u001b[35;1mCould not connect to server\u001b[0m (\u001b[35;1m7\u001b[0m) \u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 0 ms: Could not connect to server\u001b[0m"}
+@nix {"action":"stop","id":3166580603092992}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv"}
+@nix {"action":"start","id":3166580603092994,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3166580603092995,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3166580603092996,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092995,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092996,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3166580603092994,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3166580603092994,"type":106}
+@nix {"action":"start","id":3166580603092997,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3166580603092997}
+@nix {"action":"result","fields":[0,1,0,0],"id":3166580603092995,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092996,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3166580603092994,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3166580603092994,"type":106}
+@nix {"action":"result","fields":[0,1,0,1],"id":3166580603092995,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3166580603092996,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3166580603092994,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3166580603092994,"type":106}
+@nix {"action":"stop","id":3166580603092996}
+@nix {"action":"stop","id":3166580603092995}
+@nix {"action":"stop","id":3166580603092994}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\n       Reason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\n       Hint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'","raw_msg":"Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\nReason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\nHint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'"}

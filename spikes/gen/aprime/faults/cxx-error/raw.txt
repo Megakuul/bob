@@ -1,0 +1,25 @@
+these 2 derivations will be built:
+  /nix/store/hgkiwh6903nf4vbla7rp53ga5g2bn34p-libfoo-foo.drv
+  /nix/store/08iw0ymv26srimm67r8sndmwdayy2x07-api-api.drv
+building '/nix/store/hgkiwh6903nf4vbla7rp53ga5g2bn34p-libfoo-foo.drv'...
+error: Cannot build '/nix/store/hgkiwh6903nf4vbla7rp53ga5g2bn34p-libfoo-foo.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/rp93crf0s4r775srrfwxh892v192c568-libfoo-foo
+       Last 13 log lines:
+       > Running phase: unpackPhase
+       > unpacking source archive /nix/store/cnvr6qjr54240vj9l5fxl47jfp9ysqwg-libfoo-foo-src
+       > source root is libfoo-foo-src
+       > Running phase: patchPhase
+       > Running phase: updateAutotoolsGnuConfigScriptsPhase
+       > Running phase: buildPhase
+       > src/foo.cpp: In function 'int foo_sha256_hex(const char*, char*)':
+       > src/foo.cpp:13:13: error: expected ';' before '}' token
+       >    13 |     return 0
+       >       |             ^
+       >       |             ;
+       >    14 | }
+       >       | ~
+       For full logs, run:
+         nix log /nix/store/hgkiwh6903nf4vbla7rp53ga5g2bn34p-libfoo-foo.drv
+error: Cannot build '/nix/store/08iw0ymv26srimm67r8sndmwdayy2x07-api-api.drv'.

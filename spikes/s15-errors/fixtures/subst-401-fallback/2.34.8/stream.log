@@ -1,0 +1,46 @@
+@nix {"action":"start","id":3161641390702592,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"start","fields":["http://127.0.0.1:21512/nix-cache-info"],"id":3161641390702593,"level":4,"parent":0,"text":"downloading 'http://127.0.0.1:21512/nix-cache-info'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3161641390702593,"type":105}
+@nix {"action":"stop","id":3161641390702593}
+@nix {"action":"msg","column":null,"file":null,"level":1,"line":null,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21512/nix-cache-info\u001b[0m': HTTP error \u001b[35;1m401\u001b[0m\u001b[35;1m\u001b[0m\n\n         response body:\n\n         \u001b[35;1munauthorized\u001b[0m","raw_msg":"unable to download '\u001b[35;1mhttp://127.0.0.1:21512/nix-cache-info\u001b[0m': HTTP error \u001b[35;1m401\u001b[0m\u001b[35;1m\u001b[0m\n\nresponse body:\n\n\u001b[35;1munauthorized\u001b[0m"}
+@nix {"action":"stop","id":3161641390702592}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv"}
+@nix {"action":"start","id":3161641390702594,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3161641390702595,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3161641390702596,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702595,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702596,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3161641390702594,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3161641390702594,"type":106}
+@nix {"action":"start","id":3161641390702597,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3161641390702597}
+@nix {"action":"result","fields":[0,1,0,0],"id":3161641390702595,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702596,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3161641390702594,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3161641390702594,"type":106}
+@nix {"action":"start","fields":["/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv","",1,1],"id":3161641390702598,"level":3,"parent":0,"text":"building '/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":3161641390702595,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702596,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3161641390702594,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3161641390702594,"type":106}
+@nix {"action":"result","fields":[1,2,0,0],"id":3161641390702595,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3161641390702596,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3161641390702594,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3161641390702594,"type":106}
+@nix {"action":"stop","id":3161641390702598}
+@nix {"action":"stop","id":3161641390702596}
+@nix {"action":"stop","id":3161641390702595}
+@nix {"action":"stop","id":3161641390702594}

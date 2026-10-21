@@ -1,0 +1,2 @@
+{"targets":[{"name":"lib","importer":".","cmd":"tsc -p . && mkdir -p $out && cp -r dist package.json $out/"},
+ {"name":"test","importer":".","cmd":"vitest run --reporter=dot 2>&1 | tail -5 && eslint src && mkdir -p $out && echo ok > $out/ok"}]}

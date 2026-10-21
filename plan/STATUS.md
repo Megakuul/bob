@@ -1,0 +1,248 @@
+# STATUS
+
+- **Stage:** 2 — Refinement
+- **Phase:** 2.4 — Harness design & plan (started 2026-10-21). Phase 2.3 done: `SPEC.md`
+  (9,472 lines, 260 R-ids, 38 open items in App. A, 97 budgets in App. B; generated from
+  `spec/*.md`, integration log `spec/00-integration-log.md`), `docs/out-of-scope.md`.
+- **Current task:** **waiting for Gate S** (asked in chat 2026-10-21). Phase 2.4 done:
+  `HARNESS.md` (40 suites, 32 self-check faults), `plan/architecture.md`, `plan/execution-plan.md`
+  (20 milestones, 110 tasks, 252/252 R-ids covered), `ROADMAP.md`, `.claude/agents/`, `plan/usage.md`.
+- **Last gate passed:** **Gate 0** (2026-10-20): ADR 0001 and 0002 Accepted (locked), D49–D52.
+- **Next:** Gate S (owner approves SPEC incl. budgets, ADRs, HARNESS.md, plan) → BOOTSTRAP.md becomes AGENTS.md → Stage 3.
+
+## Gate 0 answers (owner, 2026-10-20, verbatim)
+
+"1. use B). 2. use nix then for B) 3. can you not do something similar to nix develop... like
+modify env variables that they point to the bob loaded toolchains (i mean bob also loads them from
+nix store right...) but otherwise yes a) is good. 4. a)"
+
+→ D49 strategy B; D50 static Nix; D51 `bob dev` = nix-develop-style environment inside the
+namespace, `.bob/bin` shims + `bob env` outside (env vars pointing straight to `/nix/store` fail
+outside the namespace on hosts without `/nix`); D52 licences accepted with ATTRIBUTION.
+
+## Phase 2.2 progress
+
+| Spike | Wave | State |
+|---|---|---|
+| S1 bob.go placement, gopls | 1 | **done**: `docs/spikes/s01-bobgo.md`, ADR 0003 (Proposed); `//go:build bob` next to code works with gopls (incl. via shim as bobtest, +7 ms); 1,000 files cold 10.8/23.9 s, no-op 0.34/0.47 s; no fallback needed → agent-accepted (A14), mention to owner |
+| S2 Go per-package builds | 1 | **done**: `docs/spikes/s02-go.md`, ADR 0004 (Proposed); hybrid granularity (per 3rd-party module, per workspace package, link, std); fixture incr 41.9 → 4.3 s [2c/4G, busy host]; no owner decision; quiet rerun of measure.sh/verify.sh pending |
+| S3 Rust | 1 | **done**: `docs/spikes/s03-rust.md`, ADR 0005 (Proposed); per-crate rustc drvs + bob-builder, own resolver = cargo on 4 graphs; owner question O-S3-1 queued for the batch |
+| S9 dynamitedb reconciliation | 1 | **done**: `docs/spikes/s09-dynamitedb.md`, ADR 0011 (Proposed); 0 double claims, 0 lost jobs in chaos runs; Get+ETag-Put transitions, epoch-fenced leases, no `Query` for lists; 13 dynamitedb bugs; **SeaweedFS breaks dynamitedb**, RustFS works; O-S9-1/2 queued |
+| S11 worker registration, S3 policies | 1 | **done**: `docs/spikes/s11-workers.md`, ADR 0013 (Proposed); owner design works on RustFS + SeaweedFS with real dynamitedb, HPKE (MLKEM768-X25519) tokens, 31 checks; worker creds fail on control + artifact writes (27 ops); needs prefix-scoped fleet writes, deny bucket policy, SeaweedFS JWT+mTLS hardening; OD-S11-1 queued |
+| S15 error translation | 1 | **done**: `docs/spikes/s15-errors.md`, ADR 0017 (Proposed); 48 faults × 2 Nix versions, no raw Nix text leaks; no owner decision |
+| S16 forges | 1 | **done**: `docs/spikes/s16-forges.md`, ADR 0018 (Proposed); one 6-method adapter interface; Forgejo 16 + GitLab 19 live, GitHub via go-github + recorded payloads; O-S16-1 queued, O2/O3 agent-decided (A12, A13) |
+| S10 lake logs | 2 | **done**: `docs/spikes/s10-lake.md`, ADR 0012 (Proposed); model fits, but lake HEAD has data-loss/hang/duplicate bugs (L1–L4), reference patch `spikes/s10-lake/lake-s10.patch`; catalog caps ~8–10 commits/s per bucket; O-S10-1/2/3 queued |
+| S6 codegen | 2 | **done**: `docs/spikes/s06-codegen.md`, ADR 0008 (Proposed); buf/connect Go+TS, gqlgen, graphql-codegen, oapi-codegen as derivations; manifest-based materialisation; early cutoff decided by agent (A11) |
+| S13 sandbox | 2 | **done**: `docs/spikes/s13-sandbox.md`, ADR 0015 (Proposed); evalbox (userns+cgroup+Landlock+seccomp) passes 15 hostile cases; loopback services in sandbox work; OD-S13-1 queued |
+| S12 cache/OCI registry | 2 | **done**: `docs/spikes/s12-cache.md`, ADR 0014 (Proposed); staging → verified promotion, Go signer = `nix store sign`, netrc only for Nix auth, OCI token flow works; O-S12-1/2 queued |
+| S4 npm | 2 | **done**: `docs/spikes/s04-npm.md`, ADR 0006 (Proposed); own resolver = npm lock on 6 graphs; isolated layout; Vite HMR in namespace 2–3 ms; lifecycle allowlist works; O-S4-1 agent-decided (A20), O-S4-2 queued (general DX) |
+| S7 cross/variants | 2 | **done**: `docs/spikes/s07-cross.md`, ADR 0009 (Proposed); fixture cross-built aarch64→x86_64, correct under qemu-user; variants shared per kind (99 vs 313 drvs for 11 configs); O-S7-1/2 agent-decided (A18, A19) |
+| S8 OCI/AppImage | 2 | **done**: `docs/spikes/s08-bundles.md`, ADR 0010 (Proposed); Go-written reproducible OCI (amd64+arm64 index, podman rootless), AppImage runs on Ubuntu 22/24, Debian 12, Fedora 43, Alpine without Nix/FUSE/userns; fixup 21.2 → 10.8 MB; O-S8-1..3 agent-decided (A15–A17) |
+| S5 OCaml | 2 | **done**: `docs/spikes/s05-ocaml.md`, ADR 0007 (Proposed); own opam resolver (= opam on 6/8), per-opam-package drvs, own code without dune; closure 693 → 55 MB after reference stripping; decisions agent-made (A21) |
+| S14 scheduling unit (owner decision) | 3 | **done**: `docs/spikes/s14-sched.md`, ADR 0016 (Proposed); per-drv jobs too small (0.55 s overhead, ~30 claims/s ceiling); hybrid recommended; O-S14-1 queued |
+| S17 orchestrator peering | 3 | **done**: `docs/spikes/s17-peering.md`, ADR 0019 (Proposed); lake is truth, live paths optional; worker fan-out (no orch↔orch) recommended; 0 gaps/dups in 12 failure runs; O-S17-1 queued |
+
+## Environment
+
+See `docs/environment.md` (after rescale: 8 vCPU Neoverse-N1, 15 GiB, 151 GB, aarch64, Fedora 44;
+userns works; no KVM/containers). Pre-rescale host was 2 vCPU / 3.7 GiB / 40 GB.
+
+## Kickoff answers (owner, 2026-10-20, verbatim)
+
+1. Old prototype / git: "no ignore the old git data."
+2. Machine: "do it here you dont need to test with massive packages do spieks and testing with
+   simple packages + also anyways the idea is that builds are also fast on such machines with low
+   power so try to make it as good as possible here."
+3. Tools/users: "yes install tools through nix and yes do whatever you need to create."
+4. Subagents: "yes do as efficient but as accurate as possible"
+5. Forges: "the interface should be pretty clear and simple so that its just a matter of using
+   teh github sdk for its adapter... therfore testing is fine for forgejo and for github just
+   ensure it uses the sdk ."
+6. §7.7: "leave as is."
+7. dynamitedb/lake: "dont pin dynamitedb and lake to commit just use the curent head version they
+   are not going to introduce breaking changes."
+8. Owner asked whether a bigger instance (4c/8 GB or 8c/16 GB) is much better and whether 40 GB
+   storage is enough. Agent answer: RAM is the bottleneck (Nix eval + linking + S3/orchestrator/
+   worker + subagent in parallel); aarch64→x86_64 cross toolchains are likely uncached (verify) and
+   build from source. Recommended 4c/8 GB now; 8c/16 GB only helps cold cross builds and the Stage 3
+   matrix; 40 GB OK for Stage 2 with regular GC, 80 GB for Stage 3. Low-power budgets (R-NFR-008)
+   are measured under a cgroup limit of 2 vCPU / 4 GiB regardless of host size.
+   Owner: "write everything to disk so that I can reboot the server and then I will rescale it".
+
+## Resume list (done 2026-10-20: environment.md, decisions.md written; Phase 2.1 started)
+
+1. Re-probe the host (CPU, RAM, disk, Nix, userns) and write `docs/environment.md`.
+2. Self-answered decisions so far → `plan/decisions.md` (create on resume): no git commits unless
+   the owner asks (owner: "ignore the old git data"); install tools via Nix; create a non-root
+   `bobtest` user for S0b; use subagents economically (explorer/test-runner).
+3. Start **Phase 2.1**: S0a (A′ vs B) in `spikes/gen/`, S0b (rootless embedded Nix, Nix vs Lix) in
+   `spikes/rootless/`; small test packages only (D47). End with ADR 0001/0002 → Gate 0.
+
+## Phase 2.1 progress
+
+- **S0b done** (2026-10-20): `docs/spikes/rootless-results.md`, `docs/adr/0002-rootless-nix.md`
+  (Proposed). Recommends static Nix 2.34.9 over Lix 2.94.3; userns re-exec + bind/pivot_root.
+  Gate 0 decision points: (1) Nix vs Lix; (2) store binaries are not runnable outside bob's
+  namespace (editors/LSPs outside `bob dev`, `bob install` needs shims) — owner must accept the DX
+  model or a fix must be designed; (3) LGPL + GPL-2.0 busybox in static Nix (ATTRIBUTION, owner review).
+- S0a done: A′ (`docs/spikes/gen-aprime.md`), B (`docs/spikes/gen-b.md`), quiet reruns back to back
+  (`docs/spikes/measure/`), ADR 0001 written.
+
+## Findings to merge into SPEC (corrections to earlier docs)
+
+- S15: a 401 from a substituter is **not** silent (contradicts S0b / ADR 0002 Consequences): it
+  appears as a level-1 warning; Nix then builds locally. bob still checks credentials first.
+- S15: the static Nix's builtin `/bin/sh` has no tools (no `mkdir`), so bob-builder must not rely
+  on shell utilities; success = exit 0 **and** every output registered in the store DB.
+
+## Round 1 answers (owner, 2026-10-21, verbatim)
+
+"1. yes split in batches c 2. yes use a slow polling and allow the orchestrator to trigger a reread
+faster by a "wake up call"... here I also must ask: is this 276$ just becuase AWS s3 pricing or
+would that even be a noticeable problem on buckets like rustfs or seaweed... i mean kubernetes pools
+way more on etcd and I doubt etcd to be much faster then dynamitedb for single key fetches....?
+please quickly answer this before i tell continue. 3. okay misunderstanding attention: workers
+should write log data directly to lake but in batches (not every second), however if a connection is
+established then the orchestrator should just directly ask the workers for their live in memory
+log.... there is no "workers send logs to orchestrator every 0.1s" instead there should be a "a user
+requests logs live so now the orchestrator asks all workers for their in memory log state". 4. the
+worker software runs as root but builds should not run as root and should also be isolated (probably
+it makes most sense to run them inside a container) 5. no stop mixing of auth... workers always have
+the s3 credentials and the token is over s3... it is always this hierarchy: s3 token ->
+getP2PToken() NEVER the other way around. how the s3 credentials work is a devops question not a
+software question: e.g. it could be ec2 machines that acquire credentials via imdsv2 or lambdas or
+whatever that is not your business. 6. a) 7. a) 8. wait before to much confusion arises... why does
+that problem presumably exist.... the lsp must find dependencies to resolve types anyways in most
+languages so as already said do something like direnv with nix develop that it just changes env
+variable paths to resolve this... so yes somehow a) but it should just work if i cd into this
+directory and open e.g. nvim in vscodes case or intellij maybe you need somethign special but yes
+then we can say open them with bob dev or something like this"
+
+Follow-up (verbatim): "okay stop using list.... this is a clear skilllissue of the design...
+please understand dynamitedb... this is not like an sql database where you can do whatever you want
+and it is still fast... it must be architected thoughtful this should not list but get. there are
+various ways to do this but I'm sure you'll fine one without list. Now continue with round 2" → D60.
+S9's key schema (lists via LIST + GET) must be redesigned GET-only in the SPEC.
+
+Recorded as D53–D59 (REQUIREMENTS §24). Q2 cost question and Q8 explanation answered in chat;
+owner to say "continue".
+
+## Round 2 answers (owner, 2026-10-21, verbatim)
+
+"4. can you make a lightweight proxy in the orchestrator? short lived tokens okay but its kinda messy
+as it has to use ANOTHER auth system (the one of teh bucket) and I want the bucket to be
+interchangeable. 5. a) is good. 6. no everything that goes away from aws s3 compatible (also garages
+non conditional write thing) is not supported therefore seaweed also not. okay now to the 1-3
+revised: 1. please check the newest lake data it should now be fixed please analyzue the code change
+/ test quickly. 2. does that not already exist with the bucket URL and name... wait can you not just
+use a url in lake to do exactly this already? 3. nothing maybe this is a feature in the future but
+tbh compliant servers always have to return the etag you probably just ran into the issue because you
+used a non-compliant one (seaweed)"
+
+→ D61–D64. lake fix f6c2284 re-checked: L2 still present (see findings).
+
+## Owner questions queued (two rounds, ≤ 8 each)
+
+Round 1 (asked in chat 2026-10-21): O-S14-1, O-S9-1, O-S17-1, OD-S13-1, OD-S11-1, O-S12-1, O-S3-1,
+O-DX-1; info: dev pushes disabled (S13), A14 bob.go next to code.
+Round 2 (asked in chat 2026-10-21): O-S10-1/2/3 (lake), O-S9-2 (dynamitedb fixes), O-S12-2, O-S16-1,
+SeaweedFS support (S9).
+
+Quiet reruns of 11 timing-sensitive spikes done 2026-10-21 08:37–09:25 UTC
+(`docs/spikes/measure/quiet/*.log`, load 0.5–4 from the runs themselves). S12's first rerun failed
+(S3 server not started by measure.sh); rerun via `quiet/s12-rerun.sh` OK: 100.7 MiB closure upload 0.64–0.76 s, promote 0.49–0.54 s, Nix substitute 0.61–0.67 s [8c/15G]. Examples: S2 fixture
+incr main.go single 11.6 s → hybrid 2.9 s [8c/15G]; S3 49-crate cold 48.3 s vs cargo 40.7 s [8c],
+130.9 vs 119.3 s [2c/4G]; S3 incr 2.9–5.4 s. SPEC budgets use these logs.
+
+
+- O-S3-1 (S3): what may bob.lock contain beyond pins/hashes? (a) crate dependency edges,
+  feature tables and 4 Cargo.toml facts in bob.lock [recommended]; (b) same data in a second
+  generated committed file; (c) fetched at evaluation time.
+- O-S12-1 (S12): scoping of private cache paths: (a) visibility markers per path, one cache URL
+  [recommended, built]; (b) one substituter URL per project; (c) every logged-in user reads every
+  bob-built path.
+- OD-S13-1 (S13): store integrity on workers (rootless Nix lets a build rewrite its input paths
+  persistently): (a) rootless workers only + per-job overlay over /nix; (b) workers must be root
+  with auto-allocate-uids; (c) both: overlay by default, root mode when started as root
+  [recommended].
+- O-S16-1 (S16): Forgejo checkout credential (Forgejo tokens never expire and need the bot
+  password to mint): (a) store bot password, mint per-job repo-scoped token, revoke + sweep
+  [recommended]; (b) OAuth2 app, 1 h tokens but not repo-scoped; (c) long-lived per-project token.
+- O-S10-1 (S10, owner owns lake): lake HEAD bugs L1 (filtered Scan over overlapping sorted
+  shards hangs / wrong rows, parquet-go merge bug), L2 (Commit returns nil after 5 failed catalog
+  writes → 37–76 % lines lost), L3 (compaction duplicates on catalog reload), L4 (NoSuchKey 60 s
+  after compaction): (a) owner fixes upstream using the reference patch [recommended]; (b) HEAD +
+  workarounds, accept L2 loss; (c) don't keep logs in lake.
+- O-S10-2 (S10): write cap ~8–10 commits/s per bucket (single catalog object): (a) accept, budget
+  ≤ 5 commits/s, flush interval grows with fleet size, live view via S17 [recommended v1];
+  (b) owner adds a write-scalable catalog to lake; (c) workers send logs through orchestrators.
+- O-S10-3 (S10): retention: (a) owner adds a delete/DropShards API to lake [recommended];
+  (b) bob edits lake's catalog itself as an interim.
+- O-S9-1 (S9): dispatch path: (a) workers poll the fleet bucket (100 workers @5 s ≈ 27 req/s,
+  ≈ $276/month AWS list price, claim p50 139 ms); (b) workers long-poll an orchestrator, which polls
+  S3 and wakes them (claims stay CAS in the bucket; conflicts with "preferably no direct instance
+  talk"); (c) a by default, b as optimisation [agent recommends c].
+- O-S9-2 (S9, owner owns dynamitedb): upstream fixes: (a) now: Query goroutine panic crashes the
+  process, Update without ETag = silent unconditional PUT, Query fails if an item is deleted while
+  listing [recommended; bob does not block]; (b) also the other 10 + keys-only listing + returning
+  new ETag; (c) none.
+- OD-S11-1 (S11): cutting off a compromised worker host: (a) one shared fleet credential, rotate
+  on all workers; (b) narrow bootstrap credential + per-worker STS credentials (15–60 min) inside
+  the sealed token [recommended]; (c) b + optional admin approval for new workers.
+- O-S14-1 (S14, marked owner decision in BOOTSTRAP): scheduling unit: (a) whole closure per job
+  only; (b) one job per derivation; (c) hybrid: closure job by default, split into batches of ≤ 64
+  ready drvs when ≥ 60 s and ≥ 30 % gain is predicted [recommended; if smallest v1 wanted: ship a
+  with the same job schema].
+- O-DX-1 (S4, applies to all languages, follows D51): editor go-to-definition into dependency
+  sources (`/nix/store/...`: Go std, npm types, crates) fails for editors started outside the
+  namespace on hosts without `/nix`: (a) accept; recommend starting the editor from `bob dev`
+  [agent recommends]; (b) bob copies/links dependency sources into a gitignored `.bob/src` and
+  maps paths; (c) a FUSE view of the store.
+- O-S12-2 (S12): download path: (a) always through the orchestrator; (b) redirect to presigned S3
+  URLs; (c) a by default, b optional [recommended; b unverified].
+
+- S12: Nix substituter auth works only via netrc (Basic, token as password); Nix silently ignores
+  401 with a warm cache → CLI checks `GET /api/whoami` first. Negative narinfo TTL 60 s, 0 for
+  remote-build/release fetches.
+
+- S13 (**critical, affects ADR 0002 + R-REG/dev push**): in rootless single-user Nix a build can
+  rewrite its input store paths persistently; FODs get host network incl. loopback. Consequence:
+  dev-machine stores are not trustworthy for pushing to the shared cache; workers need the overlay
+  or root mode; bob fetches sources itself (`nix store add` = same path as FOD), workers never
+  build user FODs.
+
+- S9: **SeaweedFS 4.36 breaks dynamitedb** (emptied "directory" read as 0-byte object; pk-only
+  object can't be created once children exist). RustFS 1.0.3 works. SPEC must name supported S3
+  backends per bucket kind (S11 tests policies on both).
+
+- S7: SPEC must split nixpkgs deps into host tools vs target libraries (typed); native api closure
+  366 MB because it references all of gcc → fixup is required (also S8: 77 → 31 MiB).
+
+- Owner challenged S9/S10 bug claims (2026-10-21); coordinator re-checked the code:
+  - lake L2 confirmed: `bucket.go:124–132` (lake 1c410ce) — after the 5th optimistic-lock failure
+    `err` is overwritten by `loadCatalog`'s nil, so `write` returns nil and the shard is orphaned.
+  - lake has one catalog per bucket at the fixed key `lakedb.catalog`, no prefix option; table data
+    under `<table>/`. Partitioning = one bucket per partition or a small prefix option in lake.
+  - dynamitedb "panics" and the Update/ETag case were **overstated** by S9: they occur only when
+    a backend omits the ETag header on GET (`get.go:50`, `get.go:127`; `update.go` uses the read's
+    ETag as `IfMatch` for its own read-modify-write) or on API misuse inside `Query` goroutines.
+    Not bugs on compliant backends (RustFS, SeaweedFS, AWS). Downgraded to robustness notes.
+
+- lake f6c2284 ("fix: update lake commit retry logic") re-checked 2026-10-21: L2 **still present**.
+  Test `/root/scratch-coord/lake/zz_l2_test.go` (fake S3, every conditional catalog PUT → 412):
+  5 PUTs, `write` returns nil. Cause: on the 5th failure `err = b.loadCatalog(ctx)` sets nil, then
+  `continue` ends the loop and `return err` returns nil. Fix: `return ErrOptimisticLock` (wrapped)
+  after the loop. Minor: on success the extra `loadCatalog` error is returned although the commit
+  succeeded (caller retry → duplicate shard). Owner's proposed fix (`return ErrOptimisticLock`
+  after the loop) passes the L2 test; owner: callers retry only on ErrOptimisticLock, other errors
+  are "unknown whether committed" like any database → bob's log writer must treat non-lock errors
+  as ambiguous (dedupe by (build, package, attempt, seq) on read, S17).
+  Owner pushed lake 045e301 with that fix; L2 test passes against it (2026-10-21).
+- lake partitions without a lake change: with path-style addressing the URL path is prepended, so
+  `New(ctx, "http://host/<real-bucket>", "<partition>")` sends `GET /<real-bucket>/<partition>/lakedb.catalog`
+  (verified with a fake server). lake only uses Get/Put/DeleteObject (no List/bucket calls), so
+  the "bucket" argument works as a key prefix. To verify: SigV4 against RustFS and AWS.
+
+## Blockers
+
+None.

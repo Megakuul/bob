@@ -1,0 +1,3 @@
+built   //tools:base
+
+bob: 1 built

@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:sleep"]}
+{"v":1,"event":"package.start","label":"//tools:sleep","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-8001","class":"interrupt","message":"build cancelled","excerpt":["stopped while building: //tools:sleep"]}}
+{"v":1,"event":"package.finish","label":"//tools:sleep","status":"cancelled"}
+{"v":1,"event":"run.finish","exitCode":130,"counts":{"built":0,"cached":0,"failed":0,"skipped":0,"cancelled":1,"upstream":0,"downloaded":0}}

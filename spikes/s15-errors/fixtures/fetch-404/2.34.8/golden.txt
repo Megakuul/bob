@@ -1,0 +1,12 @@
+FAILED  //third_party:itoa-1.0.18.crate
+skipped //rcore:rcore  (a dependency failed)
+skipped //third_party/crates:itoa-1.0.18  (a dependency failed)
+
+error[BOB-E-3003]: //third_party:itoa-1.0.18.crate: download not found (HTTP 403)
+  package defined at fixture/rcore/bob.go:9:9
+  cause: many file hosts (S3, crates.io) answer 403 instead of 404 for files that do not exist
+   | url: https://static.crates.io/crates/itoa/itoa-0.0.0-s15.crate
+  hint: the file was removed or the URL in bob.go is wrong
+  full log: bob log //third_party:itoa-1.0.18.crate
+
+bob: 1 failed, 2 skipped (exit 4)

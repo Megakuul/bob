@@ -1,0 +1,20 @@
+{
+  "targets": [
+    {
+      "name": "web",
+      "importer": ".",
+      "cmd": "tsc -p . && vite build --outDir $out/dist --emptyOutDir --logLevel warn"
+    },
+    {
+      "name": "web-hoisted",
+      "importer": ".",
+      "layout": "hoisted",
+      "cmd": "tsc -p . && vite build --outDir $out/dist --emptyOutDir --logLevel warn"
+    },
+    {
+      "name": "nm-hoisted",
+      "importer": ".",
+      "layout": "hoisted"
+    }
+  ]
+}

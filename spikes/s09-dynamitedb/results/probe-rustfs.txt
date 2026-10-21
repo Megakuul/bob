@@ -1,0 +1,26 @@
+[rustfs] PASS create-if-none-match                         first=<nil> second=already exists
+[rustfs] PASS put-stale-etag-rejected                      err=optimistic lock failed
+[rustfs] PASS update-stale-etag-rejected                   err=optimistic lock failed
+[rustfs] PASS delete-stale-etag-rejected                   err=optimistic lock failed
+[rustfs] PASS backend-get-if-match                         err=operation error S3: GetObject, https response error StatusCode: 412, RequestID: 3c3c87eb-909a-4cc1-b6f5-c28c286f7155, HostID: , api error PreconditionFailed: At…
+[rustfs] PASS backend-delete-if-match                      err=operation error S3: DeleteObject, https response error StatusCode: 412, RequestID: 1718bc5a-09ee-4a58-af77-d54391ab3e5b, HostID: , api error PreconditionFailed:… objectStillThere=true
+[rustfs] PASS raw-put-if-match-race-20                     rounds=100 histogram(winners->rounds)=map[1:100]
+[rustfs] PASS raw-put-if-none-match-race-20                rounds=100 histogram=map[1:100]
+[rustfs] PASS raw-delete-if-match-race-20                  rounds=50 histogram(successful deletes->rounds)=map[1:50] (info: >1 means deletes are not exclusive)
+[rustfs] FAIL with-expires-deletes-object                  Get after expiry: err=<nil> (nil = object still readable)
+[rustfs] FAIL static-field-stored-on-create                static="" (README: allowed but immutable)
+[rustfs] FAIL filter-LessOrEqThan-int                      N=5 LessOrEqThan(5): err=filter mismatch
+[rustfs] PASS filter-LessThan-int                          N=5 LessThan(6): err=<nil>
+[rustfs] FAIL filter-GreaterThan-duration                  Dur=1h GreaterThan(1m): err=filter mismatch
+[rustfs] PASS filter-LessOrEqThan-duration                 Dur=1h LessOrEqThan(1h): err=<nil>
+[rustfs] FAIL update-writes-back-model                     after Update: model.ETag=<nil> (doc: 'Update will modify v')
+[rustfs] FAIL query-exact-filter-mismatch-empty            len=1 err=filter mismatch
+[rustfs] seeding 2500 items for list-limit check...
+[rustfs] FAIL query-limit-stops-listing                    items=5 requests: LIST=3 GET=5 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0)
+[rustfs] FAIL query-tolerates-concurrent-delete            failed 16/20 queries; last=operation error S3: GetObject, https response error StatusCode: 404, RequestID: 287ea7fc-0423-4612-afb2-c01585ad20f9, HostID: , NoSuchKey: The specified key doe…
+[rustfs] PASS query-on-emptied-partition                   len=0 err=<nil>
+[rustfs] FAIL get-empty-sort-key-not-found                 Get sk="" err=operation error S3: GetObject, https response error StatusCode: 404, RequestID: 2465ee5e-ac2d-4396-9848-08bd17e179b6, HostID: , api error NoSuchVersion: The spe…
+[rustfs] PASS key-with-plus-rejected-as-error              err=database sort key is malformed or contains unsafe characters
+[rustfs] PASS key-101-chars-rejected                       err=database sort key is malformed or contains unsafe characters
+[rustfs] FAIL ctx-cancel-errors-is                         errors.Is(err, context.Canceled)=false err=operation error S3: GetObject, context canceled
+[rustfs] FAIL put-etag-on-missing                          err=operation error S3: PutObject, https response error StatusCode: 404, RequestID: 864ed6f6-7326-42b9-b186-408ce489c9d1, HostID: , api error NoSuchKey: The specified key does not exist.

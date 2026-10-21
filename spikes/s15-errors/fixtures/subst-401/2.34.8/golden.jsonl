@@ -1,0 +1,4 @@
+{"v":1,"event":"run.start","requested":["//tools:payload"]}
+{"v":1,"event":"error","error":{"code":"BOB-E-4001","class":"cache","message":"cache http://127.0.0.1:21511 rejected bob's credentials","label":"//tools:payload","definedAt":"fixture/tools/bob.go:23:15","cause":"the cache answered HTTP 401 to http://127.0.0.1:21511/nix-cache-info","hint":"run bob login","args":{"cache":"http://127.0.0.1:21511"}}}
+{"v":1,"event":"package.finish","label":"//tools:payload","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":4,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":13}}

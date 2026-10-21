@@ -1,0 +1,102 @@
+{
+  "name": "timeout-keep-going",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "--timeout",
+    "3",
+    "/nix/store/lkfm5nlan7hp1gp9jkcqiwacvkdd9al2-tools-sleep.drv^out",
+    "/nix/store/dhqq3ki5vna3ff41l8vzav3n1q3jzvjc-tools-silent.drv^out",
+    "/nix/store/5gjqysjavs591sslkbir27rgszmrr1q1-tools-user.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 3600,
+    "nixVersion": "2.34.8",
+    "valid": [
+      "/nix/store/dhqq3ki5vna3ff41l8vzav3n1q3jzvjc-tools-silent.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/5gjqysjavs591sslkbir27rgszmrr1q1-tools-user.drv": {
+        "label": "//tools:user",
+        "definedAt": "fixture/tools/bob.go:22:15",
+        "kind": "script"
+      },
+      "/nix/store/dhqq3ki5vna3ff41l8vzav3n1q3jzvjc-tools-silent.drv": {
+        "label": "//tools:silent",
+        "definedAt": "fixture/tools/bob.go:11:15",
+        "kind": "script"
+      },
+      "/nix/store/lkfm5nlan7hp1gp9jkcqiwacvkdd9al2-tools-sleep.drv": {
+        "label": "//tools:sleep",
+        "definedAt": "fixture/tools/bob.go:10:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/5xxrcqkg2iffjr6kx7rxq4jbfmcv0ghb-tools-user": "/nix/store/5gjqysjavs591sslkbir27rgszmrr1q1-tools-user.drv",
+      "/nix/store/q67ch4c4sc1q47kzhng14fwlaniszkj0-tools-sleep": "/nix/store/lkfm5nlan7hp1gp9jkcqiwacvkdd9al2-tools-sleep.drv",
+      "/nix/store/r920cxrni4h7b3hkl48z0vcshlxgg2pw-tools-silent": "/nix/store/dhqq3ki5vna3ff41l8vzav3n1q3jzvjc-tools-silent.drv"
+    },
+    "sources": {},
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//tools:sleep",
+        "//tools:silent",
+        "//tools:user"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//tools:sleep",
+        "//tools:silent",
+        "//tools:user"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//tools:sleep",
+        "//tools:silent",
+        "//tools:user"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//tools:sleep",
+        "//tools:silent",
+        "//tools:user"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//tools:sleep",
+        "//tools:silent",
+        "//tools:user"
+      ]
+    },
+    "requested": [
+      "//tools:sleep",
+      "//tools:silent",
+      "//tools:user"
+    ],
+    "limits": {
+      "timeoutS": 3,
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

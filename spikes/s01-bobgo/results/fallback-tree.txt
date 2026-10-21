@@ -1,0 +1,16 @@
+"//cmd/api:api"
+"//crates/rcore:rcore"
+"//internal/greet:test"
+"//libs/foo:foo"
+"//web:web"
+"nixpkgs:openssl"
+{"ok":true,"step":"initialize","t_ms":96}
+{"ok":true,"step":"open bob/cmd/api/bob.go","t_ms":96}
+{"diagnostics":null,"step":"diag bob/cmd/api/bob.go","t_ms":1804}
+{"count":1,"items":["Lib"],"latency_ms":10,"step":"complete bob/cmd/api/bob.go \"foo.\"","t_ms":1815}
+{"latency_ms":0,"locations":["/bob/libs/foo/bob.go:10"],"step":"def bob/cmd/api/bob.go \"foo.Lib\"","t_ms":1815}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":1816}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":3323}
+{"count":1,"items":["Hello"],"latency_ms":10,"step":"complete cmd/api/main.go \"greet.\"","t_ms":3333}
+{"messages":null,"step":"server-messages","t_ms":3333}
+{"server_maxrss_mb":148,"step":"exit","t_ms":3353}

@@ -1,0 +1,1595 @@
+{
+  "messages": [
+    {
+      "key": "L0 Cannot build '/nix/store/H-api-api.drv'.",
+      "name": "",
+      "levels": {
+        "0": 12
+      },
+      "count": {
+        "2.34.8": 6,
+        "2.34.9": 6
+      },
+      "faults": [
+        "go-error",
+        "link-error",
+        "missing-header",
+        "missing-lib",
+        "test-failure",
+        "two-failures"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/r9fk9k889kinxn3nbb8hypvbmcmz5vbg-api-api.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output paths:\\n         \\…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-cbad-cbad.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "c-error"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/4ms6hq4hwnqxzw2vixj8spd7x0q1khyq-cbad-cbad.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output paths:\\n        …"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-hello-s15-2.12.3.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/6ivrxzws85k8n9w8974c1ca77j2x0v9d-hello-s15-2.12.3.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output paths:\\n …"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-itoa-1.0.18-src.drv'.",
+      "name": "",
+      "levels": {
+        "0": 12
+      },
+      "count": {
+        "2.34.8": 6,
+        "2.34.9": 6
+      },
+      "faults": [
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall",
+        "hash-mismatch"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/s3p1vqnr84j2md83hb076z4y8g82l6cp-itoa-1.0.18-src.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1m1 dependency failed\\u001b[0m.\\n       Output paths:\\n         \\u001…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-itoa-1.0.18.crate.drv'.",
+      "name": "",
+      "levels": {
+        "0": 10
+      },
+      "count": {
+        "2.34.8": 5,
+        "2.34.9": 5
+      },
+      "faults": [
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/cwi69nxfj57kz5l3k0260dq96y3i5hrr-itoa-1.0.18.crate.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output paths:\\n…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-libfoo-foo.drv'.",
+      "name": "",
+      "levels": {
+        "0": 4
+      },
+      "count": {
+        "2.34.8": 2,
+        "2.34.9": 2
+      },
+      "faults": [
+        "cxx-error",
+        "two-failures"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/c018ahqqi0a24ihwk1vj3h6lw5qihn7h-libfoo-foo.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output paths:\\n       …"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-rcore-rcore.drv'.",
+      "name": "",
+      "levels": {
+        "0": 18
+      },
+      "count": {
+        "2.34.8": 9,
+        "2.34.9": 9
+      },
+      "faults": [
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall",
+        "hash-mismatch",
+        "rust-error",
+        "rust-missing-crate",
+        "two-failures"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/wyhnrkpy339chp6cy48xf1yrd80gla18-rcore-rcore.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1m1 dependency failed\\u001b[0m.\\n       Output paths:\\n         \\u001b[35…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-third_party-crates-itoa-1.0.18.drv'.",
+      "name": "",
+      "levels": {
+        "0": 12
+      },
+      "count": {
+        "2.34.8": 6,
+        "2.34.9": 6
+      },
+      "faults": [
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall",
+        "hash-mismatch"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/yvghxr9j043v4z25k081by9xf7sc78gr-third_party-crates-itoa-1.0.18.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1m1 dependency failed\\u001b[0m.\\n       Output paths:\\…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-cross.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "unsupported-system"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mplatform mismatch\\u001b[0m\\n       Required system: '\\u001b[35;1mx86_64…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-memory.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "oom"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/bw0wwbix8vh3qn9cvzkzj98dvs1f25dv-tools-memory.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed due to signal 9 (Killed)\\u001b[0m.\\n       Output paths…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-missing-builder.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "builder-missing"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output path…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-network.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "sandbox-network"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/m67cd124qvdi0f47x7w8fh7zy9qzsfrc-tools-network.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 1\\u001b[0m.\\n       Output paths:\\n    …"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-payload.drv'.",
+      "name": "",
+      "levels": {
+        "0": 10
+      },
+      "count": {
+        "2.34.8": 5,
+        "2.34.9": 5
+      },
+      "faults": [
+        "subst-401",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mlocal builds are disabled\\u001b[0m (max-jobs = 0)\\n       Hint: set '…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-syntax.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "builder-syntax"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/94xngzy083b9x72ags0yrxphir948y7z-tools-syntax.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1mbuilder failed with exit code 2\\u001b[0m.\\n       Output paths:\\n     …"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-upstream.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/sfm5bra1b29dk9z1kbbr98b5xcdj4clp-tools-upstream.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1m1 dependency failed\\u001b[0m.\\n       Output paths:\\n         \\u001b…"
+    },
+    {
+      "key": "L0 Cannot build '/nix/store/H-tools-user.drv'.",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "timeout-keep-going"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m Cannot build '\\u001b[35;1m/nix/store/5gjqysjavs591sslkbir27rgszmrr1q1-tools-user.drv\\u001b[0m'.\\n       Reason: \\u001b[31;1m1 dependency failed\\u001b[0m.\\n       Output paths:\\n         \\u001b[35;…"
+    },
+    {
+      "key": "L0 build of '/nix/store/H-tools-user.drv^out', '/nix/store/H-tools-sleep.drv^out' failed",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "timeout-keep-going"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m build of \\u001b[35;1m'/nix/store/5gjqysjavs591sslkbir27rgszmrr1q1-tools-user.drv^out', '/nix/store/lkfm5nlan7hp1gp9jkcqiwacvkdd9al2-tools-sleep.drv^out'\\u001b[0m failed\",\"raw_msg\":\"build of \\u001b…"
+    },
+    {
+      "key": "L0 builder for '/nix/store/H-tools-no-output.drv' failed to produce output",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "no-output"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m builder for '\\u001b[35;1m/nix/store/12zjj54mk6sc4ssqg6k5pn2wpiahmrms-tools-no-output.drv\\u001b[0m' failed to produce output path for output '\\u001b[35;1mout\\u001b[0m' at \\u001b[35;1m\\\"/nix/store/1…"
+    },
+    {
+      "key": "L0 builder says error",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "ok-structured"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":0,\"msg\":\"builder says error\"}"
+    },
+    {
+      "key": "L0 building derivation '/nix/store/H-tools-log-flood.drv' killed after writing more",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "log-limit"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m \\u001b[35;1mbuilding derivation '/nix/store/94ncd584xaxfvskk2w690wjiadv6mxkv-tools-log-flood.drv'\\u001b[0m killed after writing more than \\u001b[35;1m20000\\u001b[0m bytes of log output\",\"raw_msg\":…"
+    },
+    {
+      "key": "L0 derivation '/nix/store/H-tools-nochroot.drv' has '__noChroot' set, but that's",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "sandbox-nochroot"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m derivation '\\u001b[35;1m/nix/store/8cr830cyyzal1xyn8jx08dg1g72r4z68-tools-nochroot.drv\\u001b[0m' has '__noChroot' set, but that's not allowed when 'sandbox' is 'true'\",\"raw_msg\":\"derivation '\\u001…"
+    },
+    {
+      "key": "L0 error: hash mismatch importing path '/nix/store/H-tools-payload';",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-corrupt"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":0,\"msg\":\"\\u001b[31;1merror:\\u001b[0m hash mismatch importing path '\\u001b[35;1m/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\\u001b[0m';\\n         specified: \\u001b[35;1msha256:1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d\\u001b[0m\\n         got:       …"
+    },
+    {
+      "key": "L0 getting attributes of path \"/root/scratch-s15/stores/corrupt-2.34.8/nix/store/H-tools-base\": No such",
+      "name": "",
+      "levels": {
+        "0": 1
+      },
+      "count": {
+        "2.34.8": 1
+      },
+      "faults": [
+        "corrupt-store"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m\\n       … while setting up the build environment\\n\\n       \\u001b[31;1merror:\\u001b[0m getting attributes of path \\u001b[35;1m\\\"/root/scratch-s15/stores/corrupt-2.34.8/nix/store/21c23ig7xw63bqsn…"
+    },
+    {
+      "key": "L0 getting attributes of path \"/root/scratch-s15/stores/corrupt-2.34.9/nix/store/H-tools-base\": No such",
+      "name": "",
+      "levels": {
+        "0": 1
+      },
+      "count": {
+        "2.34.9": 1
+      },
+      "faults": [
+        "corrupt-store"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m\\n       … while setting up the build environment\\n\\n       \\u001b[31;1merror:\\u001b[0m getting attributes of path \\u001b[35;1m\\\"/root/scratch-s15/stores/corrupt-2.34.9/nix/store/21c23ig7xw63bqsn…"
+    },
+    {
+      "key": "L0 hash mismatch in fixed-output derivation '/nix/store/H-itoa-1.0.18.crate.drv':",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "hash-mismatch"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m hash mismatch in fixed-output derivation '\\u001b[35;1m/nix/store/2qiw919i213kj4blvygrpyw0cnimdiyi-itoa-1.0.18.crate.drv\\u001b[0m':\\n         specified: \\u001b[35;1msha256-ewAv6f9RBP823dlDOUt+E/q8F…"
+    },
+    {
+      "key": "L0 interrupted by the user",
+      "name": "",
+      "levels": {
+        "0": 3
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 2
+      },
+      "faults": [
+        "oom-scope-stop",
+        "sigint"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m interrupted by the user\",\"raw_msg\":\"interrupted by the user\"}"
+    },
+    {
+      "key": "L0 opening lock file \"/nix/var/nix/db/big-lock\": Permission denied",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "store-permission"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m\\n       … This command may have been run as non-root in a single-user Nix installation,\\n       or the Nix daemon may have crashed.\\n\\n       \\u001b[31;1merror:\\u001b[0m opening lock file \\u001b…"
+    },
+    {
+      "key": "L0 output '/nix/store/H-tools-leak-ref' is not allowed to refer",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "disallowed-ref"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m output '\\u001b[35;1m/nix/store/0pdmycy9xixax044ivy90sjvq8gvbw90-tools-leak-ref\\u001b[0m' is not allowed to refer to the following paths:\\u001b[35;1m\\n         /nix/store/21c23ig7xw63bqsnfs5rs90v05…"
+    },
+    {
+      "key": "L0 path '/nix/store/H-tools-payload' is required, but there is",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-corrupt"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m path '\\u001b[35;1m/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\\u001b[0m' is required, but there is no substituter that can build it\",\"raw_msg\":\"path '\\u001b[35;1m/nix/store/m1kix7w6aa…"
+    },
+    {
+      "key": "L0 program \"/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh\" failed with exit code 1",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "post-build-hook"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m program \\u001b[35;1m\\\"/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh\\\"\\u001b[0m \\u001b[35;1mfailed with exit code 1\\u001b[0m\",\"raw_msg\":\"program \\u001b[35;1m\\\"/root/bob/spikes/s15-errors/tmp/wo…"
+    },
+    {
+      "key": "L0 some substitutes for the outputs of derivation",
+      "name": "",
+      "levels": {
+        "0": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-corrupt"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m some substitutes for the outputs of derivation '\\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\\u001b[0m' failed (usually happens due to networking issues); try '--fallba…"
+    },
+    {
+      "key": "L0 timed out after 3 seconds",
+      "name": "",
+      "levels": {
+        "0": 8
+      },
+      "count": {
+        "2.34.8": 4,
+        "2.34.9": 4
+      },
+      "faults": [
+        "build-timeout",
+        "silent-timeout",
+        "timeout-keep-going"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m timed out after \\u001b[35;1m3\\u001b[0m seconds\",\"raw_msg\":\"timed out after \\u001b[35;1m3\\u001b[0m seconds\"}"
+    },
+    {
+      "key": "L1 file 'nar/Hshir2w432fa43dbq3j9d.nar' does not exist in binary",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-nar404"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":1,\"line\":null,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m file '\\u001b[35;1mnar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar\\u001b[0m' does not exist in binary cache '\\u001b[35;1mhttp://127.0.0.1:21513\\u001b[0m'\",\"raw_msg\":\"file '\\u001b[35;…"
+    },
+    {
+      "key": "L1 unable to download 'http://127.0.0.1:21511/nix-cache-info': HTTP error 401",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-401"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":1,\"line\":null,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21511/nix-cache-info\\u001b[0m': HTTP error \\u001b[35;1m401\\u001b[0m\\u001b[35;1m\\u001b[0m\\n\\n         response body:\\n\\n         \\u001b[35;1munaut…"
+    },
+    {
+      "key": "L1 unable to download 'http://127.0.0.1:21512/nix-cache-info': HTTP error 401",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-401-fallback"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":1,\"line\":null,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21512/nix-cache-info\\u001b[0m': HTTP error \\u001b[35;1m401\\u001b[0m\\u001b[35;1m\\u001b[0m\\n\\n         response body:\\n\\n         \\u001b[35;1munaut…"
+    },
+    {
+      "key": "L1 unable to download 'http://127.0.0.1:21514/nix-cache-info': Timeout was reached",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-stall"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":1,\"line\":null,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21514/nix-cache-info\\u001b[0m': \\u001b[35;1mTimeout was reached\\u001b[0m (\\u001b[35;1m28\\u001b[0m) \\u001b[35;1mOperation too slow. Less than 1 by…"
+    },
+    {
+      "key": "L1 unable to download 'http://127.0.0.1:21598/nix-cache-info': Could not connect",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-refused"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":1,\"line\":null,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\\u001b[0m': \\u001b[35;1mCould not connect to server\\u001b[0m (\\u001b[35;1m7\\u001b[0m) \\u001b[35;1mFailed to connect to 127.0.…"
+    },
+    {
+      "key": "L1 warning: ignoring substitute for '/nix/store/H-tools-payload' from 'http://127.0.0.1:21515',",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "subst-untrusted"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m ignoring substitute for '/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload' from 'http://127.0.0.1:21515', as it's not signed by any of the keys in 'trusted-public-keys'\"}"
+    },
+    {
+      "key": "L1 warning: unable to download 'http://127.0.0.1:21503/itoa-1.0.18.crate': Timeout was",
+      "name": "",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "fetch-stall"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21503/itoa-1.0.18.crate\\u001b[0m': \\u001b[35;1mTimeout was reached\\u001b[0m (\\u001b[35;1m28\\u001b[0m) \\u001b[35;1mOperation too slow. Less than 1 bytes/sec transferred the last 3 seco…"
+    },
+    {
+      "key": "L1 warning: unable to download 'http://127.0.0.1:21504/itoa-1.0.18.crate': HTTP error",
+      "name": "",
+      "levels": {
+        "1": 8
+      },
+      "count": {
+        "2.34.8": 4,
+        "2.34.9": 4
+      },
+      "faults": [
+        "fetch-500"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21504/itoa-1.0.18.crate\\u001b[0m': HTTP error \\u001b[35;1m500\\u001b[0m\\u001b[35;1m\\u001b[0m\\n\\nresponse body:\\n\\n\\u001b[35;1mboom\\u001b[0m; retrying in 299 ms (attempt 1/5)\"}"
+    },
+    {
+      "key": "L1 warning: unable to download 'http://127.0.0.1:21514/nix-cache-info': Timeout was",
+      "name": "",
+      "levels": {
+        "1": 8
+      },
+      "count": {
+        "2.34.8": 4,
+        "2.34.9": 4
+      },
+      "faults": [
+        "subst-stall"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21514/nix-cache-info\\u001b[0m': \\u001b[35;1mTimeout was reached\\u001b[0m (\\u001b[35;1m28\\u001b[0m) \\u001b[35;1mOperation too slow. Less than 1 bytes/sec transferred the last 3 seconds…"
+    },
+    {
+      "key": "L1 warning: unable to download 'http://127.0.0.1:21598/nix-cache-info': Could not",
+      "name": "",
+      "levels": {
+        "1": 8
+      },
+      "count": {
+        "2.34.8": 4,
+        "2.34.9": 4
+      },
+      "faults": [
+        "subst-refused"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21598/nix-cache-info\\u001b[0m': \\u001b[35;1mCould not connect to server\\u001b[0m (\\u001b[35;1m7\\u001b[0m) \\u001b[35;1mFailed to connect to 127.0.0.1 port 21598 after 0 ms: Could not c…"
+    },
+    {
+      "key": "L1 warning: unable to download 'http://127.0.0.1:21599/itoa-1.0.18.crate': Could not",
+      "name": "",
+      "levels": {
+        "1": 8
+      },
+      "count": {
+        "2.34.8": 4,
+        "2.34.9": 4
+      },
+      "faults": [
+        "fetch-refused"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21599/itoa-1.0.18.crate\\u001b[0m': \\u001b[35;1mCould not connect to server\\u001b[0m (\\u001b[35;1m7\\u001b[0m) \\u001b[35;1mFailed to connect to 127.0.0.1 port 21599 after 0 ms: Could no…"
+    },
+    {
+      "key": "L1 warning: unable to download 'https://crates.s15.invalid/itoa-1.0.18.crate': Could not",
+      "name": "",
+      "levels": {
+        "1": 8
+      },
+      "count": {
+        "2.34.8": 4,
+        "2.34.9": 4
+      },
+      "faults": [
+        "fetch-dns"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttps://crates.s15.invalid/itoa-1.0.18.crate\\u001b[0m': \\u001b[35;1mCould not resolve hostname\\u001b[0m (\\u001b[35;1m6\\u001b[0m) \\u001b[35;1mCould not resolve host: crates.s15.invalid\\u001b[0m; retryi…"
+    }
+  ],
+  "types": [
+    {
+      "key": "msg/level0",
+      "name": "msg",
+      "levels": {
+        "0": 4
+      },
+      "count": {
+        "2.34.8": 2,
+        "2.34.9": 2
+      },
+      "faults": [
+        "ok-structured",
+        "subst-corrupt"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":0,\"msg\":\"builder says error\"}"
+    },
+    {
+      "key": "msg/level0/error-info",
+      "name": "msg",
+      "levels": {
+        "0": 129
+      },
+      "count": {
+        "2.34.8": 64,
+        "2.34.9": 65
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "silent-timeout",
+        "store-permission",
+        "subst-401",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":0,\"line\":null,\"msg\":\"\\u001b[31;1merror:\\u001b[0m timed out after \\u001b[35;1m3\\u001b[0m seconds\",\"raw_msg\":\"timed out after \\u001b[35;1m3\\u001b[0m seconds\"}"
+    },
+    {
+      "key": "msg/level1",
+      "name": "msg",
+      "levels": {
+        "1": 44
+      },
+      "count": {
+        "2.34.8": 22,
+        "2.34.9": 22
+      },
+      "faults": [
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":1,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21504/itoa-1.0.18.crate\\u001b[0m': HTTP error \\u001b[35;1m500\\u001b[0m\\u001b[35;1m\\u001b[0m\\n\\nresponse body:\\n\\n\\u001b[35;1mboom\\u001b[0m; retrying in 299 ms (attempt 1/5)\"}"
+    },
+    {
+      "key": "msg/level1/error-info",
+      "name": "msg",
+      "levels": {
+        "1": 10
+      },
+      "count": {
+        "2.34.8": 5,
+        "2.34.9": 5
+      },
+      "faults": [
+        "subst-401",
+        "subst-401-fallback",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"column\":null,\"file\":null,\"level\":1,\"line\":null,\"msg\":\"\\u001b[35;1mwarning:\\u001b[0m unable to download '\\u001b[35;1mhttp://127.0.0.1:21511/nix-cache-info\\u001b[0m': HTTP error \\u001b[35;1m401\\u001b[0m\\u001b[35;1m\\u001b[0m\\n\\n         response body:\\n\\n         \\u001b[35;1munaut…"
+    },
+    {
+      "key": "msg/level3",
+      "name": "msg",
+      "levels": {
+        "3": 234
+      },
+      "count": {
+        "2.34.8": 117,
+        "2.34.9": 117
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"msg\",\"level\":3,\"msg\":\"this derivation will be built:\"}"
+    },
+    {
+      "key": "result/101",
+      "name": "build-log-line",
+      "levels": {},
+      "count": {
+        "2.34.8": 601,
+        "2.34.9": 621
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "cxx-error",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "link-error",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-structured",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "upstream-fail"
+      ],
+      "fields": "[str]",
+      "sample": "@nix {\"action\":\"result\",\"fields\":[\"start\"],\"id\":2690101226242053,\"type\":101}"
+    },
+    {
+      "key": "result/104",
+      "name": "set-phase",
+      "levels": {},
+      "count": {
+        "2.34.8": 3,
+        "2.34.9": 3
+      },
+      "faults": [
+        "ok-structured",
+        "upstream-fail"
+      ],
+      "fields": "[str]",
+      "sample": "@nix {\"action\":\"result\",\"fields\":[\"bob:compile\"],\"id\":2768742077431815,\"type\":104}"
+    },
+    {
+      "key": "result/105",
+      "name": "progress",
+      "levels": {},
+      "count": {
+        "2.34.8": 3760,
+        "2.34.9": 3169
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[int,int,int,int]",
+      "sample": "@nix {\"action\":\"result\",\"fields\":[0,0,0,0],\"id\":2690101226242050,\"type\":105}"
+    },
+    {
+      "key": "result/106",
+      "name": "set-expected",
+      "levels": {},
+      "count": {
+        "2.34.8": 2492,
+        "2.34.9": 2492
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[int,int]",
+      "sample": "@nix {\"action\":\"result\",\"fields\":[101,0],\"id\":2690101226242049,\"type\":106}"
+    },
+    {
+      "key": "result/107",
+      "name": "post-build-log-line",
+      "levels": {},
+      "count": {
+        "2.34.8": 2,
+        "2.34.9": 2
+      },
+      "faults": [
+        "post-build-hook"
+      ],
+      "fields": "[str]",
+      "sample": "@nix {\"action\":\"result\",\"fields\":[\"uploading /nix/store/rc3qplw2v7jcqr4b2ymdhw2m9f98assq-tools-hook\"],\"id\":2767367687897096,\"type\":107}"
+    },
+    {
+      "key": "start/0",
+      "name": "unknown",
+      "levels": {
+        "6": 192
+      },
+      "count": {
+        "2.34.8": 96,
+        "2.34.9": 96
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"start\",\"id\":2690101226242048,\"level\":6,\"parent\":0,\"text\":\"querying info about missing paths\",\"type\":0}"
+    },
+    {
+      "key": "start/100",
+      "name": "copy-path",
+      "levels": {
+        "3": 6
+      },
+      "count": {
+        "2.34.8": 3,
+        "2.34.9": 3
+      },
+      "faults": [
+        "ok-substitute",
+        "subst-corrupt",
+        "subst-nar404"
+      ],
+      "fields": "[str,str,str]",
+      "sample": "@nix {\"action\":\"start\",\"fields\":[\"/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\",\"http://127.0.0.1:21510\",\"local://\"],\"id\":3159889044045830,\"level\":3,\"parent\":3159889044045829,\"text\":\"copying path '/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload' from 'http://127.0.0.1:21510'\",…"
+    },
+    {
+      "key": "start/101",
+      "name": "file-transfer",
+      "levels": {
+        "4": 40
+      },
+      "count": {
+        "2.34.8": 20,
+        "2.34.9": 20
+      },
+      "faults": [
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "hash-mismatch",
+        "lock-wait-first",
+        "ok-structured",
+        "ok-substitute",
+        "post-build-hook",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "timeout-keep-going"
+      ],
+      "fields": "[str]",
+      "sample": "@nix {\"action\":\"start\",\"fields\":[\"https://static.crates.io/crates/itoa/itoa-0.0.0-s15.crate\"],\"id\":2609639308918790,\"level\":4,\"parent\":2609639308918789,\"text\":\"downloading 'https://static.crates.io/crates/itoa/itoa-0.0.0-s15.crate'\",\"type\":101}"
+    },
+    {
+      "key": "start/102",
+      "name": "realise",
+      "levels": {
+        "0": 96
+      },
+      "count": {
+        "2.34.8": 48,
+        "2.34.9": 48
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"start\",\"id\":2690101226242049,\"level\":0,\"parent\":0,\"text\":\"\",\"type\":102}"
+    },
+    {
+      "key": "start/103",
+      "name": "copy-paths",
+      "levels": {
+        "0": 96
+      },
+      "count": {
+        "2.34.8": 48,
+        "2.34.9": 48
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"start\",\"id\":2690101226242051,\"level\":0,\"parent\":0,\"text\":\"\",\"type\":103}"
+    },
+    {
+      "key": "start/104",
+      "name": "builds",
+      "levels": {
+        "0": 96
+      },
+      "count": {
+        "2.34.8": 48,
+        "2.34.9": 48
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"start\",\"id\":2690101226242050,\"level\":0,\"parent\":0,\"text\":\"\",\"type\":104}"
+    },
+    {
+      "key": "start/105",
+      "name": "build",
+      "levels": {
+        "3": 76
+      },
+      "count": {
+        "2.34.8": 38,
+        "2.34.9": 38
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-structured",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401-fallback",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "upstream-fail"
+      ],
+      "fields": "[str,str,int,int]",
+      "sample": "@nix {\"action\":\"start\",\"fields\":[\"/nix/store/y5kml8f48s30gw23kxv90f8rqg84c379-tools-sleep.drv\",\"\",1,1],\"id\":2690101226242053,\"level\":3,\"parent\":0,\"text\":\"building '/nix/store/y5kml8f48s30gw23kxv90f8rqg84c379-tools-sleep.drv'\",\"type\":105}"
+    },
+    {
+      "key": "start/108",
+      "name": "substitute",
+      "levels": {
+        "0": 6
+      },
+      "count": {
+        "2.34.8": 3,
+        "2.34.9": 3
+      },
+      "faults": [
+        "ok-substitute",
+        "subst-corrupt",
+        "subst-nar404"
+      ],
+      "fields": "[str,str]",
+      "sample": "@nix {\"action\":\"start\",\"fields\":[\"/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\",\"http://127.0.0.1:21510\"],\"id\":3159889044045829,\"level\":0,\"parent\":0,\"text\":\"\",\"type\":108}"
+    },
+    {
+      "key": "start/109",
+      "name": "query-path-info",
+      "levels": {
+        "4": 12
+      },
+      "count": {
+        "2.34.8": 6,
+        "2.34.9": 6
+      },
+      "faults": [
+        "lock-wait-first",
+        "ok-structured",
+        "post-build-hook",
+        "timeout-keep-going"
+      ],
+      "fields": "[str,str]",
+      "sample": "@nix {\"action\":\"start\",\"fields\":[\"/nix/store/pzzy0rnjvv5vppa3ar4gdbdymfacqpmb-tools-lock\",\"https://cache.nixos.org\"],\"id\":2784358578520065,\"level\":4,\"parent\":0,\"text\":\"querying info about '/nix/store/pzzy0rnjvv5vppa3ar4gdbdymfacqpmb-tools-lock' on 'https://cache.nixos.org'\",\"type\":109}"
+    },
+    {
+      "key": "start/110",
+      "name": "post-build-hook",
+      "levels": {
+        "4": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "post-build-hook"
+      ],
+      "fields": "[str]",
+      "sample": "@nix {\"action\":\"start\",\"fields\":[\"/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv\"],\"id\":2767367687897096,\"level\":4,\"parent\":0,\"text\":\"running post-build-hook '/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh'\",\"type\":110}"
+    },
+    {
+      "key": "start/111",
+      "name": "build-waiting",
+      "levels": {
+        "1": 2
+      },
+      "count": {
+        "2.34.8": 1,
+        "2.34.9": 1
+      },
+      "faults": [
+        "lock-wait"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"start\",\"id\":2784831024922629,\"level\":1,\"parent\":0,\"text\":\"waiting for lock on \\u001b[35;1m'/nix/store/pzzy0rnjvv5vppa3ar4gdbdymfacqpmb-tools-lock'\\u001b[0m\",\"type\":111}"
+    },
+    {
+      "key": "stop",
+      "name": "stop",
+      "levels": {},
+      "count": {
+        "2.34.8": 304,
+        "2.34.9": 308
+      },
+      "faults": [
+        "build-timeout",
+        "builder-missing",
+        "builder-syntax",
+        "c-error",
+        "corrupt-prep",
+        "corrupt-store",
+        "cxx-error",
+        "disallowed-ref",
+        "fetch-404",
+        "fetch-500",
+        "fetch-dns",
+        "fetch-ok",
+        "fetch-refused",
+        "fetch-stall",
+        "go-error",
+        "hash-mismatch",
+        "link-error",
+        "lock-wait",
+        "lock-wait-first",
+        "log-limit",
+        "missing-header",
+        "missing-lib",
+        "no-output",
+        "ok-fixture",
+        "ok-structured",
+        "ok-substitute",
+        "oom",
+        "oom-scope-stop",
+        "post-build-hook",
+        "rust-error",
+        "rust-missing-crate",
+        "sandbox-network",
+        "sandbox-nochroot",
+        "sigint",
+        "sigkill",
+        "silent-timeout",
+        "subst-401",
+        "subst-401-fallback",
+        "subst-corrupt",
+        "subst-nar404",
+        "subst-refused",
+        "subst-stall",
+        "subst-untrusted",
+        "test-failure",
+        "timeout-keep-going",
+        "two-failures",
+        "unsupported-system",
+        "upstream-fail"
+      ],
+      "fields": "[]",
+      "sample": "@nix {\"action\":\"stop\",\"id\":2690101226242048}"
+    }
+  ]
+}

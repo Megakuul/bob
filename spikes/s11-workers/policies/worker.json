@@ -1,0 +1,116 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyControlAlways",
+      "Effect": "Deny",
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-control",
+        "arn:aws:s3:::bob-control/*"
+      ]
+    },
+    {
+      "Sid": "DenySts",
+      "Effect": "Deny",
+      "Action": [
+        "sts:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*"
+      ]
+    },
+    {
+      "Sid": "FleetList",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-fleet"
+      ]
+    },
+    {
+      "Sid": "FleetRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-fleet/*"
+      ]
+    },
+    {
+      "Sid": "FleetWriteWorkerPrefixes",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-fleet/wreg/*",
+        "arn:aws:s3:::bob-fleet/whb/*",
+        "arn:aws:s3:::bob-fleet/lease/*",
+        "arn:aws:s3:::bob-fleet/jstat/*"
+      ]
+    },
+    {
+      "Sid": "FleetDeleteWorkerPrefixes",
+      "Effect": "Allow",
+      "Action": [
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-fleet/whb/*",
+        "arn:aws:s3:::bob-fleet/lease/*"
+      ]
+    },
+    {
+      "Sid": "AnalyticsList",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-analytics"
+      ]
+    },
+    {
+      "Sid": "AnalyticsRW",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-analytics/*"
+      ]
+    },
+    {
+      "Sid": "ArtifactsRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-artifacts/*"
+      ]
+    },
+    {
+      "Sid": "ArtifactsStagingWrite",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::bob-artifacts/staging/*"
+      ]
+    }
+  ]
+}

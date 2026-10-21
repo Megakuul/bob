@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "system": "aarch64-linux",
+  "nixpkgs": {
+    "rev": "cd4ea8d57de16f4810bc5f14207bac45fbf19f67"
+  },
+  "root": "/root/bob/spikes/s07-cross",
+  "packages": [
+    {
+      "label": "//third_party:itoa-1.0.18.crate",
+      "kind": "fetch",
+      "definedAt": "fixture.go:78",
+      "fetch": {
+        "name": "itoa-1.0.18.crate",
+        "url": "https://static.crates.io/crates/itoa/itoa-1.0.18.crate",
+        "hash": "sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI=",
+        "unpack": "tar.gz"
+      }
+    },
+    {
+      "label": "//third_party:hex-0.4.3.crate",
+      "kind": "fetch",
+      "definedAt": "fixture.go:78",
+      "fetch": {
+        "name": "hex-0.4.3.crate",
+        "url": "https://static.crates.io/crates/hex/hex-0.4.3.crate",
+        "hash": "sha256-fyQlSqmlS1yFjq7i9bzNtGqvDkhqWV7V/Y+GulUjKnA=",
+        "unpack": "tar.gz"
+      }
+    },
+    {
+      "label": "//third_party:uuid-v1.6.0.zip",
+      "kind": "fetch",
+      "definedAt": "fixture.go:78",
+      "fetch": {
+        "name": "uuid-v1.6.0.zip",
+        "url": "https://proxy.golang.org/github.com/google/uuid/@v/v1.6.0.zip",
+        "hash": "sha256-0PAvN3IX9CcC4lloTgZEHtv1FA3dzDS6m+pWA4s4pu0=",
+        "unpack": "zip"
+      }
+    },
+    {
+      "label": "//third_party:sync-v0.24.0.zip",
+      "kind": "fetch",
+      "definedAt": "fixture.go:78",
+      "fetch": {
+        "name": "sync-v0.24.0.zip",
+        "url": "https://proxy.golang.org/golang.org/x/sync/@v/v0.24.0.zip",
+        "hash": "sha256-yj/PPqglnnWJH3lH4agWpbiUAsVC1F2Lu9ngYbDFgBk=",
+        "unpack": "zip"
+      }
+    },
+    {
+      "label": "//third_party:protobuf-v1.36.11.zip",
+      "kind": "fetch",
+      "definedAt": "fixture.go:78",
+      "fetch": {
+        "name": "protobuf-v1.36.11.zip",
+        "url": "https://proxy.golang.org/google.golang.org/protobuf/@v/v1.36.11.zip",
+        "hash": "sha256-FJg9NsVqgU7ZG21lLyuPiVurobhOtDsooLEyyGN80nQ=",
+        "unpack": "zip"
+      }
+    },
+    {
+      "label": "//third_party/crates:itoa-1.0.18",
+      "kind": "rust_crate",
+      "definedAt": "fixture.go:95",
+      "src": {
+        "fromLabel": "//third_party:itoa-1.0.18.crate",
+        "subdir": "itoa-1.0.18"
+      },
+      "rust": {
+        "crateName": "itoa",
+        "version": "1.0.18",
+        "edition": "2021",
+        "crateType": "lib",
+        "root": "src/lib.rs"
+      }
+    },
+    {
+      "label": "//third_party/crates:hex-0.4.3",
+      "kind": "rust_crate",
+      "definedAt": "fixture.go:95",
+      "src": {
+        "fromLabel": "//third_party:hex-0.4.3.crate",
+        "subdir": "hex-0.4.3"
+      },
+      "rust": {
+        "crateName": "hex",
+        "version": "0.4.3",
+        "edition": "2018",
+        "crateType": "lib",
+        "root": "src/lib.rs",
+        "features": [
+          "std",
+          "alloc"
+        ]
+      }
+    },
+    {
+      "label": "//libfoo:foo",
+      "kind": "cc_library",
+      "definedAt": "fixture.go:102",
+      "src": {
+        "path": "fixture/libfoo"
+      },
+      "nixpkgs": [
+        "openssl"
+      ],
+      "cc": {
+        "lang": "c++",
+        "std": "c++20",
+        "srcs": [
+          "src/foo.cpp"
+        ],
+        "hdrs": "include",
+        "shared": true,
+        "lib": "foo"
+      }
+    },
+    {
+      "label": "//rcore:rcore",
+      "kind": "rust_crate",
+      "definedAt": "fixture.go:109",
+      "src": {
+        "path": "fixture/rcore"
+      },
+      "deps": [
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party/crates:hex-0.4.3"
+      ],
+      "rust": {
+        "crateName": "rcore",
+        "version": "0.1.0",
+        "edition": "2021",
+        "crateType": "staticlib",
+        "root": "src/lib.rs",
+        "externs": {
+          "hex": "//third_party/crates:hex-0.4.3",
+          "itoa": "//third_party/crates:itoa-1.0.18"
+        },
+        "hdrs": "include"
+      }
+    },
+    {
+      "label": "//rdemo:rmac",
+      "kind": "rust_crate",
+      "definedAt": "fixture.go:118",
+      "src": {
+        "path": "fixture/rmac"
+      },
+      "deps": [
+        "//third_party/crates:itoa-1.0.18"
+      ],
+      "rust": {
+        "crateName": "rmac",
+        "version": "0.1.0",
+        "edition": "2021",
+        "crateType": "proc-macro",
+        "root": "src/lib.rs",
+        "externs": {
+          "itoa": "//third_party/crates:itoa-1.0.18"
+        }
+      }
+    },
+    {
+      "label": "//rdemo:rdemo",
+      "kind": "rust_crate",
+      "definedAt": "fixture.go:125",
+      "src": {
+        "path": "fixture/rdemo"
+      },
+      "deps": [
+        "//third_party/crates:itoa-1.0.18",
+        "//rdemo:rmac"
+      ],
+      "rust": {
+        "crateName": "rdemo",
+        "version": "0.1.0",
+        "edition": "2021",
+        "crateType": "bin",
+        "root": "src/main.rs",
+        "externs": {
+          "itoa": "//third_party/crates:itoa-1.0.18",
+          "rmac": "//rdemo:rmac"
+        },
+        "buildScript": "build.rs"
+      }
+    },
+    {
+      "label": "//proto:greeting_go",
+      "kind": "proto_go",
+      "definedAt": "fixture.go:133",
+      "src": {
+        "path": "fixture/proto"
+      },
+      "nixpkgs": [
+        "protobuf",
+        "protoc-gen-go"
+      ],
+      "proto": {
+        "files": [
+          "greeting.proto"
+        ],
+        "goPackage": "example.com/api/gen/greetingv1"
+      }
+    },
+    {
+      "label": "//api:api",
+      "kind": "go_binary",
+      "definedAt": "fixture.go:147",
+      "src": {
+        "path": "fixture/api"
+      },
+      "deps": [
+        "//libfoo:foo",
+        "//rcore:rcore",
+        "//proto:greeting_go",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip"
+      ],
+      "nixpkgs": [
+        "go"
+      ],
+      "go": {
+        "modulePath": "example.com/api",
+        "goVersion": "1.26",
+        "main": "./cmd/api",
+        "cgo": true,
+        "requires": [
+          {
+            "path": "github.com/google/uuid",
+            "version": "v1.6.0",
+            "label": "//third_party:uuid-v1.6.0.zip"
+          },
+          {
+            "path": "golang.org/x/sync",
+            "version": "v0.24.0",
+            "label": "//third_party:sync-v0.24.0.zip"
+          },
+          {
+            "path": "google.golang.org/protobuf",
+            "version": "v1.36.11",
+            "label": "//third_party:protobuf-v1.36.11.zip"
+          }
+        ],
+        "generated": [
+          {
+            "label": "//proto:greeting_go",
+            "subdir": "gen/greetingv1"
+          }
+        ],
+        "binary": "api"
+      }
+    }
+  ]
+}

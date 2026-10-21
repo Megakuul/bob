@@ -1,0 +1,8 @@
+FAILED  //tools:diskfull
+
+error[BOB-E-6001]: no space left on device while building //tools:diskfull
+  package defined at fixture/tools/bob.go:15:15
+  cause: the disk holding bob's store is full
+  hint: free disk space (bob gc) or move bob's store to a larger disk
+
+bob: 1 failed (exit 6)

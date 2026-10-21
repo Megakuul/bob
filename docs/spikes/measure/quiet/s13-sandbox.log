@@ -1,0 +1,203 @@
+== s13-sandbox start 2026-10-21T09:19:38Z load 0.63 2.48 3.69
+##### evalbox overhead [8c/15G]
+direct bash -c true (us):          5104
+evalbox, no cgroup (us):           17290
+evalbox, cgroup leaf (us):         18689
+##### evalbox overhead [2c/4G]
+direct bash -c true (us):          2989
+evalbox, no cgroup (us):           14715
+evalbox, cgroup leaf (us):         15036
+##### part 1 functional run [8c/15G]
+=== cold build, case ok (no seed cache)
+rc=0 wall=12076 ms
+seed cache size: 46M
+=== seeded build, case ok
+rc=0 wall=381 ms
+=== seeded build, case ok (2nd)
+rc=0 wall=362 ms
+=== secrets
+PASS worker credentials file      open /home/bobtest/.config/bob-worker/credentials: no such file or directory
+PASS root's files                 open /root/.bash_history: no such file or directory
+PASS /etc/shadow                  open /etc/shadow: no such file or directory
+PASS host /etc/hostname           open /etc/hostname: no such file or directory
+PASS parent env (/proc/1/environ) open /proc/1/environ: no such file or directory
+PASS env has worker secrets       13 vars
+PASS host processes visible       1 pids in /proc
+PASS root dir contents            
+PASS user runtime dir (dbus, sockets) stat /run/user/1000: no such file or directory
+PASS /sys visible                 stat /sys/fs/cgroup: no such file or directory
+rc=0 wall=424 ms
+=== network
+PASS internet tcp 1.1.1.1:443     dial tcp 1.1.1.1:443: connect: permission denied
+PASS host loopback 127.0.0.1:21300 dial tcp 127.0.0.1:21300: connect: permission denied
+PASS cloud metadata 169.254.169.254 dial tcp 169.254.169.254:80: connect: permission denied
+PASS DNS lookup                   lookup example.com on [::1]:53: dial udp [::1]:53: connect: cannot assign requested address
+PASS host abstract unix @s13-bait dial unix @s13-bait: connect: connection refused
+PASS host unix socket path        dial unix /home/bobtest/s13-bait.sock: connect: no such file or directory
+PASS interfaces                   
+PASS AF_VSOCK socket              address family not supported by protocol
+rc=0 wall=416 ms
+=== escape
+PASS ptrace pid 1 (stage1)        operation not permitted
+PASS unshare(CLONE_NEWUSER)       operation not permitted
+PASS child in new user namespace  fork/exec /proc/self/exe: operation not permitted
+PASS mount tmpfs                  operation not permitted
+PASS chmod store file             chmod /nix/store/821rq90cnzv3fvcb485wisy7qw67sw0x-go-1.26.9/share/go/bin/go: read-only file system
+PASS open store file for write    open /nix/store/821rq90cnzv3fvcb485wisy7qw67sw0x-go-1.26.9/share/go/bin/go: permission denied
+PASS write source tree            open /src/injected: read-only file system
+PASS open /proc/1/exe for write   open /proc/1/exe: no such file or directory
+PASS readlink /proc/1/exe         readlink /proc/1/exe: no such file or directory
+PASS signal outside pid ns (kill -1) kill(-1,0): no such process (only sandbox pids exist)
+PASS io_uring_setup               operation not permitted
+PASS bpf()                        operation not permitted
+PASS write /proc/sys              open /proc/sys/kernel/hostname: permission denied
+PASS symlink in /work (allowed)   <nil>
+rc=0 wall=475 ms
+=== forkbomb (Go self-exec)
+✗ evaluating bob.go failed after trying to start more than 128 processes or threads (exit 1)
+rc=13 wall=467 ms
+=== forkbomb (bash)
+✗ evaluating bob.go failed after trying to start more than 128 processes or threads (exit 142)
+rc=13 wall=20522 ms
+=== thread bomb
+✗ evaluating bob.go failed after trying to start more than 128 processes or threads (exit 2)
+rc=13 wall=844 ms
+=== memory bomb
+✗ evaluating bob.go used more than 512M of memory and was stopped (peak 512 MiB)
+rc=11 wall=728 ms
+=== cpu loop
+✗ evaluating bob.go took longer than 5s and was stopped
+rc=10 wall=5018 ms
+=== disk fill
+✗ evaluating bob.go failed (exit 1)
+rc=15 wall=536 ms
+=== big graph output
+✗ evaluating bob.go produced more than 16 MiB of graph output and was stopped
+rc=12 wall=427 ms
+=== no landlock / no seccomp (layers removed one at a time, escape+network)
+=== escape without seccomp
+PASS ptrace pid 1 (stage1)        operation not permitted
+PASS unshare(CLONE_NEWUSER)       invalid argument
+PASS child in new user namespace  fork/exec /proc/self/exe: no space left on device
+PASS mount tmpfs                  operation not permitted
+PASS chmod store file             chmod /nix/store/821rq90cnzv3fvcb485wisy7qw67sw0x-go-1.26.9/share/go/bin/go: read-only file system
+PASS open store file for write    open /nix/store/821rq90cnzv3fvcb485wisy7qw67sw0x-go-1.26.9/share/go/bin/go: permission denied
+PASS write source tree            open /src/injected: read-only file system
+PASS open /proc/1/exe for write   open /proc/1/exe: no such file or directory
+PASS readlink /proc/1/exe         readlink /proc/1/exe: no such file or directory
+PASS signal outside pid ns (kill -1) kill(-1,0): no such process (only sandbox pids exist)
+PASS io_uring_setup               bad address
+PASS bpf()                        invalid argument
+PASS write /proc/sys              open /proc/sys/kernel/hostname: permission denied
+PASS symlink in /work (allowed)   <nil>
+rc=0 wall=395 ms
+=== network without landlock
+PASS internet tcp 1.1.1.1:443     dial tcp 1.1.1.1:443: connect: network is unreachable
+PASS host loopback 127.0.0.1:21300 dial tcp 127.0.0.1:21300: connect: network is unreachable
+PASS cloud metadata 169.254.169.254 dial tcp 169.254.169.254:80: connect: network is unreachable
+PASS DNS lookup                   lookup example.com on [::1]:53: dial udp [::1]:53: connect: cannot assign requested address
+PASS host abstract unix @s13-bait dial unix @s13-bait: connect: connection refused
+PASS host unix socket path        dial unix /home/bobtest/s13-bait.sock: connect: no such file or directory
+PASS interfaces                   
+PASS AF_VSOCK socket              address family not supported by protocol
+rc=0 wall=398 ms
+=== secrets without landlock
+PASS worker credentials file      open /home/bobtest/.config/bob-worker/credentials: no such file or directory
+PASS root's files                 open /root/.bash_history: no such file or directory
+PASS /etc/shadow                  open /etc/shadow: no such file or directory
+PASS host /etc/hostname           open /etc/hostname: no such file or directory
+PASS parent env (/proc/1/environ) open /proc/1/environ: no such file or directory
+PASS env has worker secrets       13 vars
+PASS host processes visible       1 pids in /proc
+PASS root dir contents            dev,etc,gomod,nix,proc,src,tmp,work
+PASS user runtime dir (dbus, sockets) stat /run/user/1000: no such file or directory
+PASS /sys visible                 stat /sys/fs/cgroup: no such file or directory
+rc=0 wall=391 ms
+=== host side after all cases
+##### part 2 services rootless [8c/15G]
+== postgres
+s13-pg-a> TIME initdb 1006 ms
+s13-pg-a> TIME started 1126 ms
+s13-pg-a> 100000
+s13-pg-a> TIME query 1217 ms
+s13-pg-a> 127.0.0.1
+s13-pg-a> TIME stopped 1334 ms
+  nix build pg wall: 1671 ms
+== postgres x2 in parallel, both on port 5432
+s13-pg-a> TIME initdb 795 ms
+s13-pg-b> TIME initdb 798 ms
+s13-pg-a> TIME started 915 ms
+s13-pg-b> TIME started 914 ms
+s13-pg-a> 100000
+s13-pg-a> TIME query 1006 ms
+s13-pg-b> 100000
+s13-pg-b> TIME query 1003 ms
+s13-pg-a> 127.0.0.1
+s13-pg-b> 127.0.0.1
+s13-pg-a> TIME stopped 1122 ms
+s13-pg-b> TIME stopped 1121 ms
+  nix build pg pg2 wall: 1401 ms
+== postgres left running when the builder exits
+s13-pg-left> TIME initdb 767 ms
+s13-pg-left> TIME started 885 ms
+s13-pg-left> 100000
+s13-pg-left> TIME query 973 ms
+s13-pg-left> 127.0.0.1
+s13-pg-left> leaving postgres running (pid 15)
+  nix build pgLeft wall: 1230 ms
+leftover postgres processes on host: 0
+== http on 127.0.0.1, 127.0.0.2, ::1
+s13-http> probe 127.0.0.1:8080 ready_after=2.794ms requests=1000 total=188.468ms per_req=188µs
+s13-http> probe 127.0.0.2:8080 ready_after=3.021ms requests=1000 total=161.759ms per_req=162µs
+s13-http> probe [::1]:8080 ready_after=2.777ms requests=1000 total=168.293ms per_req=168µs
+s13-http> TIME total 567 ms
+  nix build http wall: 823 ms
+== isolation between concurrent builds
+s13-iso-a> A pids: 1 2 3 4 5 6
+s13-iso-b> B pids: 1 3 4 5 6
+s13-iso-b> B cannot reach A's 127.0.0.1:5000
+  nix build isoA isoB wall: 6297 ms
+##### part 2 services rootless [2c/4G]
+== postgres
+s13-pg-a> TIME initdb 761 ms
+s13-pg-a> TIME started 879 ms
+s13-pg-a> 100000
+s13-pg-a> TIME query 972 ms
+s13-pg-a> 127.0.0.1
+s13-pg-a> TIME stopped 1090 ms
+  nix build pg wall: 1332 ms
+== postgres x2 in parallel, both on port 5432
+s13-pg-a> TIME initdb 796 ms
+s13-pg-b> TIME initdb 805 ms
+s13-pg-a> TIME started 915 ms
+s13-pg-b> TIME started 925 ms
+s13-pg-a> 100000
+s13-pg-a> TIME query 1003 ms
+s13-pg-a> 127.0.0.1
+s13-pg-b> 100000
+s13-pg-b> TIME query 1013 ms
+s13-pg-b> 127.0.0.1
+s13-pg-a> TIME stopped 1122 ms
+s13-pg-b> TIME stopped 1129 ms
+  nix build pg pg2 wall: 1394 ms
+== postgres left running when the builder exits
+s13-pg-left> TIME initdb 788 ms
+s13-pg-left> TIME started 905 ms
+s13-pg-left> 100000
+s13-pg-left> TIME query 997 ms
+s13-pg-left> 127.0.0.1
+s13-pg-left> leaving postgres running (pid 15)
+  nix build pgLeft wall: 1273 ms
+leftover postgres processes on host: 0
+== http on 127.0.0.1, 127.0.0.2, ::1
+s13-http> probe 127.0.0.1:8080 ready_after=2.702ms requests=1000 total=153.798ms per_req=154µs
+s13-http> probe 127.0.0.2:8080 ready_after=351µs requests=1000 total=146.714ms per_req=147µs
+s13-http> probe [::1]:8080 ready_after=3.034ms requests=1000 total=157.557ms per_req=158µs
+s13-http> TIME total 483 ms
+  nix build http wall: 747 ms
+== isolation between concurrent builds
+s13-iso-a> A pids: 1 2 3 4 5 6
+s13-iso-b> B pids: 1 3 4 5 6
+s13-iso-b> B cannot reach A's 127.0.0.1:5000
+  nix build isoA isoB wall: 6279 ms
+== s13-sandbox exit 0 end 2026-10-21T09:20:54Z

@@ -1,0 +1,8 @@
+FAILED  //tools:leak-ref
+
+error[BOB-E-9003]: //tools:leak-ref refers to //tools:base, which it must not reference
+  package defined at fixture/tools/bob.go:20:15
+  hint: this is a bob bug (missing fixup); please report it
+  full log: bob log //tools:leak-ref
+
+bob: 1 failed (exit 70)
