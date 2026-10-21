@@ -165,7 +165,7 @@ tests/parity/manual.json          (manual) requirement sign-offs
 tests/protected.sha256            protected-path manifest (§2.1)
 tests/owner.allowed_signers       owner's SSH signing key(s) (§2.1)
 tests/<suite>/                    Go test packages of each suite in §14 (package `…/tests/<suite>`)
-pkg/diag/codes.lock               error code table lock (R-NIX-028, protected)
+pkg/bob/diag/codes.lock               error code table lock (R-NIX-028, protected)
 docs/harness-validation.md        self-validation report (§10)
 docs/parity.md                    generated parity catalogue (§11)
 out/                              CI output, gitignored
@@ -190,7 +190,7 @@ reference screenshots stay in git) is kept out of git: the repo holds a manifest
 ### 2.1 Protected paths (BOOTSTRAP §5.2)
 
 - **Protected set** (glob list at the top of `tests/protected.sha256`): `tests/**` (except
-  `tests/*/scratch`), `pkg/diag/codes.lock`, `tools/ci/**`, `tools/lint/**`, `tools/s3count/**`,
+  `tests/*/scratch`), `pkg/bob/diag/codes.lock`, `tools/ci/**`, `tools/lint/**`, `tools/s3count/**`,
   `tools/golden/**`, `tools/pins.json`, `tools/go.mod`, `tools/go.sum`, and every `*_test.go`
   file whose package doc carries `//bob:protected` (acceptance tests outside `tests/`, e.g.
   `pkg/layering_test.go`). The harness code itself is protected, so a linter cannot be weakened to
@@ -379,7 +379,7 @@ the BOOTSTRAP and §02 additions:
 
 ### 5.4 Code table
 
-`pkg/diag/codes.lock` is protected. The `gen` stage fails when a code is removed, a class
+`pkg/bob/diag/codes.lock` is protected. The `gen` stage fails when a code is removed, a class
 changes, or an argument set changes (R-NIX-028). A test calls `diag.New` for every code with its
 arguments.
 
