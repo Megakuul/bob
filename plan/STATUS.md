@@ -4,7 +4,14 @@
 - **Phase:** 3.1 — Harness first (M0 → M1) → Gate H. Phase 3.0 kickoff: owner said "If there are
   open questions ask them now or auto decide them" → SPEC Appendix A / HARNESS open items are
   auto-decided by their recommendations (A24); Gate H handling asked in chat 2026-10-21.
-- **Current task:** M0.1 workspace skeleton (architect agent), then M0.2–M0.7 in parallel.
+- **Current task:** M0 done (M0.1–M0.7 committed, fast CI green). M1.1, M1.3, M1.4, M1.5 (clients/
+  gitlab launcher dirs still empty → T3/T6), M1.6 (`tools/devstack`; policies not applied yet,
+  `policies_applied=false`), M1.7 committed. CI stages `unit` (10) and `acceptance` (13) added;
+  acceptance tolerates tests that fail only with the "red: not implemented yet" marker
+  (`redTolerated` in `tools/ci/stage_acceptance.go`, flip at the first green feature).
+  **M1.8 running (2026-10-21): six agents T1–T6 write red acceptance tests per R-id area**
+  (brief: `plan/m1.8-brief.md`; coordinator commits). Then M1.9 (quiet-host re-measure), M1.10
+  (selfcheck + `docs/harness-validation.md`) → Gate H (self-reviewed, D70).
   Host check (D69): newuidmap/newgidmap have file caps, bobtest has subuid/subgid 524288:65536 — nothing to change.
 - **Last gate passed:** **Gate S** (2026-10-21): SPEC, budgets, ADRs 0003–0019 (locked), HARNESS.md,
   plan approved → D65–D69. AGENTS.md replaces BOOTSTRAP.md.
@@ -250,6 +257,13 @@ incr main.go single 11.6 s → hybrid 2.9 s [8c/15G]; S3 49-crate cold 48.3 s vs
   `New(ctx, "http://host/<real-bucket>", "<partition>")` sends `GET /<real-bucket>/<partition>/lakedb.catalog`
   (verified with a fake server). lake only uses Get/Put/DeleteObject (no List/bucket calls), so
   the "bucket" argument works as a key prefix. To verify: SigV4 against RustFS and AWS.
+
+## M0 wrap-up items (coordinator)
+
+- docs/parity.md changes with each run's results → the `gen` git-diff check must not flag it
+  (generate the mapping part only, or exclude it); fix when M0.2 lands.
+- main.go must set BOB_CI_PROFILE from `-profile`; gen stage calls `parity.Generate` and
+  `budgets.Write`. Budget rows with several limits keep only the first → split in M1.9.
 
 ## Blockers
 
