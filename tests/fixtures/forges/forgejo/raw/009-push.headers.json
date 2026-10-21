@@ -1,0 +1,23 @@
+{
+  "Accept-Encoding": "gzip",
+  "Content-Length": "5291",
+  "Content-Type": "application/json",
+  "User-Agent": "Go-http-client/1.1",
+  "X-Forgejo-Delivery": "8266bffd-5b42-4b85-9604-d792e0cb54e4",
+  "X-Forgejo-Event": "push",
+  "X-Forgejo-Event-Type": "push",
+  "X-Forgejo-Signature": "b3e20b9cc9edbf076341c8ef1b4100ce70b18cf8a0411bea9a154e3861b49f3a",
+  "X-Gitea-Delivery": "8266bffd-5b42-4b85-9604-d792e0cb54e4",
+  "X-Gitea-Event": "push",
+  "X-Gitea-Event-Type": "push",
+  "X-Gitea-Signature": "b3e20b9cc9edbf076341c8ef1b4100ce70b18cf8a0411bea9a154e3861b49f3a",
+  "X-Github-Delivery": "8266bffd-5b42-4b85-9604-d792e0cb54e4",
+  "X-Github-Event": "push",
+  "X-Github-Event-Type": "push",
+  "X-Gogs-Delivery": "8266bffd-5b42-4b85-9604-d792e0cb54e4",
+  "X-Gogs-Event": "push",
+  "X-Gogs-Event-Type": "push",
+  "X-Gogs-Signature": "b3e20b9cc9edbf076341c8ef1b4100ce70b18cf8a0411bea9a154e3861b49f3a",
+  "X-Hub-Signature": "sha1=5be739315cbfb5bb6953424e44944688e9672657",
+  "X-Hub-Signature-256": "sha256=b3e20b9cc9edbf076341c8ef1b4100ce70b18cf8a0411bea9a154e3861b49f3a"
+}
