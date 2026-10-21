@@ -1,0 +1,21 @@
+{
+ "id": "51-lock-conflict",
+ "title": "bob.lock merge conflict markers",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.lock contains <<<<<<< markers"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1019",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

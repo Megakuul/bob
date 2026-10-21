@@ -1,0 +1,29 @@
+{
+ "id": "15-two-failures",
+ "title": "two independent failures",
+ "source": "S15 fault 15 (two-failures)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "C++ and Rust compile errors at once"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-2001",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/libfoo/bob.go:8:11",
+  "site": "fixture/libfoo/src/foo.cpp:13:13"
+ },
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

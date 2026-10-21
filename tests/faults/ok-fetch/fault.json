@@ -1,0 +1,23 @@
+{
+ "id": "ok-fetch",
+ "title": "fixed-output fetch succeeds",
+ "source": "S15 ok scenario (fetch-ok)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "fixed-output fetch succeeds"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

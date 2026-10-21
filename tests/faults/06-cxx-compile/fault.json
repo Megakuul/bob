@@ -1,0 +1,29 @@
+{
+ "id": "06-cxx-compile",
+ "title": "C++ compile error",
+ "source": "S15 fault 6 (cxx-error)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "missing ';' in libfoo/src/foo.cpp"
+ },
+ "command": [
+  "build",
+  "//libfoo:foo"
+ ],
+ "code": "BOB-E-2001",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/libfoo/bob.go:8:11",
+  "site": "fixture/libfoo/src/foo.cpp:13:13"
+ },
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

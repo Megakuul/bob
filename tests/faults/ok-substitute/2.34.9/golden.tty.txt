@@ -1,0 +1,3 @@
+[32m↓[0m //tools:payload
+
+[32mbob: 1 cached[0m

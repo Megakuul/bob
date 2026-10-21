@@ -1,0 +1,8 @@
+FAILED  //tools:nochroot
+
+error[BOB-E-9004]: bob generated an invalid build step for //tools:nochroot: it asks to run outside the sandbox
+  package defined at fixture/tools/bob.go:13:15
+  hint: this is a bob bug; please report it with bob build -v
+  full log: bob log //tools:nochroot
+
+bob: 1 failed (exit 70)

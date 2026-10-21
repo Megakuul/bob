@@ -1,0 +1,21 @@
+{
+ "id": "65-glob-empty",
+ "title": "glob matches nothing",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.Glob pattern matches no file"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1025",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

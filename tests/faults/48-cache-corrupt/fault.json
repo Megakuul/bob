@@ -1,0 +1,26 @@
+{
+ "id": "48-cache-corrupt",
+ "title": "cache serves corrupt NAR",
+ "source": "S15 fault 48 (subst-corrupt)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "NAR bytes corrupted"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4005",
+ "exit": 4,
+ "position": "none",
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "hash mismatch importing path",
+  "some substitutes for the outputs of derivation"
+ ]
+}

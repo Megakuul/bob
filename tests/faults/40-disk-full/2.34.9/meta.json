@@ -1,0 +1,48 @@
+{
+  "name": "disk-full",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/hiqvaiw6xnyn8zsyfsjjdr24mj6wllk6-tools-diskfull.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 7492,
+    "nixVersion": "2.34.9"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/hiqvaiw6xnyn8zsyfsjjdr24mj6wllk6-tools-diskfull.drv": {
+        "label": "//tools:diskfull",
+        "definedAt": "fixture/tools/bob.go:15:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/vnnz2qipx3nik0li0bbs1ylmi2rsn8yr-tools-diskfull": "/nix/store/hiqvaiw6xnyn8zsyfsjjdr24mj6wllk6-tools-diskfull.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:diskfull"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

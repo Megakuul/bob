@@ -1,0 +1,28 @@
+{
+ "id": "14-go-test-failure",
+ "title": "Go test failure",
+ "source": "S15 fault 14 (test-failure)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "failing TestDigest"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-2005",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

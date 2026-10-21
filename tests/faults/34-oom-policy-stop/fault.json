@@ -1,0 +1,25 @@
+{
+ "id": "34-oom-policy-stop",
+ "title": "out of memory, OOMPolicy=stop",
+ "source": "S15 fault 34 (oom-scope-stop)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "limit",
+  "describe": "systemd default OOMPolicy=stop"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-8001",
+ "exit": 130,
+ "position": "none",
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "interrupted by the user"
+ ]
+}

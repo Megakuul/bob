@@ -1,0 +1,43 @@
+@nix {"action":"start","id":2709458643845120,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2709458643845120}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv"}
+@nix {"action":"start","id":2709458643845121,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2709458643845122,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2709458643845123,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"start","id":2709458643845124,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2709458643845124}
+@nix {"action":"result","fields":[0,1,0,0],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[0,2,0,0],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"start","fields":["/nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv","",1,1],"id":2709458643845125,"level":3,"parent":0,"text":"building '/nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[0,1,0,1],"id":2709458643845122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2709458643845123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2709458643845121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2709458643845121,"type":106}
+@nix {"action":"stop","id":2709458643845125}
+@nix {"action":"stop","id":2709458643845123}
+@nix {"action":"stop","id":2709458643845122}
+@nix {"action":"stop","id":2709458643845121}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m output '\u001b[35;1m/nix/store/0pdmycy9xixax044ivy90sjvq8gvbw90-tools-leak-ref\u001b[0m' is not allowed to refer to the following paths:\u001b[35;1m\n         /nix/store/21c23ig7xw63bqsnfs5rs90v055rjwdw-tools-base\u001b[0m","raw_msg":"output '\u001b[35;1m/nix/store/0pdmycy9xixax044ivy90sjvq8gvbw90-tools-leak-ref\u001b[0m' is not allowed to refer to the following paths:\u001b[35;1m\n  /nix/store/21c23ig7xw63bqsnfs5rs90v055rjwdw-tools-base\u001b[0m"}

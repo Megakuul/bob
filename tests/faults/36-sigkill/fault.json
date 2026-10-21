@@ -1,0 +1,23 @@
+{
+ "id": "36-sigkill",
+ "title": "build engine killed (SIGKILL)",
+ "source": "S15 fault 36 (sigkill)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "signal",
+  "describe": "SIGKILL to the build engine"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-6003",
+ "exit": 6,
+ "position": "none",
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

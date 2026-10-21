@@ -1,0 +1,23 @@
+{
+ "id": "ok-substitute",
+ "title": "local substitute",
+ "source": "S15 ok scenario (ok-substitute)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "local substitute"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

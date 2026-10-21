@@ -1,0 +1,29 @@
+{
+ "id": "18-fetch-dns",
+ "title": "fetch DNS failure",
+ "source": "S15 fault 18 (fetch-dns)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "crate host .invalid"
+ },
+ "command": [
+  "build",
+  "//rcore:rcore"
+ ],
+ "code": "BOB-E-3002",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/rcore/bob.go:9:9"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "unable to download",
+  "Cannot build"
+ ]
+}

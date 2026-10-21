@@ -1,0 +1,29 @@
+{
+ "id": "45-cache-refused",
+ "title": "cache connection refused",
+ "source": "S15 fault 45 (subst-refused)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "cache port closed"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4003",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:23:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "unable to download",
+  "Cannot build"
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "id": "02-broken-pkg",
+ "title": "broken nixpkgs package",
+ "source": "S15 fault 2 (broken-pkg)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.go depends on nixpkgs aranym (broken)"
+ },
+ "command": [
+  "build",
+  "//libfoo:foo"
+ ],
+ "code": "BOB-E-1002",
+ "exit": 3,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/libfoo/bob.go:8:11"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

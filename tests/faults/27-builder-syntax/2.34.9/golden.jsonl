@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:syntax"]}
+{"v":1,"event":"package.start","label":"//tools:syntax","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-9001","class":"internal","message":"bob's builder for //tools:syntax is broken: its build script has a syntax error","label":"//tools:syntax","definedAt":"fixture/tools/bob.go:16:15","excerpt":["bash: -c: line 2: syntax error near unexpected token `then'"],"hint":"this is a bob bug; please report it with bob log //tools:syntax","log":"bob log //tools:syntax","args":{"label":"//tools:syntax","reason":"its build script has a syntax error"}}}
+{"v":1,"event":"package.finish","label":"//tools:syntax","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":70,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

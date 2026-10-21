@@ -1,0 +1,28 @@
+{
+ "id": "33-oom",
+ "title": "out of memory (cgroup 300M, OOMPolicy=continue)",
+ "source": "S15 fault 33 (oom)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "limit",
+  "describe": "systemd-run --scope -p MemoryMax=300M"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-6002",
+ "exit": 6,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:14:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

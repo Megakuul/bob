@@ -1,0 +1,79 @@
+{
+  "name": "upstream-fail",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/sfm5bra1b29dk9z1kbbr98b5xcdj4clp-tools-upstream.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 719,
+    "nixVersion": "2.34.9"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/sfm5bra1b29dk9z1kbbr98b5xcdj4clp-tools-upstream.drv": {
+        "label": "//tools:upstream",
+        "definedAt": "fixture/tools/bob.go:28:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/d2j628jhxag95ibvlbn8qnjjpnjjgpg1-tools-upstream": "/nix/store/sfm5bra1b29dk9z1kbbr98b5xcdj4clp-tools-upstream.drv"
+    },
+    "sources": {},
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/6ivrxzws85k8n9w8974c1ca77j2x0v9d-hello-s15-2.12.3.drv": "hello-s15",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//tools:upstream"
+      ],
+      "/nix/store/6ivrxzws85k8n9w8974c1ca77j2x0v9d-hello-s15-2.12.3.drv": [
+        "//tools:upstream"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//tools:upstream"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//tools:upstream"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//tools:upstream"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//tools:upstream"
+      ]
+    },
+    "requested": [
+      "//tools:upstream"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ],
+    "chains": {
+      "/nix/store/6ivrxzws85k8n9w8974c1ca77j2x0v9d-hello-s15-2.12.3.drv": [
+        "/nix/store/6ivrxzws85k8n9w8974c1ca77j2x0v9d-hello-s15-2.12.3.drv"
+      ]
+    }
+  }
+}

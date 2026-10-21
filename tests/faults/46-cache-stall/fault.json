@@ -1,0 +1,29 @@
+{
+ "id": "46-cache-stall",
+ "title": "cache stalls",
+ "source": "S15 fault 46 (subst-stall)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "cache stalls"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4003",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:23:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "unable to download",
+  "Cannot build"
+ ]
+}

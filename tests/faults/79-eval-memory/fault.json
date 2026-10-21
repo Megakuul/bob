@@ -1,0 +1,20 @@
+{
+ "id": "79-eval-memory",
+ "title": "evaluator limit: memory",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "evil",
+ "inject": {
+  "kind": "limit",
+  "describe": "memory bomb in bob.go"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "forbid": []
+}

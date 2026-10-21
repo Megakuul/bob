@@ -1,0 +1,28 @@
+{
+ "id": "13-missing-lib",
+ "title": "missing library",
+ "source": "S15 fault 13 (missing-lib)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "cgo LDFLAGS adds -lzstd_s15"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-2004",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

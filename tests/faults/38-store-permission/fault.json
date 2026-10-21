@@ -1,0 +1,23 @@
+{
+ "id": "38-store-permission",
+ "title": "store not writable",
+ "source": "S15 fault 38 (store-permission)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "env",
+  "describe": "store owned by another user"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-7002",
+ "exit": 7,
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

@@ -1,0 +1,23 @@
+{
+ "id": "ok-cold",
+ "title": "cold store, all toolchains substituted",
+ "source": "S15 ok scenario (ok-cold)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "cold store, all toolchains substituted"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

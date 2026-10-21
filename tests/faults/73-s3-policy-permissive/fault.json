@@ -1,0 +1,21 @@
+{
+ "id": "73-s3-policy-permissive",
+ "title": "bucket policy too permissive",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "env",
+  "describe": "bucket policy allows public read"
+ },
+ "command": [
+  "orchestrator"
+ ],
+ "code": "BOB-E-7008",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 7,
+ "binary": "bob-server",
+ "forbid": []
+}

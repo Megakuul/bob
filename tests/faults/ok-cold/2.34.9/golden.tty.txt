@@ -1,0 +1,13 @@
+[32m✓[0m //api:api
+[32m✓[0m //libfoo:foo
+[32m✓[0m //proto:greeting_go
+[32m✓[0m //rcore:rcore
+[32m✓[0m //third_party/crates:hex-0.4.3
+[32m✓[0m //third_party/crates:itoa-1.0.18
+[32m✓[0m //third_party:hex-0.4.3.crate
+[32m✓[0m //third_party:itoa-1.0.18.crate
+[32m✓[0m //third_party:protobuf-v1.36.11.zip
+[32m✓[0m //third_party:sync-v0.24.0.zip
+[32m✓[0m //third_party:uuid-v1.6.0.zip
+
+[32mbob: 11 built[0m

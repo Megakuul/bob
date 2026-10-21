@@ -1,0 +1,10 @@
+FAILED  //tools:no-output
+
+error[BOB-E-9002]: //tools:no-output did not produce its output
+  package defined at fixture/tools/bob.go:18:15
+  cause: the build step finished successfully but did not create its output
+   | done
+  hint: this is a bob bug; please report it with bob log //tools:no-output
+  full log: bob log //tools:no-output
+
+bob: 1 failed (exit 70)

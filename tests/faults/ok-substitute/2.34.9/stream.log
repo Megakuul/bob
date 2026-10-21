@@ -1,0 +1,56 @@
+@nix {"action":"start","id":3158755172679680,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3158755172679680}
+@nix {"action":"msg","level":3,"msg":"this path will be fetched (51.8 KiB download, 51.8 KiB unpacked):"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload"}
+@nix {"action":"start","id":3158755172679681,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3158755172679682,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3158755172679683,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679682,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679683,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3158755172679681,"type":106}
+@nix {"action":"start","id":3158755172679684,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3158755172679684}
+@nix {"action":"result","fields":[0,1,0,0],"id":3158755172679682,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679683,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3158755172679682,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":3158755172679683,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3158755172679682,"type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":3158755172679683,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3158755172679681,"type":106}
+@nix {"action":"start","fields":["/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload","http://127.0.0.1:21510"],"id":3158755172679685,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload","http://127.0.0.1:21510","local://"],"id":3158755172679686,"level":3,"parent":3158755172679685,"text":"copying path '/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload' from 'http://127.0.0.1:21510'","type":100}
+@nix {"action":"start","fields":["http://127.0.0.1:21510/nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar"],"id":3158755172679687,"level":4,"parent":3158755172679686,"text":"downloading 'http://127.0.0.1:21510/nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[512,53008,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[512,53008,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3158755172679687,"type":105}
+@nix {"action":"stop","id":3158755172679687}
+@nix {"action":"result","fields":[512,53008,0,0],"id":3158755172679686,"type":105}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3158755172679686,"type":105}
+@nix {"action":"stop","id":3158755172679686}
+@nix {"action":"stop","id":3158755172679685}
+@nix {"action":"result","fields":[0,1,0,0],"id":3158755172679682,"type":105}
+@nix {"action":"result","fields":[1,1,0,0],"id":3158755172679683,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[0,0,0,0],"id":3158755172679682,"type":105}
+@nix {"action":"result","fields":[1,1,0,0],"id":3158755172679683,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3158755172679681,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3158755172679681,"type":106}
+@nix {"action":"stop","id":3158755172679683}
+@nix {"action":"stop","id":3158755172679682}
+@nix {"action":"stop","id":3158755172679681}

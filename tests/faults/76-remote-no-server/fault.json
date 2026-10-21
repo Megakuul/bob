@@ -1,0 +1,22 @@
+{
+ "id": "76-remote-no-server",
+ "title": "--remote without a configured server",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "env",
+  "describe": "empty bob config"
+ },
+ "command": [
+  "build",
+  "//...",
+  "--remote"
+ ],
+ "code": "BOB-E-4009",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 4,
+ "forbid": []
+}

@@ -1,0 +1,23 @@
+{
+ "id": "ok-lock-wait-first",
+ "title": "first of two concurrent builds",
+ "source": "S15 ok scenario (lock-wait-first)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "first of two concurrent builds"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

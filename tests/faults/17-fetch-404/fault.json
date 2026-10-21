@@ -1,0 +1,28 @@
+{
+ "id": "17-fetch-404",
+ "title": "fetch 404 (crates.io answers 403)",
+ "source": "S15 fault 17 (fetch-404)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "crate URL that does not exist"
+ },
+ "command": [
+  "build",
+  "//rcore:rcore"
+ ],
+ "code": "BOB-E-3003",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/rcore/bob.go:9:9"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

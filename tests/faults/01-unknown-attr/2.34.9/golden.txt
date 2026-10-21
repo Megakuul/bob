@@ -1,0 +1,5 @@
+error[BOB-E-1001]: nixpkgs has no package "opensll"
+  package defined at fixture/libfoo/bob.go:8:11
+  hint: did you mean openslp, openssl, openal?
+
+bob: nothing was built (exit 3)

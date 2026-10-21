@@ -1,0 +1,29 @@
+{
+ "id": "40-disk-full",
+ "title": "disk full",
+ "source": "S15 fault 40 (disk-full)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "disk",
+  "describe": "24 MB tmpfs store"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-6001",
+ "exit": 6,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:15:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "aborting transaction: SQL logic error, cannot rollback - no transaction is active (in",
+  "committing transaction: database or disk is full, database or disk is full (in"
+ ]
+}

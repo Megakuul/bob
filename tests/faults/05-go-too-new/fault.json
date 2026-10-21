@@ -1,0 +1,26 @@
+{
+ "id": "05-go-too-new",
+ "title": "Go version too new",
+ "source": "S15 fault 5 (go-too-new)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "go directive 1.27 above the toolchain"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-1008",
+ "exit": 3,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

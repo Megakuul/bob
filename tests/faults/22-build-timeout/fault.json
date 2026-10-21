@@ -1,0 +1,26 @@
+{
+ "id": "22-build-timeout",
+ "title": "build timeout",
+ "source": "S15 fault 22 (build-timeout)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "limit",
+  "describe": "build timeout 3 s"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2007",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:10:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

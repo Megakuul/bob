@@ -1,0 +1,172 @@
+{
+  "name": "fetch-refused",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/cd5jjnz11zf0fj1cf9spv8awdcpjjggs-rcore-rcore.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 5122,
+    "nixVersion": "2.34.9",
+    "valid": [
+      "/nix/store/f4nl1pl69h2sd0cla1a2nqbs7696kp2f-itoa-1.0.18.crate.drv",
+      "/nix/store/5hhss3wr7rkcjanv6m5ysw41bymv5wvx-hex-0.4.3.crate.drv",
+      "/nix/store/asqia20ra3vac8b0xmxfhhxyp0xs26qb-hex-0.4.3-src.drv",
+      "/nix/store/snljn38i6njfwkfb0lb3fz91pq9a2a2i-third_party-crates-hex-0.4.3.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/5hhss3wr7rkcjanv6m5ysw41bymv5wvx-hex-0.4.3.crate.drv": {
+        "label": "//third_party:hex-0.4.3.crate",
+        "definedAt": "fixture/rcore/bob.go:10:9",
+        "kind": "fetch",
+        "url": "https://static.crates.io/crates/hex/hex-0.4.3.crate",
+        "lockHash": "sha256-fyQlSqmlS1yFjq7i9bzNtGqvDkhqWV7V/Y+GulUjKnA="
+      },
+      "/nix/store/asqia20ra3vac8b0xmxfhhxyp0xs26qb-hex-0.4.3-src.drv": {
+        "label": "//third_party:hex-0.4.3.crate",
+        "definedAt": "fixture/rcore/bob.go:10:9",
+        "kind": "fetch",
+        "role": "unpack",
+        "url": "https://static.crates.io/crates/hex/hex-0.4.3.crate",
+        "lockHash": "sha256-fyQlSqmlS1yFjq7i9bzNtGqvDkhqWV7V/Y+GulUjKnA="
+      },
+      "/nix/store/cd5jjnz11zf0fj1cf9spv8awdcpjjggs-rcore-rcore.drv": {
+        "label": "//rcore:rcore",
+        "definedAt": "fixture/rcore/bob.go:13:13",
+        "kind": "rust_crate",
+        "srcDir": "fixture/rcore"
+      },
+      "/nix/store/dzda13aj6n2wal52g3paf6bikxpv9081-itoa-1.0.18-src.drv": {
+        "label": "//third_party:itoa-1.0.18.crate",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "fetch",
+        "role": "unpack",
+        "url": "http://127.0.0.1:21599/itoa-1.0.18.crate",
+        "lockHash": "sha256-l9Zi5b3uaeVw9E6T2wjf//IFLnh7LdsHyKBHBuT8lMo="
+      },
+      "/nix/store/f4nl1pl69h2sd0cla1a2nqbs7696kp2f-itoa-1.0.18.crate.drv": {
+        "label": "//third_party:itoa-1.0.18.crate",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "fetch",
+        "url": "http://127.0.0.1:21599/itoa-1.0.18.crate",
+        "lockHash": "sha256-l9Zi5b3uaeVw9E6T2wjf//IFLnh7LdsHyKBHBuT8lMo="
+      },
+      "/nix/store/snljn38i6njfwkfb0lb3fz91pq9a2a2i-third_party-crates-hex-0.4.3.drv": {
+        "label": "//third_party/crates:hex-0.4.3",
+        "definedAt": "fixture/rcore/bob.go:10:9",
+        "kind": "rust_crate"
+      },
+      "/nix/store/xg5nfxlf91jkvcdkmb9fdcn9i7dlkf2f-third_party-crates-itoa-1.0.18.drv": {
+        "label": "//third_party/crates:itoa-1.0.18",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "rust_crate"
+      }
+    },
+    "outputs": {
+      "/nix/store/22l6yg1h17z2bscmswzlpwavn05yzsyi-hex-0.4.3-src": "/nix/store/asqia20ra3vac8b0xmxfhhxyp0xs26qb-hex-0.4.3-src.drv",
+      "/nix/store/4lvl2n5nc1irnla1ignwcrhnjrj0a35n-third_party-crates-hex-0.4.3": "/nix/store/snljn38i6njfwkfb0lb3fz91pq9a2a2i-third_party-crates-hex-0.4.3.drv",
+      "/nix/store/57fwi9lwcjnqak95z39ijrjyzdamnlx1-itoa-1.0.18.crate": "/nix/store/f4nl1pl69h2sd0cla1a2nqbs7696kp2f-itoa-1.0.18.crate.drv",
+      "/nix/store/dfxzi1k32iyv10f1099n7d0k3hrznf7q-rcore-rcore": "/nix/store/cd5jjnz11zf0fj1cf9spv8awdcpjjggs-rcore-rcore.drv",
+      "/nix/store/ja511jn2s1wjpaa10bl5sz6nrx5xa61c-third_party-crates-itoa-1.0.18": "/nix/store/xg5nfxlf91jkvcdkmb9fdcn9i7dlkf2f-third_party-crates-itoa-1.0.18.drv",
+      "/nix/store/l3zq9hiyjd826nh16n0wmpgfmafwgky6-itoa-1.0.18-src": "/nix/store/dzda13aj6n2wal52g3paf6bikxpv9081-itoa-1.0.18-src.drv",
+      "/nix/store/zfqbs20ijx5v86q7a3wvf2a132520y40-hex-0.4.3.crate": "/nix/store/5hhss3wr7rkcjanv6m5ysw41bymv5wvx-hex-0.4.3.crate.drv"
+    },
+    "sources": {
+      "/nix/store/dayzdh49vil7zr11lfwwi31h7hd0qy89-rcore": "fixture/rcore"
+    },
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/52dk32w642kazfdmrydn6fm99q5x44zs-gcc-wrapper-15.3.0.drv": "stdenv.cc",
+      "/nix/store/8k2irddrjwgjmhibgydvv99ffcwiaf7w-gnutar-1.35.drv": "gnutar",
+      "/nix/store/cd9p0dbcdpxilrvpa0bgfqmj6hix3jf2-gzip-1.14.drv": "gzip",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/m5996sqiprjlzymgmb67ckyj67df86f7-unzip-6.0.drv": "unzip",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/rjkajiid6lbk6w0cdm565zx8qh8zhbml-rustc-wrapper-1.95.0.drv": "rustc",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/52dk32w642kazfdmrydn6fm99q5x44zs-gcc-wrapper-15.3.0.drv": [
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/8k2irddrjwgjmhibgydvv99ffcwiaf7w-gnutar-1.35.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party:hex-0.4.3.crate"
+      ],
+      "/nix/store/cd9p0dbcdpxilrvpa0bgfqmj6hix3jf2-gzip-1.14.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party:hex-0.4.3.crate"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/m5996sqiprjlzymgmb67ckyj67df86f7-unzip-6.0.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party:hex-0.4.3.crate"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/rjkajiid6lbk6w0cdm565zx8qh8zhbml-rustc-wrapper-1.95.0.drv": [
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ]
+    },
+    "requested": [
+      "//rcore:rcore"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

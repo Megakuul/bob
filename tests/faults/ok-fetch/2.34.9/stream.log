@@ -1,0 +1,44 @@
+@nix {"action":"start","id":2676696633311232,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2676696633311232}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv"}
+@nix {"action":"start","id":2676696633311233,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2676696633311234,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2676696633311235,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311234,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311235,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2676696633311233,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2676696633311233,"type":106}
+@nix {"action":"start","id":2676696633311236,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2676696633311236}
+@nix {"action":"result","fields":[0,1,0,0],"id":2676696633311234,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311235,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2676696633311233,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2676696633311233,"type":106}
+@nix {"action":"start","fields":["/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv","",1,1],"id":2676696633311237,"level":3,"parent":0,"text":"building '/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2676696633311234,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311235,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2676696633311233,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2676696633311233,"type":106}
+@nix {"action":"start","fields":["https://static.crates.io/crates/itoa/itoa-1.0.18.crate"],"id":2676696633311238,"level":4,"parent":2676696633311237,"text":"downloading 'https://static.crates.io/crates/itoa/itoa-1.0.18.crate'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2676696633311238,"type":105}
+@nix {"action":"stop","id":2676696633311238}
+@nix {"action":"result","fields":[1,2,0,0],"id":2676696633311234,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2676696633311235,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2676696633311233,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2676696633311233,"type":106}
+@nix {"action":"stop","id":2676696633311237}
+@nix {"action":"stop","id":2676696633311235}
+@nix {"action":"stop","id":2676696633311234}
+@nix {"action":"stop","id":2676696633311233}

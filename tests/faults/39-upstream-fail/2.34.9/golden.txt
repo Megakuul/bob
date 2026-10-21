@@ -1,0 +1,17 @@
+skipped //tools:upstream  (a dependency failed)
+
+error[BOB-E-5001]: nixpkgs package hello-s15 failed to build from source (needed by //tools:upstream)
+  package defined at fixture/tools/bob.go:28:15
+  cause: nixpkgs hello-s15-2.12.3: builder failed with exit code 1
+   | structuredAttrs is enabled
+   | Using versionCheckHook
+   | Running phase: unpackPhase
+   | unpacking source archive …/hello-2.12.3.tar.gz
+   | source root is hello-2.12.3
+   | setting SOURCE_DATE_EPOCH to timestamp 1773804383 of file "hello-2.12.3/ChangeLog"
+   | Running phase: patchPhase
+   | checking s15
+  hint: this is not your code: the package is not in any cache for this nixpkgs revision; pin another revision or ask your bob server admin
+  full log: bob log --nixpkgs hello-s15
+
+bob: 1 skipped (exit 5)

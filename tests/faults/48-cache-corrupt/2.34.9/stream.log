@@ -1,0 +1,57 @@
+@nix {"action":"start","id":3218949139333120,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3218949139333120}
+@nix {"action":"msg","level":3,"msg":"this path will be fetched (51.8 KiB download, 51.8 KiB unpacked):"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload"}
+@nix {"action":"start","id":3218949139333121,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3218949139333122,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3218949139333123,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3218949139333121,"type":106}
+@nix {"action":"start","id":3218949139333124,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3218949139333124}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218949139333122,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218949139333122,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218949139333123,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218949139333122,"type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":3218949139333123,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3218949139333121,"type":106}
+@nix {"action":"start","fields":["/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload","http://127.0.0.1:21516"],"id":3218949139333125,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload","http://127.0.0.1:21516","local://"],"id":3218949139333126,"level":3,"parent":3218949139333125,"text":"copying path '/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload' from 'http://127.0.0.1:21516'","type":100}
+@nix {"action":"start","fields":["http://127.0.0.1:21516/nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar"],"id":3218949139333127,"level":4,"parent":3218949139333126,"text":"downloading 'http://127.0.0.1:21516/nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[32638,53008,0,0],"id":3218949139333126,"type":105}
+@nix {"action":"result","fields":[53008,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[53008,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[53008,0,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3218949139333127,"type":105}
+@nix {"action":"stop","id":3218949139333127}
+@nix {"action":"result","fields":[53008,53008,0,0],"id":3218949139333126,"type":105}
+@nix {"action":"stop","id":3218949139333126}
+@nix {"action":"stop","id":3218949139333125}
+@nix {"action":"msg","level":0,"msg":"\u001b[31;1merror:\u001b[0m hash mismatch importing path '\u001b[35;1m/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\u001b[0m';\n         specified: \u001b[35;1msha256:1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d\u001b[0m\n         got:       \u001b[35;1msha256:1wpfk610awzyixjivxwmhq4dvzv102a3q0p3f7nqkahp79k87inn\u001b[0m"}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218949139333122,"type":105}
+@nix {"action":"result","fields":[0,1,0,1],"id":3218949139333123,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3218949139333121,"type":106}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m path '\u001b[35;1m/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\u001b[0m' is required, but there is no substituter that can build it","raw_msg":"path '\u001b[35;1m/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload\u001b[0m' is required, but there is no substituter that can build it"}
+@nix {"action":"result","fields":[0,0,0,1],"id":3218949139333122,"type":105}
+@nix {"action":"result","fields":[0,0,0,1],"id":3218949139333123,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3218949139333121,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3218949139333121,"type":106}
+@nix {"action":"stop","id":3218949139333123}
+@nix {"action":"stop","id":3218949139333122}
+@nix {"action":"stop","id":3218949139333121}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m some substitutes for the outputs of derivation '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m' failed (usually happens due to networking issues); try '--fallback' to build derivation from source","raw_msg":"some substitutes for the outputs of derivation '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m' failed (usually happens due to networking issues); try '--fallback' to build derivation from source "}

@@ -1,0 +1,20 @@
+{
+ "id": "70-generated-conflict",
+ "title": "generated-file conflict",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "codegen",
+ "inject": {
+  "kind": "patch",
+  "describe": "hand-written file at a generated path"
+ },
+ "command": [
+  "gen"
+ ],
+ "code": "BOB-E-1016",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

@@ -1,0 +1,21 @@
+{
+ "id": "68-toolchain-rust",
+ "title": "toolchain mismatch (Rust)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "rust",
+ "inject": {
+  "kind": "patch",
+  "describe": "rust-version above the pinned rustc"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1021",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

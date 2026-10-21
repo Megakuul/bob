@@ -1,0 +1,4 @@
+error[BOB-E-7002]: bob's store is not accessible: permission denied (/nix/var/nix/db/big-lock)
+  hint: bob's state directory belongs to another user or is read-only
+
+bob: nothing was built (exit 7)

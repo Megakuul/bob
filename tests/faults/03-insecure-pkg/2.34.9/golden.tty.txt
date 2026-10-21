@@ -1,0 +1,5 @@
+[31;1merror[BOB-E-1003]:[0m [1mnixpkgs package "bzip2_1_1" (2020-08-11) is marked insecure: CVE-2026-42250[0m
+  package defined at fixture/libfoo/bob.go:8:11
+  [32mhint:[0m use a fixed version; bob refuses known-vulnerable packages unless allowed per package
+
+[31;1mbob: nothing was built[0m (exit 3)

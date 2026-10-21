@@ -1,0 +1,6 @@
+[33m-[0m //tools:sleep
+
+[31;1merror[BOB-E-8001]:[0m [1mbuild cancelled[0m
+   [2m│[0m stopped while building: //tools:sleep
+
+[31;1mbob: 1 stopped[0m (exit 130)

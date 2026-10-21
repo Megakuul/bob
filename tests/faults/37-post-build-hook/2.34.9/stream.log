@@ -1,0 +1,46 @@
+@nix {"action":"start","id":2764180822163456,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"start","fields":["/nix/store/dpasfpsp7pr2p2mmyn3mggjmjyag930r-tools-hook","https://cache.nixos.org"],"id":2764180822163457,"level":4,"parent":0,"text":"querying info about '/nix/store/dpasfpsp7pr2p2mmyn3mggjmjyag930r-tools-hook' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"start","fields":["https://cache.nixos.org/dpasfpsp7pr2p2mmyn3mggjmjyag930r.narinfo"],"id":2764180822163458,"level":4,"parent":2764180822163457,"text":"downloading 'https://cache.nixos.org/dpasfpsp7pr2p2mmyn3mggjmjyag930r.narinfo'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2764180822163458,"type":105}
+@nix {"action":"stop","id":2764180822163457}
+@nix {"action":"stop","id":2764180822163458}
+@nix {"action":"stop","id":2764180822163456}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/cf0gr4gnrdcv1j5npykns1ld5k32hp02-tools-hook.drv"}
+@nix {"action":"start","id":2764180822163459,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2764180822163460,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2764180822163461,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163460,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163461,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2764180822163459,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2764180822163459,"type":106}
+@nix {"action":"start","id":2764180822163462,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2764180822163462}
+@nix {"action":"result","fields":[0,1,0,0],"id":2764180822163460,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163461,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2764180822163459,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2764180822163459,"type":106}
+@nix {"action":"start","fields":["/nix/store/cf0gr4gnrdcv1j5npykns1ld5k32hp02-tools-hook.drv","",1,1],"id":2764180822163463,"level":3,"parent":0,"text":"building '/nix/store/cf0gr4gnrdcv1j5npykns1ld5k32hp02-tools-hook.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2764180822163460,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2764180822163461,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2764180822163459,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2764180822163459,"type":106}
+@nix {"action":"start","fields":["/nix/store/cf0gr4gnrdcv1j5npykns1ld5k32hp02-tools-hook.drv"],"id":2764180822163464,"level":4,"parent":0,"text":"running post-build-hook '/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh'","type":110}
+@nix {"action":"result","fields":["uploading /nix/store/dpasfpsp7pr2p2mmyn3mggjmjyag930r-tools-hook"],"id":2764180822163464,"type":107}
+@nix {"action":"result","fields":["upload failed: 503"],"id":2764180822163464,"type":107}
+@nix {"action":"stop","id":2764180822163464}
+@nix {"action":"stop","id":2764180822163463}
+@nix {"action":"stop","id":2764180822163461}
+@nix {"action":"stop","id":2764180822163460}
+@nix {"action":"stop","id":2764180822163459}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m program \u001b[35;1m\"/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh\"\u001b[0m \u001b[35;1mfailed with exit code 1\u001b[0m","raw_msg":"program \u001b[35;1m\"/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh\"\u001b[0m \u001b[35;1mfailed with exit code 1\u001b[0m"}

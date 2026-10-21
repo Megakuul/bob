@@ -1,0 +1,13 @@
+FAILED  //libfoo:foo
+
+error[BOB-E-2001]: //libfoo:foo: compile error in fixture/libfoo/src/foo.cpp
+  --> fixture/libfoo/src/foo.cpp:13:13
+  package defined at fixture/libfoo/bob.go:8:11
+   | fixture/libfoo/src/foo.cpp:13:13: error: expected ';' before '}' token
+   |    13 |     return 0
+   |       |             ^
+   |       |             ;
+   |    14 | }
+  full log: bob log //libfoo:foo
+
+bob: 1 failed (exit 1)

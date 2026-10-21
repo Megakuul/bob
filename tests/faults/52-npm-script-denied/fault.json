@@ -1,0 +1,24 @@
+{
+ "id": "52-npm-script-denied",
+ "title": "npm lifecycle script denied",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "npm",
+ "inject": {
+  "kind": "patch",
+  "describe": "dependency with a postinstall script that writes SCRIPT-RAN"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2013",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 1,
+ "absent": [
+  "SCRIPT-RAN"
+ ],
+ "forbid": []
+}

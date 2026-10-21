@@ -1,0 +1,291 @@
+{
+  "name": "go-error",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/r9fk9k889kinxn3nbb8hypvbmcmz5vbg-api-api.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 29632,
+    "nixVersion": "2.34.9",
+    "valid": [
+      "/nix/store/5iwmivchj587snyia3mnfjaj4js8rirl-libfoo-foo.drv",
+      "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv",
+      "/nix/store/8lkmdqylbaiqdcd2s9nzx827sdgzvza9-itoa-1.0.18-src.drv",
+      "/nix/store/7y6mwyg2y31mb2gbq7wi4pf8pnl1zz4c-third_party-crates-itoa-1.0.18.drv",
+      "/nix/store/5hhss3wr7rkcjanv6m5ysw41bymv5wvx-hex-0.4.3.crate.drv",
+      "/nix/store/asqia20ra3vac8b0xmxfhhxyp0xs26qb-hex-0.4.3-src.drv",
+      "/nix/store/snljn38i6njfwkfb0lb3fz91pq9a2a2i-third_party-crates-hex-0.4.3.drv",
+      "/nix/store/69arqadg7075h5d57551bcyblnci69b0-rcore-rcore.drv",
+      "/nix/store/mpsi392fq248b85bh4ywvvkzcyav64sz-proto-greeting_go.drv",
+      "/nix/store/1i1j8fv5w21napgqf83qs3qq26ziqz7n-uuid-v1.6.0.zip.drv",
+      "/nix/store/kfzlafv5l5hf1gi3jjnmpk367k6hk38h-sync-v0.24.0.zip.drv",
+      "/nix/store/smx5ajm85lr34rwi878mhcnhm4wmhvmg-protobuf-v1.36.11.zip.drv",
+      "/nix/store/r9fk9k889kinxn3nbb8hypvbmcmz5vbg-api-api.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv": {
+        "label": "//third_party:itoa-1.0.18.crate",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "fetch",
+        "url": "https://static.crates.io/crates/itoa/itoa-1.0.18.crate",
+        "lockHash": "sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI="
+      },
+      "/nix/store/1i1j8fv5w21napgqf83qs3qq26ziqz7n-uuid-v1.6.0.zip.drv": {
+        "label": "//third_party:uuid-v1.6.0.zip",
+        "definedAt": "fixture/api/bob.go:18:3",
+        "kind": "fetch",
+        "url": "https://proxy.golang.org/github.com/google/uuid/@v/v1.6.0.zip",
+        "lockHash": "sha256-0PAvN3IX9CcC4lloTgZEHtv1FA3dzDS6m+pWA4s4pu0="
+      },
+      "/nix/store/5hhss3wr7rkcjanv6m5ysw41bymv5wvx-hex-0.4.3.crate.drv": {
+        "label": "//third_party:hex-0.4.3.crate",
+        "definedAt": "fixture/rcore/bob.go:10:9",
+        "kind": "fetch",
+        "url": "https://static.crates.io/crates/hex/hex-0.4.3.crate",
+        "lockHash": "sha256-fyQlSqmlS1yFjq7i9bzNtGqvDkhqWV7V/Y+GulUjKnA="
+      },
+      "/nix/store/5iwmivchj587snyia3mnfjaj4js8rirl-libfoo-foo.drv": {
+        "label": "//libfoo:foo",
+        "definedAt": "fixture/libfoo/bob.go:8:11",
+        "kind": "cc_library",
+        "srcDir": "fixture/libfoo"
+      },
+      "/nix/store/69arqadg7075h5d57551bcyblnci69b0-rcore-rcore.drv": {
+        "label": "//rcore:rcore",
+        "definedAt": "fixture/rcore/bob.go:13:13",
+        "kind": "rust_crate",
+        "srcDir": "fixture/rcore"
+      },
+      "/nix/store/7y6mwyg2y31mb2gbq7wi4pf8pnl1zz4c-third_party-crates-itoa-1.0.18.drv": {
+        "label": "//third_party/crates:itoa-1.0.18",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "rust_crate"
+      },
+      "/nix/store/8lkmdqylbaiqdcd2s9nzx827sdgzvza9-itoa-1.0.18-src.drv": {
+        "label": "//third_party:itoa-1.0.18.crate",
+        "definedAt": "fixture/rcore/bob.go:9:9",
+        "kind": "fetch",
+        "role": "unpack",
+        "url": "https://static.crates.io/crates/itoa/itoa-1.0.18.crate",
+        "lockHash": "sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI="
+      },
+      "/nix/store/asqia20ra3vac8b0xmxfhhxyp0xs26qb-hex-0.4.3-src.drv": {
+        "label": "//third_party:hex-0.4.3.crate",
+        "definedAt": "fixture/rcore/bob.go:10:9",
+        "kind": "fetch",
+        "role": "unpack",
+        "url": "https://static.crates.io/crates/hex/hex-0.4.3.crate",
+        "lockHash": "sha256-fyQlSqmlS1yFjq7i9bzNtGqvDkhqWV7V/Y+GulUjKnA="
+      },
+      "/nix/store/kfzlafv5l5hf1gi3jjnmpk367k6hk38h-sync-v0.24.0.zip.drv": {
+        "label": "//third_party:sync-v0.24.0.zip",
+        "definedAt": "fixture/api/bob.go:19:3",
+        "kind": "fetch",
+        "url": "https://proxy.golang.org/golang.org/x/sync/@v/v0.24.0.zip",
+        "lockHash": "sha256-yj/PPqglnnWJH3lH4agWpbiUAsVC1F2Lu9ngYbDFgBk="
+      },
+      "/nix/store/mpsi392fq248b85bh4ywvvkzcyav64sz-proto-greeting_go.drv": {
+        "label": "//proto:greeting_go",
+        "definedAt": "fixture/proto/bob.go:8:16",
+        "kind": "proto_go",
+        "srcDir": "fixture/proto"
+      },
+      "/nix/store/r9fk9k889kinxn3nbb8hypvbmcmz5vbg-api-api.drv": {
+        "label": "//api:api",
+        "definedAt": "fixture/api/bob.go:13:11",
+        "kind": "go_binary",
+        "srcDir": "fixture/api"
+      },
+      "/nix/store/smx5ajm85lr34rwi878mhcnhm4wmhvmg-protobuf-v1.36.11.zip.drv": {
+        "label": "//third_party:protobuf-v1.36.11.zip",
+        "definedAt": "fixture/api/bob.go:20:3",
+        "kind": "fetch",
+        "url": "https://proxy.golang.org/google.golang.org/protobuf/@v/v1.36.11.zip",
+        "lockHash": "sha256-FJg9NsVqgU7ZG21lLyuPiVurobhOtDsooLEyyGN80nQ="
+      },
+      "/nix/store/snljn38i6njfwkfb0lb3fz91pq9a2a2i-third_party-crates-hex-0.4.3.drv": {
+        "label": "//third_party/crates:hex-0.4.3",
+        "definedAt": "fixture/rcore/bob.go:10:9",
+        "kind": "rust_crate"
+      }
+    },
+    "outputs": {
+      "/nix/store/0kgjhfjz6rpv5bp2yvbgadgjfxvy6dpn-libfoo-foo": "/nix/store/5iwmivchj587snyia3mnfjaj4js8rirl-libfoo-foo.drv",
+      "/nix/store/22l6yg1h17z2bscmswzlpwavn05yzsyi-hex-0.4.3-src": "/nix/store/asqia20ra3vac8b0xmxfhhxyp0xs26qb-hex-0.4.3-src.drv",
+      "/nix/store/2aw8yp5hrs5jx73gnpa513qx8gh2cpdx-sync-v0.24.0.zip": "/nix/store/kfzlafv5l5hf1gi3jjnmpk367k6hk38h-sync-v0.24.0.zip.drv",
+      "/nix/store/4lvl2n5nc1irnla1ignwcrhnjrj0a35n-third_party-crates-hex-0.4.3": "/nix/store/snljn38i6njfwkfb0lb3fz91pq9a2a2i-third_party-crates-hex-0.4.3.drv",
+      "/nix/store/8lxs2gza7wqydcy7x0wjpvq12g1v8hyl-protobuf-v1.36.11.zip": "/nix/store/smx5ajm85lr34rwi878mhcnhm4wmhvmg-protobuf-v1.36.11.zip.drv",
+      "/nix/store/djv7g2xzi7a69vc9jfrpx7gi4d98a3lk-uuid-v1.6.0.zip": "/nix/store/1i1j8fv5w21napgqf83qs3qq26ziqz7n-uuid-v1.6.0.zip.drv",
+      "/nix/store/lhgqs203zn6wxpk5xshrckrkvh6fjl44-itoa-1.0.18.crate": "/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv",
+      "/nix/store/p5mbcqk9sjl0rf31bxapnryn75pdk54n-proto-greeting_go": "/nix/store/mpsi392fq248b85bh4ywvvkzcyav64sz-proto-greeting_go.drv",
+      "/nix/store/pdixsf5nq5zwqzxf6ncks0j7bs7pfvwa-api-api": "/nix/store/r9fk9k889kinxn3nbb8hypvbmcmz5vbg-api-api.drv",
+      "/nix/store/sah1grzalxssa5hk2k1x4l8rnfwfl4za-itoa-1.0.18-src": "/nix/store/8lkmdqylbaiqdcd2s9nzx827sdgzvza9-itoa-1.0.18-src.drv",
+      "/nix/store/vy44awpaqwyiwj9309ipm6vvgpp6r1xh-rcore-rcore": "/nix/store/69arqadg7075h5d57551bcyblnci69b0-rcore-rcore.drv",
+      "/nix/store/zfqbs20ijx5v86q7a3wvf2a132520y40-hex-0.4.3.crate": "/nix/store/5hhss3wr7rkcjanv6m5ysw41bymv5wvx-hex-0.4.3.crate.drv",
+      "/nix/store/zipzyzs6qlbhjghazwb9yq2pp5xmz8xi-third_party-crates-itoa-1.0.18": "/nix/store/7y6mwyg2y31mb2gbq7wi4pf8pnl1zz4c-third_party-crates-itoa-1.0.18.drv"
+    },
+    "sources": {
+      "/nix/store/9n4m5m8nvq188qck14ik7c728ss929hp-api": "fixture/api",
+      "/nix/store/dayzdh49vil7zr11lfwwi31h7hd0qy89-rcore": "fixture/rcore",
+      "/nix/store/m7v48mhazqfnnywd5i81msml80yz1g14-libfoo": "fixture/libfoo",
+      "/nix/store/mi8bxznvjbyh82wr6lqmyfncyjkw5p00-proto": "fixture/proto"
+    },
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/52dk32w642kazfdmrydn6fm99q5x44zs-gcc-wrapper-15.3.0.drv": "stdenv.cc",
+      "/nix/store/8k2irddrjwgjmhibgydvv99ffcwiaf7w-gnutar-1.35.drv": "gnutar",
+      "/nix/store/cd9p0dbcdpxilrvpa0bgfqmj6hix3jf2-gzip-1.14.drv": "gzip",
+      "/nix/store/cvvy7kll5sfd9sbsi99j01x8p5m49555-protobuf-34.1.drv": "protobuf",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/hmld0152h3574khq9pj60vy6z732l3q6-openssl-3.6.5.drv": "openssl",
+      "/nix/store/i422bd2d8b8n6hvjlw6c6k93l2i44g8j-go-1.26.8.drv": "go",
+      "/nix/store/m5996sqiprjlzymgmb67ckyj67df86f7-unzip-6.0.drv": "unzip",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/pna4d4vml6xz52r3kv1l8cb6ibzbmb91-protoc-gen-go-1.36.11.drv": "protoc-gen-go",
+      "/nix/store/rgn2vz3475wcck2qq8djrxgfp5lmwz9r-pkg-config-wrapper-0.29.2.drv": "pkg-config",
+      "/nix/store/rjkajiid6lbk6w0cdm565zx8qh8zhbml-rustc-wrapper-1.95.0.drv": "rustc",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//libfoo:foo",
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore",
+        "//proto:greeting_go",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip",
+        "//api:api"
+      ],
+      "/nix/store/52dk32w642kazfdmrydn6fm99q5x44zs-gcc-wrapper-15.3.0.drv": [
+        "//libfoo:foo",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore",
+        "//api:api"
+      ],
+      "/nix/store/8k2irddrjwgjmhibgydvv99ffcwiaf7w-gnutar-1.35.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip"
+      ],
+      "/nix/store/cd9p0dbcdpxilrvpa0bgfqmj6hix3jf2-gzip-1.14.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip"
+      ],
+      "/nix/store/cvvy7kll5sfd9sbsi99j01x8p5m49555-protobuf-34.1.drv": [
+        "//proto:greeting_go"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//libfoo:foo",
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore",
+        "//proto:greeting_go",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip",
+        "//api:api"
+      ],
+      "/nix/store/hmld0152h3574khq9pj60vy6z732l3q6-openssl-3.6.5.drv": [
+        "//libfoo:foo"
+      ],
+      "/nix/store/i422bd2d8b8n6hvjlw6c6k93l2i44g8j-go-1.26.8.drv": [
+        "//api:api"
+      ],
+      "/nix/store/m5996sqiprjlzymgmb67ckyj67df86f7-unzip-6.0.drv": [
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip",
+        "//api:api"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//libfoo:foo",
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore",
+        "//proto:greeting_go",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip",
+        "//api:api"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//libfoo:foo",
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore",
+        "//proto:greeting_go",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip",
+        "//api:api"
+      ],
+      "/nix/store/pna4d4vml6xz52r3kv1l8cb6ibzbmb91-protoc-gen-go-1.36.11.drv": [
+        "//proto:greeting_go"
+      ],
+      "/nix/store/rgn2vz3475wcck2qq8djrxgfp5lmwz9r-pkg-config-wrapper-0.29.2.drv": [
+        "//libfoo:foo"
+      ],
+      "/nix/store/rjkajiid6lbk6w0cdm565zx8qh8zhbml-rustc-wrapper-1.95.0.drv": [
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//libfoo:foo",
+        "//third_party:itoa-1.0.18.crate",
+        "//third_party/crates:itoa-1.0.18",
+        "//third_party:hex-0.4.3.crate",
+        "//third_party/crates:hex-0.4.3",
+        "//rcore:rcore",
+        "//proto:greeting_go",
+        "//third_party:uuid-v1.6.0.zip",
+        "//third_party:sync-v0.24.0.zip",
+        "//third_party:protobuf-v1.36.11.zip",
+        "//api:api"
+      ]
+    },
+    "requested": [
+      "//api:api"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

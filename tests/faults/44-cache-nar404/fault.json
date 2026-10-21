@@ -1,0 +1,28 @@
+{
+ "id": "44-cache-nar404",
+ "title": "cache NAR 404",
+ "source": "S15 fault 44 (subst-nar404)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "narinfo present, NAR missing"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4002",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:23:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

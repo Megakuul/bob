@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:silent"]}
+{"v":1,"event":"package.start","label":"//tools:silent","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2008","class":"build","message":"//tools:silent produced no output for 3s and was stopped","label":"//tools:silent","definedAt":"fixture/tools/bob.go:11:15","excerpt":["start"],"hint":"a step is probably waiting for input or hanging","log":"bob log //tools:silent","args":{"label":"//tools:silent","seconds":"3"}}}
+{"v":1,"event":"package.finish","label":"//tools:silent","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

@@ -1,0 +1,7 @@
+built   //tools:structured
+
+warning[BOB-E-9999]: unrecognised Nix error
+  cause: builder says error
+  hint: this is a bob bug; the raw message is shown with -v
+
+bob: 1 built

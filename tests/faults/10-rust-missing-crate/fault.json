@@ -1,0 +1,29 @@
+{
+ "id": "10-rust-missing-crate",
+ "title": "Rust missing crate",
+ "source": "S15 fault 10 (rust-missing-crate)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "use serde without declaring it"
+ },
+ "command": [
+  "build",
+  "//rcore:rcore"
+ ],
+ "code": "BOB-E-2010",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/rcore/bob.go:13:13",
+  "site": "fixture/rcore/src/lib.rs:2:5"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

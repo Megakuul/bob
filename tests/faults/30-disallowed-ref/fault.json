@@ -1,0 +1,26 @@
+{
+ "id": "30-disallowed-ref",
+ "title": "forbidden reference (fixup bug)",
+ "source": "S15 fault 30 (disallowed-ref)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "output refers to a disallowed path"
+ },
+ "command": [
+  "build",
+  "//tools:leak-ref"
+ ],
+ "code": "BOB-E-9003",
+ "exit": 70,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:20:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

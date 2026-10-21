@@ -1,0 +1,21 @@
+{
+ "id": "71-userns-blocked",
+ "title": "user namespaces blocked (simulated)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "cpp-lib",
+ "inject": {
+  "kind": "env",
+  "describe": "unprivileged user namespaces disabled (fault hook)"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-7005",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 7,
+ "forbid": []
+}

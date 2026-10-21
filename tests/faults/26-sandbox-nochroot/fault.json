@@ -1,0 +1,26 @@
+{
+ "id": "26-sandbox-nochroot",
+ "title": "__noChroot with sandbox",
+ "source": "S15 fault 26 (sandbox-nochroot)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "derivation sets __noChroot"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-9004",
+ "exit": 70,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:13:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

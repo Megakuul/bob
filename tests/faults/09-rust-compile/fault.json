@@ -1,0 +1,29 @@
+{
+ "id": "09-rust-compile",
+ "title": "Rust compile error",
+ "source": "S15 fault 9 (rust-error)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "type error in rcore/src/lib.rs"
+ },
+ "command": [
+  "build",
+  "//rcore:rcore"
+ ],
+ "code": "BOB-E-2001",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/rcore/bob.go:13:13",
+  "site": "fixture/rcore/src/lib.rs:30:5"
+ },
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

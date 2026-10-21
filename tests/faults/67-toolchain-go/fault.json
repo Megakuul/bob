@@ -1,0 +1,21 @@
+{
+ "id": "67-toolchain-go",
+ "title": "toolchain mismatch (Go)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "go",
+ "inject": {
+  "kind": "patch",
+  "describe": "go directive differs from the pinned Go toolchain"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1021",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

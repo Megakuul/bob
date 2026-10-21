@@ -1,0 +1,7 @@
+[32m✓[0m //tools:payload
+
+[33mwarning[BOB-E-4001]:[0m [1mcache http://127.0.0.1:21512 rejected bob's credentials[0m
+  cause: the cache answered HTTP 401 to http://127.0.0.1:21512/nix-cache-info
+  [32mhint:[0m bob built locally instead, which is slower; run bob login
+
+[32mbob: 1 built[0m

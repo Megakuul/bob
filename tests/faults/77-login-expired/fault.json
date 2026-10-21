@@ -1,0 +1,22 @@
+{
+ "id": "77-login-expired",
+ "title": "expired login",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "env",
+  "describe": "stored token is expired"
+ },
+ "command": [
+  "build",
+  "//...",
+  "--remote"
+ ],
+ "code": "BOB-E-4008",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 4,
+ "forbid": []
+}
