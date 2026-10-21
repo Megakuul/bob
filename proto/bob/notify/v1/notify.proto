@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package bob.notify.v1;
+
+import "google/protobuf/field_mask.proto";
+import "bob/authz/v1/authz.proto";
+
+service NotifyService {
+  rpc CreateNotifyWebhook(CreateNotifyWebhookRequest) returns (CreateNotifyWebhookResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc GetNotifyWebhook(GetNotifyWebhookRequest) returns (GetNotifyWebhookResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc ListNotifyWebhooks(ListNotifyWebhooksRequest) returns (ListNotifyWebhooksResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc UpdateNotifyWebhook(UpdateNotifyWebhookRequest) returns (UpdateNotifyWebhookResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc DeleteNotifyWebhook(DeleteNotifyWebhookRequest) returns (DeleteNotifyWebhookResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+}
+
+message NotifyWebhook {
+  string id = 1;
+  string url = 2;                       // https only
+  repeated string events = 3;           // build.finished | release.published
+  repeated string projects = 4;         // empty = all
+  bool enabled = 5;
+  string last_result = 6;               // output only: "200 at <time>" | "error: <reason>"
+  string etag = 7;
+}
+message CreateNotifyWebhookRequest { NotifyWebhook webhook = 1; }
+message CreateNotifyWebhookResponse { NotifyWebhook webhook = 1; string secret = 2; }   // once
+message GetNotifyWebhookRequest { string id = 1; }
+message GetNotifyWebhookResponse { NotifyWebhook webhook = 1; }
+message ListNotifyWebhooksRequest {}
+message ListNotifyWebhooksResponse { repeated NotifyWebhook webhooks = 1; }             // ≤ 50
+message UpdateNotifyWebhookRequest { NotifyWebhook webhook = 1; google.protobuf.FieldMask update_mask = 2; }
+message UpdateNotifyWebhookResponse { NotifyWebhook webhook = 1; }
+message DeleteNotifyWebhookRequest { string id = 1; }
+message DeleteNotifyWebhookResponse {}

@@ -5,9 +5,10 @@
   open questions ask them now or auto decide them" → SPEC Appendix A / HARNESS open items are
   auto-decided by their recommendations (A24); Gate H handling asked in chat 2026-10-21.
 - **Current task:** M0.1 workspace skeleton (architect agent), then M0.2–M0.7 in parallel.
+  Host check (D69): newuidmap/newgidmap have file caps, bobtest has subuid/subgid 524288:65536 — nothing to change.
 - **Last gate passed:** **Gate S** (2026-10-21): SPEC, budgets, ADRs 0003–0019 (locked), HARNESS.md,
   plan approved → D65–D69. AGENTS.md replaces BOOTSTRAP.md.
-- **Next:** finish M0/M1 → Gate H.
+- **Next:** finish M0/M1 → Gate H (self-reviewed, D70; owner answer "b)" 2026-10-21) → M2…
 
 ## Gate S answers (owner, 2026-10-21, verbatim)
 

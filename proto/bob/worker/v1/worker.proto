@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package bob.worker.v1;
+
+import "bob/authz/v1/authz.proto";
+
+option go_package = "github.com/megakuul/bob/internal/gen/bob/worker/v1;workerv1";
+
+// WorkerControlService is served by every orchestrator and called only by workers.
+// Authentication: header "Authorization: Bob-Worker <bwt1 token>" and "Bob-PoP" (§05.9.2).
+// The token is obtained only through the fleet bucket (worker/<wid>, sealed). User tokens
+// are refused with PERMISSION_DENIED. Transport: HTTP/2 + TLS; the worker pins the
+// orchestrator's SPKI hash from FleetConfig.
+service WorkerControlService {
+  // Attach is the long-lived control channel between one worker and one orchestrator.
+  // A worker keeps one Attach per member in FleetConfig. The first worker message is Hello.
+  // The worker reopens the stream before its token expires (new token, new PoP).
+  rpc Attach(stream AttachRequest) returns (stream AttachResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_WORKER};
+  }
+
+  // GetCheckoutCredential returns the job's source credentials: a forge credential scoped to the
+  // job's repository (or the key of an uploaded source snapshot) and a download token, valid
+  // only while the caller holds the job (owner + epoch checked on job/<id>). Flow: §06 §6.9.6.
+  rpc GetCheckoutCredential(GetCheckoutCredentialRequest) returns (GetCheckoutCredentialResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_WORKER};
+  }
+}
+
+message AttachRequest {
+  oneof msg {
+    Hello hello = 1;
+    SlotState slots = 2;
+    JobEvent job_event = 3;
+    LiveChunk live_chunk = 4;
+    Pong pong = 5;
+  }
+}
+
+message AttachResponse {
+  oneof msg {
+    Welcome welcome = 1;
+    Wake wake = 2;
+    LiveSubscribe live_subscribe = 3;
+    LiveUnsubscribe live_unsubscribe = 4;
+    CancelJob cancel_job = 5;
+    Drain drain = 6;
+    Ping ping = 7;
+  }
+}
+
+message Hello {
+  string worker_id = 1;
+  string platform = 2;              // "x86_64-linux" | "aarch64-linux"
+  repeated string class_ids = 3;    // classes this worker satisfies (from FleetConfig)
+  int32 slots_total = 4;
+  int32 slots_free = 5;
+  string version = 6;               // bob-server version
+}
+
+message Welcome {
+  string orchestrator_id = 1;
+  int64 fleet_config_gen = 2;       // worker re-reads fleet/cfg when it is older
+}
+
+message SlotState {
+  int32 slots_free = 1;
+  repeated string running_job_ids = 2;
+}
+
+enum JobEventKind {
+  JOB_EVENT_KIND_UNSPECIFIED = 0;
+  JOB_EVENT_KIND_CLAIMED = 1;
+  JOB_EVENT_KIND_RUNNING = 2;
+  JOB_EVENT_KIND_FINISHED = 3;      // result written to job/<id>
+  JOB_EVENT_KIND_ABANDONED = 4;     // worker gave up (lease lost, cancel acknowledged)
+}
+
+// JobEvent is a hint so controllers react without waiting for their next pass.
+// The job record stays the truth; orchestrators re-read it before acting.
+message JobEvent {
+  string job_id = 1;
+  int64 epoch = 2;
+  JobEventKind kind = 3;
+}
+
+// Wake asks the worker to try one slot now (D54).
+message Wake {
+  string class_id = 1;
+  uint64 slot = 2;
+  string job_id = 3;
+}
+
+// LiveSubscribe asks the worker for its in-memory log of a job (D55): first everything after
+// the cursors, then new lines every 250 ms, until expires_unix_ms (renewed by repeating the
+// message) or LiveUnsubscribe.
+message LiveSubscribe {
+  string subscription_id = 1;
+  string job_id = 2;
+  map<string, LiveCursor> cursors = 3; // package label -> last line the orchestrator has
+  int64 expires_unix_ms = 4;           // now + 15 s
+}
+
+message LiveUnsubscribe {
+  string subscription_id = 1;
+}
+
+message LiveCursor {
+  int64 seq = 1;
+  int32 attempt = 2;
+}
+
+message LiveChunk {
+  string subscription_id = 1;
+  string job_id = 2;
+  int64 epoch = 3;
+  repeated LiveLine lines = 4;         // ≤ 5,000 lines and ≤ 4 MiB per chunk
+  repeated LiveRestart restarts = 5;
+  repeated LiveFinal finals = 6;
+}
+
+message LiveLine {
+  string package = 1;
+  int64 seq = 2;
+  int32 attempt = 3;
+  int32 stream = 4;                    // 1 stdout, 2 stderr, 3 bob
+  int64 ts_unix_nano = 5;
+  string text = 6;                     // UTF-8, ≤ 4 KiB
+}
+
+message LiveRestart {
+  string package = 1;
+  int32 attempt = 2;
+  int64 from_seq = 3;
+}
+
+message LiveFinal {
+  string package = 1;
+  int64 last_seq = 2;
+  int32 attempt = 3;
+}
+
+message CancelJob {
+  string job_id = 1;
+}
+
+message Drain {
+  bool drain = 1;                      // true: finish running jobs, claim nothing new
+}
+
+message Ping {
+  int64 unix_ms = 1;
+}
+
+message Pong {
+  int64 unix_ms = 1;
+}
+
+message GetCheckoutCredentialRequest {
+  string job_id = 1;
+  int64 epoch = 2;
+}
+
+message GetCheckoutCredentialResponse {
+  // HPKE (ADR 0013 suite) to the worker KEM key, info = "bob-wco-v1"‖0‖LV(wid)‖LV(job_id)‖LV(epoch).
+  // Plaintext: canonical CBOR {1: clone_url (https, no credentials), 2: username,
+  // 3: token (short-lived, repository-scoped; D62 for Forgejo), 4: expires_unix, 5: fetch_ref, 6: sha}.
+  // Empty for upload sources.
+  bytes sealed_checkout = 1;
+  string source_key = 2;               // artifacts key src/<projectID>/<hex>.tar.zst, else ""
+  string download_token = 3;           // bob_dt_, download scope, the job's project only, deleted at job end
+  int64 expires_unix = 4;
+}

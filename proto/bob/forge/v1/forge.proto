@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package bob.forge.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+import "bob/authz/v1/authz.proto";
+
+service ForgeService {
+  // Returns the webhook secret once.
+  rpc CreateForgeIntegration(CreateForgeIntegrationRequest) returns (CreateForgeIntegrationResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc GetForgeIntegration(GetForgeIntegrationRequest) returns (GetForgeIntegrationResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc ListForgeIntegrations(ListForgeIntegrationsRequest) returns (ListForgeIntegrationsResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc UpdateForgeIntegration(UpdateForgeIntegrationRequest) returns (UpdateForgeIntegrationResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  // Refused while projects link to it.
+  rpc DeleteForgeIntegration(DeleteForgeIntegrationRequest) returns (DeleteForgeIntegrationResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc RotateWebhookSecret(RotateWebhookSecretRequest) returns (RotateWebhookSecretResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  // Checks credentials (and optionally one repository) against the forge.
+  rpc TestForgeIntegration(TestForgeIntegrationRequest) returns (TestForgeIntegrationResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  // Last 100 deliveries (ring document).
+  rpc ListForgeDeliveries(ListForgeDeliveriesRequest) returns (ListForgeDeliveriesResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+}
+
+enum ForgeKind { FORGE_KIND_UNSPECIFIED = 0; FORGE_KIND_GITHUB = 1; FORGE_KIND_FORGEJO = 2; FORGE_KIND_GITLAB = 3; }
+enum Health { HEALTH_UNSPECIFIED = 0; HEALTH_OK = 1; HEALTH_AUTH_FAILED = 2; HEALTH_UNREACHABLE = 3; }
+message GitHubCredentials { int64 app_id = 1; int64 installation_id = 2; string private_key_pem = 3; /* input only */ }
+message ForgejoCredentials { string bot_login = 1; string bot_password = 2; /* input only */ }
+message GitLabCredentials { string access_token = 1; /* input only; project/group token, Maintainer, api */ bool allow_plaintext_secret = 2; /* GitLab < 19.0 */ }
+message ForgeIntegration {
+  string id = 1;
+  ForgeKind kind = 2;
+  string display_name = 3;
+  string base_url = 4;              // https only (github: https://api.github.com)
+  oneof credentials {
+    GitHubCredentials github = 5;
+    ForgejoCredentials forgejo = 6;
+    GitLabCredentials gitlab = 7;
+  }
+  bool has_credentials = 8;         // output only
+  string webhook_url = 9;           // output only: <base>/hooks/<id>
+  Health health = 10;               // output only
+  string health_message = 11;       // output only
+  google.protobuf.Timestamp created_at = 12;
+  string etag = 13;
+}
+message CreateForgeIntegrationRequest { ForgeIntegration integration = 1; }
+message CreateForgeIntegrationResponse { ForgeIntegration integration = 1; string webhook_secret = 2; }
+message GetForgeIntegrationRequest { string id = 1; }
+message GetForgeIntegrationResponse { ForgeIntegration integration = 1; }
+message ListForgeIntegrationsRequest {}
+message ListForgeIntegrationsResponse { repeated ForgeIntegration integrations = 1; }   // ≤ 50
+message UpdateForgeIntegrationRequest { ForgeIntegration integration = 1; google.protobuf.FieldMask update_mask = 2; }
+message UpdateForgeIntegrationResponse { ForgeIntegration integration = 1; }
+message DeleteForgeIntegrationRequest { string id = 1; string etag = 2; }
+message DeleteForgeIntegrationResponse {}
+message RotateWebhookSecretRequest { string id = 1; }
+message RotateWebhookSecretResponse { string webhook_secret = 1; }   // old secret accepted for 24 h; per-repo hooks re-ensured
+message TestForgeIntegrationRequest { string id = 1; string repo_full_name = 2; }
+message TestForgeIntegrationResponse { Health health = 1; string message = 2; int64 repo_id = 3; }
+message Delivery {
+  string delivery_id = 1;
+  string event = 2;                 // forge event name
+  string result = 3;                // accepted | duplicate | ignored: <reason> | rejected: signature | rejected: payload
+  string build_id = 4;
+  google.protobuf.Timestamp received_at = 5;
+}
+message ListForgeDeliveriesRequest { string integration_id = 1; }
+message ListForgeDeliveriesResponse { repeated Delivery deliveries = 1; }

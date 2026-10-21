@@ -689,3 +689,4 @@ for the questions to answer, not commitments):
 | D67 | Stage 3: local git commits per task on branch `bob-v1`; never pushed without asking. |
 | D68 | Protected test files: changes are reported by CI (hash manifest), not blocked; no signing key. |
 | D69 | Host setup for rootless podman/OCI tests (setuid newuidmap/newgidmap, subuid ranges) is approved. |
+| D70 | Gate H is self-reviewed by the agent against HARNESS.md (report in `docs/harness-validation.md`); no stop for the owner. Tests are protected from then on. Owner: "b)". |

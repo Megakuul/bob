@@ -210,3 +210,15 @@ spikes/**/.bob/
 /spikes/s15-errors/s15
 /spikes/s15-errors/s15cache
 spikes/**/target/
+# Go build outputs
+/bob
+/bob-server
+/bob-builder
+/out/
+*.test
+*.prof
+go.work.sum
+# web build outputs
+/web/node_modules/
+/web/.svelte-kit/
+/web/build/
