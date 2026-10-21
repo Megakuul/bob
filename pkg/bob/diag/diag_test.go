@@ -219,6 +219,7 @@ func mustPanic(t *testing.T, name string, f func()) {
 func TestNewPanics(t *testing.T) {
 	mustPanic(t, "unknown code", func() { New(1999) })
 	mustPanic(t, "missing argument", func() { New(2003, "label", "//api:api") })
+	//lint:ignore SA5012 the odd argument count is what this case tests
 	mustPanic(t, "odd arguments", func() { New(2003, "label") })
 	mustPanic(t, "unknown variant", func() { New(1025, "variant", "nope", "file", "x") })
 	mustPanic(t, "variant missing", func() { New(4009) })

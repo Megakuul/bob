@@ -2,25 +2,40 @@ syntax = "proto3";
 
 package bob.fleet.v1;
 
-import "google/protobuf/timestamp.proto";
 import "bob/authz/v1/authz.proto";
+import "google/protobuf/timestamp.proto";
 
 service FleetService {
-  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
-  rpc GetWorker(GetWorkerRequest) returns (GetWorkerResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc GetWorker(GetWorkerRequest) returns (GetWorkerResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
   // Worker finishes current jobs and claims no new ones.
-  rpc DrainWorker(DrainWorkerRequest) returns (DrainWorkerResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
-  rpc UndrainWorker(UndrainWorkerRequest) returns (UndrainWorkerResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc DrainWorker(DrainWorkerRequest) returns (DrainWorkerResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc UndrainWorker(UndrainWorkerRequest) returns (UndrainWorkerResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
   // ADR 0013 revocation: state=revoked, gen+1; effective ≤ 10 s; the process must restart with new keys.
-  rpc RevokeWorker(RevokeWorkerRequest) returns (RevokeWorkerResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
-  rpc ListOrchestrators(ListOrchestratorsRequest) returns (ListOrchestratorsResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc RevokeWorker(RevokeWorkerRequest) returns (RevokeWorkerResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc ListOrchestrators(ListOrchestratorsRequest) returns (ListOrchestratorsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 enum WorkerState {
   WORKER_STATE_UNSPECIFIED = 0;
   WORKER_STATE_ACTIVE = 1;
   WORKER_STATE_DRAINING = 2;
-  WORKER_STATE_STALE = 3;      // heartbeat older than fleet.gone_after (5 min, §05.6.3)
+  WORKER_STATE_STALE = 3; // heartbeat older than fleet.gone_after (5 min, §05.6.3)
   WORKER_STATE_REVOKED = 4;
 }
 message Worker {
@@ -28,7 +43,7 @@ message Worker {
   WorkerState state = 2;
   string platform = 3;
   map<string, string> labels = 4;
-  repeated string capabilities = 5;     // kvm, big-parallel, …
+  repeated string capabilities = 5; // kvm, big-parallel, …
   string version = 6;
   int32 cpus = 7;
   int64 memory_bytes = 8;
@@ -42,17 +57,45 @@ message Orchestrator {
   string version = 3;
   google.protobuf.Timestamp started_at = 4;
   google.protobuf.Timestamp last_heartbeat = 5;
-  repeated string leader_of = 6;        // controller leader leases held (ADR 0011)
+  repeated string leader_of = 6; // controller leader leases held (ADR 0011)
 }
-message ListWorkersRequest { int32 page_size = 1; string page_token = 2; string platform = 3; repeated WorkerState states = 4; string query = 5; }
-message ListWorkersResponse { repeated Worker workers = 1; string next_page_token = 2; }
-message GetWorkerRequest { string id = 1; }
-message GetWorkerResponse { Worker worker = 1; }
-message DrainWorkerRequest { string id = 1; }
-message DrainWorkerResponse { Worker worker = 1; }
-message UndrainWorkerRequest { string id = 1; }
-message UndrainWorkerResponse { Worker worker = 1; }
-message RevokeWorkerRequest { string id = 1; string reason = 2; }
-message RevokeWorkerResponse { Worker worker = 1; }
+message ListWorkersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string platform = 3;
+  repeated WorkerState states = 4;
+  string query = 5;
+}
+message ListWorkersResponse {
+  repeated Worker workers = 1;
+  string next_page_token = 2;
+}
+message GetWorkerRequest {
+  string id = 1;
+}
+message GetWorkerResponse {
+  Worker worker = 1;
+}
+message DrainWorkerRequest {
+  string id = 1;
+}
+message DrainWorkerResponse {
+  Worker worker = 1;
+}
+message UndrainWorkerRequest {
+  string id = 1;
+}
+message UndrainWorkerResponse {
+  Worker worker = 1;
+}
+message RevokeWorkerRequest {
+  string id = 1;
+  string reason = 2;
+}
+message RevokeWorkerResponse {
+  Worker worker = 1;
+}
 message ListOrchestratorsRequest {}
-message ListOrchestratorsResponse { repeated Orchestrator orchestrators = 1; }
+message ListOrchestratorsResponse {
+  repeated Orchestrator orchestrators = 1;
+}

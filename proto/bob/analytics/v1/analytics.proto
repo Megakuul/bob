@@ -7,26 +7,79 @@ import "bob/build/v1/build.proto";
 
 service AnalyticsService {
   // Overview page; every list filtered to permitted projects; fleet numbers are aggregate counts.
-  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse) { option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED}; option idempotency_level = NO_SIDE_EFFECTS; }
-  rpc PackageDurations(PackageDurationsRequest) returns (PackageDurationsResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "project_id"}; option idempotency_level = NO_SIDE_EFFECTS; }
-  rpc RecentFailures(RecentFailuresRequest) returns (RecentFailuresResponse) { option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED}; option idempotency_level = NO_SIDE_EFFECTS; }
-  rpc BuildHistory(BuildHistoryRequest) returns (BuildHistoryResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "project_id"}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc PackageDurations(PackageDurationsRequest) returns (PackageDurationsResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project_id"
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc RecentFailures(RecentFailuresRequest) returns (RecentFailuresResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc BuildHistory(BuildHistoryRequest) returns (BuildHistoryResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project_id"
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
-message PlatformFleet { string platform = 1; int32 active = 2; int32 busy = 3; int32 stale = 4; int32 queued_jobs = 5; }
+message PlatformFleet {
+  string platform = 1;
+  int32 active = 2;
+  int32 busy = 3;
+  int32 stale = 4;
+  int32 queued_jobs = 5;
+}
 message GetOverviewRequest {}
 message GetOverviewResponse {
-  repeated bob.build.v1.Build running = 1;        // ≤ 20
+  repeated bob.build.v1.Build running = 1; // ≤ 20
   repeated PlatformFleet fleet = 2;
   double cache_hit_rate_24h = 3;
   repeated bob.build.v1.Build recent_failures = 4; // ≤ 10
   int32 queue_depth = 5;
 }
-message PackageDuration { string label = 1; string day = 2; /* YYYY-MM-DD */ double avg_ms = 3; int64 count = 4; }
-message PackageDurationsRequest { string project_id = 1; string label = 2; int32 days = 3; }   // days ≤ 400
-message PackageDurationsResponse { repeated PackageDuration rows = 1; }
-message RecentFailuresRequest { string project_id = 1; int32 limit = 2; }                   // ≤ 100
-message RecentFailuresResponse { repeated bob.build.v1.Build builds = 1; }
-message HistoryDay { string day = 1; int32 succeeded = 2; int32 failed = 3; int32 cancelled = 4; double p50_duration_s = 5; double p90_duration_s = 6; }
-message BuildHistoryRequest { string project_id = 1; int32 days = 2; string pipeline = 3; }
-message BuildHistoryResponse { repeated HistoryDay days = 1; }
+message PackageDuration {
+  string label = 1;
+  string day = 2; /* YYYY-MM-DD */
+  double avg_ms = 3;
+  int64 count = 4;
+}
+message PackageDurationsRequest {
+  string project_id = 1;
+  string label = 2;
+  int32 days = 3;
+} // days ≤ 400
+message PackageDurationsResponse {
+  repeated PackageDuration rows = 1;
+}
+message RecentFailuresRequest {
+  string project_id = 1;
+  int32 limit = 2;
+} // ≤ 100
+message RecentFailuresResponse {
+  repeated bob.build.v1.Build builds = 1;
+}
+message HistoryDay {
+  string day = 1;
+  int32 succeeded = 2;
+  int32 failed = 3;
+  int32 cancelled = 4;
+  double p50_duration_s = 5;
+  double p90_duration_s = 6;
+}
+message BuildHistoryRequest {
+  string project_id = 1;
+  int32 days = 2;
+  string pipeline = 3;
+}
+message BuildHistoryResponse {
+  repeated HistoryDay days = 1;
+}

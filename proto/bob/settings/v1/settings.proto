@@ -2,57 +2,90 @@ syntax = "proto3";
 
 package bob.settings.v1;
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/field_mask.proto";
 import "bob/authz/v1/authz.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
 
 service SettingsService {
-  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; option idempotency_level = NO_SIDE_EFFECTS; }
-  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
-  rpc ListSigningKeys(ListSigningKeysRequest) returns (ListSigningKeysResponse) { option (bob.authz.v1.rule) = {kind: KIND_PUBLIC}; option idempotency_level = NO_SIDE_EFFECTS; }
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc ListSigningKeys(ListSigningKeysRequest) returns (ListSigningKeysResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
   // New ACTIVE key; the previous ACTIVE key becomes VERIFY_ONLY.
-  rpc CreateSigningKey(CreateSigningKeyRequest) returns (CreateSigningKeyResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc CreateSigningKey(CreateSigningKeyRequest) returns (CreateSigningKeyResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
   // Re-signs every narinfo signed only by this key, then marks it RETIRED (removed from public_keys).
-  rpc RetireSigningKey(RetireSigningKeyRequest) returns (RetireSigningKeyResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
+  rpc RetireSigningKey(RetireSigningKeyRequest) returns (RetireSigningKeyResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
 }
 
 message Retention {
-  int32 logs_days = 1;                 // default 30
-  int32 analytics_days = 2;            // default 400
-  int32 builds_days = 3;               // build/job records, default 365 (= §05 `retention.builds`)
-  int32 cache_unreferenced_days = 4;   // paths not reachable from a release or a build younger than this, default 90 (= §05 `retention.cache`)
-  int32 staging_days = 5;              // lifecycle rule, default 7
+  int32 logs_days = 1; // default 30
+  int32 analytics_days = 2; // default 400
+  int32 builds_days = 3; // build/job records, default 365 (= §05 `retention.builds`)
+  int32 cache_unreferenced_days = 4; // paths not reachable from a release or a build younger than this, default 90 (= §05 `retention.cache`)
+  int32 staging_days = 5; // lifecycle rule, default 7
 }
 message SessionPolicy {
-  int32 cli_idle_days = 1;             // default 7
-  int32 cli_max_days = 2;              // default 30
-  int32 browser_idle_hours = 3;        // default 12
-  int32 browser_max_days = 4;          // default 7
-  int32 sa_token_max_days = 5;         // default 365
+  int32 cli_idle_days = 1; // default 7
+  int32 cli_max_days = 2; // default 30
+  int32 browser_idle_hours = 3; // default 12
+  int32 browser_max_days = 4; // default 7
+  int32 sa_token_max_days = 5; // default 365
 }
 message Settings {
-  string server_name = 1;              // default "bob"; Nix key name prefix
-  string base_url = 2;                 // https://bob.example (status links, OCI realm)
+  string server_name = 1; // default "bob"; Nix key name prefix
+  string base_url = 2; // https://bob.example (status links, OCI realm)
   Retention retention = 3;
   SessionPolicy sessions = 4;
-  bool live_log_enabled = 5;           // default true (D55 pull)
-  int32 max_parallel_downloads = 6;    // per orchestrator, default 256
+  bool live_log_enabled = 5; // default true (D55 pull)
+  int32 max_parallel_downloads = 6; // per orchestrator, default 256
   string etag = 7;
 }
 message GetSettingsRequest {}
-message GetSettingsResponse { Settings settings = 1; }
-message UpdateSettingsRequest { Settings settings = 1; google.protobuf.FieldMask update_mask = 2; }
-message UpdateSettingsResponse { Settings settings = 1; }
-enum KeyState { KEY_STATE_UNSPECIFIED = 0; KEY_STATE_ACTIVE = 1; KEY_STATE_VERIFY_ONLY = 2; KEY_STATE_RETIRING = 3; KEY_STATE_RETIRED = 4; }
+message GetSettingsResponse {
+  Settings settings = 1;
+}
+message UpdateSettingsRequest {
+  Settings settings = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+message UpdateSettingsResponse {
+  Settings settings = 1;
+}
+enum KeyState {
+  KEY_STATE_UNSPECIFIED = 0;
+  KEY_STATE_ACTIVE = 1;
+  KEY_STATE_VERIFY_ONLY = 2;
+  KEY_STATE_RETIRING = 3;
+  KEY_STATE_RETIRED = 4;
+}
 message SigningKey {
-  string name = 1;                     // <server_name>-<n>
-  string public_key = 2;               // "name:base64(32 bytes)"
+  string name = 1; // <server_name>-<n>
+  string public_key = 2; // "name:base64(32 bytes)"
   KeyState state = 3;
   google.protobuf.Timestamp created_at = 4;
 }
 message ListSigningKeysRequest {}
-message ListSigningKeysResponse { repeated SigningKey keys = 1; }
+message ListSigningKeysResponse {
+  repeated SigningKey keys = 1;
+}
 message CreateSigningKeyRequest {}
-message CreateSigningKeyResponse { SigningKey key = 1; }
-message RetireSigningKeyRequest { string name = 1; }
-message RetireSigningKeyResponse { SigningKey key = 1; }   // RETIRING until the re-sign sweep finishes
+message CreateSigningKeyResponse {
+  SigningKey key = 1;
+}
+message RetireSigningKeyRequest {
+  string name = 1;
+}
+message RetireSigningKeyResponse {
+  SigningKey key = 1;
+} // RETIRING until the re-sign sweep finishes

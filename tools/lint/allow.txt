@@ -1,0 +1,4 @@
+# Analyzer exceptions (HARNESS.md §1.5). Protected: changes are reported by CI.
+# Format: <analyzer> <pkgpath>.<Func> <reason>
+nopanic github.com/megakuul/bob/pkg/bob/diag.New panics on an unknown code by design; only constant codes reach it, which a test proves (R-NIX-028)
+nopanic github.com/megakuul/bob/pkg/bob/diag.build shared body of diag.New and its severity variants; same contract as diag.New

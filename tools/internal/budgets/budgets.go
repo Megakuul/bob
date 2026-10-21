@@ -121,7 +121,7 @@ func Parse(spec []byte) ([]Row, error) {
 		}
 		cells := splitCells(line)
 		if len(cells) != 5 {
-			return nil, fmt.Errorf("Appendix B row %d: %d cells, want 5: %q", len(rows)+1, len(cells), line)
+			return nil, fmt.Errorf("budgets: Appendix B row %d: %d cells, want 5: %q", len(rows)+1, len(cells), line)
 		}
 		r, err := parseRow(fmt.Sprintf("B-%03d", len(rows)+1), cells)
 		if err != nil {

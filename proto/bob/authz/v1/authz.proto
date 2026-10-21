@@ -1,32 +1,33 @@
 syntax = "proto3";
 package bob.authz.v1;
+
 import "google/protobuf/descriptor.proto";
 
 enum Kind {
   KIND_UNSPECIFIED = 0;
-  KIND_PROJECT = 1;        // permission on the request's project (see project_field, resolve)
-  KIND_GLOBAL = 2;         // permission with project "*"
-  KIND_LIST_FILTERED = 3;  // authenticated; results filtered to permitted projects
-  KIND_AUTHENTICATED = 4;  // any valid API principal
-  KIND_PUBLIC = 5;         // no credential; handler applies visibility, then PROJECT for private data
-  KIND_WORKER = 6;         // bwt1 worker token + Bob-PoP (bob.worker.v1 only)
-  reserved 7;              // was KIND_ORCHESTRATOR: workers serve no RPCs (outbound Attach, §05.9)
+  KIND_PROJECT = 1; // permission on the request's project (see project_field, resolve)
+  KIND_GLOBAL = 2; // permission with project "*"
+  KIND_LIST_FILTERED = 3; // authenticated; results filtered to permitted projects
+  KIND_AUTHENTICATED = 4; // any valid API principal
+  KIND_PUBLIC = 5; // no credential; handler applies visibility, then PROJECT for private data
+  KIND_WORKER = 6; // bwt1 worker token + Bob-PoP (bob.worker.v1 only)
+  reserved 7; // was KIND_ORCHESTRATOR: workers serve no RPCs (outbound Attach, §05.9)
   reserved "KIND_ORCHESTRATOR";
 }
 
 enum Resolve {
   RESOLVE_UNSPECIFIED = 0; // project_field holds a project id
-  RESOLVE_BUILD = 1;       // project_field holds a build id
-  RESOLVE_JOB = 2;         // job id
-  RESOLVE_RELEASE = 3;     // release id
-  RESOLVE_REPOSITORY = 4;  // OCI repository name "<project>/<image>"
+  RESOLVE_BUILD = 1; // project_field holds a build id
+  RESOLVE_JOB = 2; // job id
+  RESOLVE_RELEASE = 3; // release id
+  RESOLVE_REPOSITORY = 4; // OCI repository name "<project>/<image>"
 }
 
 message Rule {
   Kind kind = 1;
-  string project_field = 2;        // KIND_PROJECT only; top-level string field of the request
+  string project_field = 2; // KIND_PROJECT only; top-level string field of the request
   Resolve resolve = 3;
-  bool allow_download_scope = 4;   // KIND_AUTHENTICATED: also accept bob_dt_ tokens
+  bool allow_download_scope = 4; // KIND_AUTHENTICATED: also accept bob_dt_ tokens
 }
 
 extend google.protobuf.MethodOptions {
