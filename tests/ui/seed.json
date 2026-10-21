@@ -1,0 +1,31 @@
+{
+  "clock": "2026-03-02T10:00:00Z",
+  "rpc": {
+    "/bob.auth.v1.AuthService/GetServerInfo": {"name": "bob-test", "version": "0.1.0", "oidcProviders": [{"id": "corp", "displayName": "Corp SSO"}]},
+    "/bob.auth.v1.AuthService/WhoAmI": {"principal": {"user": {"id": "alice", "login": "alice"}}, "roles": [{"roleId": "admin", "project": "*"}]},
+    "/bob.analytics.v1.AnalyticsService/GetOverview": {"running": 4, "queued": 7, "workers": [{"platform": "linux/amd64", "active": 6, "total": 8}, {"platform": "linux/arm64", "active": 2, "total": 2}], "cacheHitRate": 0.91},
+    "/bob.analytics.v1.AnalyticsService/PackageDurations": {"packages": [{"project": "api", "label": "//svc/api:server", "p50Ms": 42000, "p90Ms": 61000}]},
+    "/bob.project.v1.ProjectService/ListProjects": {"projects": [{"name": "api", "repo": "acme/api", "forge": "forgejo"}, {"name": "web", "repo": "acme/web", "forge": "forgejo"}]},
+    "/bob.project.v1.ProjectService/GetProject": {"name": "api", "repo": "acme/api", "forge": "forgejo"},
+    "/bob.build.v1.BuildService/ListBuilds": {"builds": [
+      {"id": "01jbq7k2p4m8x0c3v5n7r9t1y6", "number": 412, "project": "api", "pipeline": "ci", "trigger": "push", "actor": "alice", "ref": "main", "sha": "3f2a91c", "state": "RUNNING", "done": 41, "total": 120, "createTime": "2026-03-02T09:58:00Z"},
+      {"id": "01jbq7aa0d2f4h6k8m0p2r4t6v", "number": 411, "project": "web", "pipeline": "ci", "trigger": "push", "actor": "alice", "ref": "pr/88", "sha": "77c0e1b", "state": "FAILED", "errorCode": "BOB-E-2005", "createTime": "2026-03-02T09:46:00Z"}]},
+    "/bob.build.v1.BuildService/GetBuild": {"id": "01jbq7k2p4m8x0c3v5n7r9t1y6", "number": 412, "project": "api", "pipeline": "ci", "ref": "main", "sha": "3f2a91c", "state": "RUNNING", "platforms": ["linux/amd64", "linux/arm64"], "variant": "release", "attempt": 1, "done": 41, "total": 120, "cached": 63},
+    "/bob.build.v1.JobService/ListJobs": {"jobs": [
+      {"id": "01jbq7k2p4j0b00000000000s1", "label": "//svc/api:server", "platform": "linux/amd64", "state": "BUILDING"},
+      {"id": "01jbq7k2p4j0b00000000000d1", "label": "//lib/db:db", "platform": "linux/amd64", "state": "CACHED"},
+      {"id": "01jbq7k2p4j0b00000000000a1", "label": "//lib/auth:test", "platform": "linux/amd64", "state": "FAILED", "errorCode": "BOB-E-2005"}]},
+    "/bob.fleet.v1.FleetService/ListWorkers": {"workers": [{"id": "w3kq8p0q", "platform": "linux/amd64", "state": "ACTIVE", "jobs": 1, "cpu": 8, "memoryBytes": "16106127360", "labels": ["ssd"]}]},
+    "/bob.fleet.v1.FleetService/GetWorker": {"id": "w3kq8p0q", "platform": "linux/amd64", "state": "ACTIVE", "jobs": 1, "cpu": 8, "memoryBytes": "16106127360", "labels": ["ssd"]},
+    "/bob.fleet.v1.FleetService/ListOrchestrators": {"orchestrators": [{"id": "o-1", "endpoint": "https://10.0.0.5:8443", "version": "0.1.0", "leaderOf": ["promotion", "gc"]}]},
+    "/bob.cache.v1.CacheService/GetCacheStats": {"sizeBytes": "53687091200", "paths": "120443", "hitRate24h": 0.91, "hitRate7d": 0.88, "retentionDays": 30},
+    "/bob.cache.v1.CacheService/ListTopPackages": {"packages": [{"project": "api", "label": "//svc/api:server", "hits7d": "812", "sizeBytes": "1258291"}]},
+    "/bob.release.v1.ReleaseService/ListReleases": {"releases": [{"project": "api", "name": "api", "version": "1.4.2", "visibility": "PUBLIC", "platforms": ["linux/amd64", "linux/arm64"]}]},
+    "/bob.release.v1.ReleaseService/GetRelease": {"project": "api", "name": "api", "version": "1.4.2", "visibility": "PUBLIC", "install": "bob install acme/api@1.4.2"},
+    "/bob.registry.v1.RegistryService/ListRepositories": {"repositories": [{"name": "api-server", "public": true}]},
+    "/bob.registry.v1.RegistryService/GetRepository": {"name": "api-server", "public": true},
+    "/bob.registry.v1.RegistryService/ListTags": {"tags": [{"name": "b-01jbq7k2p4m8x0c3v5n7r9t1y6"}]},
+    "/bob.access.v1.UserService/ListUsers": {"users": [{"id": "alice", "login": "alice", "source": "LOCAL"}]},
+    "/bob.settings.v1.SettingsService/GetSettings": {"serverName": "bob-test", "baseUrl": "https://bob.test"}
+  }
+}
