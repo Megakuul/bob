@@ -31,13 +31,15 @@ type FleetConfig struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *FleetConfig) Draft() *FleetConfig {
-	return &FleetConfig{Name: r.Name,
+	return &FleetConfig{
+		Name:    r.Name,
 		ETag:    r.ETag,
 		Gen:     Carry(r.Gen),
 		Members: Carry(r.Members),
 		Classes: Carry(r.Classes),
 		Keys:    Carry(r.Keys),
-		Params:  Carry(r.Params)}
+		Params:  Carry(r.Params),
+	}
 }
 
 // FleetMember is one orchestrator of FleetConfig.m.
@@ -95,13 +97,15 @@ type OrchRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OrchRecord) Draft() *OrchRecord {
-	return &OrchRecord{ID: r.ID,
+	return &OrchRecord{
+		ID:        r.ID,
 		ETag:      r.ETag,
 		Endpoint:  Carry(r.Endpoint),
 		SPKIPin:   Carry(r.SPKIPin),
 		Heartbeat: Carry(r.Heartbeat),
 		Started:   Carry(r.Started),
-		Version:   Carry(r.Version)}
+		Version:   Carry(r.Version),
+	}
 }
 
 // ControllerLease is `ctl/<controller>` as the controllers read it; Lease writes it.
@@ -116,12 +120,14 @@ type ControllerLease struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *ControllerLease) Draft() *ControllerLease {
-	return &ControllerLease{Name: r.Name,
+	return &ControllerLease{
+		Name:    r.Name,
 		ETag:    r.ETag,
 		Owner:   Carry(r.Owner),
 		Epoch:   Carry(r.Epoch),
 		Expires: Carry(r.Expires),
-		Cursor:  Carry(r.Cursor)}
+		Cursor:  Carry(r.Cursor),
+	}
 }
 
 // NewControllerLease is the leader lease `ctl/<name>` of a controller (§05.6.5).
@@ -144,10 +150,12 @@ type WorkerReg struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *WorkerReg) Draft() *WorkerReg {
-	return &WorkerReg{Wid: r.Wid,
+	return &WorkerReg{
+		Wid:  r.Wid,
 		ETag: r.ETag,
 		Body: Carry(r.Body),
-		Sig:  Carry(r.Sig)}
+		Sig:  Carry(r.Sig),
+	}
 }
 
 // RegSlot is a slot of the registration inbox `wrs/reg/s/<seq20>` (SeqLog).
@@ -161,11 +169,13 @@ type RegSlot struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *RegSlot) Draft() *RegSlot {
-	return &RegSlot{Log: r.Log,
+	return &RegSlot{
+		Log:  r.Log,
 		Seq:  r.Seq,
 		ETag: r.ETag,
 		Wid:  Carry(r.Wid),
-		At:   Carry(r.At)}
+		At:   Carry(r.At),
+	}
 }
 
 // RegLog is the registration inbox: slots wrs/reg/s/<seq20>, tail hint wrt/reg. It has no
@@ -210,7 +220,8 @@ type WorkerRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *WorkerRecord) Draft() *WorkerRecord {
-	return &WorkerRecord{Wid: r.Wid,
+	return &WorkerRecord{
+		Wid:       r.Wid,
 		ETag:      r.ETag,
 		State:     Carry(r.State),
 		Gen:       Carry(r.Gen),
@@ -224,7 +235,8 @@ func (r *WorkerRecord) Draft() *WorkerRecord {
 		Slots:     Carry(r.Slots),
 		TokenExp:  Carry(r.TokenExp),
 		Sealed:    Carry(r.Sealed),
-		RequestID: Carry(r.RequestID)}
+		RequestID: Carry(r.RequestID),
+	}
 }
 
 // Heartbeat is `whb/<wid>`: PutOwned by the worker every fleet.heartbeat.
@@ -239,12 +251,14 @@ type Heartbeat struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *Heartbeat) Draft() *Heartbeat {
-	return &Heartbeat{Wid: r.Wid,
+	return &Heartbeat{
+		Wid:  r.Wid,
 		ETag: r.ETag,
 		At:   Carry(r.At),
 		Free: Carry(r.Free),
 		Jobs: Carry(r.Jobs),
-		Sig:  Carry(r.Sig)}
+		Sig:  Carry(r.Sig),
+	}
 }
 
 // HeldJobEpoch is one held job of a heartbeat.
@@ -293,12 +307,14 @@ type QueueSlot struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *QueueSlot) Draft() *QueueSlot {
-	return &QueueSlot{Class: r.Class,
+	return &QueueSlot{
+		Class: r.Class,
 		Seq:   r.Seq,
 		ETag:  r.ETag,
 		Job:   Carry(r.Job),
 		At:    Carry(r.At),
-		Taken: Carry(r.Taken)}
+		Taken: Carry(r.Taken),
+	}
 }
 
 // Queue is the sequence log of one class.
@@ -397,7 +413,8 @@ type JobRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *JobRecord) Draft() *JobRecord {
-	return &JobRecord{ID: r.ID,
+	return &JobRecord{
+		ID:              r.ID,
 		ETag:            r.ETag,
 		Spec:            Carry(r.Spec),
 		SpecSig:         Carry(r.SpecSig),
@@ -413,7 +430,8 @@ func (r *JobRecord) Draft() *JobRecord {
 		Result:          Carry(r.Result),
 		ResultSig:       Carry(r.ResultSig),
 		Promotion:       Carry(r.Promotion),
-		NonReproducible: Carry(r.NonReproducible)}
+		NonReproducible: Carry(r.NonReproducible),
+	}
 }
 
 // MaxJobSpec bounds JobRecord.Spec.
@@ -498,7 +516,8 @@ type BuildRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *BuildRecord) Draft() *BuildRecord {
-	return &BuildRecord{ID: r.ID,
+	return &BuildRecord{
+		ID:              r.ID,
 		ETag:            r.ETag,
 		Project:         Carry(r.Project),
 		Number:          Carry(r.Number),
@@ -531,7 +550,8 @@ func (r *BuildRecord) Draft() *BuildRecord {
 		Evaluated:       Carry(r.Evaluated),
 		Counts:          Carry(r.Counts),
 		Errors:          Carry(r.Errors),
-		NonReproducible: Carry(r.NonReproducible)}
+		NonReproducible: Carry(r.NonReproducible),
+	}
 }
 
 // PackageCounts is BuildRecord.pc (§06 PackageCounts).
@@ -675,9 +695,11 @@ type BranchCounter struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *BranchCounter) Draft() *BranchCounter {
-	return &BranchCounter{Scope: r.Scope,
+	return &BranchCounter{
+		Scope: r.Scope,
 		ETag:  r.ETag,
-		Count: Carry(r.Count)}
+		Count: Carry(r.Count),
+	}
 }
 
 // BranchCounterKey is the key model of the branch counter.
@@ -699,10 +721,12 @@ type ProjectCounters struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *ProjectCounters) Draft() *ProjectCounters {
-	return &ProjectCounters{Project: r.Project,
+	return &ProjectCounters{
+		Project:  r.Project,
 		ETag:     r.ETag,
 		Builds:   Carry(r.Builds),
-		Releases: Carry(r.Releases)}
+		Releases: Carry(r.Releases),
+	}
 }
 
 // RunningBuild is one entry of `bidx/running`.
@@ -721,9 +745,11 @@ type RunningBuilds struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *RunningBuilds) Draft() *RunningBuilds {
-	return &RunningBuilds{Name: r.Name,
+	return &RunningBuilds{
+		Name:   r.Name,
 		ETag:   r.ETag,
-		Builds: Carry(r.Builds)}
+		Builds: Carry(r.Builds),
+	}
 }
 
 // FailedBuild is one entry of the `bidx/failed` ring.
@@ -743,9 +769,11 @@ type FailedBuilds struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *FailedBuilds) Draft() *FailedBuilds {
-	return &FailedBuilds{Name: r.Name,
+	return &FailedBuilds{
+		Name:   r.Name,
 		ETag:   r.ETag,
-		Builds: Carry(r.Builds)}
+		Builds: Carry(r.Builds),
+	}
 }
 
 // PromoEntry is a slot of the promotion log promo/<yyyymmdd>/s/<seq20> (tail promot/<yyyymmdd>).
@@ -761,8 +789,10 @@ type PromoEntry struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *PromoEntry) Draft() *PromoEntry {
-	return &PromoEntry{Day: r.Day, Seq: r.Seq, ETag: r.ETag, StoreHash: Carry(r.StoreHash),
-		Project: Carry(r.Project), Build: Carry(r.Build), At: Carry(r.At)}
+	return &PromoEntry{
+		Day: r.Day, Seq: r.Seq, ETag: r.ETag, StoreHash: Carry(r.StoreHash),
+		Project: Carry(r.Project), Build: Carry(r.Build), At: Carry(r.At),
+	}
 }
 
 // PromoTail is the tail hint `promot/<yyyymmdd>` of a day's promotion log.

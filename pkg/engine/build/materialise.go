@@ -10,6 +10,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/materialise"
 	"github.com/megakuul/bob/pkg/engine/store"
+	"github.com/megakuul/bob/pkg/engine/translate"
 )
 
 // Working-tree outputs (SPEC §03.6.6, R-FW-007; npm node_modules §03.4.3). A local bob build,
@@ -99,6 +100,24 @@ func (r *runner) genSet(g *ir.Graph, p *planner) []engine.Materialisation {
 		}
 	}
 	return out
+}
+
+// genContext makes bob gen's translator judge each package by its working-tree output: the
+// materialisation's derivation stands for the package, whose own derivation is not built.
+func (r *runner) genContext(c *translate.Context, g *ir.Graph, p *planner) {
+	for _, m := range r.genSet(g, p) {
+		var pk translate.Pkg
+		for d, x := range c.Packages {
+			if x.Label == m.Label && x.Role == "" {
+				pk = x
+				delete(c.Packages, d)
+			}
+		}
+		if pk.Label == "" {
+			pk = translate.Pkg{Label: m.Label}
+		}
+		c.Packages[m.Drv] = pk
+	}
 }
 
 // uniqueMaterialisations drops repeated entries (ecosystems plan in waves) and sorts by Dir.

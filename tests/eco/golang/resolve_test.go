@@ -58,7 +58,7 @@ func bobRequirements(t *testing.T) []corpusModule {
 // requiring reqs, and returns its directory.
 func corpusRepo(t *testing.T, reqs []corpusModule) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "corproot") // R2: root package = directory name
+	dir := t.TempDir()
 	var requires, imports strings.Builder
 	for _, r := range reqs {
 		fmt.Fprintf(&requires, "\t\t\tgolang.Require(%q, %q),\n", r.path, r.version)

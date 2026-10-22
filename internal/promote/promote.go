@@ -299,8 +299,10 @@ type promoLock struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *promoLock) Draft() *promoLock {
-	return &promoLock{Job: r.Job, ETag: r.ETag, Owner: store.Carry(r.Owner), Epoch: store.Carry(r.Epoch),
-		Expires: store.Carry(r.Expires), Cursor: store.Carry(r.Cursor)}
+	return &promoLock{
+		Job: r.Job, ETag: r.ETag, Owner: store.Carry(r.Owner), Epoch: store.Carry(r.Epoch),
+		Expires: store.Carry(r.Expires), Cursor: store.Carry(r.Cursor),
+	}
 }
 
 // acquire waits until this orchestrator holds the job lock, renewing it in the background

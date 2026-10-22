@@ -215,6 +215,9 @@ func contains(list []string, s string) bool {
 func (r *runner) realise(ctx context.Context, st *store.Store, g *ir.Graph, p *planner, srcPaths map[string]string,
 	requested []string, units []testrun.Unit, cached map[string]bool) (*translate.Report, error) {
 	tctx := r.translatorContext(g, p, srcPaths, requested)
+	if r.o.Command == CmdGen {
+		r.genContext(tctx, g, p)
+	}
 	for _, u := range units { // a --rerun unit is a new drv of the same package, replacing it
 		if _, ok := tctx.Packages[u.DrvPath]; !ok {
 			orig := testDrvOf(p, u.Label)

@@ -593,6 +593,9 @@ bob: 2 problems (exit 3)
     (`<state>/nix/store/…`, §02.7.5). They can be read outside the namespace; binaries there run
     only through `bob run`/`bob exec`.
   - No `result` symlinks are created.
+  - `--dry-run` (ruling G24, R-RS-005): evaluates and plans only; nothing is fetched, imported
+    or built. Prints the planned derivations' store paths, one per line, sorted (human output;
+    `--json` prints only run.start/run.finish). The plan needs no network and no crate sources.
 - `bob test`: builds the test derivations; cached test results count as passed (`cached`).
   `--rerun` re-runs the selected tests even when cached (Nix `--rebuild` on the test
   derivations) **[proposal]**. Test args after `--` become part of the test derivation (they

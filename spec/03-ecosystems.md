@@ -680,7 +680,7 @@ the zip is never the imported path (S2 §3.6).
    this repository whose packages the module imports (directly or through that module's
    packages) is required at `v0.0.0` in the direct block and replaced by its relative
    directory (`replace example.com/lib => ../lib`, one line each, after the blocks): the only
-   `replace` bob writes, so the go command finds it [A-I-M5c]. No `toolchain`, other
+   `replace` bob writes, so the go command finds it [A133]. No `toolchain`, other
    `replace`, `exclude`, `retract`.
 2. go.sum: `<path> <version> <h1>` for each `packages:true` module and `<path> <version>/go.mod <modH1>`
    for every module of the pruned graph, sorted bytewise by line, `\n` endings.
@@ -973,8 +973,13 @@ an input of every Rust derivation; changing it rebuilds all).
 - **Acceptance:** A crate with `Toolchain: nixpkgs.Tool(p, "<other rustc attr>")` compiles with
   it (job golden); mixing toolchains along one dependency edge fails at evaluation with
   `✗ //a:a (rustc 1.95.0) depends on //b:b built with rustc 1.94.1; Rust crates linked together need the same toolchain`.
-  **[open]** The pin has one `rustc`; other versions need a second nixpkgs pin (§01) —
-  recommendation: allow `Toolchain` only from the project's pins in v1.
+  *Decided (2026-10-22, M8b-3):* in v1 `Toolchain` takes rustc attributes of the project's one
+  nixpkgs pin: the default `rustc` (1.95.0 at nixos-26.05) or the compiler of a versioned set
+  of the pin, `rust_<major>_<minor>.packages.stable.rustc`. The pin has `rust_1_95`, `rust_1_97`
+  and `rust_1_98` (no `rust_1_94`); the acceptance's other attribute is
+  `rust_1_97.packages.stable.rustc` (rustc 1.97.1, on cache.nixos.org). Cross-compiling
+  (R-FW-034) needs the default `rustc`, whose target standard library the target system's set
+  provides. A second nixpkgs pin stays out of v1.
 - **Source:** R-RS-004.
 
 ### §03.3.5 Errors (examples, §02 templates)

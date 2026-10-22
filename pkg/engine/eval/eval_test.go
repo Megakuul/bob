@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -136,7 +137,7 @@ func TestEvaluateCoreRepo(t *testing.T) {
 	// Another checkout path, a broken Go file next to a bob.go: same IR (R-FW-043 a, b).
 	files := coreRepo()
 	files["lib/broken.go"] = "package lib\n\nvar X = generatedByBob\n"
-	b := writeRepo(t, "elsewhere/core", files) // R2: the root's package is the directory name
+	b := writeRepo(t, "elsewhere", files)
 	other, err := evaluate(t, b)
 	if err != nil {
 		t.Fatal(err)
@@ -245,22 +246,37 @@ func TestRules(t *testing.T) {
 	}
 }
 
-// TestRuleR2RootDirName: a root bob.go without Go code next to it uses the repository
-// directory's name, sanitised (SPEC R-FW-002 R2), not the module path.
-func TestRuleR2RootDirName(t *testing.T) {
+// TestRuleR2Root (A131): a root bob.go without non-test Go code next to it may use any package
+// name (the checkout directory's name differs between machines); a root with Go code and a
+// non-root directory without Go code still follow R2.
+func TestRuleR2Root(t *testing.T) {
 	cases := []struct{ dir, want string }{
 		{"npm", "npm"}, {"cpp-lib", "cpplib"}, {"My.Repo", "myrepo"}, {"9lives", "x9lives"}, {"---", "x"},
 	}
 	for _, c := range cases {
-		if got := expectedPkg(filepath.Join("/x", c.dir), "."); got != c.want {
+		if got := expectedPkg(path.Join("a", c.dir)); got != c.want {
 			t.Errorf("expectedPkg(%q) = %q, want %q", c.dir, got, c.want)
 		}
 	}
-	files := coreRepo() // module example.com/core, package core
-	_, err := evaluate(t, writeRepo(t, "checkout", files))
-	want := `bob.go: package core, but the Go code in this directory is package checkout; bob.go must use package checkout`
+	// Any name at the root (coreRepo's root is package core in a directory named src).
+	if _, err := evaluate(t, writeRepo(t, "src", coreRepo())); err != nil {
+		t.Errorf("root package core in directory src: %v", err)
+	}
+	// A root with Go code must use its package.
+	files := coreRepo()
+	files["root.go"] = "package other\n"
+	_, err := evaluate(t, writeRepo(t, "core", files))
+	want := `bob.go: package core, but the Go code in this directory is package other; bob.go must use package other`
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err = %v, want %q", err, want)
+		t.Errorf("root with Go code: err = %v, want %q", err, want)
+	}
+	// A non-root directory without Go code uses its name.
+	files = coreRepo()
+	files["tools/bob.go"] = "//go:build bob\n\npackage wrong\n"
+	_, err = evaluate(t, writeRepo(t, "core", files))
+	want = `tools/bob.go: package wrong, but the Go code in this directory is package tools; bob.go must use package tools`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("non-root dir: err = %v, want %q", err, want)
 	}
 }
 

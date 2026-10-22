@@ -48,8 +48,10 @@ type releaseHead struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *releaseHead) Draft() *releaseHead {
-	return &releaseHead{Project: r.Project,
-		N: r.N}
+	return &releaseHead{
+		Project: r.Project,
+		N:       r.N,
+	}
 }
 
 func (r *Resolver) project(ctx context.Context, kind, id string) (string, error) {

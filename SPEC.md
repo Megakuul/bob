@@ -449,7 +449,7 @@ Expected from other sections:
 | Rule | Check | Error text (first line) |
 |---|---|---|
 | R1 | line 1 is exactly `//go:build bob` | `<dir>/bob.go: the first line must be "//go:build bob" so that go build, go vet and go test ignore it` |
-| R2 | package clause = package of the directory's non-test `.go` files; without Go files: dir name lowercased, chars outside `[a-z0-9_]` removed, prefixed `x` if empty or starting with a digit | `<dir>/bob.go: package <x>, but the Go code in this directory is package <y>; bob.go must use package <y>` |
+| R2 | package clause = package of the directory's non-test `.go` files; without Go files: dir name lowercased, chars outside `[a-z0-9_]` removed, prefixed `x` if empty or starting with a digit; the repository root without non-test `.go` files accepts any package name (it is never imported by name; checkout directory names differ, e.g. a worker's `work/src`) [A131] | `<dir>/bob.go: package <x>, but the Go code in this directory is package <y>; bob.go must use package <y>` |
 | R3 | no `bob.go` imports a `bob.go` package whose directory is `package main` | `<dir>/bob.go: imports the build definitions of <maindir>/, which is a main package and cannot be imported; define the shared package in a bob.go of a non-main directory` |
 | R4 | no top-level identifier of `bob.go` is declared in another file of the package | `<dir>/bob.go:<line>: <Name> is also declared at <file>:<line>; bob.go shares its package with that code, rename one of them` |
 | R5 | dir has `.c .cc .cpp .cxx .m .f .F .f90 .swig .swigcxx` files next to `bob.go` | not an error: bob materialises `<dir>/zz_bob_cgo.go` (gitignored): `//go:build bob && cgo` / `package <x>` / `import "C"` |
@@ -2341,6 +2341,9 @@ bob: 2 problems (exit 3)
     (`<state>/nix/store/…`, §02.7.5). They can be read outside the namespace; binaries there run
     only through `bob run`/`bob exec`.
   - No `result` symlinks are created.
+  - `--dry-run` (ruling G24, R-RS-005): evaluates and plans only; nothing is fetched, imported
+    or built. Prints the planned derivations' store paths, one per line, sorted (human output;
+    `--json` prints only run.start/run.finish). The plan needs no network and no crate sources.
 - `bob test`: builds the test derivations; cached test results count as passed (`cached`).
   `--rerun` re-runs the selected tests even when cached (Nix `--rebuild` on the test
   derivations) **[proposal]**. Test args after `--` become part of the test derivation (they
@@ -3801,7 +3804,7 @@ the zip is never the imported path (S2 §3.6).
    this repository whose packages the module imports (directly or through that module's
    packages) is required at `v0.0.0` in the direct block and replaced by its relative
    directory (`replace example.com/lib => ../lib`, one line each, after the blocks): the only
-   `replace` bob writes, so the go command finds it [A-I-M5c]. No `toolchain`, other
+   `replace` bob writes, so the go command finds it [A133]. No `toolchain`, other
    `replace`, `exclude`, `retract`.
 2. go.sum: `<path> <version> <h1>` for each `packages:true` module and `<path> <version>/go.mod <modH1>`
    for every module of the pruned graph, sorted bytewise by line, `\n` endings.
@@ -4094,8 +4097,13 @@ an input of every Rust derivation; changing it rebuilds all).
 - **Acceptance:** A crate with `Toolchain: nixpkgs.Tool(p, "<other rustc attr>")` compiles with
   it (job golden); mixing toolchains along one dependency edge fails at evaluation with
   `✗ //a:a (rustc 1.95.0) depends on //b:b built with rustc 1.94.1; Rust crates linked together need the same toolchain`.
-  **[open]** The pin has one `rustc`; other versions need a second nixpkgs pin (§01) —
-  recommendation: allow `Toolchain` only from the project's pins in v1.
+  *Decided (2026-10-22, M8b-3):* in v1 `Toolchain` takes rustc attributes of the project's one
+  nixpkgs pin: the default `rustc` (1.95.0 at nixos-26.05) or the compiler of a versioned set
+  of the pin, `rust_<major>_<minor>.packages.stable.rustc`. The pin has `rust_1_95`, `rust_1_97`
+  and `rust_1_98` (no `rust_1_94`); the acceptance's other attribute is
+  `rust_1_97.packages.stable.rustc` (rustc 1.97.1, on cache.nixos.org). Cross-compiling
+  (R-FW-034) needs the default `rustc`, whose target standard library the target system's set
+  provides. A second nixpkgs pin stays out of v1.
 - **Source:** R-RS-004.
 
 ### §03.3.5 Errors (examples, §02 templates)

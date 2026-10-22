@@ -365,7 +365,7 @@ type Pkg struct{ Name, Cmd string }
 // Repo writes a git repository with the given packages and returns its directory.
 func Repo(t testing.TB, pkgs []Pkg) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "srv") // R2: root package = directory name
+	dir := filepath.Join(t.TempDir(), "repo")
 	write := func(rel, body string) {
 		p := filepath.Join(dir, rel)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {

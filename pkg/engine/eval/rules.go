@@ -64,6 +64,7 @@ func parseBob(dir, shown string, src []byte) *bobFile {
 // goPkg is the real (untagged) Go code of a directory.
 type goPkg struct {
 	name    string
+	nonTest bool // the directory has non-test Go files (not only _test.go files)
 	imports []string
 	files   []string // non-test and in-package test files, for R4
 }
@@ -78,11 +79,11 @@ func realGo(root, dir string) *goPkg {
 	var mp *build.MultiplePackageError
 	switch {
 	case errors.As(err, &mp):
-		return &goPkg{name: mp.Packages[0]}
+		return &goPkg{name: mp.Packages[0], nonTest: true}
 	case err != nil:
 		return nil
 	}
-	g := &goPkg{name: bp.Name, imports: bp.Imports}
+	g := &goPkg{name: bp.Name, imports: bp.Imports, nonTest: len(bp.GoFiles)+len(bp.CgoFiles) > 0}
 	for _, list := range [][]string{bp.GoFiles, bp.CgoFiles, bp.TestGoFiles} {
 		for _, f := range list {
 			if f != "bob.go" {
@@ -98,14 +99,10 @@ func realGo(root, dir string) *goPkg {
 var cgoExts = map[string]bool{".c": true, ".cc": true, ".cpp": true, ".cxx": true, ".m": true, ".f": true,
 	".F": true, ".f90": true, ".swig": true, ".swigcxx": true}
 
-// expectedPkg is R2's package for the directory dir (relative to the repository root) without
-// Go code: the directory's name, sanitised. For the root that is the name of the repository
-// directory itself (SPEC R-FW-002 R2).
-func expectedPkg(root, dir string) string {
+// expectedPkg is R2's package for a non-root directory dir without Go code: the directory's
+// name, sanitised (SPEC R-FW-002 R2). The root has no expected name (rootPkgOK).
+func expectedPkg(dir string) string {
 	base := path.Base(dir)
-	if dir == "." {
-		base = filepath.Base(root)
-	}
 	var b strings.Builder
 	for _, r := range strings.ToLower(base) {
 		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' {
@@ -163,12 +160,15 @@ func (c *ruleCheck) check() (ir.Errors, []string) {
 			continue
 		}
 		g := realOf(dir)
-		// R2
-		want := expectedPkg(c.root, dir)
+		// R2. The root without non-test Go code accepts any package name (A131): it is never
+		// imported by name, and the checkout directory's name differs between machines (a
+		// worker unpacks sources into work/src).
+		want := expectedPkg(dir)
 		if g != nil {
 			want = g.name
 		}
-		if f.pkg != want {
+		anyName := dir == "." && (g == nil || !g.nonTest)
+		if f.pkg != want && !anyName {
 			add(f.shown, 0, ir.Errors{ir.RuleError("R2", "dir", dir, "have", f.pkg, "want", want)})
 		}
 		// R4

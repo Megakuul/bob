@@ -128,7 +128,7 @@ Expected from other sections:
 | Rule | Check | Error text (first line) |
 |---|---|---|
 | R1 | line 1 is exactly `//go:build bob` | `<dir>/bob.go: the first line must be "//go:build bob" so that go build, go vet and go test ignore it` |
-| R2 | package clause = package of the directory's non-test `.go` files; without Go files: dir name lowercased, chars outside `[a-z0-9_]` removed, prefixed `x` if empty or starting with a digit | `<dir>/bob.go: package <x>, but the Go code in this directory is package <y>; bob.go must use package <y>` |
+| R2 | package clause = package of the directory's non-test `.go` files; without Go files: dir name lowercased, chars outside `[a-z0-9_]` removed, prefixed `x` if empty or starting with a digit; the repository root without non-test `.go` files accepts any package name (it is never imported by name; checkout directory names differ, e.g. a worker's `work/src`) [A131] | `<dir>/bob.go: package <x>, but the Go code in this directory is package <y>; bob.go must use package <y>` |
 | R3 | no `bob.go` imports a `bob.go` package whose directory is `package main` | `<dir>/bob.go: imports the build definitions of <maindir>/, which is a main package and cannot be imported; define the shared package in a bob.go of a non-main directory` |
 | R4 | no top-level identifier of `bob.go` is declared in another file of the package | `<dir>/bob.go:<line>: <Name> is also declared at <file>:<line>; bob.go shares its package with that code, rename one of them` |
 | R5 | dir has `.c .cc .cpp .cxx .m .f .F .f90 .swig .swigcxx` files next to `bob.go` | not an error: bob materialises `<dir>/zz_bob_cgo.go` (gitignored): `//go:build bob && cgo` / `package <x>` / `import "C"` |

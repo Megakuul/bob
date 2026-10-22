@@ -49,7 +49,8 @@ type UserRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *UserRecord) Draft() *UserRecord {
-	return &UserRecord{ID: r.ID,
+	return &UserRecord{
+		ID:           r.ID,
 		ETag:         r.ETag,
 		Login:        Carry(r.Login),
 		DisplayName:  Carry(r.DisplayName),
@@ -65,7 +66,8 @@ func (r *UserRecord) Draft() *UserRecord {
 		MustChange:   Carry(r.MustChange),
 		Index:        Carry(r.Index),
 		Created:      Carry(r.Created),
-		LastLogin:    Carry(r.LastLogin)}
+		LastLogin:    Carry(r.LastLogin),
+	}
 }
 
 // UserKey is the key model of user/<id>.
@@ -81,9 +83,11 @@ type NameRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *NameRecord) Draft() *NameRecord {
-	return &NameRecord{Key: r.Key,
+	return &NameRecord{
+		Key:  r.Key,
 		ETag: r.ETag,
-		ID:   Carry(r.ID)}
+		ID:   Carry(r.ID),
+	}
 }
 
 // OidcSubRecord is `oidcsub/<hash64(iss‖0‖sub)>` → userID.
@@ -95,9 +99,11 @@ type OidcSubRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OidcSubRecord) Draft() *OidcSubRecord {
-	return &OidcSubRecord{Key: r.Key,
+	return &OidcSubRecord{
+		Key:  r.Key,
 		ETag: r.ETag,
-		ID:   Carry(r.ID)}
+		ID:   Carry(r.ID),
+	}
 }
 
 // UserNameKey is the key model of uname/<enc(login)>.
@@ -121,9 +127,11 @@ type UserIndexMeta struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *UserIndexMeta) Draft() *UserIndexMeta {
-	return &UserIndexMeta{Name: r.Name,
+	return &UserIndexMeta{
+		Name:  r.Name,
 		ETag:  r.ETag,
-		Count: Carry(r.Count)}
+		Count: Carry(r.Count),
+	}
 }
 
 // UserIndexMetaKey is the key model of uidxm/all.
@@ -179,11 +187,13 @@ type RoleRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *RoleRecord) Draft() *RoleRecord {
-	return &RoleRecord{ID: r.ID,
+	return &RoleRecord{
+		ID:          r.ID,
 		ETag:        r.ETag,
 		Description: Carry(r.Description),
 		Permissions: Carry(r.Permissions),
-		Created:     Carry(r.Created)}
+		Created:     Carry(r.Created),
+	}
 }
 
 // RoleKey is the key model of role/<id>.
@@ -198,9 +208,11 @@ type IDList struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *IDList) Draft() *IDList {
-	return &IDList{Name: r.Name,
+	return &IDList{
+		Name: r.Name,
 		ETag: r.ETag,
-		IDs:  Carry(r.IDs)}
+		IDs:  Carry(r.IDs),
+	}
 }
 
 // SAIndex is `saidx/all` (≤ 1,000 ids).
@@ -212,9 +224,11 @@ type SAIndex struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *SAIndex) Draft() *SAIndex {
-	return &SAIndex{Name: r.Name,
+	return &SAIndex{
+		Name: r.Name,
 		ETag: r.ETag,
-		IDs:  Carry(r.IDs)}
+		IDs:  Carry(r.IDs),
+	}
 }
 
 // OidcProviderIndex is `oidcps/all` (≤ 50 ids).
@@ -226,9 +240,11 @@ type OidcProviderIndex struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OidcProviderIndex) Draft() *OidcProviderIndex {
-	return &OidcProviderIndex{Name: r.Name,
+	return &OidcProviderIndex{
+		Name: r.Name,
 		ETag: r.ETag,
-		IDs:  Carry(r.IDs)}
+		IDs:  Carry(r.IDs),
+	}
 }
 
 // RolesIndexKey, SAIndexKey and OidcProviderIndexKey are the key models of the index documents.
@@ -247,9 +263,11 @@ type RoleMembers struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *RoleMembers) Draft() *RoleMembers {
-	return &RoleMembers{Role: r.Role,
+	return &RoleMembers{
+		Role:       r.Role,
 		ETag:       r.ETag,
-		Principals: Carry(r.Principals)}
+		Principals: Carry(r.Principals),
+	}
 }
 
 // RoleMembersKey is the key model of rmem/<role>.
@@ -265,9 +283,11 @@ type AdminIndex struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *AdminIndex) Draft() *AdminIndex {
-	return &AdminIndex{Name: r.Name,
+	return &AdminIndex{
+		Name:       r.Name,
 		ETag:       r.ETag,
-		Principals: Carry(r.Principals)}
+		Principals: Carry(r.Principals),
+	}
 }
 
 // AdminIndexKey is the key model of adminidx/all.
@@ -297,13 +317,15 @@ type ServiceAccountRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *ServiceAccountRecord) Draft() *ServiceAccountRecord {
-	return &ServiceAccountRecord{ID: r.ID,
+	return &ServiceAccountRecord{
+		ID:          r.ID,
 		ETag:        r.ETag,
 		Description: Carry(r.Description),
 		Disabled:    Carry(r.Disabled),
 		Bindings:    Carry(r.Bindings),
 		Tokens:      Carry(r.Tokens),
-		Created:     Carry(r.Created)}
+		Created:     Carry(r.Created),
+	}
 }
 
 // ServiceAccountKey is the key model of sa/<id>.
@@ -326,7 +348,8 @@ type TokenRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *TokenRecord) Draft() *TokenRecord {
-	return &TokenRecord{Hash: r.Hash,
+	return &TokenRecord{
+		Hash:    r.Hash,
 		ETag:    r.ETag,
 		Owner:   Carry(r.Owner),
 		Kind:    Carry(r.Kind),
@@ -334,7 +357,8 @@ func (r *TokenRecord) Draft() *TokenRecord {
 		Session: Carry(r.Session),
 		TokenID: Carry(r.TokenID),
 		Expires: Carry(r.Expires),
-		Created: Carry(r.Created)}
+		Created: Carry(r.Created),
+	}
 }
 
 // TokenKey is the key model of tok/<hash64(token)>.
@@ -369,7 +393,8 @@ type SessionRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *SessionRecord) Draft() *SessionRecord {
-	return &SessionRecord{Hash: r.Hash,
+	return &SessionRecord{
+		Hash:      r.Hash,
 		ETag:      r.ETag,
 		ID:        Carry(r.ID),
 		User:      Carry(r.User),
@@ -380,7 +405,8 @@ func (r *SessionRecord) Draft() *SessionRecord {
 		IdleUntil: Carry(r.IdleUntil),
 		MaxUntil:  Carry(r.MaxUntil),
 		Download:  Carry(r.Download),
-		Access:    Carry(r.Access)}
+		Access:    Carry(r.Access),
+	}
 }
 
 // SessionKey is the key model of sess/<hash64(token)>.
@@ -403,14 +429,16 @@ type OAuthCodeRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OAuthCodeRecord) Draft() *OAuthCodeRecord {
-	return &OAuthCodeRecord{Hash: r.Hash,
+	return &OAuthCodeRecord{
+		Hash:      r.Hash,
 		ETag:      r.ETag,
 		User:      Carry(r.User),
 		Client:    Carry(r.Client),
 		Redirect:  Carry(r.Redirect),
 		Challenge: Carry(r.Challenge),
 		UserAgent: Carry(r.UserAgent),
-		Expires:   Carry(r.Expires)}
+		Expires:   Carry(r.Expires),
+	}
 }
 
 // OAuthCodeKey is the key model of oac/<hash64(code)>.
@@ -435,7 +463,8 @@ type DeviceCodeRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *DeviceCodeRecord) Draft() *DeviceCodeRecord {
-	return &DeviceCodeRecord{Hash: r.Hash,
+	return &DeviceCodeRecord{
+		Hash:      r.Hash,
 		ETag:      r.ETag,
 		UserCode:  Carry(r.UserCode),
 		State:     Carry(r.State),
@@ -444,7 +473,8 @@ func (r *DeviceCodeRecord) Draft() *DeviceCodeRecord {
 		UserAgent: Carry(r.UserAgent),
 		Expires:   Carry(r.Expires),
 		LastPoll:  Carry(r.LastPoll),
-		Interval:  Carry(r.Interval)}
+		Interval:  Carry(r.Interval),
+	}
 }
 
 // DeviceCodeKey is the key model of devc/<hash64(device_code)>.
@@ -463,10 +493,12 @@ type DeviceUserRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *DeviceUserRecord) Draft() *DeviceUserRecord {
-	return &DeviceUserRecord{Code: r.Code,
+	return &DeviceUserRecord{
+		Code:    r.Code,
 		ETag:    r.ETag,
 		Hash:    Carry(r.Hash),
-		Expires: Carry(r.Expires)}
+		Expires: Carry(r.Expires),
+	}
 }
 
 // DeviceUserKey is the key model of devu/<user_code>.
@@ -488,14 +520,16 @@ type OidcStateRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OidcStateRecord) Draft() *OidcStateRecord {
-	return &OidcStateRecord{Hash: r.Hash,
+	return &OidcStateRecord{
+		Hash:     r.Hash,
 		ETag:     r.ETag,
 		Provider: Carry(r.Provider),
 		Nonce:    Carry(r.Nonce),
 		Verifier: Carry(r.Verifier),
 		Next:     Carry(r.Next),
 		Redirect: Carry(r.Redirect),
-		Expires:  Carry(r.Expires)}
+		Expires:  Carry(r.Expires),
+	}
 }
 
 // OidcStateKey is the key model of oidcst/<hash64(state)>.
@@ -520,7 +554,8 @@ type OidcProviderRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OidcProviderRecord) Draft() *OidcProviderRecord {
-	return &OidcProviderRecord{ID: r.ID,
+	return &OidcProviderRecord{
+		ID:             r.ID,
 		ETag:           r.ETag,
 		DisplayName:    Carry(r.DisplayName),
 		Issuer:         Carry(r.Issuer),
@@ -529,7 +564,8 @@ func (r *OidcProviderRecord) Draft() *OidcProviderRecord {
 		Scopes:         Carry(r.Scopes),
 		UsernameClaim:  Carry(r.UsernameClaim),
 		RequireMapping: Carry(r.RequireMapping),
-		Created:        Carry(r.Created)}
+		Created:        Carry(r.Created),
+	}
 }
 
 // OidcProviderKey is the key model of oidcp/<id>.
@@ -556,9 +592,11 @@ type OidcMappings struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OidcMappings) Draft() *OidcMappings {
-	return &OidcMappings{Name: r.Name,
+	return &OidcMappings{
+		Name:     r.Name,
 		ETag:     r.ETag,
-		Mappings: Carry(r.Mappings)}
+		Mappings: Carry(r.Mappings),
+	}
 }
 
 // OidcMappingsKey is the key model of oidcmap/all.

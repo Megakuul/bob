@@ -22,7 +22,7 @@ func (Ecosystem) Name() string { return lock.SectionRust }
 
 // Plan turns the Rust nodes into per-crate derivations: registry sources (fetched by bob),
 // build-script compile and run, rustc per crate unit, roots and test units.
-func (Ecosystem) Plan(_ context.Context, req engine.PlanRequest) (res engine.PlanResult, err error) {
+func (Ecosystem) Plan(ctx context.Context, req engine.PlanRequest) (res engine.PlanResult, err error) {
 	defer func() { // a planner bug must not crash bob
 		if v := recover(); v != nil {
 			err = fmt.Errorf("rust planner: internal error: %v", v)
@@ -31,7 +31,7 @@ func (Ecosystem) Plan(_ context.Context, req engine.PlanRequest) (res engine.Pla
 	if req.Graph == nil {
 		return engine.PlanResult{}, fmt.Errorf("rust planner: no graph")
 	}
-	pl, err := newPlanner(req)
+	pl, err := newPlanner(ctx, req)
 	if err != nil {
 		return engine.PlanResult{}, err
 	}

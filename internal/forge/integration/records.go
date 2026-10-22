@@ -51,7 +51,8 @@ type ForgeRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *ForgeRecord) Draft() *ForgeRecord {
-	return &ForgeRecord{ID: r.ID,
+	return &ForgeRecord{
+		ID:             r.ID,
 		ETag:           r.ETag,
 		Kind:           store.Carry(r.Kind),
 		DisplayName:    store.Carry(r.DisplayName),
@@ -69,7 +70,8 @@ func (r *ForgeRecord) Draft() *ForgeRecord {
 		PrevUntil:      store.Carry(r.PrevUntil),
 		Health:         store.Carry(r.Health),
 		HealthMsg:      store.Carry(r.HealthMsg),
-		Repos:          store.Carry(r.Repos)}
+		Repos:          store.Carry(r.Repos),
+	}
 }
 
 // ForgeKey is the key model of forge/<id>.
@@ -84,9 +86,11 @@ type ForgeIndex struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *ForgeIndex) Draft() *ForgeIndex {
-	return &ForgeIndex{Name: r.Name,
+	return &ForgeIndex{
+		Name: r.Name,
 		ETag: r.ETag,
-		IDs:  store.Carry(r.IDs)}
+		IDs:  store.Carry(r.IDs),
+	}
 }
 
 // ForgeIndexKey is the key model of forges/all.
@@ -114,12 +118,14 @@ type RepoLinkRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *RepoLinkRecord) Draft() *RepoLinkRecord {
-	return &RepoLinkRecord{Key: r.Key,
+	return &RepoLinkRecord{
+		Key:      r.Key,
 		ETag:     r.ETag,
 		Project:  store.Carry(r.Project),
 		FullName: store.Carry(r.FullName),
 		CloneURL: store.Carry(r.CloneURL),
-		Created:  store.Carry(r.Created)}
+		Created:  store.Carry(r.Created),
+	}
 }
 
 // RepoLinkKey is the key model of the link of repository repoID of integration forgeID.
@@ -143,12 +149,14 @@ type DeliveryRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *DeliveryRecord) Draft() *DeliveryRecord {
-	return &DeliveryRecord{Key: r.Key,
+	return &DeliveryRecord{
+		Key:      r.Key,
 		ETag:     r.ETag,
 		Received: store.Carry(r.Received),
 		Event:    store.Carry(r.Event),
 		Result:   store.Carry(r.Result),
-		Build:    store.Carry(r.Build)}
+		Build:    store.Carry(r.Build),
+	}
 }
 
 // DeliveryKey is the key model of a delivery's record.
@@ -179,9 +187,11 @@ type DeliveryRing struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *DeliveryRing) Draft() *DeliveryRing {
-	return &DeliveryRing{Forge: r.Forge,
+	return &DeliveryRing{
+		Forge:   r.Forge,
 		ETag:    r.ETag,
-		Entries: store.Carry(r.Entries)}
+		Entries: store.Carry(r.Entries),
+	}
 }
 
 // RingSize is the length of the delivery ring (§05.4.5).

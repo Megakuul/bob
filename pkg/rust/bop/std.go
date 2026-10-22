@@ -41,18 +41,23 @@ func rustStdKind(c *builder.Ctx, raw json.RawMessage) error {
 		return err
 	}
 	c.Phase("rust-std")
-	rels, err := stdFiles(a.From, a.Triple)
+	return writeStd(a.From, a.Triple, o)
+}
+
+// writeStd copies the standard library of triple from the rustc at from into the sysroot o.
+func writeStd(from, triple, o string) error {
+	rels, err := stdFiles(from, triple)
 	if err != nil {
 		return err
 	}
 	var manifest bytes.Buffer
 	for _, rel := range rels {
-		if err := copyFile(filepath.Join(a.From, rel), filepath.Join(o, rel)); err != nil {
+		if err := copyFile(filepath.Join(from, rel), filepath.Join(o, rel)); err != nil {
 			return err
 		}
 		manifest.WriteString("file:" + rel + "\n")
 	}
-	return os.WriteFile(filepath.Join(o, "lib", "rustlib", "manifest-rust-std-"+a.Triple), manifest.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(o, "lib", "rustlib", "manifest-rust-std-"+triple), manifest.Bytes(), 0o644)
 }
 
 // stdFiles reads lib/rustlib/manifest-rust-std-<triple> of from and returns its files relative

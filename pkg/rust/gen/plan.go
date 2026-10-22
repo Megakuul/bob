@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -27,6 +28,8 @@ import (
 // planner plans the Rust nodes of one PlanRequest. Planning is a pure function of the request
 // (R-FW-008): bob.lock carries every crate fact (R-RS-005), so no source is read.
 type planner struct {
+	ctx     context.Context // the Plan call's (nixpkgs lookups of native defaults)
+	nix     nixLookup       // req.Nixpkgs; nil without an index
 	req     engine.PlanRequest
 	ws      *workspace
 	members []resolve.Member
@@ -40,7 +43,7 @@ type planner struct {
 	out     engine.PlanResult
 }
 
-func newPlanner(req engine.PlanRequest) (*planner, error) {
+func newPlanner(ctx context.Context, req engine.PlanRequest) (*planner, error) {
 	ws, err := readWorkspace(req.Graph)
 	if err != nil {
 		return nil, err
@@ -49,9 +52,12 @@ func newPlanner(req engine.PlanRequest) (*planner, error) {
 	if err != nil {
 		return nil, err
 	}
-	pl := &planner{req: req, ws: ws, members: members, byKey: map[string]*resolve.Crate{}, ids: map[string]*ir.Node{},
+	pl := &planner{ctx: ctx, req: req, ws: ws, members: members, byKey: map[string]*resolve.Crate{}, ids: map[string]*ir.Node{},
 		own: map[string]*drv.Derivation{}, modulo: map[string][32]byte{}, fetched: map[string]bool{},
 		out: engine.PlanResult{Nodes: map[string]engine.Resolved{}}}
+	if req.Nixpkgs != nil {
+		pl.nix = req.Nixpkgs
+	}
 	for _, n := range req.Graph.Nodes {
 		pl.ids[n.ID] = n
 	}
@@ -156,7 +162,8 @@ type toolchain struct {
 	version    string          // "1.95.0"
 	system     string          // Nix system of the jobs (always the host's, R-PLAT-004)
 	hostTriple string
-	triple     string // target triple
+	triple     string       // target triple
+	plat       bob.Platform // target platform
 	host       *resolve.Platform
 	target     *resolve.Platform
 
@@ -215,7 +222,7 @@ func (pl *planner) newToolchain(n *ir.Node, s rsspec.Crate) (*toolchain, error) 
 	}
 	host := engine.HostPlatform()
 	rt := engine.RustFor(host, plat)
-	tc.hostTriple, tc.triple = host.Triple(), rt.Triple
+	tc.hostTriple, tc.triple, tc.plat = host.Triple(), rt.Triple, plat
 	if tc.triple == "" || tc.hostTriple == "" || tc.system == "" {
 		return nil, fmt.Errorf("%s: unsupported platform %s", n.Label, plat)
 	}
@@ -992,7 +999,8 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 }
 
 // nativeForBuildScript gives a registry crate's build script the packages rust.Uses names
-// (PATH, PKG_CONFIG_PATH) and pkg-config.
+// (PATH, PKG_CONFIG_PATH) and pkg-config; without a rust.Uses for the crate, the native-crate
+// defaults table applies (§03.3.6).
 func (pl *planner) nativeForBuildScript(rc *rootCtx, u *unitOut, in *inputs, r *buildRunJSON) error {
 	if u.local != nil {
 		return nil
@@ -1022,15 +1030,22 @@ func (pl *planner) nativeForBuildScript(rc *rootCtx, u *unitOut, in *inputs, r *
 				if !ok {
 					return fmt.Errorf("%s: native package of rust.Uses(%q) is not planned", n.Label, use.Crate)
 				}
-				for _, o := range sortedKeys(rv.Outputs) {
-					if o != "out" && o != "dev" && o != "lib" && o != "bin" {
-						continue
-					}
-					p := in.add(rv, o)
-					r.Path = append(r.Path, p+"/bin")
-					pcs = append(pcs, p+"/lib/pkgconfig", p+"/share/pkgconfig")
-				}
+				pcs = addNative(in, rv, r, pcs)
 			}
+		}
+	}
+	if d := nativeDefault(u.name, u.version); d != nil && !pl.usesNames(u.name) {
+		var target bob.Platform
+		if rc.tc.cross != nil && !u.unit.Key.Host {
+			target = rc.tc.plat
+		}
+		libs, pc, err := pl.defaultNatives(pl.ctx, d, target, pl.label(u))
+		if err != nil {
+			return err
+		}
+		r.Path = append(r.Path, in.add(pc, pickOutput(pc.Outputs, "bin", "out"))+"/bin")
+		for _, rv := range libs {
+			pcs = addNative(in, rv, r, pcs)
 		}
 	}
 	if len(pcs) > 0 {

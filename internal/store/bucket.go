@@ -59,6 +59,24 @@ func Open(ctx context.Context, cfg BucketConfig) (*Bucket, error) {
 	return b, nil
 }
 
+// OpenUnprobed connects to the bucket without the conformance probe (it writes nothing). Only
+// for operator commands that read (bob-server store fsck); a server process uses Open.
+func OpenUnprobed(ctx context.Context, cfg BucketConfig) (*Bucket, error) {
+	return newBucket(ctx, cfg)
+}
+
+// ReadRaw returns the stored bytes of key (bob-server store fsck checks the objects of kinds it
+// has no record type for). A missing key is ErrNotFound.
+func ReadRaw(ctx context.Context, b *Bucket, key string) ([]byte, error) {
+	return Call(ctx, func(ctx context.Context) ([]byte, error) {
+		if err := checkBucket(b); err != nil {
+			return nil, err
+		}
+		o, _, err := b.rawGet(ctx, key, "")
+		return o.body, wrap(key, failed(ctx, err))
+	})
+}
+
 func newBucket(ctx context.Context, cfg BucketConfig) (*Bucket, error) {
 	if _, err := Segment(cfg.Name); err != nil {
 		return nil, fmt.Errorf("store: bucket name %q is invalid", cfg.Name)

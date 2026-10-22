@@ -41,7 +41,8 @@ type SettingsRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *SettingsRecord) Draft() *SettingsRecord {
-	return &SettingsRecord{Name: r.Name,
+	return &SettingsRecord{
+		Name:         r.Name,
 		ETag:         r.ETag,
 		ServerName:   store.Carry(r.ServerName),
 		BaseURL:      store.Carry(r.BaseURL),
@@ -56,7 +57,8 @@ func (r *SettingsRecord) Draft() *SettingsRecord {
 		BrowserMaxD:  store.Carry(r.BrowserMaxD),
 		SATokenMaxD:  store.Carry(r.SATokenMaxD),
 		LiveLogOff:   store.Carry(r.LiveLogOff),
-		MaxDownloads: store.Carry(r.MaxDownloads)}
+		MaxDownloads: store.Carry(r.MaxDownloads),
+	}
 }
 
 // Defaults of SPEC §6.5.13.
@@ -98,7 +100,17 @@ func pick(v, def int32) int32 {
 	return def
 }
 
-// read returns set/server (zero record when absent).
+// zero reads a field of the settings record, which read returns without data fields when
+// set/server does not exist (every setting then has its default).
+func zero[T any](f store.DataField[T]) T {
+	if f == nil {
+		var z T
+		return z
+	}
+	return f.Value()
+}
+
+// read returns set/server (a record without data fields when absent).
 func (s *Settings) read(ctx context.Context) (*SettingsRecord, error) {
 	rec, _, err := store.GetCached(ctx, s.Control, &s.cache, &SettingsRecord{Name: store.ID("server")})
 	if errors.Is(err, store.ErrNotFound) {
@@ -113,29 +125,29 @@ func (s *Settings) CacheDays(ctx context.Context) int32 {
 	if err != nil {
 		return defaultCacheDays
 	}
-	return pick(rec.CacheDays.Value(), defaultCacheDays)
+	return pick(zero(rec.CacheDays), defaultCacheDays)
 }
 
 func (s *Settings) message(r *SettingsRecord) *settingsv1.Settings {
-	name := r.ServerName.Value()
+	name := zero(r.ServerName)
 	if name == "" {
 		name = s.ServerName
 	}
 	if name == "" {
 		name = defaultServerName
 	}
-	base := r.BaseURL.Value()
+	base := zero(r.BaseURL)
 	if base == "" {
 		base = s.BaseURL
 	}
 	return &settingsv1.Settings{ServerName: name, BaseUrl: base,
-		Retention: &settingsv1.Retention{LogsDays: pick(r.LogsDays.Value(), defaultLogsDays), AnalyticsDays: pick(r.AnalyticsDay.Value(), defaultAnalytics),
-			BuildsDays: pick(r.BuildsDays.Value(), defaultBuildsDays), CacheUnreferencedDays: pick(r.CacheDays.Value(), defaultCacheDays),
-			StagingDays: pick(r.StagingDays.Value(), defaultStagingDays)},
-		Sessions: &settingsv1.SessionPolicy{CliIdleDays: pick(r.CLIIdleDays.Value(), defaultCLIIdle), CliMaxDays: pick(r.CLIMaxDays.Value(), defaultCLIMax),
-			BrowserIdleHours: pick(r.BrowserIdleH.Value(), defaultBrowserIdle), BrowserMaxDays: pick(r.BrowserMaxD.Value(), defaultBrowserMax),
-			SaTokenMaxDays: pick(r.SATokenMaxD.Value(), defaultSATokenMax)},
-		LiveLogEnabled: !r.LiveLogOff.Value(), MaxParallelDownloads: pick(r.MaxDownloads.Value(), defaultMaxDownloads), Etag: store.ETagOf(r.ETag)}
+		Retention: &settingsv1.Retention{LogsDays: pick(zero(r.LogsDays), defaultLogsDays), AnalyticsDays: pick(zero(r.AnalyticsDay), defaultAnalytics),
+			BuildsDays: pick(zero(r.BuildsDays), defaultBuildsDays), CacheUnreferencedDays: pick(zero(r.CacheDays), defaultCacheDays),
+			StagingDays: pick(zero(r.StagingDays), defaultStagingDays)},
+		Sessions: &settingsv1.SessionPolicy{CliIdleDays: pick(zero(r.CLIIdleDays), defaultCLIIdle), CliMaxDays: pick(zero(r.CLIMaxDays), defaultCLIMax),
+			BrowserIdleHours: pick(zero(r.BrowserIdleH), defaultBrowserIdle), BrowserMaxDays: pick(zero(r.BrowserMaxD), defaultBrowserMax),
+			SaTokenMaxDays: pick(zero(r.SATokenMaxD), defaultSATokenMax)},
+		LiveLogEnabled: !zero(r.LiveLogOff), MaxParallelDownloads: pick(zero(r.MaxDownloads), defaultMaxDownloads), Etag: store.ETagOf(r.ETag)}
 }
 
 // GetSettings implements SettingsService.

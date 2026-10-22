@@ -61,10 +61,10 @@ func (l *links) UnlinkRepo(_ context.Context, _ string, id int64) error {
 	return nil
 }
 
-func (l *links) Record(_ context.Context, id string) (*integration.ForgeRecord, error) {
+func (l *links) Health(_ context.Context, id string) (int32, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return &integration.ForgeRecord{ID: store.ID(id), Health: store.Set(l.health)}, nil
+	return l.health, nil
 }
 
 func code(err error) connect.Code {

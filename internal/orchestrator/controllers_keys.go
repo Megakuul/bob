@@ -37,11 +37,13 @@ type OrchKeyRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *OrchKeyRecord) Draft() *OrchKeyRecord {
-	return &OrchKeyRecord{Kid: r.Kid,
+	return &OrchKeyRecord{
+		Kid:      r.Kid,
 		ETag:     r.ETag,
 		Seed:     store.Carry(r.Seed),
 		Created:  store.Carry(r.Created),
-		NotAfter: store.Carry(r.NotAfter)}
+		NotAfter: store.Carry(r.NotAfter),
+	}
 }
 
 // rotatedKid is the kid of the n-th rotated key: "k" + 6 digits. The key controller derives

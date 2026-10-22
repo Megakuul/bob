@@ -27,7 +27,8 @@ type Record struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *Record) Draft() *Record {
-	return &Record{ID: r.ID,
+	return &Record{
+		ID:            r.ID,
 		ETag:          r.ETag,
 		DisplayName:   store.Carry(r.DisplayName),
 		Description:   store.Carry(r.Description),
@@ -38,7 +39,8 @@ func (r *Record) Draft() *Record {
 		WebURL:        store.Carry(r.WebURL),
 		HookErr:       store.Carry(r.HookErr),
 		Created:       store.Carry(r.Created),
-		Slot:          store.Carry(r.Slot)}
+		Slot:          store.Carry(r.Slot),
+	}
 }
 
 // Repo is the linked repository as JobSpec.Repo and the build controller name it:
@@ -59,9 +61,11 @@ type IndexCounter struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *IndexCounter) Draft() *IndexCounter {
-	return &IndexCounter{Name: r.Name,
+	return &IndexCounter{
+		Name:  r.Name,
 		ETag:  r.ETag,
-		Count: store.Carry(r.Count)}
+		Count: store.Carry(r.Count),
+	}
 }
 
 // Entry is one slot of the projects index pidx/all/p/<num10> (P = 200). It carries what the
@@ -130,7 +134,8 @@ type PipelinesRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *PipelinesRecord) Draft() *PipelinesRecord {
-	return &PipelinesRecord{Project: r.Project,
+	return &PipelinesRecord{
+		Project: r.Project,
 		ETag:    r.ETag,
 		SHA:     store.Carry(r.SHA),
 		Build:   store.Carry(r.Build),
@@ -138,7 +143,8 @@ func (r *PipelinesRecord) Draft() *PipelinesRecord {
 		Default: store.Carry(r.Default),
 		At:      store.Carry(r.At),
 		Defs:    store.Carry(r.Defs),
-		Last:    store.Carry(r.Last)}
+		Last:    store.Carry(r.Last),
+	}
 }
 
 // PipelineDef is one pipeline as the evaluation reported it.

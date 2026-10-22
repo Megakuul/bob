@@ -64,7 +64,10 @@ type Options struct {
 	// materialise, SPEC §03.6.6); Untrusted implies it.
 	NoMaterialise bool
 	// Force moves conflicting files of owned directories to .bob/gen/backup/ (bob gen --force).
-	Force  bool
+	Force bool
+	// DryRun stops after planning (bob build --dry-run, R-RS-005, ruling G24): nothing is
+	// fetched, imported or built; Result.Planned lists the derivations.
+	DryRun bool
 	Events func(Event)
 }
 
@@ -127,6 +130,8 @@ type Result struct {
 	// Generated are the not-committed generated native files this run wrote or kept (for bob's
 	// block in .git/info/exclude), as Gen returns them.
 	Generated []string
+	// Planned are the derivation paths of the plan, sorted (Options.DryRun only).
+	Planned []string
 }
 
 // Package is one requested package after the run.

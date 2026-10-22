@@ -59,9 +59,11 @@ type checkoutShard struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *checkoutShard) Draft() *checkoutShard {
-	return &checkoutShard{Shard: r.Shard,
-		ETag: r.ETag,
-		Jobs: store.Carry(r.Jobs)}
+	return &checkoutShard{
+		Shard: r.Shard,
+		ETag:  r.ETag,
+		Jobs:  store.Carry(r.Jobs),
+	}
 }
 
 func shardOf(jobID string) (*checkoutShard, error) {

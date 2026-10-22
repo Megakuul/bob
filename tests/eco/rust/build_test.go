@@ -1,6 +1,7 @@
 package rust
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -14,9 +15,13 @@ import (
 
 var cargoPathRe = regexp.MustCompile(`/nix/store/[a-z0-9]{32}-cargo-`)
 
+// cratePathRe matches the store name of an unpacked crate source (crate-<name>-<version>).
+var cratePathRe = regexp.MustCompile(`^[a-z0-9]{32}-crate-`)
+
 // R-RS-001a: on the Rust fixture, bob build //... and bob test //... succeed natively and
 // cross; the outputs (demo, usec, the C binary cmain linking a Rust cdylib and staticlib) run
-// under env -i; cargo is never an input of any derivation; a second-store rebuild is
+// without any environment set up for them (natively through bob run inside bob's namespace,
+// cross under qemu-user); cargo is never an input of any derivation; a second-store rebuild is
 // bit-identical. (The cgo binary calling a StaticLib is the Go fixture's R-GO-001a.)
 func TestRRS001aCratesBuildScriptsProcMacrosAndCInterop(t *testing.T) {
 	parity.Covers(t, "R-RS-001a")
@@ -45,8 +50,18 @@ func TestRRS001aCratesBuildScriptsProcMacrosAndCInterop(t *testing.T) {
 					t.Errorf("no output path for %s: %v", label, paths)
 					continue
 				}
-				if r := runGuest(t, plat, homeA, filepath.Join(ps[0], "bin", bin)); r.Exit != 0 {
-					t.Errorf("%s under env -i exited %d:\n%s%s", label, r.Exit, r.Stdout, r.Stderr)
+				// Outputs live in bob's store and run inside its namespace (SPEC §02 --print-paths:
+				// "binaries there run only through bob run/bob exec"): natively through bob run with
+				// the harness's minimal environment (no LD_LIBRARY_PATH or toolchain variables),
+				// the other platform under qemu-user with the store of homeA as the guest root.
+				var r harness.Result
+				if plat == host {
+					r = bobIn(t, dir, homeA, "run", label)
+				} else {
+					r = runGuest(t, plat, homeA, filepath.Join(ps[0], "bin", bin))
+				}
+				if r.Exit != 0 {
+					t.Errorf("%s exited %d:\n%s%s", label, r.Exit, r.Stdout, r.Stderr)
 				}
 			}
 			assertTests(t, dir, homeA, plat, host, []string{"//corelib:corelib_test", "//corelib:corelib_test_num"})
@@ -141,7 +156,21 @@ func TestRRS005LockCarriesCrateGraphFacts(t *testing.T) {
 	if !ok(t, withSources) {
 		return
 	}
-	cold := noNetwork(t, dir, t.TempDir(), "build", "--dry-run", "//...")
+	// The crate cache is empty, the network is off. A fresh BOB_HOME cannot plan offline at all
+	// (its nixpkgs pin and the evaluator's Go come from the network), so the cold home first
+	// gets nixpkgs from a plan-only run with network, which must not download any crate.
+	coldHome := t.TempDir()
+	if r := bobEnv(t, dir, registryEnv(coldHome), "build", "--dry-run", "//..."); !ok(t, r) {
+		return
+	}
+	if ents, err := os.ReadDir(filepath.Join(coldHome, "nix", "store")); err == nil {
+		for _, e := range ents {
+			if cratePathRe.MatchString(e.Name()) {
+				t.Errorf("bob build --dry-run downloaded crate source %s", e.Name())
+			}
+		}
+	}
+	cold := noNetwork(t, dir, coldHome, "build", "--dry-run", "//...")
 	if !ok(t, cold) {
 		return
 	}
@@ -154,13 +183,13 @@ func TestRRS005LockCarriesCrateGraphFacts(t *testing.T) {
 }
 
 // R-RS-004a (a): a crate with Toolchain from another rustc attribute compiles with it (the
-// job is golden and shows the toolchain store path). The attribute "rust_1_94" is the decision
-// for "<other rustc attr>"; it needs a second pin or nixpkgs attribute (SPEC [open]).
+// job is golden and shows the toolchain store path). "<other rustc attr>" is the compiler of the
+// pin's versioned set rust_1_97 (SPEC R-RS-004a, decided M8b-3: the pin has no rust_1_94).
 func TestRRS004aToolchainPerPackage(t *testing.T) {
 	parity.Covers(t, "R-RS-004a")
 	home := t.TempDir()
 	dir := harness.Fixture(t, "rust")
-	replaceIn(t, filepath.Join(dir, "rcore", "bob.go"), "\t\tHeaders: \"include\",", "\t\tHeaders:   \"include\",\n\t\tToolchain: nixpkgs.Tool(p, \"rust_1_94\"),")
+	replaceIn(t, filepath.Join(dir, "rcore", "bob.go"), "\t\tHeaders: \"include\",", "\t\tHeaders:   \"include\",\n\t\tToolchain: nixpkgs.Tool(p, \"rust_1_97.packages.stable.rustc\"),")
 	replaceIn(t, filepath.Join(dir, "rcore", "bob.go"), "\"github.com/megakuul/bob/pkg/bob\"", "\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/nixpkgs\"")
 	if r := bobEnv(t, dir, registryEnv(home), "lock"); !ok(t, r) {
 		return
@@ -172,7 +201,7 @@ func TestRRS004aToolchainPerPackage(t *testing.T) {
 	if !parsed {
 		return
 	}
-	toolchain := regexp.MustCompile(`/nix/store/[a-z0-9]{32}-rustc-wrapper-1\.94\.\d+|/nix/store/[a-z0-9]{32}-rustc-1\.94\.\d+`)
+	toolchain := regexp.MustCompile(`/nix/store/[a-z0-9]{32}-rustc-wrapper-1\.97\.\d+|/nix/store/[a-z0-9]{32}-rustc-1\.97\.\d+`)
 	nameRe := regexp.MustCompile(`^[a-z0-9]{32}-rcore-[0-9.]+(-[a-z0-9]+)?\.drv$|^[a-z0-9]{32}-rcore(-[a-z0-9]+)?\.drv$`)
 	found := false
 	for n, d := range bobDrvs(all) {
@@ -182,7 +211,7 @@ func TestRRS004aToolchainPerPackage(t *testing.T) {
 		found = true
 		spec := jobSpec(d)
 		if !toolchain.MatchString(spec) {
-			t.Errorf("the compile job of %s does not name the rustc 1.94 toolchain", n)
+			t.Errorf("the compile job of %s does not name the rustc 1.97 toolchain", n)
 		}
 		golden.Assert(t, "tests/goldens/eco/rust/jobs/rcore-alt-toolchain.json", []byte(spec+"\n"), golden.Reqs("R-RS-004a"))
 	}
@@ -198,7 +227,7 @@ func TestRRS004aMixedToolchainsRejected(t *testing.T) {
 	home := t.TempDir()
 	dir := harness.Fixture(t, "rust")
 	// corelib (a dependency of demo) gets the other toolchain; demo keeps the default.
-	replaceIn(t, filepath.Join(dir, "corelib", "bob.go"), "\t\tDefault:  []string{\"fast\"},", "\t\tDefault:  []string{\"fast\"},\n\t\tToolchain: nixpkgs.Tool(p, \"rust_1_94\"),")
+	replaceIn(t, filepath.Join(dir, "corelib", "bob.go"), "\t\tDefault:  []string{\"fast\"},", "\t\tDefault:  []string{\"fast\"},\n\t\tToolchain: nixpkgs.Tool(p, \"rust_1_97.packages.stable.rustc\"),")
 	replaceIn(t, filepath.Join(dir, "corelib", "bob.go"), "\"github.com/megakuul/bob/pkg/bob\"", "\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/nixpkgs\"")
 	r := bobEnv(t, dir, registryEnv(home), "build", "//demo:demo", "--lock", "--json")
 	if harness.Red(t, r) || !exitIs(t, r, 3) {

@@ -96,7 +96,7 @@ func goDeps(ds []dep) string {
 // one bob.go per importer (the way the npm fixture spells them) plus the minimal source files.
 func writeGraph(t *testing.T, g graph) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "root") // R2: root package = directory name
+	dir := t.TempDir()
 	w := func(rel, body string) { ecotest.WriteFile(t, filepath.Join(dir, filepath.FromSlash(rel)), body) }
 	w("go.mod", "module example.com/"+strings.ReplaceAll(g.name, "-", "")+"\n\ngo 1.26\n")
 	w("bob.lock", "{\n  \"lockVersion\": 1\n}\n")

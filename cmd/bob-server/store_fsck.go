@@ -34,7 +34,12 @@ func storeFsck(getenv func(string) string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return 1
 		}
-		problems, err := orchestrator.Fsck(ctx, c, b.name, b.role, keys)
+		bucket, err := store.OpenUnprobed(ctx, store.BucketConfig{Endpoint: cfg.Endpoint, Region: cfg.Region, Name: b.name, Role: b.role})
+		if err != nil {
+			fmt.Fprintf(stderr, "✗ %v\n", err)
+			return store.ExitConfig
+		}
+		problems, err := orchestrator.Fsck(ctx, bucket, b.role, keys)
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ fsck %s: %v\n", b.name, err)
 			return 1

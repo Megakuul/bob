@@ -33,10 +33,12 @@ type SigningKeyRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *SigningKeyRecord) Draft() *SigningKeyRecord {
-	return &SigningKeyRecord{Name: r.Name,
+	return &SigningKeyRecord{
+		Name:    r.Name,
 		ETag:    r.ETag,
 		Seed:    store.Carry(r.Seed),
-		Created: store.Carry(r.Created)}
+		Created: store.Carry(r.Created),
+	}
 }
 
 // KeyEntry is one key of the index.
@@ -58,9 +60,11 @@ type SigningKeyIndex struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *SigningKeyIndex) Draft() *SigningKeyIndex {
-	return &SigningKeyIndex{Name: r.Name,
+	return &SigningKeyIndex{
+		Name: r.Name,
 		ETag: r.ETag,
-		Keys: store.Carry(r.Keys)}
+		Keys: store.Carry(r.Keys),
+	}
 }
 
 func indexKey() *SigningKeyIndex { return &SigningKeyIndex{Name: store.ID("all")} }

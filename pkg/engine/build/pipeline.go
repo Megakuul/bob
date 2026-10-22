@@ -118,6 +118,10 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		return res, err
 	}
 	units = r.skipForeign(g, p, units)
+	if o.DryRun {
+		res.Planned = plannedDrvs(p, units)
+		return res, nil
+	}
 
 	if err := r.stage(StageFetch, func() error { return ensureAll(ctx, f, p.fetches) }); err != nil {
 		return res, err
@@ -164,6 +168,23 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		return res, err
 	}
 	return res, nil
+}
+
+// plannedDrvs are the paths of the plan's derivations and of the selected test units, sorted.
+func plannedDrvs(p *planner, units []testrun.Unit) []string {
+	seen := map[string]bool{}
+	for path := range p.byPath {
+		seen[path] = true
+	}
+	for _, u := range units {
+		seen[u.DrvPath] = true
+	}
+	out := make([]string, 0, len(seen))
+	for path := range seen {
+		out = append(out, path)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // skipForeign takes the units that cannot run on this machine out of units (R-FW-039); they

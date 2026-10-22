@@ -72,6 +72,15 @@ func (r *Registry) Record(ctx context.Context, id string) (*ForgeRecord, error) 
 	return rec, err
 }
 
+// Health is the health of integration id (forgev1.Health; one conditional GET).
+func (r *Registry) Health(ctx context.Context, id string) (int32, error) {
+	rec, err := r.Record(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	return rec.Health.Value(), nil
+}
+
 // Adapter returns the record and the adapter of integration id.
 func (r *Registry) Adapter(ctx context.Context, id string) (*ForgeRecord, forge.Adapter, error) {
 	rec, b, err := r.adapters(ctx, id)

@@ -25,7 +25,7 @@ import (
 type Linker interface {
 	LinkRepo(ctx context.Context, forgeID, fullName, project, baseURL string) (integration.Linked, error)
 	UnlinkRepo(ctx context.Context, forgeID string, repoID int64) error
-	Record(ctx context.Context, id string) (*integration.ForgeRecord, error)
+	Health(ctx context.Context, id string) (int32, error) // forgev1.Health of the integration
 }
 
 // Config configures Projects.
@@ -179,14 +179,16 @@ func (p *Projects) Health(ctx context.Context, rec *Record) projectv1.LinkHealth
 		return projectv1.LinkHealth_LINK_HEALTH_UNSPECIFIED
 	}
 	if p.cfg.Links != nil {
-		if f, err := p.cfg.Links.Record(ctx, rec.Forge.Value()); err == nil && f.Health.Value() == int32(forgev1.Health_HEALTH_AUTH_FAILED) {
+		if h, err := p.cfg.Links.Health(ctx, rec.Forge.Value()); err == nil && h == int32(forgev1.Health_HEALTH_AUTH_FAILED) {
 			return projectv1.LinkHealth_LINK_HEALTH_AUTH_FAILED
 		}
 	}
 	return storedHealth(rec)
 }
 
-func storedHealth(rec *Record) projectv1.LinkHealth { return healthOf(rec.Forge.Value(), rec.HookErr.Value()) }
+func storedHealth(rec *Record) projectv1.LinkHealth {
+	return healthOf(rec.Forge.Value(), rec.HookErr.Value())
+}
 
 func healthOf(forgeID, hookErr string) projectv1.LinkHealth {
 	switch {

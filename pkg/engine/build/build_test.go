@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -295,15 +294,10 @@ func TestRunEcosystemEndToEnd(t *testing.T) {
 	}
 }
 
-// writeRepo writes files below a new repository directory, named after the package of the root
-// bob.go (rule R2: a root without Go code uses the directory's name).
+// writeRepo writes files below a new repository directory.
 func writeRepo(t *testing.T, files map[string]string) string {
 	t.Helper()
-	name := "repo"
-	if m := regexp.MustCompile(`(?m)^package (\w+)`).FindStringSubmatch(files["bob.go"]); m != nil {
-		name = m[1]
-	}
-	dir := filepath.Join(t.TempDir(), name)
+	dir := filepath.Join(t.TempDir(), "repo")
 	for p, c := range files {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o755); err != nil {
 			t.Fatal(err)

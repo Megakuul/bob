@@ -90,7 +90,7 @@ func writeRepo(t *testing.T, gr graph) string {
 		"app/bob.go": "//go:build bob\n\npackage app\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/ocaml\"\n)\n\n" +
 			"var App = bob.Define(func(p *bob.P) *ocaml.Exe {\n\treturn ocaml.Executable(p, ocaml.ExeOpts{Name: \"app\", Deps: []ocaml.Dep{" + strings.Join(deps, ", ") + "}})\n})\n",
 	}
-	dir := filepath.Join(t.TempDir(), "root") // R2: root package = directory name
+	dir := t.TempDir()
 	for rel, body := range files {
 		ecotest.WriteFile(t, filepath.Join(dir, filepath.FromSlash(rel)), body)
 	}

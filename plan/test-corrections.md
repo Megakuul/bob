@@ -162,3 +162,48 @@ cross-module import vs `go list -m all`), I-C1 2 (remote builds without a projec
 fixtures' root package names (pkg/engine/eval expectedPkg uses the module path's last element
 for the root, SPEC R2 says the directory name: implementation vs SPEC, owner), ocaml fixture
 `ocaml.Test` func+type clash (I-M11a in progress; SPEC 03.5 has the same clash).
+
+## Wave 4 (applied 2026-10-22 by I-M8b under the owner's approval of evidence-based corrections, A111)
+25. APPLIED (M8b-5). I-M8a TEST PROBLEM 3: `tests/core/api_test.go` TestAPISurface allowed no two
+   constructors of one package to share a result type, but the SPEC API itself declares
+   `cc.StaticLibrary`/`cc.SharedLibrary` → `*Library` (§03.1.1), `rust.Library`/`rust.ProcMacro`
+   → `*Lib` and `rust.StaticLib`/`rust.CDylib` → `*CLib` (§03.3.1). The test now allows exactly
+   these SPEC-listed sets (`specSharedResults`); any other constructor returning one of those
+   types, and every other shared result (e.g. `ext.New`/`ext.NewIn`), still fails.
+26. APPLIED (M8b-3). I-M8a TEST PROBLEM 4: `tests/eco/rust/build_test.go` TestRRS004a* used
+   `nixpkgs.Tool(p, "rust_1_94")`, an attribute that does not exist in the pin (nix eval at
+   cd4ea8d5 and da6dc0e7: `rust_1_95`, `rust_1_97`, `rust_1_98`; `rust_1_9x` are package sets,
+   not tools). Now `rust_1_97.packages.stable.rustc` (rustc-wrapper-1.97.1, on cache.nixos.org)
+   and the job regexp `1\.97`; SPEC R-RS-004a [open] decided the same way (spec/03 and SPEC.md).
+   The golden name rcore-alt-toolchain.json is unchanged (no golden yet: owner approval).
+27. APPLIED (M8b-6). I-M8a TEST PROBLEM 7: TestRRS001a ran outputs straight from
+   `$BOB_HOME/nix/store` on the host; their interpreter/RUNPATH are `/nix/store/...` paths that
+   exist only inside bob's namespace (cmain's librdyn.so: "cannot open shared object file").
+   SPEC §02 `--print-paths`: "binaries there run only through bob run/bob exec". The host
+   platform's outputs now run through `bob run <label>` with the harness's minimal environment
+   (PATH=/usr/bin:/bin, HOME, TZ, LC_ALL, BOB_HOME; no LD_LIBRARY_PATH or toolchain variables);
+   the foreign platform keeps qemu-user with the bob home as guest root (unchanged).
+28. APPLIED (M8b-7). TestRRS005: the cold run used a fresh BOB_HOME in a user+net namespace
+   (ruling G24). A fresh home cannot plan offline at all: the nixpkgs pin (tarball) and the
+   evaluator's Go (PATH=/usr/bin:/bin has none) come from the network, which has nothing to do
+   with crates. The cold home now first gets nixpkgs from `bob build --dry-run` with network
+   (plan only), the test asserts that this put no crate source (`crate-*`) into the store, then
+   runs the offline dry run in it and compares with the warm home's (which has all crate
+   sources from bob lock). This keeps the SPEC statement ("network disabled and an empty crate
+   cache"); verified by hand on arm64: identical 89 derivation paths warm, cold-online and
+   cold-offline (`unshare -n`).
+
+## I-M5c (2026-10-22, owner-approved class of evidence-based corrections, A111)
+26. APPLIED (A133). tests/eco/golang/resolve_test.go TestRGO002bBuildListEqualsGoCommand: a
+   `go list -m all` line `<path> v0.0.0 => <dir>` is accepted when <path> is another workspace
+   module of the entry (e.mods) and <dir> points at its directory; every other line is checked as
+   before. Evidence: the go fixture's tools and api import example.com/lib; the go command finds a
+   workspace module only through such a replace (go.work would print several main modules and the
+   union build list). SPEC §03.2.5 / R-GO-002b amended accordingly.
+27. NOTE (A131): under the coordinator ruling A131 a root bob.go without non-test Go files may use
+   any package name, so tests with fixed root package names (`package root`, `corproot`,
+   `rsroot`, `synroot`, `srv`, `synth`, vite-react's `web`, ...) are valid as they are. The
+   directory renames I-M5c had made for the dir-name rule (seen by I-S2 in item 25: npm repos/
+   graphs, golang corproot/synroot, rust rsroot, srvtest srv, tests/nix probe dir, devenv
+   vite-react package, ocaml corpus) were reverted to their original form; no test change remains
+   from that rule.

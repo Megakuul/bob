@@ -51,10 +51,12 @@ type buildKey struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *buildKey) Draft() *buildKey {
-	return &buildKey{Hash: r.Hash,
+	return &buildKey{
+		Hash:  r.Hash,
 		ETag:  r.ETag,
 		Build: store.Carry(r.Build),
-		At:    store.Carry(r.At)}
+		At:    store.Carry(r.At),
+	}
 }
 
 // CreateFromEvent implements the webhook intake's Builds (internal/forge/integration): it

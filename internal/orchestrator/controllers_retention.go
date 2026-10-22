@@ -145,8 +145,10 @@ type buildNodes struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *buildNodes) Draft() *buildNodes {
-	return &buildNodes{ID: r.ID,
-		ETag: r.ETag}
+	return &buildNodes{
+		ID:   r.ID,
+		ETag: r.ETag,
+	}
 }
 
 // builds deletes terminal builds older than cutoff, oldest page first: bnodes, then the build

@@ -21,9 +21,11 @@ type BuildNodes struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *BuildNodes) Draft() *BuildNodes {
-	return &BuildNodes{ID: r.ID,
+	return &BuildNodes{
+		ID:    r.ID,
 		ETag:  r.ETag,
-		Nodes: store.Carry(r.Nodes)}
+		Nodes: store.Carry(r.Nodes),
+	}
 }
 
 // Node is one package of a build graph.

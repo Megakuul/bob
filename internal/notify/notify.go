@@ -53,7 +53,8 @@ type HookRecord struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *HookRecord) Draft() *HookRecord {
-	return &HookRecord{ID: r.ID,
+	return &HookRecord{
+		ID:         r.ID,
 		ETag:       r.ETag,
 		URL:        store.Carry(r.URL),
 		Secret:     store.Carry(r.Secret),
@@ -61,7 +62,8 @@ func (r *HookRecord) Draft() *HookRecord {
 		Projects:   store.Carry(r.Projects),
 		Enabled:    store.Carry(r.Enabled),
 		LastResult: store.Carry(r.LastResult),
-		Created:    store.Carry(r.Created)}
+		Created:    store.Carry(r.Created),
+	}
 }
 
 // HookKey is the key model of nhook/<id>.
@@ -76,9 +78,11 @@ type HookIndex struct {
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *HookIndex) Draft() *HookIndex {
-	return &HookIndex{Name: r.Name,
+	return &HookIndex{
+		Name: r.Name,
 		ETag: r.ETag,
-		IDs:  store.Carry(r.IDs)}
+		IDs:  store.Carry(r.IDs),
+	}
 }
 
 // HookIndexKey is the key model of nhooks/all.
