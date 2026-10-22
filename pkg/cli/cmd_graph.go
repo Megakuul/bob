@@ -68,9 +68,9 @@ func graphLabels(g *graph) []string {
 	return out
 }
 
-// posString renders an IR position as "file:line" (the IR records no column yet).
+// posString renders an IR position as "file:line:col" ("file:line" without a column).
 func posString(p ir.Pos) string {
-	return translate.PosString(diag.Pos{File: p.File, Line: p.Line})
+	return translate.PosString(diag.Pos{File: p.File, Line: p.Line, Col: p.Col})
 }
 
 // reverse returns the graph with every edge reversed (--rdeps).

@@ -1,10 +1,11 @@
 package orchestrator_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -433,9 +434,15 @@ func keys(t *testing.T, b buckets) {
 	ctx := context.Background()
 	k := &orchestrator.Keys{Control: b.control, Fleet: b.fleet}
 	now := time.Now().UTC()
+	// a pass that crashed after creating okey/k000001: the next pass publishes that key
+	seed := make([]byte, ed25519.SeedSize)
+	seed[0] = 7
+	if err := store.Create(ctx, b.control, &orchestrator.OrchKeyRecord{Kid: "k000001", Seed: seed, Created: now, NotAfter: now.Add(orchestrator.KeyLifetime)}); err != nil {
+		t.Fatal(err)
+	}
 	ks, err := k.Rotate(ctx, now)
-	if err != nil || len(ks) != 1 || !strings.HasPrefix(ks[0].Kid, "k") {
-		t.Fatalf("first rotate = %+v (%v), want one key", ks, err)
+	if err != nil || len(ks) != 1 || ks[0].Kid != "k000001" || !bytes.Equal(ks[0].Pub, ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)) {
+		t.Fatalf("first rotate = %+v (%v), want the crashed pass's key k000001 published", ks, err)
 	}
 	if again, err := k.Rotate(ctx, now); err != nil || len(again) != 1 {
 		t.Fatalf("second rotate = %+v (%v), want the same single key", again, err)
@@ -445,7 +452,7 @@ func keys(t *testing.T, b buckets) {
 	}
 	// 84 days later the next key is created; 91 days later the first is retired
 	ks, err = k.Rotate(ctx, now.Add(84*24*time.Hour))
-	if err != nil || len(ks) != 2 {
+	if err != nil || len(ks) != 2 || ks[1].Kid != "k000002" {
 		t.Fatalf("rotate 7 d before notAfter = %+v (%v), want two keys", ks, err)
 	}
 	ks, err = k.Rotate(ctx, now.Add(91*24*time.Hour))

@@ -66,5 +66,5 @@ func RunJob(ctx context.Context, in io.Reader, out io.Writer, r Runner) error {
 	if err := safe.Run(func() error { o = r.Run(ctx, j); return nil }); err != nil {
 		o = Outcome{Status: "infra", Error: "job runner crashed"}
 	}
-	return json.NewEncoder(out).Encode(jobOutcome{Status: o.Status, Error: o.Error})
+	return json.NewEncoder(out).Encode(jobOutcome(o))
 }

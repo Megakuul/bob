@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/internal/logstore"
+	"github.com/megakuul/bob/internal/store"
+	"github.com/megakuul/bob/internal/store/s3client"
 )
 
 // Live buffer caps per job (SPEC §6.5.17): the last 20,000 lines or 8 MiB, whichever is smaller.
@@ -252,3 +254,40 @@ func (w *LineWriter) Close() error {
 	}
 	return nil
 }
+
+// LogConfig is the log.* configuration of a worker process (SPEC §05.11.1).
+type LogConfig struct {
+	Storage       store.StorageConfig // endpoint, region, analytics bucket
+	Wid           string
+	FlushInterval time.Duration // log.flush_interval (BOB_LOG_FLUSH_INTERVAL), 0 = 30 s
+	Now           func() time.Time
+	Log           *slog.Logger
+}
+
+// NewProcessLogs builds the log pipeline of a worker process over the analytics bucket (the
+// worker credential from the SDK default chain). Run the result as a server.Component (it runs
+// the lake writer) and hand it to the job runner (Start) and to every Attach stream (Stream).
+func NewProcessLogs(ctx context.Context, cfg LogConfig) (*Logs, error) {
+	c, err := s3client.New(ctx, s3client.Options{Endpoint: cfg.Storage.Endpoint, Region: cfg.Storage.Region})
+	if err != nil {
+		return nil, err
+	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	w := logstore.NewWriter(logstore.WriterConfig{Client: c, Bucket: cfg.Storage.Analytics,
+		FlushInterval: cfg.FlushInterval, Now: now, Log: cfg.Log})
+	l := NewLogs(w, logstore.NewReader(c, cfg.Storage.Analytics), cfg.Wid)
+	l.Now = now
+	if cfg.Log != nil {
+		l.Log = cfg.Log
+	}
+	return l, nil
+}
+
+// Name implements server.Component.
+func (l *Logs) Name() string { return "log writer" }
+
+// Run implements server.Component: the lake writer's commit loop, with a last flush on stop.
+func (l *Logs) Run(ctx context.Context) error { return l.W.Run(ctx) }

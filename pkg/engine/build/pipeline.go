@@ -179,13 +179,9 @@ func (r *runner) replay() (*Result, error) {
 // indexStage opens the nixpkgs index when the graph uses nixpkgs and runs the pre-checks of
 // R-NIX-011 on every nixpkgs node.
 func (r *runner) indexStage(ctx context.Context, st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) (*nixidx.Index, map[string]nixidx.Entry, error) {
-	ecoNodes := false
-	for _, n := range g.Nodes {
-		ecoNodes = ecoNodes || !isCoreKind(n.Kind)
-	}
 	// Ecosystems take their toolchains from nixpkgs; a graph of core steps without nixpkgs
 	// tools needs no index (and no nixpkgs download).
-	if lf.Nixpkgs.Rev == "" || !usesNixpkgs(g) && !ecoNodes {
+	if lf.Nixpkgs.Rev == "" || !usesNixpkgs(g) && !hasEcoNodes(g) {
 		return nil, map[string]nixidx.Entry{}, nil
 	}
 	src, err := f.Ensure(ctx, lock.NixpkgsRequest(lf.Nixpkgs))

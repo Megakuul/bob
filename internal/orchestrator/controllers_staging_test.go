@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
+
 	"github.com/megakuul/bob/internal/orchestrator"
+	"github.com/megakuul/bob/internal/store"
 )
 
 func TestStagedKeys(t *testing.T) {
@@ -40,5 +43,41 @@ func TestStagedKeys(t *testing.T) {
 	}
 	if _, err := orchestrator.StagedKeys(pre, make([]byte, orchestrator.MaxComplete+1), false); err == nil {
 		t.Errorf("oversized COMPLETE.json accepted")
+	}
+}
+
+func TestCheckRecord(t *testing.T) {
+	enc := func(v any) []byte {
+		b, err := cbor.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	for name, c := range map[string]struct {
+		role, key string
+		body      []byte
+		want      string // "" | "corrupt" | "invalid"
+	}{
+		"job ok":            {"fleet", "job/j1", enc(store.JobRecord{State: "running", Owner: "w", Epoch: 1, Spec: []byte{1}}), ""},
+		"job no owner":      {"fleet", "job/j1", enc(store.JobRecord{State: "claimed", Spec: []byte{1}}), "invalid"},
+		"job bad state":     {"fleet", "job/j1", enc(store.JobRecord{State: "weird", Spec: []byte{1}}), "invalid"},
+		"job garbage":       {"fleet", "job/j1", []byte{0xff, 0x00}, "corrupt"},
+		"worker ok":         {"fleet", "worker/w", enc(store.WorkerRecord{State: "active"}), ""},
+		"member twice":      {"fleet", "fleet/cfg", enc(store.FleetConfig{Members: []store.FleetMember{{Orch: "a"}, {Orch: "a"}}}), "invalid"},
+		"lease epoch 0":     {"fleet", "ctl/x", enc(store.ControllerLease{Owner: "a"}), "invalid"},
+		"build ok":          {"control", "build/b", enc(store.BuildRecord{State: "succeeded"}), ""},
+		"build bad state":   {"control", "build/b", enc(store.BuildRecord{State: "x"}), "invalid"},
+		"other well-formed": {"control", "pidx/all/p/0000000000", enc(map[string]int{"n": 1}), ""},
+		"other truncated":   {"control", "pidx/all/p/0000000000", []byte{0xa1, 0x61}, "corrupt"},
+	} {
+		err := orchestrator.CheckRecord(c.role, c.key, c.body)
+		got := ""
+		if err != nil {
+			got, _, _ = strings.Cut(err.Error(), ":")
+		}
+		if got != c.want {
+			t.Errorf("%s: %v, want %q", name, err, c.want)
+		}
 	}
 }

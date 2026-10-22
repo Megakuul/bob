@@ -58,6 +58,10 @@ func runPipeline(e *env, cmd build.Command) int {
 	}
 	recordBuild(root, drvsOf(res))
 	recordLabels(root, res.Requested)
+	if len(res.Generated) > 0 {
+		// Native files the run wrote stay out of git (best effort: bob check reports 1013).
+		_ = updateExclude(root, res.Generated, false)
+	}
 	exit = res.ExitCode
 	if err != nil {
 		// a failure that is not a diagnostic: report it with the run's own errors

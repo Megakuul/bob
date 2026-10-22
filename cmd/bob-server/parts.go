@@ -16,6 +16,7 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	rbacParts(env, &parts)
 	authParts(env, &parts) // identity needs parts.Authz (rbacParts)
 	controllerParts(env, &parts)
+	logParts(env, &parts) // I-B7: LogService, lake-maintenance; the returned LiveLogs goes to Attach
 	if _, err := fleetParts(ctx, env, &parts); err != nil {
 		return parts, err
 	}

@@ -324,7 +324,7 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 	if exit != 0 || json.Unmarshal(out.Bytes(), &o) != nil || o.Status == "" {
 		return Outcome{Status: "infra", Error: fmt.Sprintf("job container exited %d: %s", exit, errTail.String())}
 	}
-	return Outcome{Status: o.Status, Error: o.Error}
+	return Outcome(o)
 }
 
 // tail keeps the last max bytes written to it.

@@ -48,9 +48,11 @@ type nativeEntry struct {
 }
 
 // Check reports, without changing any file and without network, the findings of bob check
-// (R-CLI-009): bob.lock entries that are missing, extra or stale (BOB-E-1012) and generated
-// native files that differ from what bob would write (BOB-E-1011). Evaluation failures and
-// other errors are returned as the error (diagnostics as *diag.Error or ir.Errors).
+// (R-CLI-009): bob.lock entries that are missing, extra or stale (BOB-E-1012), generated
+// native files edited by hand (BOB-E-1011), and .bob/ or not-committed generated files that
+// git does not ignore (BOB-E-1013). Evaluation failures and other errors are returned as the
+// error (diagnostics as *diag.Error or ir.Errors). Only the evaluator's Go toolchain may be
+// downloaded (nixpkgs' go, when no go is on PATH and the store lacks it).
 func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	if o.Root == "" {
 		return nil, errors.New("build: Options.Root is empty")
@@ -59,6 +61,7 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	if err != nil {
 		return nil, err
 	}
+	o.Patterns, o.Platform, o.Variants = nil, "", nil // the whole repository (as Gen)
 	g, _, err := evaluate(ctx, st, o)
 	if err != nil {
 		return nil, err
@@ -90,7 +93,13 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	for _, d := range drift {
 		findings = append(findings, d.finding())
 	}
-	return findings, nil
+	ignore := []string{BobDir}
+	for _, f := range files {
+		if !f.Committed {
+			ignore = append(ignore, f.Path)
+		}
+	}
+	return append(findings, IgnoreFindings(ctx, o.Root, ignore)...), nil
 }
 
 // Gen writes the generated native files of the graph (bob gen, bob check --fix): missing files
@@ -409,11 +418,7 @@ func writeNativeState(root string, next nativeState) error {
 // a pin and the graph has nixpkgs or ecosystem nodes, and (with the offline fetcher) only when
 // the nixpkgs source is already in the store.
 func nativeIndex(ctx context.Context, st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) (*nixidx.Index, error) {
-	ecoNodes := false
-	for _, n := range g.Nodes {
-		ecoNodes = ecoNodes || !isCoreKind(n.Kind)
-	}
-	if lf.Nixpkgs.Rev == "" || !usesNixpkgs(g) && !ecoNodes {
+	if lf.Nixpkgs.Rev == "" || !usesNixpkgs(g) && !hasEcoNodes(g) {
 		return nil, nil
 	}
 	src, err := f.Ensure(ctx, lock.NixpkgsRequest(lf.Nixpkgs))
@@ -432,13 +437,9 @@ func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetch
 	var out []*diag.Error
 	stale := func(what string) { out = append(out, diag.New(1012, "what", what)) }
 
-	ecoNodes := false
-	for _, n := range g.Nodes {
-		ecoNodes = ecoNodes || !isCoreKind(n.Kind)
-	}
 	decl := nixpkgsDecl(g)
 	switch {
-	case lf.Nixpkgs.Rev == "" && (usesNixpkgs(g) || ecoNodes):
+	case lf.Nixpkgs.Rev == "" && usesNixpkgs(g): // as bob build pins it (D-M4d-5)
 		stale("nixpkgs is not pinned")
 	case lf.Nixpkgs.Rev != "":
 		isStale, err := nixpkgsStale(lf.Nixpkgs, decl)
@@ -482,6 +483,9 @@ func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetch
 	for _, e := range ecos {
 		inUse[e.Name()] = true
 	}
+	for _, name := range missingSections(g, lf) {
+		stale(name + " is not locked")
+	}
 	for _, name := range sortedKeys(lf.Sections) {
 		if knownSection(name) && !inUse[name] {
 			stale("the " + name + " section is no longer used")
@@ -500,8 +504,8 @@ func staleSections(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetc
 	var out []*diag.Error
 	for _, e := range ecos {
 		lfr, ok := e.(engine.LockFreshness)
-		if !ok {
-			continue
+		if !ok || lf.Sections[e.Name()] == nil {
+			continue // a missing section is locked on demand (bob build) or reported as missing
 		}
 		what, at, err := lfr.Stale(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[e.Name()], Fetch: f})
 		if err != nil {

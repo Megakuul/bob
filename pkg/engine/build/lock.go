@@ -76,6 +76,17 @@ func usesNixpkgs(g *ir.Graph) bool {
 	return false
 }
 
+// hasEcoNodes reports whether any node belongs to an ecosystem (they take their toolchains
+// from nixpkgs).
+func hasEcoNodes(g *ir.Graph) bool {
+	for _, n := range g.Nodes {
+		if !isCoreKind(n.Kind) {
+			return true
+		}
+	}
+	return false
+}
+
 // nixpkgsStale reports whether pin no longer matches the declaration decl.
 func nixpkgsStale(pin lock.NixpkgsPin, decl string) (bool, error) {
 	spec, err := lock.ParseNixpkgs(decl)
@@ -211,10 +222,14 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 	if len(stale) > 0 {
 		return nil, errors.Join(stale...)
 	}
-	if r.o.Lock {
-		if _, err := lockEcosystems(ctx, f, g, lf, nil, false); err != nil {
-			return nil, err
+	// --lock re-resolves every section; otherwise sections bob.lock does not have yet are
+	// locked on demand like missing pins (stale ones failed above).
+	if r.o.Offline && !r.o.Lock {
+		if missing := missingSections(g, lf); len(missing) > 0 {
+			return nil, diag.New(1012, "what", missing[0]+" is not locked and --offline forbids locking it")
 		}
+	} else if _, err := lockEcosystems(ctx, f, g, lf, nil, false, !r.o.Lock); err != nil {
+		return nil, err
 	}
 	after, err := lf.Encode()
 	if err != nil {
@@ -250,9 +265,10 @@ func ecosystemsOf(g *ir.Graph) ([]engine.Ecosystem, error) {
 	return out, nil
 }
 
-// lockEcosystems re-resolves the sections of the ecosystems used by g. Sections that bob.lock
-// cannot hold (an ecosystem without a lock section key) are left to their ecosystem.
-func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, update []string, all bool) ([]LockChange, error) {
+// lockEcosystems re-resolves the sections of the ecosystems used by g (onlyMissing: only those
+// bob.lock has no section for). Sections that bob.lock cannot hold (an ecosystem without a
+// lock section key) are left to their ecosystem.
+func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, update []string, all, onlyMissing bool) ([]LockChange, error) {
 	ecos, err := ecosystemsOf(g)
 	if err != nil {
 		return nil, err
@@ -260,7 +276,7 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 	var changes []LockChange
 	for _, e := range ecos {
 		name := e.Name()
-		if !knownSection(name) {
+		if !knownSection(name) || onlyMissing && lf.Sections[name] != nil {
 			continue
 		}
 		upd := update
@@ -284,6 +300,21 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 		}
 	}
 	return changes, nil
+}
+
+// missingSections are the lock sections of g's ecosystems that bob.lock does not have.
+func missingSections(g *ir.Graph, lf *lock.File) []string {
+	ecos, err := ecosystemsOf(g)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range ecos {
+		if knownSection(e.Name()) && lf.Sections[e.Name()] == nil {
+			out = append(out, e.Name())
+		}
+	}
+	return out
 }
 
 func knownSection(name string) bool {
@@ -402,7 +433,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		lf.Sources = nil
 	}
 
-	ecoChanges, err := lockEcosystems(ctx, f, g, lf, lo.Update, lo.All)
+	ecoChanges, err := lockEcosystems(ctx, f, g, lf, lo.Update, lo.All, false)
 	if err != nil {
 		return nil, err
 	}

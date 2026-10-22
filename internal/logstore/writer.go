@@ -61,7 +61,7 @@ type Writer struct {
 
 	mu      sync.Mutex
 	parts   map[string]*partition
-	pending int                        // uncommitted bytes over all partitions
+	pending int                         // uncommitted bytes over all partitions
 	last    map[string]map[string]int64 // build → package → last committed seq
 	kick    chan struct{}
 

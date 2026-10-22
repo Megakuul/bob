@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -106,6 +107,18 @@ func (Secret) String() string { return "[redacted]" }
 // GoString redacts.
 func (Secret) GoString() string { return "[redacted]" }
 
+// MarshalJSON redacts.
+func (Secret) MarshalJSON() ([]byte, error) { return []byte(`"[redacted]"`), nil }
+
+// MarshalText redacts.
+func (Secret) MarshalText() ([]byte, error) { return []byte("[redacted]"), nil }
+
+// LogValue redacts.
+func (Secret) LogValue() slog.Value { return slog.StringValue("[redacted]") }
+
+// IsZero reports an empty secret.
+func (s Secret) IsZero() bool { return s.v == "" }
+
 // EventType is the normalized kind of a webhook event.
 type EventType string
 
@@ -162,6 +175,3 @@ type PullRequest struct {
 	FromFork, Merged                                 bool
 	FetchRef                                         string
 }
-
-// CheckEvent validates the invariants every normalized event must satisfy.
-func CheckEvent(e Event) error { return errNotImplemented("forge.CheckEvent") }

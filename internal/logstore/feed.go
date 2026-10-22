@@ -12,14 +12,14 @@ import (
 
 // Follow timing (R-LOG-101, ADR 0019 decision 4).
 const (
-	gapToLake    = time.Second      // a follower's gap older than this asks for a lake read
-	liveSilence  = 6 * time.Second  // no live chunk for this long: degraded
-	degradedPoll = 5 * time.Second  // lake read interval while degraded
-	minLakeGap   = time.Second      // lake reads of one feed are at least this far apart
-	feedTick     = time.Second      // job state / subscription renewal check
-	delayedBeat  = time.Second      // a degraded follower hears from the server at least this often
-	feedCap      = 200000           // lines one feed keeps (the oldest are evicted)
-	maxBatch     = MaxChunkLines    // lines per follower message
+	gapToLake    = time.Second     // a follower's gap older than this asks for a lake read
+	liveSilence  = 6 * time.Second // no live chunk for this long: degraded
+	degradedPoll = 5 * time.Second // lake read interval while degraded
+	minLakeGap   = time.Second     // lake reads of one feed are at least this far apart
+	feedTick     = time.Second     // job state / subscription renewal check
+	delayedBeat  = time.Second     // a degraded follower hears from the server at least this often
+	feedCap      = 200000          // lines one feed keeps (the oldest are evicted)
+	maxBatch     = MaxChunkLines   // lines per follower message
 	followWait   = 500 * time.Millisecond
 )
 

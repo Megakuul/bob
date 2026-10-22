@@ -2,19 +2,16 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
-	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/translate"
 )
 
@@ -25,9 +22,10 @@ const (
 )
 
 // runCheck is `bob check [--fix] [--determinism]` (SPEC R-CLI-009): definition errors of
-// bob.go, paths git does not ignore (1013) and, with --determinism, a second evaluation
-// (1018), without changing a file unless --fix. Drift (1011) and lock freshness (1012) need
-// the engine's check stages (NEEDS in plan/progress/I-M4e.md).
+// bob.go, stale or missing lock entries (1012), generated files edited by hand (1011) and
+// paths git does not ignore (1013), and with --determinism a second evaluation (1018), without
+// changing a file unless --fix. --fix runs bob lock, bob gen --force and writes bob's block in
+// .git/info/exclude first.
 func runCheck(e *env) int {
 	root, err := e.root(false)
 	if err != nil {
@@ -37,29 +35,57 @@ func runCheck(e *env) int {
 	if done {
 		return exit
 	}
-	o := build.Options{Root: root, Patterns: []string{"//..."}, Store: st, Offline: e.a.bool("offline")}
+	o := build.Options{Root: root, Store: st, Offline: e.a.bool("offline")}
 	if e.a.bool("fix") {
-		if err := writeExclude(root, []string{".bob/"}); err != nil {
-			return e.out.fail(err)
-		}
 		if _, err := build.Lock(e.ctx, o, build.LockOptions{}); err != nil {
 			return e.out.fail(err)
 		}
+		paths, err := build.Gen(e.ctx, o, true)
+		if err != nil {
+			return e.out.fail(err)
+		}
+		if err := writeExclude(root, paths); err != nil {
+			return e.out.fail(err)
+		}
 	}
-	var findings []*diag.Error
-	g, err := build.Evaluate(e.ctx, o)
+	findings, err := build.Check(e.ctx, o)
 	if err != nil {
 		findings = append(findings, diagErrors(err)...)
-	} else {
-		recordLabels(root, graphLabels(graphOf(g)))
-	}
-	findings = append(findings, ignoreFindings(e.ctx, root, []string{".bob/"})...)
-	if e.a.bool("determinism") && err == nil {
-		if err := eval.CheckDeterminism(e.ctx, eval.Request{Root: root, Patterns: o.Patterns, GoRoot: o.GoRoot}); err != nil {
+	} else if e.a.bool("determinism") {
+		if err := build.CheckDeterminism(e.ctx, o); err != nil {
 			findings = append(findings, diagErrors(err)...)
 		}
 	}
 	return reportFindings(e, findings)
+}
+
+// runGen is `bob gen [--force]` (SPEC §03.0.2): write the generated native files and bob's
+// block in .git/info/exclude. A file edited by hand fails with 1011 unless --force, which keeps
+// a backup under .bob/gen/backup/.
+func runGen(e *env) int {
+	if e.a.bool("check") {
+		return e.out.fail(diag.NotImplemented("bob gen --check"))
+	}
+	root, err := e.root(false)
+	if err != nil {
+		return e.out.fail(err)
+	}
+	st, exit, done := e.enterStore()
+	if done {
+		return exit
+	}
+	o := build.Options{Root: root, Patterns: e.patterns(root, e.a.pos), Store: st, Offline: e.a.bool("offline")}
+	paths, err := build.Gen(e.ctx, o, e.a.bool("force"))
+	if err != nil {
+		return e.out.fail(err)
+	}
+	if err := writeExclude(root, paths); err != nil {
+		return e.out.fail(err)
+	}
+	e.out.result(struct {
+		Excluded []string `json:"excluded"`
+	}{append([]string{}, paths...)})
+	return e.out.finish(0, translate.Counts{}, nil)
 }
 
 // reportFindings prints the findings of check (blocks, then `bob: N problems (exit E)`), or
@@ -88,31 +114,14 @@ func reportFindings(e *env, findings []*diag.Error) int {
 	return e.out.finish(exit, translate.Counts{}, nil)
 }
 
-// ignoreFindings is BOB-E-1013 for each path git does not ignore. A directory that is not a
-// git work tree, or a host without git, has nothing to check.
-func ignoreFindings(ctx context.Context, root string, paths []string) []*diag.Error {
-	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
-		return nil
-	}
-	git, err := exec.LookPath("git")
-	if err != nil {
-		return nil
-	}
-	var out []*diag.Error
-	for _, p := range paths {
-		cmd := exec.CommandContext(ctx, git, "check-ignore", "-q", "--no-index", "--", p)
-		cmd.Dir = root
-		err := cmd.Run()
-		var ee *exec.ExitError
-		if errors.As(err, &ee) && ee.ExitCode() == 1 {
-			out = append(out, diag.New(1013, "path", p))
-		}
-	}
-	return out
-}
+// writeExclude replaces bob's block in .git/info/exclude with .bob/ and paths, keeping every
+// other line.
+func writeExclude(root string, paths []string) error { return updateExclude(root, paths, true) }
 
-// writeExclude replaces bob's block in .git/info/exclude with paths, keeping every other line.
-func writeExclude(root string, paths []string) error {
+// updateExclude writes bob's block in .git/info/exclude: .bob/ and paths, keeping every other
+// line. With replace the block holds exactly these; otherwise paths are added to it (a build
+// that did not regenerate native files does not know every generated file).
+func updateExclude(root string, paths []string, replace bool) error {
 	gitDir := filepath.Join(root, ".git")
 	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
 		return nil
@@ -122,6 +131,7 @@ func writeExclude(root string, paths []string) error {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return diag.New(7002, "reason", p+" cannot be read")
 	}
+	paths = append([]string{build.BobDir}, paths...) // a copy: the caller's slice stays
 	var keep []string
 	in := false
 	for _, l := range strings.Split(strings.TrimRight(string(old), "\n"), "\n") {
@@ -130,6 +140,8 @@ func writeExclude(root string, paths []string) error {
 			in = true
 		case l == excludeEnd:
 			in = false
+		case in && !replace:
+			paths = append(paths, strings.TrimPrefix(l, "/"))
 		case !in && (l != "" || len(keep) > 0):
 			keep = append(keep, l)
 		}

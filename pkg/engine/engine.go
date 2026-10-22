@@ -52,6 +52,12 @@ type PlanRequest struct {
 	// TestArgs are the arguments after `--` of bob test; they become part of every test unit
 	// planned here (so its result is cached per argument set).
 	TestArgs []string
+	// Root is the repository root (working tree) the graph was evaluated from; "" in Native.
+	Root string
+	// Store gives Plan the store access it may need: reading store paths, importing source
+	// trees it selected itself, realising pinned inputs it must read (planstore.go). nil in
+	// Native and wherever the caller has no store.
+	Store PlanStore
 }
 
 // PlanResult is what Plan returns.
@@ -91,8 +97,9 @@ type DriftLine struct {
 }
 
 // LockFreshness is implemented by an Ecosystem whose lock section records the declarations it
-// was resolved from (`inputs`, R-FW-062). Stale compares req.Prev (nil: no section yet) with the
-// declarations in req.Graph without network and without changing anything; it returns "" when
+// was resolved from (`inputs`, R-FW-062). Stale compares req.Prev (bob.lock's section; a missing
+// section is locked on demand instead) with the declarations in req.Graph without network and
+// without changing anything; it returns "" when
 // the section is fresh, else what changed ("npm zod ^3 is not pinned") and the bob.go position
 // of the changed declaration (zero when unknown). bob build, bob test and bob check report a
 // stale section as BOB-E-1012; bob lock and --lock re-resolve it. An Ecosystem without this

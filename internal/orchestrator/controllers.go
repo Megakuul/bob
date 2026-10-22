@@ -93,6 +93,10 @@ func (c *Controller) now() time.Time {
 
 func (c *Controller) ttl() time.Duration { return LeaseTTLFactor * c.Interval }
 
+// renewAfter is when a held lease is renewed: half its TTL (one interval) is left as margin
+// for a failed or slow renewal.
+func (c *Controller) renewAfter() time.Duration { return c.ttl() / 2 }
+
 func (c *Controller) every() time.Duration {
 	if c.Every > 0 {
 		return c.Every
@@ -139,6 +143,12 @@ func (c *Controller) Run(ctx context.Context) error {
 		now := c.now()
 		if err := c.acquire(ctx, now); err != nil && ctx.Err() == nil {
 			c.log().Warn("controller lease not checked", "controller", c.ID, "err", err.Error())
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(min(c.every(), time.Second)):
+				continue
+			}
 		}
 		if ctx.Err() != nil {
 			return nil
@@ -165,7 +175,7 @@ func (c *Controller) sleep(now time.Time) time.Duration {
 	var d time.Duration
 	if c.held {
 		next := c.last.Add(c.every())
-		if r := c.renewed.Add(c.ttl() / 3); r.Before(next) {
+		if r := c.renewed.Add(c.renewAfter()); r.Before(next) {
 			next = r
 		}
 		d = next.Sub(now)
@@ -180,10 +190,10 @@ func (c *Controller) sleep(now time.Time) time.Duration {
 }
 
 // acquire runs the lease state machine of §05.6.5 with this orchestrator's clock and skew: create
-// when absent, renew when owned (after a third of the TTL), take over when lapsed. It keeps the
+// when absent, renew when owned (after half the TTL), take over when lapsed. It keeps the
 // cursor.
 func (c *Controller) acquire(ctx context.Context, now time.Time) error {
-	if c.held && now.Before(c.renewed.Add(c.ttl()/3)) && now.Before(c.expires) {
+	if c.held && now.Before(c.renewed.Add(c.renewAfter())) && now.Before(c.expires) {
 		return nil
 	}
 	var other *store.ControllerLease

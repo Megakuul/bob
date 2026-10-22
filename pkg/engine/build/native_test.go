@@ -211,6 +211,7 @@ func checkNative(ctx context.Context, root string, g *ir.Graph, lf *lock.File) (
 func TestLockFindings(t *testing.T) {
 	ctx := context.Background()
 	g := natGraph("one")
+	g.Nodes = append(g.Nodes, &ir.Node{ID: "nixpkgs:zlib", Kind: "nixpkgs.lib", Label: "nixpkgs:zlib", Nix: &ir.Nix{Attr: "zlib"}})
 	lf := &lock.File{LockVersion: lock.Version,
 		Sections: map[string]json.RawMessage{"nat": json.RawMessage(`{"inputs":"old"}`), "go": json.RawMessage(`{}`)},
 		Sources:  map[string]lock.Source{"//x:dl": {URL: "https://example.invalid/x"}}}

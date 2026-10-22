@@ -233,8 +233,15 @@ type WorkerControl struct {
 // GetCheckoutCredential implements WorkerControlService: a checkout credential for the job the
 // calling worker holds (owner + epoch), sealed to its KEM key (R-FLEET-006).
 func (w *WorkerControl) GetCheckoutCredential(ctx context.Context, req *connect.Request[workerv1.GetCheckoutCredentialRequest]) (*connect.Response[workerv1.GetCheckoutCredentialResponse], error) {
-	wid := api.WorkerFrom(ctx)
-	jobID, epoch := req.Msg.JobId, req.Msg.Epoch
+	res, err := w.checkout(ctx, api.WorkerFrom(ctx), req.Msg.JobId, req.Msg.Epoch)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(res), nil
+}
+
+// checkout is GetCheckoutCredential for the authenticated worker wid.
+func (w *WorkerControl) checkout(ctx context.Context, wid, jobID string, epoch int64) (*workerv1.GetCheckoutCredentialResponse, error) {
 	if _, err := store.Segment(jobID); err != nil {
 		return nil, api.InvalidArgument("job_id", "invalid job id")
 	}
@@ -262,7 +269,7 @@ func (w *WorkerControl) GetCheckoutCredential(ctx context.Context, req *connect.
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&workerv1.GetCheckoutCredentialResponse{SealedCheckout: sealed, ExpiresUnix: co.Expires.Unix()}), nil
+	return &workerv1.GetCheckoutCredentialResponse{SealedCheckout: sealed, ExpiresUnix: co.Expires.Unix()}, nil
 }
 
 // Attach implements WorkerControlService: the worker's control channel. The first message is

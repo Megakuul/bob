@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/megakuul/bob/internal/orchestrator"
@@ -25,7 +28,7 @@ type Keys struct {
 // EnsureKeys (start-up; the hourly rotation is orchestrator.Keys, the key controller) returns the fleet's current signing key, creating and publishing one when
 // fleet/cfg has no valid key yet, and publishes params in fleet/cfg.pr when it holds none.
 // Orchestrators that start together may each publish a key; all of them then pick the same
-// one (the valid key with the smallest kid), so every orchestrator signs with one key and the
+// one (keysOf), so every orchestrator signs with one key and the
 // others stay verifiable.
 func EnsureKeys(ctx context.Context, control, fleet *store.Bucket, now time.Time, params store.FleetParams) (*Keys, error) {
 	cfg, err := store.Get(ctx, fleet, store.FleetConfigKey())
@@ -39,7 +42,7 @@ func EnsureKeys(ctx context.Context, control, fleet *store.Bucket, now time.Time
 			if err != nil {
 				return nil, err
 			}
-			fresh = &orchestrator.OrchKeyRecord{Kid: orchestrator.KeyID(pub), Seed: priv.Seed(), Created: now.UTC(), NotAfter: now.Add(orchestrator.KeyLifetime).UTC()}
+			fresh = &orchestrator.OrchKeyRecord{Kid: kidOf(pub), Seed: priv.Seed(), Created: now.UTC(), NotAfter: now.Add(orchestrator.KeyLifetime).UTC()}
 			// The seed first: a published key whose seed is missing could never sign.
 			if err := store.Create(ctx, control, fresh); err != nil {
 				return nil, fmt.Errorf("okey/%s: %w", fresh.Kid, err)
@@ -74,6 +77,13 @@ func EnsureKeys(ctx context.Context, control, fleet *store.Bucket, now time.Time
 	return keysOf(ctx, control, cfg, now)
 }
 
+// kidOf is the kid of a start-up key: "k" + base32 of the first 10 bytes of the public key's
+// SHA-256 (the key controller's rotated keys are "k" + 6 digits).
+func kidOf(pub ed25519.PublicKey) string {
+	h := sha256.Sum256(pub)
+	return "k" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(h[:10]))
+}
+
 func hasValid(ks []store.FleetKey, now time.Time) bool {
 	for _, k := range ks {
 		if len(k.Pub) == ed25519.PublicKeySize && k.NotAfter.After(now) {
@@ -83,7 +93,8 @@ func hasValid(ks []store.FleetKey, now time.Time) bool {
 	return false
 }
 
-// keysOf picks the signing key of cfg (the valid key with the smallest kid) and loads its seed.
+// keysOf picks the signing key of cfg (the valid key that lives longest, ties by smallest kid,
+// so orchestrators that read the same fleet/cfg pick the same key) and loads its seed.
 func keysOf(ctx context.Context, control *store.Bucket, cfg *store.FleetConfig, now time.Time) (*Keys, error) {
 	ks := &Keys{Verify: map[string]ed25519.PublicKey{}}
 	var pick *store.FleetKey
@@ -93,7 +104,7 @@ func keysOf(ctx context.Context, control *store.Bucket, cfg *store.FleetConfig, 
 		}
 		ks.Verify[k.Kid] = ed25519.PublicKey(k.Pub)
 		ks.Pubs = append(ks.Pubs, ed25519.PublicKey(k.Pub))
-		if k.NotAfter.After(now) && (pick == nil || k.Kid < pick.Kid) {
+		if k.NotAfter.After(now) && (pick == nil || k.NotAfter.After(pick.NotAfter) || k.NotAfter.Equal(pick.NotAfter) && k.Kid < pick.Kid) {
 			pick = &cfg.Keys[i]
 		}
 	}

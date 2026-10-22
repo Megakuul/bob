@@ -49,7 +49,7 @@ func commands() []command {
 		{"check", []string{"bob check [--fix]"}, "check bob.go files and bob.lock",
 			[]flag{{name: "fix"}, {name: "determinism"}}, runCheck},
 		{"gen", []string{"bob gen [patterns…] [--check] [--force]"}, "write native tooling files and generated code",
-			[]flag{{name: "check"}, {name: "force"}}, notYet},
+			[]flag{{name: "check"}, {name: "force"}}, runGen},
 		{"status", []string{"bob status [--json]"}, "show the state of generated files and the lock", nil, notYet},
 		{"lock", []string{"bob lock [--update [names…]] [--nixpkgs <rev>] [--offline]"}, "update bob.lock",
 			[]flag{{name: "update"}, {name: "nixpkgs", kind: fStr}, {name: "rebuild"}}, runLock},
