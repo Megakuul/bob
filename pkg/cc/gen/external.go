@@ -61,9 +61,6 @@ func (pl *planner) planExternal(n *ir.Node) error {
 	if err != nil {
 		return internal(n, "%v", err)
 	}
-	if c.system != hostSystem() {
-		return crossNotImplemented(n, c)
-	}
 	sec, err := lockSection(pl.req.Lock)
 	if err != nil {
 		return internal(n, "bob.lock cc section: %v", err)
@@ -88,7 +85,7 @@ func (pl *planner) planExternal(n *ir.Node) error {
 
 	in := newInputs(pl.req.Builder)
 	in.srcs[src] = true
-	ts, err := pl.tools(n, x.CC, in)
+	ts, err := pl.tools(n, x.CC, c, in)
 	if err != nil {
 		return err
 	}
@@ -136,15 +133,19 @@ func (pl *planner) planExternal(n *ir.Node) error {
 			ldflags = append(ldflags, "-L"+lib+"/lib", "-Wl,-rpath,"+lib+"/lib")
 		}
 	}
-	env := map[string]string{"CC": "gcc", "CXX": "g++", "CFLAGS": strings.Join(cflags, " "),
+	env := map[string]string{"CC": c.cmd("gcc"), "CXX": c.cmd("g++"), "CFLAGS": strings.Join(cflags, " "),
 		"CXXFLAGS": strings.Join(cflags, " "), "LDFLAGS": strings.Join(ldflags, " "),
 		"PKG_CONFIG_PATH": strings.Join(pcPath, ":"), "CMAKE_PREFIX_PATH": strings.Join(prefixes, ":")}
+	cargs, err := crossArgs(n, x, c, env)
+	if err != nil {
+		return err
+	}
 	out := drv.Placeholder("out")
-	args := map[string]any{"src": src, "build": x.Build, "args": x.Args, "profile": c.profile, "path": path,
+	args := map[string]any{"src": src, "build": x.Build, "args": cargs, "profile": c.profile, "path": path,
 		"shell": shell, "env": env, "out": out}
 	fx := &fixup{Strip: c.profile != string(bob.Debug), ShrinkRPath: true,
 		Forbidden: append(append([]string{}, ts.forbids...), src, pl.req.Builder), Tools: ts.fixup}
-	p, d, err := pl.job(drv.Name("ccx", x.Name), c.system, "cc-external", n.Label, args, fx, in)
+	p, d, err := pl.job(c.name("ccx", x.Name), c.system, "cc-external", n.Label, args, fx, in)
 	if err != nil {
 		return internal(n, "%v", err)
 	}
@@ -155,4 +156,26 @@ func (pl *planner) planExternal(n *ir.Node) error {
 	return nil
 }
 
-func diagNotImplemented(feature string) error { return diag.NotImplemented(feature) }
+// crossArgs returns the External's configure arguments, preceded for a cross target by what its
+// build system needs to cross-compile (R-PLAT-005); env gets the prefixed binutils.
+func crossArgs(n *ir.Node, x ccspec.External, c config, env map[string]string) ([]string, error) {
+	if !c.tc.Cross() {
+		return x.Args, nil
+	}
+	for _, t := range []string{"ar", "ranlib", "strip", "nm", "ld", "objcopy"} {
+		env[strings.ToUpper(t)] = c.cmd(t)
+	}
+	var pre []string
+	switch x.Build {
+	case ccspec.BuildCMake:
+		cpu, _, _ := strings.Cut(c.tc.Triple, "-")
+		pre = []string{"-DCMAKE_SYSTEM_NAME=Linux", "-DCMAKE_SYSTEM_PROCESSOR=" + cpu,
+			"-DCMAKE_C_COMPILER=" + c.cmd("gcc"), "-DCMAKE_CXX_COMPILER=" + c.cmd("g++")}
+	case ccspec.BuildAutotools:
+		pre = []string{"--host=" + c.tc.Triple}
+	case ccspec.BuildMeson:
+		// Meson cross-compiles only with a cross file, which the cc-external builder cannot write yet.
+		return nil, diag.NotImplemented("cross-compiling a Meson cc.External (" + n.Label + ")")
+	}
+	return append(pre, x.Args...), nil
+}

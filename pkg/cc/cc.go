@@ -184,6 +184,10 @@ func program(p *bob.P, name string, o BinaryOpts, kind, typ string) (bob.Node, [
 	t := ccspec.Target{Name: name, Type: typ, Std: string(o.Std), Defines: defines(o.Defines),
 		Flags: list(o.Flags), LinkOpts: list(o.LinkOpts), PrivDeps: []int{}}
 	deps := tools(p, &t.Tools)
+	if tc := p.Toolchain(); typ == ccspec.TypeTest && tc.Emulator != "" {
+		t.Tools.Emulator = len(deps)
+		deps = append(deps, nixpkgs.Tool(p, tc.Emulator))
+	}
 	t.Deps, deps = linkables(libsFrom(p, o.Libs, o.Deps), deps)
 	problems := check(o.Srcs, o.Std, o.Flags, o.LinkOpts, o.Defines)
 	return ext.Restrict(ext.New(p, kind, name, deps, []bob.Sources{o.Srcs}, t), o.Platforms), problems

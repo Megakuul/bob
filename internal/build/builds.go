@@ -106,6 +106,12 @@ type Projects interface {
 // ErrNoProject is the answer of Projects for an unknown project.
 var ErrNoProject = errors.New("project not found")
 
+// UploadProjects is implemented by a Projects that creates a project on the first upload
+// (`--remote`) build that names it: a project without a repository (decision D-IB13-1).
+type UploadProjects interface {
+	ForUpload(ctx context.Context, id string) (*Project, error)
+}
+
 // AnyProject accepts every syntactically valid project id with no linked repository. It is
 // the Projects of a server without ProjectService (decision D-IB11-3).
 type AnyProject struct{}
@@ -414,12 +420,19 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 		return nil, err
 	}
 	proj, err := b.cfg.Projects.Project(ctx, r.Project)
-	if err != nil {
+	up, implicit := b.cfg.Projects.(UploadProjects)
+	if err != nil && !(errors.Is(err, ErrNoProject) && implicit && r.Source.Upload != "") {
 		return nil, err
 	}
 	if r.Source.Upload != "" {
 		if err := b.checkUpload(ctx, r.Project, r.Source.Upload); err != nil {
 			return nil, err
+		}
+		if proj == nil {
+			// the snapshot exists: its uploader may call CreateBuild on this project id
+			if proj, err = up.ForUpload(ctx, r.Project); err != nil {
+				return nil, err
+			}
 		}
 	} else if proj.Repo == "" && r.Source.Upload == "" && b.cfg.Projects != (AnyProject{}) {
 		return nil, invalid("source", "project %s has no linked repository; upload a source snapshot", r.Project)
@@ -620,7 +633,7 @@ func (b *Builds) syncEntry(ctx context.Context, rec *store.BuildRecord) error {
 
 // Get reads a build record (GET, the source of truth).
 func (b *Builds) Get(ctx context.Context, id string) (*store.BuildRecord, error) {
-	if len(id) != 26 {
+	if !validBuildID(id) {
 		return nil, store.ErrNotFound
 	}
 	return store.Get(ctx, b.cfg.Control, &store.BuildRecord{ID: id})

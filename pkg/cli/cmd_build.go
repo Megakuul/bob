@@ -105,6 +105,7 @@ func (e *env) buildOptions(root string, cmd build.Command) (build.Options, error
 		PrintPaths: e.a.bool("print-paths"),
 		JSONLog:    e.out.jsonLog,
 	}
+	o.RequireAllTests = cmd == build.CmdTest && e.a.bool("require-all-tests")
 	if v := e.a.str("variant"); v != "" {
 		o.Variants = strings.Split(v, "+")
 	}
@@ -171,6 +172,12 @@ func (s *sink) clear() {
 }
 
 func (s *sink) put(ev build.Event) {
+	if ev.Event == "note" && ev.Note != nil && !s.o.json {
+		// Notes go to stderr at once, before the build they announce (R-FW-036).
+		s.clear()
+		fmt.Fprintf(s.o.errw, "note: %s\n", ev.Note.Text)
+		return
+	}
 	if !s.o.json {
 		if ev.Event == "run.start" {
 			s.o.started = true
@@ -249,7 +256,21 @@ func (s *sink) write(ev build.Event) {
 			Status     string   `json:"status"`
 			DurationMs int64    `json:"durationMs"`
 			Failed     []string `json:"failed"`
-		}{ev.Label, ev.Status, ev.DurationMs, failed})
+			Runner     string   `json:"runner,omitempty"`
+			Reason     string   `json:"reason,omitempty"`
+		}{ev.Label, ev.Status, ev.DurationMs, failed, ev.Runner, ev.Line})
+	case "note":
+		if n := ev.Note; n != nil {
+			o.event(ev.Event, struct {
+				Type     string `json:"type"`
+				Code     string `json:"code"`
+				Message  string `json:"message"`
+				Label    string `json:"label,omitempty"`
+				Attr     string `json:"attr,omitempty"`
+				Platform string `json:"platform,omitempty"`
+				Field    string `json:"field,omitempty"`
+			}{"note", n.Code, n.Text, n.Label, n.Attr, n.Platform, n.Field})
+		}
 	case "package.finish":
 		o.event(ev.Event, struct {
 			Label  string   `json:"label"`
@@ -335,7 +356,12 @@ func renderTests(o *out, res *build.Result) {
 	var pass, fail, cached int
 	for _, t := range res.Tests {
 		dur := fmt.Sprintf(" (%.1fs)", float64(t.DurationMs)/1000)
+		if t.Runner != "" {
+			dur = fmt.Sprintf(" (%.1fs, %s)", float64(t.DurationMs)/1000, t.Runner)
+		}
 		switch t.Status {
+		case "skipped":
+			fmt.Fprintf(o.w, "%s    %s: %s\n", paint(o.style, sgrYellow, "SKIP"), t.Label, t.Reason)
 		case "pass":
 			pass++
 			fmt.Fprintf(o.w, "%s    %s%s\n", paint(o.style, sgrGreen, "PASS"), t.Label, dur)
@@ -377,7 +403,10 @@ func renderTests(o *out, res *build.Result) {
 	fmt.Fprintln(w, paint(o.style, sgrGreen, line))
 }
 
-const sgrGreen = "\x1b[32m"
+const (
+	sgrGreen  = "\x1b[32m"
+	sgrYellow = "\x1b[33m"
+)
 
 // runReplay translates a recorded Nix run instead of building (BOB_TEST_NIX_REPLAY, test
 // builds only, A27): the same output as a live run of the capture.

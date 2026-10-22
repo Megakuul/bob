@@ -22,6 +22,9 @@ type Toolchain struct {
 	// libgcc_s, libstdc++ and sanitiser runtimes (R-FW-037); "" natively, where the wrapper's
 	// RUNPATH already covers them.
 	CCLib string
+	// Emulator is the attribute of the user-mode emulator (a host tool) that runs the target's
+	// test programs on the host (R-FW-039), and EmulatorCmd its command in bin/; "" natively.
+	Emulator, EmulatorCmd string
 }
 
 // Cross reports whether the toolchain compiles for another platform than it runs on.
@@ -45,6 +48,7 @@ func ToolchainFor(host, target Platform) Toolchain {
 	t.Triple = target.Triple()
 	t.Prefix = t.Triple + "-"
 	t.CC, t.Bintools, t.CCLib = set, set+".bintools", set+".cc"
+	t.Emulator, t.EmulatorCmd = "qemu-user", "qemu-"+target.cpu()
 	return t
 }
 

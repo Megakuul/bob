@@ -421,9 +421,6 @@ func (pl *planner) planTarget(n *ir.Node) error {
 	if err != nil {
 		return internal(n, "%v", err)
 	}
-	if c.system != hostSystem() {
-		return crossNotImplemented(n, c)
-	}
 	src, ok := pl.req.Sources[n.ID]
 	if !ok {
 		return internal(n, "its sources were not imported")
@@ -443,7 +440,7 @@ func (pl *planner) planTarget(n *ir.Node) error {
 	}
 	in := newInputs(pl.req.Builder)
 	in.srcs[src] = true
-	ts, err := pl.tools(n, t.Tools, in)
+	ts, err := pl.tools(n, t.Tools, c, in)
 	if err != nil {
 		return err
 	}
@@ -473,7 +470,7 @@ func (pl *planner) planTarget(n *ir.Node) error {
 		lang := language(f)
 		cxx = cxx || lang == "c++"
 		obj := buildTop + "/obj/" + f + ".o"
-		argv := append([]string{compiler(lang)}, compileArgs(t, c, f, src, own, depInc)...)
+		argv := append([]string{c.cmd(compiler(lang))}, compileArgs(t, c, f, src, own, depInc)...)
 		argv = append(argv, "-c", f, "-o", obj)
 		compile = append(compile, command{Argv: argv, Out: obj})
 		objs = append(objs, obj)
@@ -485,7 +482,7 @@ func (pl *planner) planTarget(n *ir.Node) error {
 	switch t.Type {
 	case ccspec.TypeStatic:
 		lib := out + "/lib/lib" + name + ".a"
-		link = command{Argv: append([]string{"ar", "rcsD", lib}, objs...), Out: lib}
+		link = command{Argv: append([]string{c.cmd("ar"), "rcsD", lib}, objs...), Out: lib}
 	default:
 		ldeps, err := pl.linkDeps(n, t)
 		if err != nil {
@@ -505,7 +502,7 @@ func (pl *planner) planTarget(n *ir.Node) error {
 			linker = "g++"
 		}
 		target := out + "/bin/" + name
-		argv := []string{linker}
+		argv := []string{c.cmd(linker)}
 		if t.Type == ccspec.TypeShared {
 			target = out + "/lib/lib" + name + ".so"
 			argv = append(argv, "-shared", "-Wl,-soname,lib"+name+".so")
@@ -514,6 +511,11 @@ func (pl *planner) planTarget(n *ir.Node) error {
 		argv = append(argv, objs...)
 		argv = append(argv, largs...)
 		argv = append(argv, c.sanitizeFlags()...)
+		if ts.ccLib != "" && len(c.sanitizeNames()) > 0 {
+			// R-FW-037: the cross sanitiser runtimes need the cross gcc-lib (libstdc++) at run
+			// time; nixpkgs' cross libasan does not find it on its own.
+			argv = append(argv, "-Wl,-rpath,"+ts.ccLib+"/lib")
+		}
 		argv = append(argv, t.LinkOpts...)
 		link = command{Argv: argv, Out: target}
 	}
@@ -526,7 +528,7 @@ func (pl *planner) planTarget(n *ir.Node) error {
 	if t.Type == ccspec.TypeStatic {
 		fx.ShrinkRPath = false
 	}
-	p, d, err := pl.job(drv.Name("cc", name), c.system, "cc-compile-link", n.Label, args, fx, in)
+	p, d, err := pl.job(c.name("cc", name), c.system, "cc-compile-link", n.Label, args, fx, in)
 	if err != nil {
 		return internal(n, "%v", err)
 	}
@@ -541,7 +543,7 @@ func (pl *planner) planTarget(n *ir.Node) error {
 	case ccspec.TypeBinary:
 		rv.MainProgram = "bin/" + name
 	case ccspec.TypeTest:
-		rv, err = pl.testRun(n, name, d, p, c.system)
+		rv, err = pl.testRun(n, name, d, p, c)
 		if err != nil {
 			return err
 		}
@@ -562,11 +564,6 @@ func (pl *planner) hasCXX(n *ir.Node) bool {
 		}
 	}
 	return false
-}
-
-// crossNotImplemented: the C/C++ toolchain is the host's; cross toolchains are task M7.4.
-func crossNotImplemented(n *ir.Node, c config) error {
-	return diagNotImplemented(fmt.Sprintf("C/C++ for %s from %s (%s, task M7.4)", c.system, hostSystem(), n.Label))
 }
 
 // linkInfo is what other ecosystems (cgo, Rust, OCaml) link for a bob library: its headers,
@@ -654,12 +651,15 @@ func staticIncludes(l *lib, rv engine.Resolved) []string {
 }
 
 // testRun plans the test-run job of a test: run the program once; TAP output gives the cases.
-func (pl *planner) testRun(n *ir.Node, name string, binD *drv.Derivation, binDrv, system string) (engine.Resolved, error) {
+func (pl *planner) testRun(n *ir.Node, name string, binD *drv.Derivation, binDrv string, c config) (engine.Resolved, error) {
 	in := newInputs(pl.req.Builder)
 	in.add(engine.Resolved{Drv: binDrv, Outputs: map[string]string{"out": outPath(binD)}}, "out")
 	argv := append([]string{outPath(binD) + "/bin/" + name}, pl.req.TestArgs...)
 	args := map[string]any{"argv": argv, "format": "tap", "timeoutSeconds": defaultTestTimeoutS}
-	p, d, err := pl.job(drv.Name("ccrun", name), system, "test-run", n.Label, args, nil, in)
+	if err := pl.emulate(n, c.tc, args, in); err != nil {
+		return engine.Resolved{}, err
+	}
+	p, d, err := pl.job(c.name("ccrun", name), c.system, "test-run", n.Label, args, nil, in)
 	if err != nil {
 		return engine.Resolved{}, internal(n, "%v", err)
 	}
@@ -668,3 +668,27 @@ func (pl *planner) testRun(n *ir.Node, name string, binD *drv.Derivation, binDrv
 
 // defaultTestTimeoutS is the timeout of a C/C++ test unit: 10 minutes (A92).
 const defaultTestTimeoutS = 600
+
+// emulate makes a test-run job of a cross-compiled test run its program under the emulator
+// (R-FW-039): argv becomes <qemu> <program> <args>. Sanitised and race tests of another
+// platform are not run at all (the engine reports them skipped).
+func (pl *planner) emulate(n *ir.Node, tc bob.Toolchain, args map[string]any, in *inputs) error {
+	if !tc.Cross() {
+		return nil
+	}
+	var t ccspec.Target
+	if err := json.Unmarshal(n.Spec, &t); err != nil {
+		return internal(n, "spec: %v", err)
+	}
+	if t.Tools.Emulator <= 0 {
+		return internal(n, "a test for %s has no emulator", tc.Target)
+	}
+	_, rv, err := pl.dep(n, t.Tools.Emulator)
+	if err != nil {
+		return err
+	}
+	q := in.add(rv, pickOutput(rv.Outputs, "out"))
+	argv, _ := args["argv"].([]string)
+	args["argv"] = append([]string{q + "/bin/" + tc.EmulatorCmd}, argv...)
+	return nil
+}

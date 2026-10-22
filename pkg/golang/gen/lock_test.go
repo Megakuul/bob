@@ -161,3 +161,18 @@ func TestLockErrors(t *testing.T) {
 		t.Errorf("not found: %#v", err)
 	}
 }
+
+// TestGoLineCoversDependencies: a dependency of the same language version with a higher patch
+// raises the go line (the go command would want to update go.mod otherwise).
+func TestGoLineCoversDependencies(t *testing.T) {
+	m := &wsModule{spec: gospec.Module{Path: "example.com/m", Go: "1.26"}}
+	sec := &lock.GoSection{Modules: []lock.GoModule{
+		{Path: "a.example/x", Version: "v1.0.0", Go: "1.26.1"},
+		{Path: "a.example/x", Version: "v0.9.0", Go: "1.26.4"}, // not selected
+		{Path: "b.example/y", Version: "v1.0.0", Go: "1.25.7"},
+	}}
+	bl := []resolve.Module{{Path: "a.example/x", Version: "v1.0.0"}, {Path: "b.example/y", Version: "v1.0.0"}}
+	if got := goDirectiveOf(m, bl, sec); got != "1.26.1" {
+		t.Errorf("go line %s, want 1.26.1", got)
+	}
+}

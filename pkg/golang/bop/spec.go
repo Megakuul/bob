@@ -12,6 +12,16 @@ type Toolchain struct {
 	GOARCH string   `json:"goarch"`
 	Path   []string `json:"path"` // PATH of the job: the C toolchain's bin directories
 	CC     string   `json:"cc"`   // C compiler for cgo and external linking; "" = cgo off
+	// Env is the cross environment of SPEC R-FW-033 (GOOS, GOARCH, CC, CXX); GOOS and GOARCH
+	// must equal the fields above, CC and CXX name the target's compilers. Empty natively.
+	Env map[string]string `json:"env,omitempty"`
+	// GCFlags are the variant's compile flags (-N -l for debug, -race, -asan), given to every
+	// compile and, for go-std, to go list.
+	GCFlags []string `json:"gcflags,omitempty"`
+	// LDFlags are link flags: -race, -asan, and -extld=<target C compiler> when cross.
+	LDFlags []string `json:"ldflags,omitempty"`
+	// CFlags are added to the C compiles of cgo and to an external link (-O0 -g, -fsanitize=…).
+	CFlags []string `json:"cflags,omitempty"`
 }
 
 // StdArgs is the args of kind go-std: the standard library compiled once per toolchain,

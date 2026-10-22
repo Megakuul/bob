@@ -22,16 +22,37 @@ import (
 // authService implements bob.auth.v1.AuthService.
 type authService struct{ id *Identity }
 
-func (id *Identity) nix() *authv1.NixInfo {
-	if id.info.BaseURL == "" {
+// SetNixKeys sets the source of the cache's public keys (promote.Keys.PublicKeys: ACTIVE and
+// VERIFY_ONLY keys) that WhoAmI and GetServerInfo announce. It is called while the server is
+// wired, before it serves.
+func (id *Identity) SetNixKeys(keys func(context.Context) ([]string, error)) { id.nixKeys = keys }
+
+// nix is the server's binary cache for clients (SPEC §6.5 NixInfo): the substituter (empty
+// without server.base_url: the client then uses <server>/nix) and the public keys. Without
+// keys (no cache, or the key index unreadable) it is nil: a client must not trust a cache
+// whose keys it does not know.
+func (id *Identity) nix(ctx context.Context) *authv1.NixInfo {
+	if id.nixKeys == nil {
 		return nil
 	}
-	return &authv1.NixInfo{Substituter: strings.TrimSuffix(id.info.BaseURL, "/") + "/nix"}
+	keys, err := id.nixKeys(ctx)
+	if err != nil {
+		id.log.Warn("cache public keys not available", "err", err.Error())
+		return nil
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	out := &authv1.NixInfo{PublicKeys: keys}
+	if id.info.BaseURL != "" {
+		out.Substituter = strings.TrimSuffix(id.info.BaseURL, "/") + "/nix"
+	}
+	return out
 }
 
 func (s authService) GetServerInfo(ctx context.Context, _ *connect.Request[authv1.GetServerInfoRequest]) (*connect.Response[authv1.GetServerInfoResponse], error) {
 	out := &authv1.GetServerInfoResponse{
-		ServerName: s.id.info.Name, BaseUrl: s.id.info.BaseURL, Version: s.id.info.Version, Nix: s.id.nix(),
+		ServerName: s.id.info.Name, BaseUrl: s.id.info.BaseURL, Version: s.id.info.Version, Nix: s.id.nix(ctx),
 		LoginOptions: []*authv1.LoginOption{{DisplayName: "Password"}},
 	}
 	provs, err := s.id.listProviders(ctx)
@@ -52,7 +73,7 @@ func (s authService) GetServerInfo(ctx context.Context, _ *connect.Request[authv
 
 func (s authService) WhoAmI(ctx context.Context, _ *connect.Request[authv1.WhoAmIRequest]) (*connect.Response[authv1.WhoAmIResponse], error) {
 	p := api.PrincipalFrom(ctx)
-	out := api.WhoAmI(p, s.id.nix())
+	out := api.WhoAmI(p, s.id.nix(ctx))
 	if p != nil {
 		// Projects come from the effective permissions ("*" if any permission is on every
 		// project), not from the bindings' projects.

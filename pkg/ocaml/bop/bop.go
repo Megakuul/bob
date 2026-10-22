@@ -123,10 +123,10 @@ func (r *runner) resolve(dir string, argv []string) ([]string, error) {
 	}
 	name := path.Base(interp[0])
 	args := interp[1:]
-	if name == "env" && len(args) > 0 {
+	viaEnv := name == "env" && len(args) > 0
+	if viaEnv { // #!/usr/bin/env x: x from the job's PATH, never the host's
 		name, args = path.Base(args[0]), args[1:]
-	}
-	if _, err := os.Stat(interp[0]); err == nil && name != "env" {
+	} else if _, err := os.Stat(interp[0]); err == nil {
 		return append([]string{prog}, argv[1:]...), nil
 	}
 	p, err := lookPath(name, r.path)

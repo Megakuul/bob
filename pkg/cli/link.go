@@ -7,5 +7,6 @@ import (
 	_ "github.com/megakuul/bob/pkg/golang/gen"
 	_ "github.com/megakuul/bob/pkg/nixpkgs"
 	_ "github.com/megakuul/bob/pkg/npm/gen"
+	_ "github.com/megakuul/bob/pkg/ocaml/gen"
 	_ "github.com/megakuul/bob/pkg/rust/gen"
 )

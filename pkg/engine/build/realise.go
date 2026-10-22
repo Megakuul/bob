@@ -414,7 +414,7 @@ func signalName(s syscall.Signal) string {
 func (r *runner) testResults(ctx context.Context, st *store.Store, units []testrun.Unit, cached map[string]bool) []TestResult {
 	var out []TestResult
 	for _, u := range units {
-		tr := TestResult{Label: u.Label, Status: string(testrun.StatusFail)}
+		tr := TestResult{Label: u.Label, Status: string(testrun.StatusFail), Runner: unitRunner(u)}
 		if res, err := testrun.ReadResult(hostPath(st, u.Out)); err == nil {
 			tr.DurationMs, tr.Failed = res.DurationMs(), res.Failed()
 			tr.Status = string(testrun.StatusPass)
@@ -424,7 +424,7 @@ func (r *runner) testResults(ctx context.Context, st *store.Store, units []testr
 		} else if res, ok := failedResult(ctx, st, u.DrvPath); ok {
 			tr.DurationMs, tr.Failed = res.DurationMs(), res.Failed()
 		}
-		r.emit(Event{Event: "test.result", Label: tr.Label, Status: tr.Status, DurationMs: tr.DurationMs, Failed: tr.Failed})
+		r.emit(Event{Event: "test.result", Label: tr.Label, Status: tr.Status, DurationMs: tr.DurationMs, Failed: tr.Failed, Runner: tr.Runner})
 		out = append(out, tr)
 	}
 	return out

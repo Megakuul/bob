@@ -47,6 +47,9 @@ type Identity struct {
 	users    ttlCache[store.UserRecord]
 	sas      ttlCache[store.ServiceAccountRecord]
 
+	// nixKeys lists the cache's public keys (SetNixKeys); nil = no cache on this server.
+	nixKeys func(context.Context) ([]string, error)
+
 	// bootToken and bootUser are set once by Bootstrap, before the API serves.
 	bootToken, bootUser string
 }

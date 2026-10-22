@@ -155,6 +155,9 @@ func download(ctx context.Context, u, dir string) error {
 			case <-time.After(time.Duration(attempt) * time.Second):
 			}
 		}
+		if err := os.RemoveAll(filepath.Join(dir, "packages")); err != nil { // a failed attempt's files
+			return err
+		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
 			return err

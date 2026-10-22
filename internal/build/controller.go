@@ -687,19 +687,3 @@ func (b *Builds) settle(ctx context.Context, rec *store.BuildRecord) error {
 	}
 	return b.dropRunning(ctx, rec.ID)
 }
-
-// buildTime is the creation time in a build id.
-func buildTime(id string) (time.Time, error) {
-	if len(id) != 26 {
-		return time.Time{}, fmt.Errorf("build id %q", id)
-	}
-	var ms uint64
-	for i := range 10 {
-		v := strings.IndexByte(crockford, id[i])
-		if v < 0 {
-			return time.Time{}, fmt.Errorf("build id %q", id)
-		}
-		ms = ms<<5 | uint64(v)
-	}
-	return time.UnixMilli(int64(ms)).UTC(), nil
-}

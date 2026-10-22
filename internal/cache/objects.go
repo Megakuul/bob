@@ -254,6 +254,34 @@ func (o *Objects) PutFile(ctx context.Context, key string, r io.ReadSeeker, size
 	}
 }
 
+// CreateFile writes the contents of r (size bytes, seekable for signing) to key only when key
+// does not exist (If-None-Match: *); an existing key is ErrPrecondition. A lost response is
+// resolved by HEAD: an object of our size is taken as ours (key is content-addressed).
+func (o *Objects) CreateFile(ctx context.Context, key string, r io.ReadSeeker, size int64, contentType string) error {
+	for a := 0; ; a++ {
+		if _, err := r.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		_, err := o.s3.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(key), Body: r,
+			ContentLength: aws.Int64(size), ContentType: aws.String(contentType), IfNoneMatch: aws.String("*")})
+		if err == nil || ctx.Err() != nil || !transient(err) {
+			if err = classify(ctx, err); err != nil {
+				return fmt.Errorf("put %s: %w", key, err)
+			}
+			return nil
+		}
+		if inf, herr := o.Head(ctx, key); herr == nil && inf.Size == size {
+			return nil
+		}
+		if a == attempts-1 {
+			return fmt.Errorf("put %s: %w", key, err)
+		}
+		if perr := pause(ctx, a); perr != nil {
+			return perr
+		}
+	}
+}
+
 // Copy copies src (only while its ETag is srcETag) to dst, replacing dst's metadata with
 // meta. dstETag "" creates dst only when absent; otherwise only that version of dst is
 // replaced. A precondition that does not hold (dst, or a changed src) is ErrPrecondition.

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -118,23 +117,22 @@ func (l errorList) Unwrap() []error { return l }
 
 // config is the projected configuration of a node.
 type config struct {
-	system     string // Nix system
-	profile    string // release | debug
+	system     string        // Nix system of the derivations: always the host's (R-PLAT-004)
+	tc         bob.Toolchain // the node's C/C++ toolchain (cross for another platform, R-FW-033)
+	profile    string        // release | debug
 	sanitizers []string
 }
 
 func configOf(n *ir.Node) (config, error) {
 	var c config
-	var plat string
-	if raw, ok := n.Proj["platform"]; !ok || json.Unmarshal(raw, &plat) != nil {
+	tc, err := engine.CToolchain(n)
+	if err != nil {
+		return c, err
+	}
+	if _, ok := n.Proj["platform"]; !ok {
 		return c, fmt.Errorf("%s has no platform", n.Label)
 	}
-	goos, goarch, _ := strings.Cut(plat, "-")
-	arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]
-	if arch == "" || goos != "linux" {
-		return c, fmt.Errorf("%s: unsupported platform %s", n.Label, plat)
-	}
-	c.system = arch + "-" + goos
+	c.system, c.tc = hostSystem(), tc
 	c.profile = string(bob.Release)
 	if raw, ok := n.Proj["profile"]; ok {
 		var p string
@@ -148,10 +146,24 @@ func configOf(n *ir.Node) (config, error) {
 	return c, nil
 }
 
-// hostSystem is the Nix system bob runs on: the C/C++ tools come from its package set.
-func hostSystem() string {
-	return map[string]string{"amd64": "x86_64-linux", "arm64": "aarch64-linux"}[runtime.GOARCH]
+// name is a derivation name of the node: base, then the platform when cross and the
+// projection tag (dbg, address, undefined), R-FW-038.
+func (c config) name(base ...string) string {
+	parts := append([]string{}, base...)
+	if c.tc.Cross() {
+		parts = append(parts, string(c.tc.Target))
+	}
+	if c.profile == string(bob.Debug) {
+		parts = append(parts, "dbg")
+	}
+	for _, s := range c.sanitizeNames() {
+		parts = append(parts, s)
+	}
+	return drv.Name(parts...)
 }
+
+// cmd is a command of the toolchain ("gcc" → "x86_64-unknown-linux-gnu-gcc" when cross).
+func (c config) cmd(name string) string { return c.tc.Prefix + name }
 
 // profileFlags are the profile's and the sanitisers' compile flags (§04 table), in order.
 func (c config) profileFlags() []string {
@@ -164,8 +176,8 @@ func (c config) profileFlags() []string {
 	return append(out, c.sanitizeFlags()...)
 }
 
-// sanitizeFlags are needed at compile and link time.
-func (c config) sanitizeFlags() []string {
+// sanitizeNames are the -fsanitize names of the configuration, in canonical order.
+func (c config) sanitizeNames() []string {
 	var names []string
 	for _, s := range c.sanitizers {
 		switch s {
@@ -175,6 +187,12 @@ func (c config) sanitizeFlags() []string {
 			names = append(names, "undefined")
 		}
 	}
+	return names
+}
+
+// sanitizeFlags are needed at compile and link time.
+func (c config) sanitizeFlags() []string {
+	names := c.sanitizeNames()
 	if len(names) == 0 {
 		return nil
 	}
@@ -332,10 +350,18 @@ type toolset struct {
 	bin     string   // binutils output
 	fixup   fixupTools
 	forbids []string
+	ccLib   string // the cross compiler's lib output (sanitised cross builds), "" otherwise
 }
 
-func (pl *planner) tools(n *ir.Node, t ccspec.Tools, in *inputs) (toolset, error) {
+func (pl *planner) tools(n *ir.Node, t ccspec.Tools, c config, in *inputs) (toolset, error) {
 	var ts toolset
+	if t.CCLib > 0 {
+		_, rv, err := pl.dep(n, t.CCLib)
+		if err != nil {
+			return ts, err
+		}
+		ts.ccLib = in.add(rv, pickOutput(rv.Outputs, "lib", "out"))
+	}
 	for i, ix := range []int{t.CC, t.Binutils, t.Patchelf} {
 		_, rv, err := pl.dep(n, ix)
 		if err != nil {
@@ -350,7 +376,7 @@ func (pl *planner) tools(n *ir.Node, t ccspec.Tools, in *inputs) (toolset, error
 		case 1:
 			ts.bin = p
 			ts.path = append(ts.path, p+"/bin")
-			ts.fixup.Strip, ts.fixup.Objcopy = p+"/bin/strip", p+"/bin/objcopy"
+			ts.fixup.Strip, ts.fixup.Objcopy = p+"/bin/"+c.cmd("strip"), p+"/bin/"+c.cmd("objcopy")
 		case 2:
 			ts.fixup.Patchelf = p + "/bin/patchelf"
 		}
@@ -386,3 +412,6 @@ func joinDir(dir, rel string) string {
 	}
 	return path.Join(dir, rel)
 }
+
+// hostSystem is the Nix system bob runs on: the system of every C/C++ derivation.
+func hostSystem() string { return engine.HostSystem() }

@@ -62,6 +62,7 @@ func CToolchain(n *ir.Node) (bob.Toolchain, error) {
 // GoTarget is the Go side of the toolchain table (R-FW-033): the host's go with GOOS/GOARCH of
 // the target; cgo and external links use the target's C compiler.
 type GoTarget struct {
+	Platform     bob.Platform // the target
 	GOOS, GOARCH string
 	CC, CXX      string // C and C++ compiler commands ("gcc", "x86_64-unknown-linux-gnu-gcc")
 	Cross        bool
@@ -70,7 +71,7 @@ type GoTarget struct {
 // GoFor returns the Go settings that compile on host for target.
 func GoFor(host, target bob.Platform) GoTarget {
 	tc := bob.ToolchainFor(host, target)
-	return GoTarget{GOOS: "linux", GOARCH: tc.Target.GOARCH(), CC: tc.Prefix + "gcc", CXX: tc.Prefix + "g++", Cross: tc.Cross()}
+	return GoTarget{Platform: tc.Target, GOOS: "linux", GOARCH: tc.Target.GOARCH(), CC: tc.Prefix + "gcc", CXX: tc.Prefix + "g++", Cross: tc.Cross()}
 }
 
 // Env is the environment the table names for a cross build (GOOS, GOARCH, CC, CXX); nil
@@ -126,15 +127,6 @@ func NixpkgsSource(n *ir.Node) (system, attr string, err error) {
 		return host.NixSystem(), "pkgsCross." + p.CrossSet() + "." + n.Nix.Attr, nil
 	}
 	return p.NixSystem(), n.Nix.Attr, nil
-}
-
-// Emulator returns the user-mode emulator that runs binaries of target on host (R-FW-039):
-// the nixpkgs attribute (a host tool) and the command in its bin/. ok is false natively.
-func Emulator(host, target bob.Platform) (attr, command string, ok bool) {
-	if host == target || target.NixSystem() == "" {
-		return "", "", false
-	}
-	return "qemu-user", "qemu-" + strings.TrimSuffix(target.NixSystem(), "-linux"), true
 }
 
 // NativeOnly lists the ecosystems that cannot cross-compile in v1 (R-PLAT-005), by kind prefix,

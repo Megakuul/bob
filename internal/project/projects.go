@@ -158,6 +158,20 @@ func (p *Projects) Project(ctx context.Context, id string) (*buildctl.Project, e
 	return &buildctl.Project{ID: rec.ID, DefaultBranch: rec.DefaultBranch, Repo: rec.Repo()}, nil
 }
 
+// ForUpload implements buildctl.UploadProjects: the first `--remote` build of a project id
+// creates the project without a repository (decision D-IB13-1). The caller is authorized for
+// CreateBuild on that id; the record grants nothing, bindings are by id.
+func (p *Projects) ForUpload(ctx context.Context, id string) (*buildctl.Project, error) {
+	if _, err := p.Create(ctx, Spec{ID: id, Description: "created by a remote build"}); err != nil && !errors.Is(err, ErrExists) {
+		var inv *InvalidError
+		if errors.As(err, &inv) {
+			return nil, buildctl.ErrNoProject
+		}
+		return nil, err
+	}
+	return p.Project(ctx, id)
+}
+
 // Health is the link health of a project; it reads the integration's health (one
 // conditional GET) when the project has a link.
 func (p *Projects) Health(ctx context.Context, rec *Record) projectv1.LinkHealth {

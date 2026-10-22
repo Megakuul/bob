@@ -58,10 +58,10 @@ func cacheParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 	if parts.Routes == nil {
 		parts.Routes = map[string]http.Handler{}
 	}
-	delete(parts.Routes, "GET /nix/nix-cache-info") // the stand-in of authParts until this milestone
-	parts.Routes["GET /nix/"] = h                   // GET and HEAD
+	parts.Routes["GET /nix/"] = h // GET and HEAD
 
 	keys := &promote.Keys{Control: env.Storage.Control, Now: env.Now}
+	id.SetNixKeys(keys.PublicKeys) // WhoAmI / GetServerInfo nix.public_keys
 	if err := keys.Ensure(ctx); err != nil {
 		env.Log.Warn("no cache signing key yet; the promotion controller retries", "err", err.Error())
 	}

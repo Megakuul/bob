@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -172,6 +173,7 @@ func (b *build) compile(p Package) error {
 	}
 	args = append(args, "-trimpath", trim)
 	args = append(args, p.Flags...)
+	args = append(args, r.t.GCFlags...)
 	args = append(args, "-c="+strconv.Itoa(cores()), "-nolocalimports", "-importcfg", filepath.Join(obj, "importcfg"), "-pack")
 	if len(p.CgoFiles)+len(p.CFiles)+len(p.SFiles)+len(p.SysoFiles) == 0 {
 		args = append(args, "-complete")
@@ -299,7 +301,7 @@ func (b *build) cgo(p Package, dir, obj string) ([]string, []string, error) {
 	for i, f := range p.LDFlags {
 		ld[i] = strconv.Quote(f)
 	}
-	cflags := append([]string{"-O2", "-g"}, p.CFlags...)
+	cflags := append(append([]string{"-O2", "-g"}, t.CFlags...), p.CFlags...)
 	args := []string{t.tool("cgo"), "-objdir", obj + "/", "-importpath", p.ImportPath,
 		"-trimpath", dir + "=>" + p.Trim + ";" + obj + "=>"}
 	if p.Header != "" {
@@ -347,7 +349,8 @@ func (b *build) cgo(p Package, dir, obj string) ([]string, []string, error) {
 	}
 	dyn := filepath.Join(obj, "_cgo_.o")
 	argv = append(append([]string{}, gcc...), "-o", dyn, mainObj)
-	argv = append(append(append(argv, objs...), "-O2", "-g"), p.LDFlags...)
+	argv = append(append(append(argv, objs...), "-O2", "-g"), t.CFlags...)
+	argv = append(argv, p.LDFlags...)
 	if _, err := r.run(obj, false, argv...); err != nil {
 		return nil, nil, err
 	}
@@ -405,11 +408,18 @@ func (b *build) link(l Link) error {
 		mode = "exe"
 	}
 	args := []string{t.tool("link"), "-o", out, "-importcfg", ic, "-buildmode=" + mode, "-buildid="}
-	if l.External || mode != "exe" {
+	args = append(args, t.LDFlags...)
+	if l.External || mode != "exe" || has(t.LDFlags, "-asan") {
 		if t.CC == "" {
 			return fmt.Errorf("linking needs a C compiler but cgo is off for this build")
 		}
-		args = append(args, "-extld="+t.CC, "-linkmode=external")
+		if !slices.ContainsFunc(t.LDFlags, func(f string) bool { return strings.HasPrefix(f, "-extld=") }) {
+			args = append(args, "-extld="+t.CC)
+		}
+		args = append(args, "-linkmode=external")
+		if len(t.CFlags) > 0 {
+			args = append(args, "-extldflags="+strings.Join(t.CFlags, " "))
+		}
 	}
 	for _, x := range l.X {
 		args = append(args, "-X", x)

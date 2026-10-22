@@ -44,17 +44,20 @@ type Options struct {
 	// outside the repository are refused and the evaluator sandbox refuses weaker isolation.
 	Untrusted, Strict bool
 
-	Lock       bool  // --lock: re-resolve stale lock entries instead of failing with BOB-E-1012
-	Offline    bool  // --offline: no substituters, no downloads
-	KeepGoing  *bool // nil = true
-	MaxJobs    int   // -j (0 = Nix's default: the number of CPUs)
-	Limits     translate.Limits
-	Rerun      bool     // bob test --rerun
-	TestArgs   []string // bob test -- args (engine.PlanRequest.TestArgs)
-	PrintPaths bool     // fill Package.HostPaths and package.finish Paths
-	JSONLog    bool     // --json-log: emit log events with build log lines
-	Replay     string   // BOB_TEST_NIX_REPLAY: translate this capture instead of running Nix
-	Events     func(Event)
+	Lock      bool  // --lock: re-resolve stale lock entries instead of failing with BOB-E-1012
+	Offline   bool  // --offline: no substituters, no downloads
+	KeepGoing *bool // nil = true
+	MaxJobs   int   // -j (0 = Nix's default: the number of CPUs)
+	Limits    translate.Limits
+	Rerun     bool // bob test --rerun
+	// RequireAllTests makes a test that cannot run on this machine (skipped, R-FW-039) fail the
+	// run with exit 1 (bob test --require-all-tests).
+	RequireAllTests bool
+	TestArgs        []string // bob test -- args (engine.PlanRequest.TestArgs)
+	PrintPaths      bool     // fill Package.HostPaths and package.finish Paths
+	JSONLog         bool     // --json-log: emit log events with build log lines
+	Replay          string   // BOB_TEST_NIX_REPLAY: translate this capture instead of running Nix
+	Events          func(Event)
 }
 
 // Event is one typed event of a run. Names: the SPEC §02.4 events (run.start, package.start,
@@ -82,6 +85,8 @@ type Event struct {
 	ExitCode   int              // run.finish
 	Counts     translate.Counts // run.finish
 	Drift      []string         // run.finish
+	Note       *Note            // note (R-FW-036, R-FW-038): a "note:" line, never an error
+	Runner     string           // test.result: the emulator a foreign test ran under ("qemu-x86_64")
 }
 
 // Stage event names in the order Run emits them. StageNamespace is the caller's (the CLI
@@ -128,7 +133,9 @@ type Package struct {
 // TestResult is the outcome of one test unit.
 type TestResult struct {
 	Label      string
-	Status     string // pass | fail | cached
+	Status     string // pass | fail | cached | skipped
+	Runner     string // the emulator the unit ran under ("qemu-x86_64"), "" natively
+	Reason     string // skipped: why ("not run: needs a native linux-amd64 machine")
 	DurationMs int64
 	Failed     []string
 }
@@ -167,7 +174,7 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 		res.ExitCode = diag.ExitCode(res.Report.Errors)
 	}
 	for _, t := range res.Tests {
-		if t.Status == "fail" && res.ExitCode == 0 {
+		if (t.Status == "fail" || t.Status == "skipped" && o.RequireAllTests) && res.ExitCode == 0 {
 			res.ExitCode = 1
 		}
 	}
@@ -193,6 +200,7 @@ type runner struct {
 	start     time.Time
 	started   bool                // run.start was emitted
 	hostPaths map[string][]string // label → host paths of its outputs (sorted by output name)
+	skipped   []TestResult        // test units that cannot run on this machine (R-FW-039)
 	// transientPin is the nixpkgs pin resolved for the evaluator's Go before bob.lock had one;
 	// the lock stage records it when bob.go declares the same channel.
 	transientPin lock.NixpkgsPin

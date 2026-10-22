@@ -497,11 +497,13 @@ func (s *OpamSection) validate() error {
 		if len(p.Version) > maxName || !opamVerRe.MatchString(p.Version) {
 			return fmt.Errorf("opam package %s: version %q is invalid", name, clip(p.Version))
 		}
-		if err := checkHTTPURL("opam package "+name+" url", p.URL, ""); err != nil {
-			return err
-		}
-		if err := checkSRI("opam package "+name+" hash", p.Hash, "sha512", "sha256"); err != nil {
-			return err
+		if p.URL != "" || p.Hash != "" { // virtual packages (base-bytes) and conf-* have no source
+			if err := checkHTTPURL("opam package "+name+" url", p.URL, ""); err != nil {
+				return err
+			}
+			if err := checkSRI("opam package "+name+" hash", p.Hash, "sha512", "sha256"); err != nil {
+				return err
+			}
 		}
 		if !hex64Re.MatchString(p.Opam) {
 			return fmt.Errorf("opam package %s: opam digest %q is not sha256 hex", name, clip(p.Opam))

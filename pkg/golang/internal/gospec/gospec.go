@@ -84,6 +84,9 @@ type Test struct {
 	Args     []string      `json:"args"`
 	Services []ext.Service `json:"services"`
 	TimeoutS int64         `json:"timeoutSeconds"`
+	// Emulator is the dep index of the emulator that runs a test of another platform
+	// (qemu-user, R-FW-039); 0 = none (index 0 is the module).
+	Emulator int `json:"emulator,omitempty"`
 }
 
 // Tests is the spec of a go.tests node; its deps are its units.

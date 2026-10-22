@@ -76,7 +76,7 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 		return lock.EncodeSection(lock.SectionOpam, prev)
 	}
 	commit := ""
-	if prev != nil {
+	if prev != nil && !slices.Contains(req.Update, "opam-repository") {
 		commit = prev.Repository.Commit
 	}
 	snap, err := snapshotFor(commit)
@@ -217,14 +217,4 @@ func invalid(n *ir.Node, option, reason string) error {
 	e := diag.New(1020, "label", n.Label, "option", option, "reason", reason)
 	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
 	return e
-}
-
-// lockedNames lists the package names of a section, sorted.
-func lockedNames(sec *lock.OpamSection) []string {
-	names := make([]string, 0, len(sec.Packages))
-	for n := range sec.Packages {
-		names = append(names, n)
-	}
-	slices.Sort(names)
-	return names
 }

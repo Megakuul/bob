@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/megakuul/bob/pkg/engine"
 	"go/build"
 	"io/fs"
 	"os"
@@ -348,7 +349,9 @@ type buildCtx struct {
 	goos, goarch string
 	tags         []string // module tags of the main module + binary/test tags, sorted
 	cgo          bool
-	tc           *toolchain // the closure's toolchain (the main module's)
+	tc           *toolchain      // the closure's toolchain (the main module's)
+	target       engine.GoTarget // compilers and environment of the target (R-FW-033)
+	v            variant         // the Go projection of the variant (R-FW-038)
 }
 
 // goContext is the go/build context of c: the target, the build tags, the toolchain's
@@ -359,6 +362,9 @@ func (c buildCtx) goContext() build.Context {
 	bc.CgoEnabled = c.cgo
 	bc.BuildTags = slices.Clone(c.tags)
 	bc.ToolTags = nil
+	if m := c.v.mode(); m != "" {
+		bc.ToolTags = []string{m} // cmd/go adds "race" / "asan" with -race / -asan
+	}
 	bc.ReleaseTags = nil
 	for i := 1; i <= c.tc.minor; i++ {
 		bc.ReleaseTags = append(bc.ReleaseTags, fmt.Sprintf("go1.%d", i))
@@ -469,7 +475,7 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 
 // importDir reads a package directory in configuration c, once per planner.
 func (pl *planner) importDir(c buildCtx, bc *build.Context, dir string) (*build.Package, error) {
-	key := strings.Join([]string{c.goos, c.goarch, strings.Join(c.tags, ","), fmt.Sprint(c.cgo, c.tc.minor), dir}, "|")
+	key := strings.Join([]string{c.goos, c.goarch, strings.Join(c.tags, ","), fmt.Sprint(c.cgo, c.tc.minor), c.v.mode(), dir}, "|")
 	if bp, ok := pl.bp[key]; ok {
 		return bp, nil
 	}

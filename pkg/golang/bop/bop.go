@@ -51,7 +51,38 @@ func (t Toolchain) check() error {
 	if !filepath.IsAbs(t.GoRoot) || t.GOOS == "" || t.GOARCH == "" {
 		return builder.Invalidf("go job: goroot, goos and goarch are required")
 	}
+	for k, v := range t.Env {
+		switch {
+		case k == "GOOS" && v == t.GOOS, k == "GOARCH" && v == t.GOARCH:
+		case (k == "CC" || k == "CXX") && v != "" && !strings.ContainsAny(v, "/ \t\n"):
+		default:
+			return builder.Invalidf("go job: env %s=%q is not a cross setting of this job", k, v)
+		}
+	}
+	for _, f := range t.GCFlags {
+		if !allowedGCFlags[f] {
+			return builder.Invalidf("go job: compile flag %q is not allowed", f)
+		}
+	}
+	for _, f := range t.LDFlags {
+		if !allowedGCFlags[f] && !strings.HasPrefix(f, "-extld=") {
+			return builder.Invalidf("go job: link flag %q is not allowed", f)
+		}
+	}
 	return nil
+}
+
+// allowedGCFlags are the variant flags a job may set (SPEC §04 R-FW-038 projection table).
+var allowedGCFlags = map[string]bool{"-N": true, "-l": true, "-race": true, "-asan": true}
+
+// has reports whether flags holds f.
+func has(flags []string, f string) bool {
+	for _, x := range flags {
+		if x == f {
+			return true
+		}
+	}
+	return false
 }
 
 // tool is the path of a Go tool of the toolchain (compile, link, asm, cgo).
@@ -70,6 +101,13 @@ func (t Toolchain) env(tmp string, cgo bool) []string {
 	}
 	if cgo && t.CC != "" {
 		e["CGO_ENABLED"], e["CC"] = "1", t.CC
+		if cxx := t.Env["CXX"]; cxx != "" {
+			e["CXX"] = cxx
+		}
+		if len(t.CFlags) > 0 {
+			e["CGO_CFLAGS"] = strings.Join(append([]string{"-O2", "-g"}, t.CFlags...), " ")
+			e["CGO_CXXFLAGS"], e["CGO_LDFLAGS"] = e["CGO_CFLAGS"], strings.Join(t.CFlags, " ")
+		}
 	}
 	if t.GOARCH == "amd64" {
 		e["GOAMD64"] = "v1"
@@ -172,8 +210,24 @@ func stdKind(c *builder.Ctx, raw json.RawMessage) error {
 		return err
 	}
 	c.Phase("go-std")
-	out, err := r.run(r.tmp, true, filepath.Join(a.GoRoot, "bin", "go"), "list", "-trimpath", "-export", "-deps",
-		"-f", "{{if .Export}}{{.ImportPath}} {{.Export}}{{end}}", "std")
+	argv := []string{filepath.Join(a.GoRoot, "bin", "go"), "list", "-trimpath", "-export", "-deps"}
+	var gc []string
+	for _, f := range a.GCFlags {
+		switch f {
+		case "-race", "-asan":
+			argv = append(argv, f)
+		default:
+			gc = append(gc, f)
+		}
+	}
+	if len(gc) > 0 {
+		argv = append(argv, "-gcflags=all="+strings.Join(gc, " "))
+	}
+	if err := r.goCompilerShim(); err != nil {
+		return err
+	}
+	argv = append(argv, "-f", "{{if .Export}}{{.ImportPath}} {{.Export}}{{end}}", "std")
+	out, err := r.run(r.tmp, true, argv...)
 	if err != nil {
 		return err
 	}
@@ -259,4 +313,45 @@ func cores() int {
 		n = 1
 	}
 	return min(n, 4)
+}
+
+// goCompilerShim makes `go list -asan` accept a cross compiler: cmd/go requires the output of
+// `$CC --version` to start with "gcc" (cmd/go/internal/work/init.go compilerVersion), and a
+// prefixed cross gcc prints "x86_64-unknown-linux-gnu-gcc (GCC) …". For a cross go-std job with
+// -asan, CC becomes a script that prints that line without the prefix and runs the real
+// compiler otherwise (S7 §3.2). The script runs with the shell of the cc-wrapper script.
+func (r *runner) goCompilerShim() error {
+	cc := r.t.Env["CC"]
+	if cc == "" || !has(r.t.GCFlags, "-asan") || !r.cgo {
+		return nil
+	}
+	real, err := lookPath(cc, r.t.Path)
+	if err != nil {
+		return err
+	}
+	head, err := os.ReadFile(real)
+	if err != nil {
+		return err
+	}
+	line, _, _ := strings.Cut(string(head[:min(len(head), 512)]), "\n")
+	shell, _, _ := strings.Cut(strings.TrimSpace(strings.TrimPrefix(line, "#!")), " ")
+	if !strings.HasPrefix(line, "#!") || !filepath.IsAbs(shell) {
+		return fmt.Errorf("%s is not a compiler wrapper script; cannot run cmd/go -asan with it", real)
+	}
+	prefix := strings.TrimSuffix(cc, "gcc")
+	dir := filepath.Join(r.tmp, "ccshim")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	script := "#!" + shell + "\n" +
+		"if [ \"$#\" = 1 ] && [ \"$1\" = --version ]; then\n" +
+		"  out=$(" + strconv.Quote(real) + " --version) || exit $?\n" +
+		"  printf '%s\\n' \"${out#" + prefix + "}\"\n  exit 0\nfi\n" +
+		"exec " + strconv.Quote(real) + " \"$@\"\n"
+	shim := filepath.Join(dir, "gcc")
+	if err := os.WriteFile(shim, []byte(script), 0o755); err != nil {
+		return err
+	}
+	r.t.CC = shim
+	return nil
 }

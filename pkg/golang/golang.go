@@ -19,10 +19,13 @@ import (
 // packages built from it depend on the target platform.
 func init() {
 	ext.Register(ext.Kind{Name: gospec.KindModule})
-	ext.Register(ext.Kind{Name: gospec.KindBinary, Axes: []ext.Axis{ext.AxisPlatform}})
+	// Binaries and test units see the variant (R-FW-038): -N -l for debug, -race, and the
+	// sanitisers (Go -asan for every package, all of them for cgo code and the link).
+	variant := []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisSanitizers, ext.AxisGoRace}
+	ext.Register(ext.Kind{Name: gospec.KindBinary, Axes: variant})
 	ext.Register(ext.Kind{Name: gospec.KindPackage, Axes: []ext.Axis{ext.AxisPlatform}})
 	ext.Register(ext.Kind{Name: gospec.KindTests, Axes: []ext.Axis{ext.AxisPlatform}})
-	ext.Register(ext.Kind{Name: gospec.KindTest, Axes: []ext.Axis{ext.AxisPlatform}})
+	ext.Register(ext.Kind{Name: gospec.KindTest, Axes: variant})
 }
 
 // ModuleOpts describes one Go module; its go.mod/go.sum are generated from it (R-GO-003).
@@ -217,7 +220,7 @@ func (m *Module) labelDir(d string) string {
 // ccTool is the C compiler of the module's cgo packages (one per configuration).
 func (m *Module) ccTool() bob.Tool {
 	if m.cc == nil {
-		m.cc = nixpkgs.Tool(m.p, "gcc")
+		m.cc = nixpkgs.Tool(m.p, m.p.Toolchain().CC) // the target's C compiler (R-FW-033)
 	}
 	return m.cc
 }
@@ -463,6 +466,11 @@ func (m *Module) unit(d, name string, o TestOpts) *TestSet {
 		TimeoutS: int64(o.Timeout / time.Second)}
 	if spec.Args == nil {
 		spec.Args = []string{}
+	}
+	if tc := m.p.Toolchain(); tc.Emulator != "" {
+		// A test for another platform runs under the emulator (R-FW-039).
+		spec.Emulator = len(deps)
+		deps = append(deps, nixpkgs.Tool(m.p, tc.Emulator))
 	}
 	return &TestSet{Node: ext.NewIn(m.p, gospec.KindTest, m.labelDir(d), name, deps, nil, spec)}
 }

@@ -20,17 +20,22 @@ import (
 // crockford is the lower-case Crockford base32 alphabet of build ids (SPEC §6.1).
 const crockford = "0123456789abcdefghjkmnpqrstvwxyz"
 
-// ErrBadID is returned for a build id that is not a 26-char lower-case Crockford id.
+// ErrBadID is returned for a string that is not a build id: "b-" and 26 upper-case Crockford
+// characters (buildctl.NewBuildID), or the 26 lower-case characters of earlier versions.
 var ErrBadID = errors.New("invalid build id")
 
 // BuildTime is the creation time encoded in a build id (48-bit ms in the first 10 chars).
 func BuildTime(buildID string) (time.Time, error) {
-	if len(buildID) != 26 {
+	ulid, alphabet := buildID, crockford
+	if rest, ok := strings.CutPrefix(buildID, "b-"); ok {
+		ulid, alphabet = rest, strings.ToUpper(crockford)
+	}
+	if len(ulid) != 26 {
 		return time.Time{}, fmt.Errorf("%w %q", ErrBadID, buildID)
 	}
 	var ms uint64
-	for i := range len(buildID) {
-		v := strings.IndexByte(crockford, buildID[i])
+	for i := range len(ulid) {
+		v := strings.IndexByte(alphabet, ulid[i])
 		if v < 0 {
 			return time.Time{}, fmt.Errorf("%w %q", ErrBadID, buildID)
 		}

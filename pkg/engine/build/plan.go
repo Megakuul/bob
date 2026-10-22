@@ -202,9 +202,13 @@ func (p *planner) planNixpkgs(n *ir.Node) error {
 	if n.Nix == nil {
 		return internalf(n.Label, "nixpkgs node without a nix object")
 	}
-	e, ok := p.entries[n.Nix.Attr]
+	sys, attr, err := engine.NixpkgsSource(n)
+	if err != nil {
+		return internalf(n.Label, "%v", err)
+	}
+	e, ok := p.entries[entryKey(sys, attr)]
 	if !ok || e.DrvPath == "" {
-		return internalf(n.Label, "nixpkgs attribute %s was not resolved", n.Nix.Attr)
+		return internalf(n.Label, "nixpkgs attribute %s (%s) was not resolved", attr, sys)
 	}
 	outs := map[string]string{}
 	want := n.Nix.Outputs
@@ -437,34 +441,14 @@ func (p *planner) addJob(n *ir.Node, system string, spec map[string]any, in *inp
 	return nil
 }
 
-// systemOf is the Nix system node n builds for; bob builds only for the host here (cross
-// compilation is §04's, M7.4).
+// systemOf is the Nix system of the derivation of node n: always the host's (R-PLAT-004). The
+// node's platform only selects toolchains, flags and target libraries; it must be one bob
+// knows.
 func (p *planner) systemOf(n *ir.Node) (string, error) {
-	raw, ok := n.Proj["platform"]
-	if !ok {
-		return p.system, nil
+	if _, err := engine.NodePlatform(n); err != nil {
+		return "", internalf(n.Label, "%v", err)
 	}
-	var pl string
-	if err := json.Unmarshal(raw, &pl); err != nil {
-		return "", internalf(n.Label, "platform: %v", err)
-	}
-	sys := nixSystem(pl)
-	if sys != p.system {
-		return "", diag.New(1010, "label", n.Label, "system", sys)
-	}
-	return sys, nil
-}
-
-// nixSystem maps a bob platform ("linux-arm64") to its Nix system ("aarch64-linux").
-func nixSystem(platform string) string {
-	osName, arch, _ := strings.Cut(platform, "-")
-	switch arch {
-	case "amd64":
-		arch = "x86_64"
-	case "arm64":
-		arch = "aarch64"
-	}
-	return arch + "-" + osName
+	return p.system, nil
 }
 
 // storeName is the fallback store name of a package (SPEC R-NIX-006 "Store names"):

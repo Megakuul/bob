@@ -8,12 +8,15 @@ import (
 	"time"
 )
 
-// crockford is the lower-case Crockford base32 alphabet of build ids (SPEC §6.1).
-const crockford = "0123456789abcdefghjkmnpqrstvwxyz"
+// crockford is the upper-case Crockford base32 alphabet of build ids (ULID).
+const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
-// NewBuildID returns a fresh build id (SPEC §6.1, ULID layout): 26 lower-case Crockford
-// characters, the first ten the 48-bit creation time in milliseconds (so ids sort by time;
-// logstore.BuildTime reads it back), the other sixteen 80 random bits.
+// buildPrefix starts every build id (SPEC §02.6 shows `b-01JB7Q8V3K`).
+const buildPrefix = "b-"
+
+// NewBuildID returns a fresh build id: "b-" and a 26-character upper-case ULID, the first ten
+// characters the 48-bit creation time in milliseconds (so ids sort by time; logstore.BuildTime
+// reads it back), the other sixteen 80 random bits.
 func NewBuildID(now time.Time) (string, error) {
 	var rnd [10]byte
 	if _, err := rand.Read(rnd[:]); err != nil {
@@ -35,7 +38,39 @@ func NewBuildID(now time.Time) (string, error) {
 			j++
 		}
 	}
-	return string(b[:]), nil
+	return buildPrefix + string(b[:]), nil
+}
+
+// buildTime is the creation time in a build id. Besides "b-<ULID>" it accepts the 26
+// lower-case characters of the ids made before the prefix (stores of earlier versions).
+func buildTime(id string) (time.Time, error) {
+	ulid, alphabet := id, strings.ToLower(crockford)
+	if rest, ok := strings.CutPrefix(id, buildPrefix); ok {
+		ulid, alphabet = rest, crockford
+	}
+	if len(ulid) != 26 {
+		return time.Time{}, fmt.Errorf("build id %q", id)
+	}
+	var ms uint64
+	for i := range len(ulid) {
+		v := strings.IndexByte(alphabet, ulid[i])
+		if v < 0 {
+			return time.Time{}, fmt.Errorf("build id %q", id)
+		}
+		if i < 10 {
+			ms = ms<<5 | uint64(v)
+		}
+	}
+	if ms >= 1<<48 {
+		return time.Time{}, fmt.Errorf("build id %q", id)
+	}
+	return time.UnixMilli(int64(ms)).UTC(), nil
+}
+
+// validBuildID reports whether id has the syntax of a build id.
+func validBuildID(id string) bool {
+	_, err := buildTime(id)
+	return err == nil
 }
 
 // JobID is the id of the n-th job (1-based) of a build: "<buildID>.j<nnnn>". The build id
@@ -46,7 +81,7 @@ func JobID(buildID string, n int) string { return fmt.Sprintf("%s.j%04d", buildI
 // BuildOfJob returns the build id of a job id made by JobID.
 func BuildOfJob(jobID string) (string, bool) {
 	b, n, ok := strings.Cut(jobID, ".j")
-	if !ok || len(b) != 26 || len(n) != 4 {
+	if !ok || !validBuildID(b) || len(n) != 4 {
 		return "", false
 	}
 	if _, err := strconv.ParseUint(n, 10, 16); err != nil {

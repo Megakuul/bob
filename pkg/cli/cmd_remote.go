@@ -23,35 +23,44 @@ import (
 	"github.com/megakuul/bob/pkg/engine/translate"
 )
 
-// projectSlug is the syntax of a server project id (SPEC §6.1).
-var projectSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
+// projectSlug is the syntax of a server project id (decision D-IB12-1: 1-40 characters a-z,
+// 0-9 and '-', a letter first, no '-' last).
+var projectSlug = regexp.MustCompile(`^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$`)
 
 // project is the server project of the repository at root: BOB_SERVER_PROJECT, else the slug
-// of the root directory's name (SPEC §02.6 leaves the mapping open; plan/progress/I-C1.md).
+// of the root directory's name (decision D-IC1-5). A server creates the project on its first
+// upload build when it does not exist yet (decision D-IB13-1).
 func (e *env) project(root string) (string, error) {
 	if p := e.getenv("BOB_SERVER_PROJECT"); p != "" {
 		if !projectSlug.MatchString(p) {
-			return "", diag.New(4, "flag", "BOB_SERVER_PROJECT", "what", "a project id (lower-case letters, digits and -)")
+			return "", diag.New(4, "flag", "BOB_SERVER_PROJECT", "what", "a project id (lower-case letters, digits and -, a letter first)")
 		}
 		return p, nil
 	}
+	p := slug(filepath.Base(root))
+	if !projectSlug.MatchString(p) {
+		return "", diag.New(4, "flag", "BOB_SERVER_PROJECT", "what", "a project id (the repository directory name is not one)")
+	}
+	return p, nil
+}
+
+// slug maps a directory name to a project id: lower case, runs of other characters become one
+// '-', leading characters before the first letter dropped, at most 40 characters.
+func slug(name string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(filepath.Base(root)) {
+	for _, r := range strings.ToLower(name) {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'z', b.Len() > 0 && r >= '0' && r <= '9':
 			b.WriteRune(r)
 		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
 			b.WriteByte('-')
 		}
 	}
-	p := strings.Trim(b.String(), "-")
+	p := b.String()
 	if len(p) > 40 {
-		p = strings.TrimRight(p[:40], "-")
+		p = p[:40]
 	}
-	if !projectSlug.MatchString(p) {
-		return "", diag.New(4, "flag", "BOB_SERVER_PROJECT", "what", "a project id (the repository directory name is not one)")
-	}
-	return p, nil
+	return strings.TrimRight(p, "-")
 }
 
 // remoteRun is the state of one `bob build/test --remote`.

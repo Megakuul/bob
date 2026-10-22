@@ -45,8 +45,50 @@ pkg/cli/link.go (blank import pkg/rust/gen) and cmd/bob-builder/main.go (rustbop
   derivation when their features agree (drv dedup by path).
 
 ## NEEDS
-- (see final report)
+1. pkg/engine/lock (owner: engine/lock unit; patch verified in the private copy,
+   /var/tmp/i-m8a/patches/lock.diff): bob.lock validation rejects real crates:
+   a. featureRe has no '?': weak dependency features ("memchr?/std" of aho-corasick, "quote?/proc-macro"
+      of syn) fail every graph with regex or syn: `featureRe = ^[A-Za-z0-9_][A-Za-z0-9_+./:?-]{0,127}$`.
+   b. dependency targets go through checkText (maxName 512); rustix has an 851-byte cfg():
+      a separate cap (4096) for CrateDep.Target.
+   Without (a) and (b) `bob lock` fails for the rust fixture and 12 of 14 corpus workspaces
+   (shown as BOB-E-9005 "Nix stopped unexpectedly (lock: section rust: …)" — that code is wrong
+   too: a lock-section validation error of an ecosystem's own output is an internal error).
+2. pkg/cli (I-M4f): `bob build --dry-run` (plan only, ruling G24) for R-RS-005.
+3. Dev environment (M6 owner): rust-analyzer needs the proc-macro dylibs and build-script
+   OUT_DIRs in rust-project.json, i.e. planned and realised bob derivations; DevRequest has no
+   Builder/Resolver and PrepareDev may not build. Proposal: DevPrep.Build []engine.Resolved
+   (derivations the CLI realises with the packages) plus Builder/Resolver in DevRequest. Until
+   then rust-project.json resolves imports but not derive/attribute macros or include!(OUT_DIR).
+4. Native-crate defaults table (§03.3.6, openssl-sys → nixpkgs openssl): a registry crate's
+   build script can only get a nixpkgs package that is a node of the graph, and the evaluator
+   does not know the locked crates. Needs either evaluator access to bob.lock or a
+   plan-time nixpkgs lookup that the engine plans (PlanStore). rust.Uses works.
+5. Cross (M7.4): the Rust planner returns BOB-E-9008 for a foreign platform; host units,
+   --target, and the rust-std-<triple> sysroot (R-FW-034) come with the platform work.
+6. framework.zip must be regenerated (go generate ./pkg/engine/eval) when pkg/rust is
+   committed (pkg/rust changed: API, internal/cfgtab, internal/rsspec).
+7. resolve (lock --update): the resolver has no "prefer locked versions" mode, so a re-lock
+   after a declaration change moves every pin to the newest matching version (Cargo keeps
+   unrelated pins). Needs resolve.Options.Locked (I-R-crates' package).
 
 ## TEST PROBLEM
 1. SPEC §03.3.1 and the fixtures (rust/corelib/bob.go, polyglot/crates/rcore/bob.go) use
    `*rust.Test` as type and `rust.Test(...)` as function; Go cannot declare both in one package.
+   Implemented: func Test returning *rust.TestSet. Fix: the two fixtures write `*rust.TestSet`.
+2. tests/fixtures/repos/rust/bob.go is `package rust` but go.mod says module
+   example.com/rustfix and the root has no other Go code: the evaluator's R2 rule wants
+   `package rustfix` (BOB-E-1024). Every test on the rust fixture stops there.
+3. tests/core TestAPISurface: "constructors [Library ProcMacro] all return *Lib" and
+   "[StaticLib CDylib] all return *CLib" — the SPEC API (§03.3.1) and the fixtures (mymacro:
+   `*rust.Lib` from ProcMacro; rdyn/rcore: `*rust.CLib`) require exactly that.
+4. TestRRS004a*: the attribute "rust_1_94" is not in the pin (nixos-26.05 has rust_1_95,
+   rust_1_97, rust_1_98, which are package sets, not tools; a rustc tool would be e.g.
+   "rust_1_97.packages.stable.rustc").
+5. serverenv.NixTool("rustc") returns the first printed output of `nix build`, the -man output,
+   on a cold harness cache (TestRRS002aCfgTablesEqualRustc then fails with "fork/exec
+   …-rustc-wrapper-1.95.0-man/bin/rustc"); with the cache warm it returns the out link and
+   the test passes.
+6. On this loaded host (load 25–30 on 8 CPUs) a fresh BOB_HOME's first `bob lock` (nixpkgs
+   tarball import) exceeds the harness's 5-minute cap per bob run; the corpus subtests then
+   exit -1. Measured with a warm home instead (corpus.sh, results below).

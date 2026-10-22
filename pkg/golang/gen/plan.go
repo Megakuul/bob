@@ -206,22 +206,12 @@ func (pl *planner) toolchainOf(m *wsModule) (*toolchain, error) {
 	return &toolchain{rv: rv, out: out, goroot: out + "/share/go", version: mm[1], minor: minor}, nil
 }
 
-// platformOf returns GOOS/GOARCH and the Nix system of a node's platform.
-func platformOf(n *ir.Node) (goos, goarch, system string, err error) {
-	raw, ok := n.Proj["platform"]
-	if !ok {
-		return "", "", "", fmt.Errorf("%s has no platform", n.Label)
+// platformOf returns the platform of a node.
+func platformOf(n *ir.Node) (bob.Platform, error) {
+	if _, ok := n.Proj["platform"]; !ok {
+		return "", fmt.Errorf("%s has no platform", n.Label)
 	}
-	var pl string
-	if err := json.Unmarshal(raw, &pl); err != nil {
-		return "", "", "", err
-	}
-	goos, goarch, _ = strings.Cut(pl, "-")
-	arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]
-	if arch == "" {
-		return "", "", "", fmt.Errorf("%s: unsupported platform %s", n.Label, pl)
-	}
-	return goos, goarch, arch + "-" + goos, nil
+	return engine.NodePlatform(n)
 }
 
 // target is everything a binary or test unit is built with.
@@ -230,7 +220,8 @@ type target struct {
 	mod    *wsModule
 	build  gospec.Build
 	ctx    buildCtx
-	system string
+	system string           // Nix system of the derivations: the host's (R-PLAT-004)
+	plat   bob.Platform     // the platform the binary or test is for
 	cc     *engine.Resolved // C compiler (nil: cgo off)
 	cgoOK  bool
 }
@@ -253,11 +244,16 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 	if err != nil {
 		return nil, err
 	}
-	goos, goarch, system, err := platformOf(n)
+	plat, err := platformOf(n)
 	if err != nil {
 		return nil, internal(n, "%v", err)
 	}
-	t := &target{node: n, mod: mod, build: b, system: system}
+	v, err := variantOf(n)
+	if err != nil {
+		return nil, internal(n, "%v", err)
+	}
+	gt := engine.GoFor(engine.HostPlatform(), plat)
+	t := &target{node: n, mod: mod, build: b, system: engine.HostSystem(), plat: plat}
 	if b.CC >= 0 && b.CC < len(n.Deps) {
 		rv, ok := pl.req.Inputs[n.Deps[b.CC]]
 		if !ok {
@@ -267,7 +263,15 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 		t.cgoOK = true
 	}
 	tags := append(slices.Clone(mod.spec.Tags), b.Tags...)
-	t.ctx = buildCtx{main: mod.spec.Path, goos: goos, goarch: goarch, tags: sortedUnique(tags), cgo: t.cgoOK, tc: tc}
+	t.ctx = buildCtx{main: mod.spec.Path, goos: gt.GOOS, goarch: gt.GOARCH, tags: sortedUnique(tags), cgo: t.cgoOK, tc: tc,
+		target: gt, v: v}
+	if m := v.mode(); m != "" && !t.cgoOK {
+		// cmd/go: "-race requires cgo", "-asan requires cgo" (the runtimes are C code).
+		return nil, pl.invalid("CGo", fmt.Sprintf("the %s variant needs cgo, but the package sets golang.CGoOff", m))
+	}
+	if v.race && v.asan {
+		return nil, pl.invalid("variant", "race and asan cannot be combined in one Go build")
+	}
 	return t, nil
 }
 
@@ -297,8 +301,8 @@ func (pl *planner) loadTarget(t *target, roots []string, tests map[string]bool) 
 		}
 		return cl, nil
 	}
-	if len(cgoPkgs) > 0 || !t.ctx.cgo {
-		return cl, nil
+	if len(cgoPkgs) > 0 || !t.ctx.cgo || t.ctx.v.mode() != "" {
+		return cl, nil // race and asan keep cgo on: their runtimes need it
 	}
 	// No cgo in the closure: build it pure Go (static binary, std without cgo).
 	t.ctx.cgo = false
@@ -411,22 +415,78 @@ func outPath(d *drv.Derivation) string {
 
 // toolchainArgs is the Toolchain part of a job.
 type toolchainArgs struct {
-	GoRoot string   `json:"goroot"`
-	GOOS   string   `json:"goos"`
-	GOARCH string   `json:"goarch"`
-	Path   []string `json:"path"`
-	CC     string   `json:"cc"`
+	GoRoot  string            `json:"goroot"`
+	GOOS    string            `json:"goos"`
+	GOARCH  string            `json:"goarch"`
+	Path    []string          `json:"path"`
+	CC      string            `json:"cc"`
+	Env     map[string]string `json:"env,omitempty"`
+	GCFlags []string          `json:"gcflags,omitempty"`
+	LDFlags []string          `json:"ldflags,omitempty"`
+	CFlags  []string          `json:"cflags,omitempty"`
 }
 
+// job kinds as toolchainArgs sees them: what of the variant reaches the job (R-FW-038).
+const (
+	jobPure = iota // std and pure Go packages: profile, race, Go's -asan
+	jobCgo         // cgo packages: also every C sanitiser
+	jobLink        // the link: race/asan, and the C sanitisers when cgo is linked
+)
+
 func (pl *planner) toolchainArgs(c buildCtx, cc *engine.Resolved, in *inputs) toolchainArgs {
+	return pl.toolchainArgsFor(c, cc, in, jobPure)
+}
+
+func (pl *planner) toolchainArgsFor(c buildCtx, cc *engine.Resolved, in *inputs, kind int) toolchainArgs {
 	in.add(c.tc.rv, "out")
-	a := toolchainArgs{GoRoot: c.tc.goroot, GOOS: c.goos, GOARCH: c.goarch, Path: []string{}}
+	a := toolchainArgs{GoRoot: c.tc.goroot, GOOS: c.goos, GOARCH: c.goarch, Path: []string{}, Env: c.target.Env()}
 	if c.cgo && cc != nil {
 		o := pickOutput(cc.Outputs, "bin", "out")
 		a.Path = append(a.Path, in.add(*cc, o)+"/bin")
-		a.CC = "gcc"
+		a.CC = c.target.CC
+	}
+	if c.target.Cross {
+		a.LDFlags = append(a.LDFlags, "-extld="+c.target.CC)
+	}
+	if kind == jobLink {
+		if m := c.v.mode(); m != "" {
+			a.LDFlags = append(a.LDFlags, "-"+m)
+		}
+	} else {
+		a.GCFlags = c.v.gcflags()
+	}
+	if kind == jobCgo || kind == jobLink && c.cgo {
+		a.CFlags = c.v.cflags()
 	}
 	return a
+}
+
+// fields are the toolchain part of a job's args.
+func (a toolchainArgs) fields() map[string]any {
+	m := map[string]any{"goroot": a.GoRoot, "goos": a.GOOS, "goarch": a.GOARCH, "path": a.Path, "cc": a.CC}
+	if len(a.Env) > 0 {
+		m["env"] = a.Env
+	}
+	if len(a.GCFlags) > 0 {
+		m["gcflags"] = a.GCFlags
+	}
+	if len(a.LDFlags) > 0 {
+		m["ldflags"] = a.LDFlags
+	}
+	if len(a.CFlags) > 0 {
+		m["cflags"] = a.CFlags
+	}
+	return m
+}
+
+// with returns the toolchain fields plus kv (key, value, …).
+func (a toolchainArgs) with(kv ...any) map[string]any {
+	m := a.fields()
+	for i := 0; i+1 < len(kv); i += 2 {
+		k, _ := kv[i].(string)
+		m[k] = kv[i+1]
+	}
+	return m
 }
 
 func pickOutput(outs map[string]string, prefer ...string) string {
@@ -446,12 +506,12 @@ func pickOutput(outs map[string]string, prefer ...string) string {
 func (pl *planner) std(c buildCtx, cc *engine.Resolved, system string) (string, *drv.Derivation, error) {
 	in := newInputs(pl.req.Builder)
 	tca := pl.toolchainArgs(c, cc, in)
-	name := drv.Name("go-std", c.tc.version, c.goos, c.goarch)
+	parts := []string{"go-std", c.tc.version, c.goos, c.goarch}
 	if c.cgo {
-		name += "-cgo"
+		parts = append(parts, "cgo")
 	}
-	args := map[string]any{"goroot": tca.GoRoot, "goos": tca.GOOS, "goarch": tca.GOARCH, "path": tca.Path, "cc": tca.CC,
-		"out": drv.Placeholder("out")}
+	name := drv.Name(append(parts, c.v.tag(false)...)...)
+	args := tca.with("out", drv.Placeholder("out"))
 	return pl.job(name, system, "go-std", "go std "+c.tc.version, args, in)
 }
 
@@ -810,7 +870,7 @@ func (pl *planner) cgoFlags(t *target, p *pkg, in *inputs) ([]string, []string, 
 			continue
 		}
 		// The Cgo declaration's own platform must match the target's.
-		if _, _, sys, err := platformOf(n); err != nil || sys != t.system {
+		if p, err := platformOf(n); err != nil || p != t.plat {
 			continue
 		}
 		for _, li := range s.Libs {
@@ -929,10 +989,11 @@ func (pl *planner) groupDrv(t *target, cl *closure, res *compiled, g *group, src
 	}
 	in := newInputs(pl.req.Builder)
 	var cc *engine.Resolved
+	jk := jobPure
 	if kind == "go-cgo" {
-		cc = t.cc
+		cc, jk = t.cc, jobCgo
 	}
-	tca := pl.toolchainArgs(cl.ctx, cc, in)
+	tca := pl.toolchainArgsFor(cl.ctx, cc, in, jk)
 	in.addDrv(res.stdD, res.stdDrv)
 	var pkgs []pkgJob
 	self := drv.Placeholder("out")
@@ -948,9 +1009,9 @@ func (pl *planner) groupDrv(t *target, cl *closure, res *compiled, g *group, src
 		in.addDrv(res.packD, res.packDrv)
 		pack = res.pack
 	}
-	args := map[string]any{"goroot": tca.GoRoot, "goos": tca.GOOS, "goarch": tca.GOARCH, "path": tca.Path, "cc": tca.CC,
-		"std": res.std, "pack": pack, "packages": pkgs}
-	p, d, err := pl.job(groupName(g), t.system, kind, groupLabel(g), args, in)
+	args := tca.with("std", res.std, "pack", pack, "packages", pkgs)
+	p, d, err := pl.job(drv.Name(append([]string{groupName(g)}, nameParts(cl.ctx.target, cl.ctx.v.tag(jk == jobCgo))...)...),
+		t.system, kind, groupLabel(g), args, in)
 	if err != nil {
 		return internal(t.node, "%v", err)
 	}
@@ -1073,7 +1134,7 @@ func (pl *planner) planBinary(n *ir.Node) error {
 		return err
 	}
 	in := newInputs(pl.req.Builder)
-	tca := pl.toolchainArgs(cl.ctx, t.cc, in)
+	tca := pl.toolchainArgsFor(cl.ctx, t.cc, in, jobLink)
 	in.addDrv(res.stdD, res.stdDrv)
 	link := map[string]string{}
 	for _, dep := range cl.transitive(ip) {
@@ -1096,9 +1157,9 @@ func (pl *planner) planBinary(n *ir.Node) error {
 	default:
 		l["out"] = out + "/bin/" + s.Name
 	}
-	args := map[string]any{"goroot": tca.GoRoot, "goos": tca.GOOS, "goarch": tca.GOARCH, "path": tca.Path, "cc": tca.CC,
-		"std": res.std, "pack": "", "packages": []any{}, "link": l}
-	p, d, err := pl.job(drv.Name("go-link", s.Name), t.system, "go-link", n.Label, args, in)
+	args := tca.with("std", res.std, "pack", "", "packages", []any{}, "link", l)
+	p, d, err := pl.job(drv.Name(append([]string{"go-link", s.Name}, nameParts(cl.ctx.target, cl.ctx.v.tag(cl.ctx.cgo))...)...),
+		t.system, "go-link", n.Label, args, in)
 	if err != nil {
 		return internal(n, "%v", err)
 	}

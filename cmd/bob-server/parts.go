@@ -16,6 +16,7 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	rbacParts(env, &parts)
 	authParts(env, &parts)             // identity needs parts.Authz (rbacParts)
 	cacheParts(ctx, env, &parts)       // /nix/ cache, promotion, signing keys (needs identity)
+	uploadParts(ctx, env, &parts)      // PUT /upload/source (needs identity)
 	cs := controllerParts(env, &parts) // membership, key, index-repair, retention, staging sweep
 	live := logParts(env, &parts)      // LogService, lake-maintenance; LiveLogs feeds Attach
 	f, err := fleetParts(ctx, env, &parts, cs, live)

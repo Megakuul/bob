@@ -2,8 +2,8 @@ package gen
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -38,7 +38,7 @@ type planner struct {
 	own     map[string]*drv.Derivation
 	out     engine.PlanResult
 	sec     *lock.OpamSection
-	repo    string             // readable directory of the repository snapshot ("" until needed)
+	repo    string              // readable directory of the repository snapshot ("" until needed)
 	opam    map[string]*opamOut // planned opam packages by name
 	walking map[string]bool
 	fetched map[string]bool
@@ -232,10 +232,10 @@ func (pl *planner) job(name, system, kind, label string, args any, fx *fixup, in
 
 // toolchain is the OCaml, C and shell toolchain of one node.
 type toolchain struct {
-	path    []string // bin dirs in ToolAttrs order
-	roots   map[string]string
-	in      []engine.Resolved
-	siteLib string // findlib's site-lib (bytes, topfind)
+	path     []string // bin dirs in ToolAttrs order
+	roots    map[string]string
+	in       []engine.Resolved
+	siteLib  string // findlib's site-lib (bytes, topfind)
 	ocamlLib string
 }
 
@@ -310,9 +310,9 @@ func systemOf(n *ir.Node) (string, error) {
 // confEnv is what packages with conf-* packages in their closure get: the mapped libraries'
 // outputs (inputs, PATH, pkg-config, C include and library paths).
 type confEnv struct {
-	rvs        []engine.Resolved
-	bin, pc    []string
-	inc, lib   []string
+	rvs      []engine.Resolved
+	bin, pc  []string
+	inc, lib []string
 }
 
 func (pl *planner) confOf(t *target, name string) (*confEnv, bool) {

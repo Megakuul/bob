@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build/testrun"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/eval"
@@ -64,6 +63,10 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	}
 	res.Requested = requestedLabels(g)
 	r.emit(Event{Event: "run.start", Requested: res.Requested, Nix: nixVersion})
+	if err := crossRefusals(g); err != nil {
+		return res, err
+	}
+	r.noteDropped(g)
 
 	var lf *lock.File
 	if err := r.stage(StageLock, func() (err error) { lf, err = r.lockStage(ctx, st, f, g); return }); err != nil {
@@ -113,6 +116,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return res, err
 	}
+	units = r.skipForeign(g, p, units)
 
 	if err := r.stage(StageFetch, func() error { return ensureAll(ctx, f, p.fetches) }); err != nil {
 		return res, err
@@ -152,9 +156,31 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	res.Report = rep
 	r.collect(st, g, p, res, targets)
 	if o.Command == CmdTest {
-		res.Tests = r.testResults(ctx, st, units, cached)
+		res.Tests = append(r.testResults(ctx, st, units, cached), r.skippedResults()...)
 	}
 	return res, nil
+}
+
+// skipForeign takes the units that cannot run on this machine out of units (R-FW-039); they
+// are reported skipped by skippedResults.
+func (r *runner) skipForeign(g *ir.Graph, p *planner, units []testrun.Unit) []testrun.Unit {
+	var keep []testrun.Unit
+	for _, u := range units {
+		if why := skipReason(g, p, u); why != "" {
+			r.skipped = append(r.skipped, TestResult{Label: u.Label, Status: string(testrun.StatusSkipped), Reason: why})
+			continue
+		}
+		keep = append(keep, u)
+	}
+	return keep
+}
+
+// skippedResults emits the test.result events of the skipped units.
+func (r *runner) skippedResults() []TestResult {
+	for _, t := range r.skipped {
+		r.emit(Event{Event: "test.result", Label: t.Label, Status: t.Status, Line: t.Reason})
+	}
+	return r.skipped
 }
 
 // replay translates a recorded Nix run (BOB_TEST_NIX_REPLAY) instead of building.

@@ -27,6 +27,8 @@ type Tools struct {
 	// CCLib is the cross compiler's "lib" output (sanitised cross builds, R-FW-037); 0 = none
 	// (index 0 is always CC).
 	CCLib int `json:"ccLib,omitempty"`
+	// Emulator runs a cross-compiled test program on the host (qemu-user, R-FW-039); 0 = none.
+	Emulator int `json:"emulator,omitempty"`
 }
 
 // Target is the spec of cc.library, cc.binary and cc.test nodes. The node's sources are its

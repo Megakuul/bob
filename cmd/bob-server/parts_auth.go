@@ -15,7 +15,6 @@ import (
 
 	"github.com/megakuul/bob/internal/api"
 	"github.com/megakuul/bob/internal/auth"
-	bhttp "github.com/megakuul/bob/internal/http"
 	"github.com/megakuul/bob/internal/rbac"
 	"github.com/megakuul/bob/internal/server"
 	"github.com/megakuul/bob/internal/store"
@@ -53,12 +52,6 @@ func authParts(env *server.Env, parts *server.OrchestratorParts) {
 	for _, p := range auth.FallbackPatterns() {
 		parts.Routes[p] = pages
 	}
-	// Until the binary cache (M16.1) serves /nix/, the cache info answers with the
-	// credential check of §6.6.1.
-	parts.Routes["GET /nix/nix-cache-info"] = bhttp.NixCacheInfo(func(r *http.Request) error {
-		_, err := id.HTTPPrincipal(r)
-		return err
-	})
 }
 
 // adminCreateUser is `bob-server admin create-user --login <name> [--admin]` (SPEC §6.3.2):

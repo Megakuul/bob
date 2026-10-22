@@ -71,7 +71,7 @@ func runExec(e *env) int {
 	if err != nil {
 		return e.out.fail(err)
 	}
-	argv := append([]string{filepath.Base(tool)}, e.a.pass[1:]...)
+	argv := append([]string{path}, e.a.pass[1:]...) // argv[0] = the program, as the S1 shim exec did
 	if e.a.bool("lsp") {
 		e.out.finished = true // the exit status is the server's, also after a signal
 		return runLSP(e.ctx, home, path, argv, env, filepath.Join(home, "nix", "store"))
