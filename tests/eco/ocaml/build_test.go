@@ -51,6 +51,9 @@ func TestRML001aFixtureBuildsFineGrained(t *testing.T) {
 				t.Errorf("runtime closure contains the build-only %s (scrubbing, SPEC §03.5.3)", n)
 			}
 		}
+		if strings.Contains(n, "-glibc-") && strings.HasSuffix(n, "-dev") { // glibc-*-dev is scrubbed too
+			t.Errorf("runtime closure contains the build-only %s (scrubbing, SPEC §03.5.3)", n)
+		}
 	}
 
 	// Every locked opam package has its own derivation opam-<name>-<version>.

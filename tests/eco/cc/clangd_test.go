@@ -1,6 +1,7 @@
 package cc
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -49,7 +50,9 @@ func TestRCC003aCompileCommandsResolveIncludes(t *testing.T) {
 			t.Errorf("entry for %s has directory %q, want %q", e.File, e.Directory, dir)
 		}
 	}
-	golden.Assert(t, "tests/goldens/eco/cc/compile_commands.json", []byte(cc), golden.Reqs("R-CC-003a"))
+	golden.Assert(t, "tests/goldens/eco/cc/compile_commands.json", []byte(cc), golden.Reqs("R-CC-003a"),
+		// the fixture lives in a temp dir, not under the repo root golden.Assert replaces
+		golden.Normalize(func(b []byte) []byte { return bytes.ReplaceAll(b, []byte(dir), []byte("$REPO")) }))
 
 	const file = "libs/pack/src/pack.cpp"
 	if !strings.Contains(readFile(t, filepath.Join(dir, file)), "#include <openssl/evp.h>") {

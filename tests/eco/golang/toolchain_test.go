@@ -73,7 +73,10 @@ func TestRGO004aToolchainPerModule(t *testing.T) {
 	versions := map[string]bool{}
 	for n := range all {
 		if m := stdNameRe.FindStringSubmatch(n); m != nil {
-			names[n]++
+			// Count by name without the hash prefix: two std derivations with one name (same
+			// Go version, platform, cgo variant) but different hashes are a duplicate build.
+			_, base, _ := strings.Cut(n, "-")
+			names[base]++
 			versions[m[1]] = true
 		}
 	}

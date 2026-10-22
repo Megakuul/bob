@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/megakuul/bob/tests/harness"
@@ -46,10 +47,16 @@ func TestRRS003aRustAnalyzerAndCargoMetadata(t *testing.T) {
 	if len(counters) == 0 {
 		t.Errorf("analysis-stats printed no unresolved imports / macro calls counters:\n%s%s", ra.Stdout, ra.Stderr)
 	}
+	seen := map[string]bool{}
 	for _, c := range counters {
+		seen[strings.TrimSuffix(strings.ToLower(c[1]), "s")] = true
 		if n, _ := strconv.Atoi(c[2]); n != 0 {
 			t.Errorf("rust-analyzer reports %s unresolved %s", c[2], c[1])
 		}
+	}
+	// SPEC: 0 unresolved imports AND 0 unresolved macro calls; both counters must be reported.
+	if len(counters) > 0 && (!seen["import"] || !seen["macro call"]) {
+		t.Errorf("analysis-stats reported no counter for both unresolved imports and unresolved macro calls: %v", seen)
 	}
 	cm := runAs(t, uid, gid, userHome, dir, shimEnv, filepath.Join(dir, ".bob", "bin", "cargo"), "metadata", "--locked", "--offline", "--format-version", "1")
 	if cm.Exit != 0 {
