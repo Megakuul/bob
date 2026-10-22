@@ -11,3 +11,5 @@ DONE R-REG-153 → tests/cache/rotation_test.go::TestRREG153SigningKeyRotation
 DONE R-REG-003 → tests/oci/oci_test.go::TestRREG003PullRegistry (podman rootless only)
 DONE R-REG-004 → tests/oci/release_test.go::TestRREG004Releases
 DONE R-PIPE-001 (fixtures contract) + R-PIPE-008 (adapter part) → tests/forge/adapters_test.go::TestFixtures{Contract,Refused,BaseURLMustBeHTTPS,CheckEvent}; stubs internal/forge
+DONE R-PIPE-007 pieces: GitHub replay → tests/forge/github_replay_test.go; gitlab launcher tests/serverenv/gitlab (untested start: heavy)
+DONE R-PIPE-001/-007 live Forgejo → tests/forge/forgejo_live_test.go::TestForgejoLive (live tag; verified it starts and reaches red)

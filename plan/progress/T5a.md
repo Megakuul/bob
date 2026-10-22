@@ -16,3 +16,4 @@ DONE R-SEC-002 → tests/policy/{matrix,sec}_test.go::TestRSEC002PolicyMatrix,Te
 DONE R-SEC-100 → tests/policy/sec_test.go::TestRSEC100NoCredentialMintingInSource,TestRSEC100RPCsWithoutWorkerTokenReturnNoCredentials
 DONE R-SEC-102(+) → tests/policy/sec_test.go::TestRSEC102PositivePathAndRefusal
 SKIP R-SEC-101 (manual: runbook docs/operations/worker-compromise.md)
+DONE R-FLEET-005 → tests/store/fleet/planner_test.go::TestRFLEET005Planner (real-run 4-worker/73-drv bullet blocked: no raw-graph submit API/fixture)
