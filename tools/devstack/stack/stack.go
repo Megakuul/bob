@@ -9,6 +9,8 @@ package stack
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,6 +56,8 @@ type Info struct {
 	AccessKey     string   `json:"access_key"`
 	SecretKey     string   `json:"secret_key"`
 	Buckets       []string `json:"buckets"`
+	APIURL        string   `json:"api_url"`          // first orchestrator's HTTP listener
+	AdminToken    string   `json:"admin_token"`      // bootstrap admin credential for tests
 	PoliciesReady bool     `json:"policies_applied"` // false until the shipped policies exist (M-server)
 	Orchestrators []Proc   `json:"orchestrators"`
 	Workers       []Proc   `json:"workers"`
@@ -106,15 +110,29 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 	if s.proxy, err = s3count.Listen(px, 0); err != nil {
 		return fail(err)
 	}
+	tok := make([]byte, 16)
+	if _, err := rand.Read(tok); err != nil {
+		return fail(fmt.Errorf("devstack: %w", err))
+	}
+	adminToken := hex.EncodeToString(tok)
 	s.Info = Info{
 		V: 1, Dir: dir, Pid: os.Getpid(),
 		S3URL: s.fs.URL, S3ProxyURL: s.proxy.URL, Region: s.fs.Root.Region,
 		AccessKey: s.fs.Root.AccessKey, SecretKey: s.fs.Root.SecretKey,
-		Buckets: rustfs.Buckets,
-		Rustfs:  Proc{Name: "rustfs", Pid: s.fs.Pid(), Log: filepath.Join(s.fs.Dir, "rustfs.log"), Running: true},
+		Buckets:    rustfs.Buckets,
+		AdminToken: adminToken,
+		Rustfs:     Proc{Name: "rustfs", Pid: s.fs.Pid(), Log: filepath.Join(s.fs.Dir, "rustfs.log"), Running: true},
 	}
 	for i := range o.Orchestrators {
-		p, err := s.spawn(server, "orchestrator", "orchestrator-"+strconv.Itoa(i), dir)
+		port, err := serverenv.FreePort()
+		if err != nil {
+			return fail(err)
+		}
+		listen := "127.0.0.1:" + strconv.Itoa(port)
+		if i == 0 {
+			s.Info.APIURL = "http://" + listen
+		}
+		p, err := s.spawn(server, "orchestrator", "orchestrator-"+strconv.Itoa(i), dir, "BOB_LISTEN="+listen, "BOB_ADMIN_TOKEN="+adminToken)
 		if err != nil {
 			return fail(err)
 		}
@@ -140,7 +158,7 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 	return s, nil
 }
 
-func (s *Stack) spawn(server, mode, name, dir string) (Proc, error) {
+func (s *Stack) spawn(server, mode, name, dir string, env ...string) (Proc, error) {
 	cmd := exec.Command(server, mode)
 	cmd.Env = append(os.Environ(),
 		"BOB_STORAGE_ENDPOINT="+s.proxy.URL,
@@ -150,6 +168,7 @@ func (s *Stack) spawn(server, mode, name, dir string) (Proc, error) {
 		"BOB_SERVER_NAME="+name,
 		"BOB_STATE_DIR="+filepath.Join(dir, name),
 	)
+	cmd.Env = append(cmd.Env, env...)
 	if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 		return Proc{}, fmt.Errorf("devstack: %w", err)
 	}
