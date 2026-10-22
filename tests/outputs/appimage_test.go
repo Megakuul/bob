@@ -383,15 +383,15 @@ func TestROUT019FidelityWarnings(t *testing.T) {
 		return
 	}
 	want := regexp.MustCompile(`warning: //apptest:script: entry "deploy" is a script; it cannot run on hosts without user namespaces\. Set Mode: appimage\.UsernsOnly to make this explicit\.`)
-	if !want.MatchString(r.Stderr) {
-		t.Errorf("no script warning in stderr:\n%s", r.Stderr)
+	if !want.MatchString(r.Combined()) {
+		t.Errorf("no script warning in the output:\n%s", r.Combined())
 	}
 	r = w.bob("build", "--print-paths", "--json", "//apptest:script-userns")
 	if !exitIs(t, r, 0) {
 		return
 	}
-	if strings.Contains(r.Stderr, "is a script") {
-		t.Errorf("UsernsOnly still warns:\n%s", r.Stderr)
+	if strings.Contains(r.Combined(), "is a script") {
+		t.Errorf("UsernsOnly still warns:\n%s", r.Combined())
 	}
 	var out string
 	for _, e := range parseEvents(t, r) {

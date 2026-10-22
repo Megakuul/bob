@@ -134,11 +134,11 @@ func TestRDEV011EditorSettings(t *testing.T) {
 			return
 		}
 		noLeak(t, r)
-		if r.Exit == 0 || !strings.Contains(r.Stderr, "BOB-E-0004") {
-			t.Errorf("commented settings.json: exit %d, stderr %q, want a failure with BOB-E-0004", r.Exit, r.Stderr)
+		if r.Exit == 0 || !strings.Contains(r.Combined(), "BOB-E-0004") {
+			t.Errorf("commented settings.json: exit %d, output %q, want a failure with BOB-E-0004", r.Exit, r.Combined())
 		}
-		if !strings.Contains(r.Stderr, "go.alternateTools") {
-			t.Errorf("BOB-E-0004 does not show the snippet to paste by hand:\n%s", r.Stderr)
+		if !strings.Contains(r.Combined(), "go.alternateTools") {
+			t.Errorf("BOB-E-0004 does not show the snippet to paste by hand:\n%s", r.Combined())
 		}
 		if b, _ := os.ReadFile(settings); string(b) != commented {
 			t.Errorf("the refused file was modified: %q", b)

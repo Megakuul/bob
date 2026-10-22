@@ -194,6 +194,33 @@ func TestRFW016DefinedAtIsConstructorLine(t *testing.T) {
 	if checked < 4 {
 		t.Errorf("only %d nodes of acme were checked", checked)
 	}
+	// The line heuristic above accepts any line that passes p; pin the exact constructor line
+	// of the packages whose bob.go (tests/fixtures/repos/acme) names their label in a comment.
+	exact := map[string]struct{ file, call string }{
+		"//libs/foo:foo":       {"libs/foo/bob.go", "cc.SharedLibrary(p"},
+		"//crates/rcore:rcore": {"crates/rcore/bob.go", "rust.StaticLib(p"},
+		"//web:web":            {"web/bob.go", "npm.Vite(p"},
+	}
+	for label, want := range exact {
+		line := 0
+		for i, l := range strings.Split(readFile(t, filepath.Join(dir, filepath.FromSlash(want.file))), "\n") {
+			if strings.Contains(l, want.call) {
+				line = i + 1
+			}
+		}
+		found := false
+		for _, n := range g.Nodes {
+			if n.Label == label {
+				found = true
+				if n.DefinedAt.File != want.file || n.DefinedAt.Line != line {
+					t.Errorf("node %s: definedAt %s:%d, want %s:%d (the %s call)", label, n.DefinedAt.File, n.DefinedAt.Line, want.file, line, want.call)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("acme's IR has no node %s", label)
+		}
+	}
 }
 
 // R-FW-016: a failing C++ build of //libs/foo:foo prints "(defined at libs/foo/bob.go:12)".

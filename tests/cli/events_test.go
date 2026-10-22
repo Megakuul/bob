@@ -151,10 +151,30 @@ func checkStream(t testing.TB, r harness.Result, verbose bool) []event {
 			t.Errorf("bob %s: run.finish at line %d is not the last line", strings.Join(r.Args, " "), i+1)
 		}
 	}
-	if strings.Contains(r.Stdout, "/nix/store/") {
-		t.Errorf("bob %s: --json output names a /nix/store path", strings.Join(r.Args, " "))
+	// Leak checks cover everything except the two fields that legitimately carry store-like text:
+	// package.finish `paths[]` (host paths <state>/nix/store/…, only with --print-paths) and the raw
+	// build log lines of `log` events (--json-log).
+	var clean strings.Builder
+	for _, e := range evs {
+		c := event{}
+		for k, v := range e {
+			c[k] = v
+		}
+		delete(c, "paths")
+		if e["event"] == "log" {
+			delete(c, "line")
+		}
+		b, err := json.Marshal(c)
+		if err != nil {
+			t.Fatalf("harness: re-encode event: %v", err)
+		}
+		clean.Write(b)
+		clean.WriteByte('\n')
 	}
-	noLeak(t, harness.Result{Args: r.Args, Stdout: r.Stdout})
+	if strings.Contains(clean.String(), "/nix/store/") {
+		t.Errorf("bob %s: --json output names a /nix/store path outside paths[] and log lines", strings.Join(r.Args, " "))
+	}
+	noLeak(t, harness.Result{Args: r.Args, Stdout: clean.String()})
 	return evs
 }
 

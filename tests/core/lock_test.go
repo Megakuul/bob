@@ -19,8 +19,14 @@ import (
 	"github.com/megakuul/bob/tests/parity"
 )
 
-// lockFixtures are the fixture repositories that declare external requirements.
-var lockFixtures = []string{"acme", "go", "rust", "npm", "ocaml", "cc", "polyglot"}
+// lockFixtures are all fixture repositories (R-FW-065: "for every fixture").
+var lockFixtures = []string{"acme", "go", "rust", "npm", "ocaml", "cc", "polyglot", "codegen", "cpp-lib", "bigclosure", "nondet"}
+
+// namesEcosystem reports whether msg names ecosystem eco as a word. A bare substring test would
+// match "go" inside "bob.go" or "golang" in every message that cites a position.
+func namesEcosystem(msg, eco string) bool {
+	return regexp.MustCompile(`(^|[^.\w])` + regexp.QuoteMeta(eco) + `($|[^\w])`).MatchString(msg)
+}
 
 var sriRe = regexp.MustCompile(`^sha(256|512)-[A-Za-z0-9+/]+={0,2}$`)
 
@@ -264,7 +270,7 @@ func TestRFW005LockOnDemand(t *testing.T) {
 	}
 	e, ok := errorWithCode(t, r, "BOB-E-1012")
 	if ok {
-		if !strings.Contains(e.Message, "go") {
+		if !namesEcosystem(e.Message, "go") {
 			t.Errorf("the stale-lock error does not name the go ecosystem: %q", e.Message)
 		}
 		if !regexp.MustCompile(fmt.Sprintf(`bob\.go:%d\b`, line)).MatchString(e.DefinedAt + " " + e.Location + " " + e.Message) {
@@ -395,7 +401,7 @@ func TestRFW062StaleSectionPerEcosystem(t *testing.T) {
 				return
 			}
 			e, ok := errorWithCode(t, r, "BOB-E-1012")
-			if ok && !strings.Contains(e.Message, c.eco) {
+			if ok && !namesEcosystem(e.Message, c.eco) {
 				t.Errorf("the stale-lock error does not name %s: %q", c.eco, e.Message)
 			}
 		})

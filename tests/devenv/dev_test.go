@@ -84,12 +84,12 @@ func TestRDEV001DevShell(t *testing.T) {
 	// An unknown shell lists the names.
 	r = w.bobHide(dir, "dev", "--shell", "nope", "--", "true")
 	noLeak(t, r)
-	if r.Exit != 3 || !strings.Contains(r.Stderr, "BOB-E-1014") {
-		t.Errorf("bob dev --shell nope: exit %d, stderr %q, want exit 3 with BOB-E-1014", r.Exit, r.Stderr)
+	if r.Exit != 3 || !strings.Contains(r.Combined(), "BOB-E-1014") {
+		t.Errorf("bob dev --shell nope: exit %d, output %q, want exit 3 with BOB-E-1014", r.Exit, r.Combined())
 	}
 	for _, name := range []string{"default", "ci"} {
-		if !strings.Contains(r.Stderr, name) {
-			t.Errorf("BOB-E-1014 does not list the shell %q:\n%s", name, r.Stderr)
+		if !strings.Contains(r.Combined(), name) {
+			t.Errorf("BOB-E-1014 does not list the shell %q:\n%s", name, r.Combined())
 		}
 	}
 

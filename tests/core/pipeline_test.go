@@ -113,6 +113,7 @@ func TestRFW063FetchesAreImportedNotBuilt(t *testing.T) {
 					names = append(names, e.Name()[33:])
 				}
 			}
+			inspected := 0
 			for _, e := range ents {
 				if !strings.HasSuffix(e.Name(), ".drv") {
 					continue
@@ -129,6 +130,7 @@ func TestRFW063FetchesAreImportedNotBuilt(t *testing.T) {
 				if !strings.HasSuffix(d.Builder, "/bin/bob-builder") {
 					continue // a nixpkgs derivation; its fixed-output inputs are nixpkgs' own
 				}
+				inspected++
 				for _, o := range d.Outputs {
 					if o.Hash != "" || o.Algo != "" {
 						t.Errorf("bob generated a fixed-output derivation %s (output %s has outputHash)", e.Name(), o.Name)
@@ -137,6 +139,9 @@ func TestRFW063FetchesAreImportedNotBuilt(t *testing.T) {
 				if _, has := d.Env["outputHash"]; has {
 					t.Errorf("%s has outputHash in its environment", e.Name())
 				}
+			}
+			if inspected == 0 {
+				t.Errorf("no bob-builder derivation found in %s after a cold build; the fixed-output check above saw nothing", store)
 			}
 			// Path identity for every recursive hash of the lock.
 			var lockDoc any

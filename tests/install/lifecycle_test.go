@@ -79,15 +79,24 @@ func TestRINST001Lifecycle(t *testing.T) {
 		t.Errorf("shim still there after uninstall: %v", err)
 	}
 	l := e.bob(t, "", "list", "--json")
+	if l.Exit != 0 {
+		t.Errorf("bob list --json after uninstall: exit %d\n%s", l.Exit, l.Combined())
+	}
+	gotResult := false
 	for _, ev := range events(t, l.Stdout) {
 		if ev["event"] == "result" {
+			gotResult = true
 			d, _ := ev["data"].(map[string]any)
-			if in, _ := d["installed"].([]any); len(in) != 0 {
-				t.Errorf("list is not empty after uninstall: %v", in)
+			in, ok := d["installed"].([]any)
+			if !ok || len(in) != 0 {
+				t.Errorf("list is not empty after uninstall: %v", d["installed"])
 			}
 		}
 	}
-	if h := e.bob(t, "", "list"); strings.TrimSpace(h.Stdout) != "" {
+	if !gotResult {
+		t.Errorf("bob list --json after uninstall: no result event:\n%s", l.Stdout)
+	}
+	if h := e.bob(t, "", "list"); h.Exit != 0 || strings.TrimSpace(h.Stdout) != "" {
 		t.Errorf("bob list is not empty after uninstall:\n%s", h.Stdout)
 	}
 }

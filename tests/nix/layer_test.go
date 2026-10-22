@@ -336,20 +336,29 @@ func TestRNIX002NixpkgsStaysUsable(t *testing.T) {
 	dir := e.dir(t, "polyglot")
 	bobgo := filepath.Join(dir, "bob.go")
 	s := string(mustRead(t, bobgo))
-	s = strings.Replace(s, `Nixpkgs: "nixos-26.05"`, `Nixpkgs: "nixos-25.11@`+sha+`"`, 1)
-	s = strings.Replace(s, `Go:   "1.26"`, `Go:   "1.25"`, 1)
-	mustWrite(t, bobgo, []byte(s), 0o644)
+	edited := strings.Replace(s, `Nixpkgs: "nixos-26.05"`, `Nixpkgs: "nixos-25.11@`+sha+`"`, 1)
+	edited = strings.Replace(edited, `Go:   "1.26"`, `Go:   "1.25"`, 1)
+	if strings.Count(edited, "nixos-25.11@") != 1 || !strings.Contains(edited, `Go:   "1.25"`) {
+		t.Fatal("harness: the polyglot fixture no longer has the Nixpkgs and Go lines this test edits")
+	}
+	mustWrite(t, bobgo, []byte(edited), 0o644)
 	r := e.run(t, "polyglot", "build", "--json", "//...")
 	if harness.Red(t, r) {
 		return
 	}
+	nErrors := 0
 	for _, ev := range events(t, r.Stdout) {
 		if ev["event"] != "error" {
 			continue
 		}
+		nErrors++
 		em, _ := ev["error"].(map[string]any)
 		if code, _ := em["code"].(string); code != "BOB-E-1008" && code != "BOB-E-2006" {
 			t.Errorf("against nixos-25.11 only version constraints (1008/2006) may fail, got %v", em)
 		}
+	}
+	// A failure without any error event (a crash, a bare message) would pass the loop above.
+	if r.Exit != 0 && nErrors == 0 {
+		t.Errorf("bob build exited %d against nixos-25.11 without an error event:\n%s", r.Exit, r.Combined())
 	}
 }

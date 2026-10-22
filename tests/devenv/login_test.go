@@ -350,7 +350,7 @@ func TestRDEV005RemoteBuildsInsteadOfPushes(t *testing.T) {
 	}
 
 	// bob build --remote: builds on the fleet, downloads, never writes the cache.
-	logBefore := serverLogs(stackDir)
+	logBefore := logSizes(stackDir)
 	r := w.bob(dir, "build", "--remote", "--print-paths", "--json", "//x:quick")
 	if redIf(t, r) || !exitIs(t, r, 0) {
 		return
@@ -383,7 +383,7 @@ func TestRDEV005RemoteBuildsInsteadOfPushes(t *testing.T) {
 			t.Errorf("local store: %s is not signed by the server key %q:\n%s", logical, want, out)
 		}
 	}
-	if m := cacheWrite.FindString(strings.TrimPrefix(serverLogs(stackDir), logBefore)); m != "" {
+	if m := cacheWrite.FindString(logsSince(stackDir, logBefore)); m != "" {
 		t.Errorf("the server's request log has a write to a cache endpoint during bob build --remote: %q", m)
 	}
 
@@ -422,13 +422,31 @@ func TestRDEV005RemoteBuildsInsteadOfPushes(t *testing.T) {
 // cacheWrite matches an access-log line of a write to the cache endpoints.
 var cacheWrite = regexp.MustCompile(`(?m)^.*\b(PUT|POST|DELETE)\b[^\n]{0,120}/nix/.*$`)
 
-// serverLogs is the concatenated log of every stack process (the server's request log).
-func serverLogs(dir string) string {
+// logSizes records the size of every stack process log, so that logsSince returns only what was
+// written afterwards (per file: the logs of several processes are not one append-only stream).
+func logSizes(dir string) map[string]int64 {
+	files, _ := filepath.Glob(filepath.Join(dir, "logs", "*.log"))
+	m := map[string]int64{}
+	for _, f := range files {
+		if st, err := os.Stat(f); err == nil {
+			m[f] = st.Size()
+		}
+	}
+	return m
+}
+
+// logsSince is the concatenated text written to every stack process log (the server's request
+// log) after the sizes were taken by logSizes; files created since count completely.
+func logsSince(dir string, before map[string]int64) string {
 	files, _ := filepath.Glob(filepath.Join(dir, "logs", "*.log"))
 	var b strings.Builder
 	for _, f := range files {
 		c, _ := os.ReadFile(f)
+		if off := before[f]; off <= int64(len(c)) {
+			c = c[off:]
+		}
 		b.Write(c)
+		b.WriteByte('\n')
 	}
 	return b.String()
 }

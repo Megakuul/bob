@@ -377,7 +377,10 @@ func TestRFW025PostgresServices(t *testing.T) {
 		if e.str("status") != "pass" {
 			t.Errorf("%s: %s, want pass", e.str("label"), e.str("status"))
 		}
-		if ms, _ := e["durationMs"].(float64); ms > 3000 {
+		ms, has := e["durationMs"].(float64)
+		if !has || ms <= 0 {
+			t.Errorf("%s: test.result has no positive durationMs (%v); the 3 s bound cannot be checked", e.str("label"), e["durationMs"])
+		} else if ms > 3000 {
 			t.Errorf("%s took %.0f ms, want ≤ 3000 ms", e.str("label"), ms)
 		}
 	}
@@ -421,9 +424,12 @@ func TestRFW020ChainOf100Steps(t *testing.T) {
 	parity.Covers(t, "R-FW-020")
 	for _, variant := range []string{"release", "debug"} {
 		t.Run(variant, func(t *testing.T) {
-			dir := chainRepo(t, 100)
+			// The salt makes the chain's derivations new for each profile, so neither subtest
+			// is served from the store of the other.
+			dir := chainRepo(t, 100, variant)
 			// The store is cold for the chain's own derivations; tool closures may be warm.
-			warm := bobRun(t, dir, "build", "//chain:s000", "--variant", variant)
+			// The warm-up step is not part of the chain, so all 100 chain steps are timed.
+			warm := bobRun(t, dir, "build", "//chain:warm", "--variant", variant)
 			if harness.Red(t, warm) || !exitIs(t, warm, 0) {
 				return
 			}
@@ -439,19 +445,21 @@ func TestRFW020ChainOf100Steps(t *testing.T) {
 	}
 }
 
-// chainRepo writes a repository with n steps s000…s(n-1), each depending on the previous one.
-func chainRepo(t *testing.T, n int) string {
+// chainRepo writes a repository with n steps s000…s(n-1), each depending on the previous one,
+// plus an independent step "warm". salt is part of every step's environment.
+func chainRepo(t *testing.T, n int, salt string) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "chain")
 	var b strings.Builder
-	b.WriteString("//go:build bob\n\npackage chain\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\n")
+	b.WriteString("//go:build bob\n\npackage chain\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/nixpkgs\"\n)\n\n")
 	for i := 0; i < n; i++ {
 		in := "nil"
 		if i > 0 {
 			in = fmt.Sprintf("map[string]bob.Tree{\"prev\": s%03d(p)}", i-1)
 		}
-		fmt.Fprintf(&b, "var s%03d = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"s%03d\", bob.RunOpts{Cmd: []string{\"true\"}, Inputs: %s, Env: map[string]string{\"N\": \"%d\"}})\n})\n\n", i, i, in, i)
+		fmt.Fprintf(&b, "var s%03d = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"s%03d\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, \"coreutils\")}, Cmd: []string{\"true\"}, Inputs: %s, Env: map[string]string{\"N\": \"%s-%d\"}})\n})\n\n", i, i, in, salt, i)
 	}
+	fmt.Fprintf(&b, "var warm = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"warm\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, \"coreutils\")}, Cmd: []string{\"true\"}, Env: map[string]string{\"N\": \"%s-warm\"}})\n})\n", salt)
 	writeFile(t, filepath.Join(dir, "chain", "bob.go"), b.String())
 	writeFile(t, filepath.Join(dir, "bob.go"), "//go:build bob\n\npackage chain\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n")
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/chain\n\ngo 1.26.0\n")

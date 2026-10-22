@@ -170,8 +170,8 @@ func TestROUT023ReleaseManifest(t *testing.T) {
 	for _, e := range validateSchema(schema, doc, "$") {
 		t.Errorf("release.json violates the schema: %s", e)
 	}
-	if canon := canonicalJSON(t, raw); !bytes.Equal(bytes.TrimSpace(raw), canon) && !bytes.Equal(raw, canon) {
-		t.Errorf("release.json keys are not sorted / not compact JSON")
+	if bad := unsortedKeys(t, raw); bad != "" {
+		t.Errorf("release.json keys are not sorted: %s", bad)
 	}
 	if m.Schema != "bob.release/v1" || m.Release != "api" || m.Label != "//deploy:api" || m.Version != "1.0.1" || m.Public {
 		t.Errorf("header fields: %+v", m)
@@ -251,22 +251,57 @@ func TestROUT023ReleaseManifest(t *testing.T) {
 	}
 }
 
-// canonicalJSON re-encodes raw compactly with sorted keys (encoding/json sorts map keys).
-func canonicalJSON(t testing.TB, raw []byte) []byte {
+// unsortedKeys walks the tokens of raw in document order and returns a description of the first
+// object whose keys are not in ascending order ("" when every object is sorted). SPEC §4.8 asks
+// for sorted keys, not for a particular indentation.
+func unsortedKeys(t testing.TB, raw []byte) string {
 	t.Helper()
-	var v any
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
-	if err := dec.Decode(&v); err != nil {
-		t.Fatal(err)
+	type frame struct {
+		obj     bool
+		last    string
+		hasLast bool
+		wantKey bool
 	}
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		t.Fatal(err)
+	var stack []frame
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			if err.Error() == "EOF" {
+				return ""
+			}
+			t.Fatalf("release.json is not JSON: %v", err)
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{':
+				stack = append(stack, frame{obj: true, wantKey: true})
+			case '[':
+				stack = append(stack, frame{})
+			default:
+				stack = stack[:len(stack)-1]
+				if n := len(stack); n > 0 && stack[n-1].obj {
+					stack[n-1].wantKey = true
+				}
+			}
+			continue
+		}
+		n := len(stack)
+		if n == 0 || !stack[n-1].obj {
+			continue
+		}
+		f := &stack[n-1]
+		if f.wantKey {
+			k, _ := tok.(string)
+			if f.hasLast && k <= f.last {
+				return fmt.Sprintf("%q after %q", k, f.last)
+			}
+			f.last, f.hasLast, f.wantKey = k, true, false
+		} else {
+			f.wantKey = true
+		}
 	}
-	return bytes.TrimSpace(b.Bytes())
 }
 
 // validateSchema checks v (decoded with UseNumber) against the JSON Schema subset of

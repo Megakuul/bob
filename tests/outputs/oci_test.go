@@ -256,9 +256,6 @@ func TestROUT010Reproducibility(t *testing.T) {
 			gzipHeaderOK(t, what, b)
 			es := readTar(t, b)
 			checkTarRules(t, what, es)
-			if i > 0 && i < len(m.Layers)-1 {
-				continue
-			}
 			for _, dir := range []string{"nix", "nix/store"} {
 				e, ok := tarFind(es, dir)
 				if !ok || e.Hdr.Typeflag != '5' || e.Hdr.Mode&0o7777 != 0o555 || e.Hdr.Uid != 0 {

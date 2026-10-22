@@ -164,8 +164,12 @@ func TestRCLI002VerboseAddsLines(t *testing.T) {
 		if def.Exit != verb.Exit {
 			t.Errorf("bob %v: exit %d without -v, %d with -v", c.args, def.Exit, verb.Exit)
 		}
-		want := lines(durationRE.ReplaceAllString(def.Stdout, "<d>"))
-		got := lines(durationRE.ReplaceAllString(verb.Stdout, "<d>"))
+		want := lines(durationRE.ReplaceAllString(def.Stdout+def.Stderr, "<d>"))
+		got := lines(durationRE.ReplaceAllString(verb.Stdout+verb.Stderr, "<d>"))
+		if len(want) == 0 {
+			t.Errorf("bob %v: the default run printed nothing (no summary line), nothing to compare", c.args)
+			continue
+		}
 		i := 0
 		for _, l := range got {
 			if i < len(want) && l == want[i] {

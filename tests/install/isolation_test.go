@@ -89,6 +89,9 @@ func TestRINST006NoProjectState(t *testing.T) {
 	// hook active: cd into the project, run the prompt hook, then the program.
 	inProject := bash(proj, hook+`_bob_hook; `+prog+` --env`)
 	caller := bash(proj, hook+`_bob_hook; env | sed "s/^_=.*//"`)
+	if caller["BOB_PROJECT"] == "" {
+		t.Fatalf("precondition: the shell hook did not activate the project (BOB_PROJECT is unset); the comparison below would be vacuous")
+	}
 	if d := diffEnv(inProject, fromRoot, ignore); len(d) != 0 {
 		t.Errorf("program environment from inside the activated project differs from the one from / in %v", d)
 	}
@@ -104,6 +107,9 @@ func TestRINST006NoProjectState(t *testing.T) {
 		t.Fatalf("bob dev -- acme --env: exit %d\n%s", r.Exit, r.Combined())
 	}
 	c, p := envLines(readFile(t, filepath.Join(dir, "caller"))), envLines(readFile(t, filepath.Join(dir, "prog")))
+	if c["BOB_DEV"] != "1" {
+		t.Fatalf("precondition: the caller of the program is not inside bob dev (BOB_DEV=%q)", c["BOB_DEV"])
+	}
 	if d := diffEnv(p, c, func(k string) bool { return k == "_" || k == "PWD" || k == "OLDPWD" || k == "SHLVL" }); len(d) != 0 {
 		t.Errorf("under bob dev the program's environment differs from its caller's in %v", d)
 	}

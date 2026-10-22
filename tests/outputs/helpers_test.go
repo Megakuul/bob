@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -112,7 +113,13 @@ func (w *world) bobEnv(env []string, args ...string) harness.Result {
 	w.t.Helper()
 	r := harness.Run(w.t, "bob", harness.Spec{Dir: w.dir, Env: append(w.env(), env...), Timeout: 8 * time.Minute}, args...)
 	if !contains(args, "-v") {
-		for _, l := range leakcheck.Check([]byte(r.Combined())) {
+		shown := r.Combined()
+		if contains(args, "--print-paths") {
+			// --print-paths prints host paths <home>/nix/store/<hash>-<name> on purpose (SPEC §02.6,
+			// §02.7.5); they are not raw Nix text.
+			shown = r.Stderr + "\n" + printPathsRE.ReplaceAllString(r.Stdout, `"paths":[]`)
+		}
+		for _, l := range leakcheck.Check([]byte(shown)) {
 			w.t.Errorf("bob %s shows raw Nix text: %s", strings.Join(args, " "), l)
 		}
 	}
@@ -129,6 +136,9 @@ func (w *world) env() []string {
 		"XDG_CACHE_HOME=" + filepath.Join(h, ".cache"), "TERM=dumb",
 	}
 }
+
+// printPathsRE matches the paths[] array of a package.finish event.
+var printPathsRE = regexp.MustCompile(`"paths"\s*:\s*\[[^\]]*\]`)
 
 func contains(s []string, x string) bool {
 	for _, e := range s {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -116,12 +117,23 @@ func (w *world) bobEnv(env []string, args ...string) harness.Result {
 		verbose = verbose || a == "-v"
 	}
 	if !verbose {
-		for _, l := range leakcheck.Check([]byte(r.Combined())) {
+		shown := r.Combined()
+		for _, a := range args {
+			if a == "--print-paths" {
+				// --print-paths prints host paths <home>/nix/store/<hash>-<name> on purpose (SPEC
+				// §02.6, §02.7.5); they are not raw Nix text.
+				shown = r.Stderr + "\n" + printPathsRE.ReplaceAllString(r.Stdout, `"paths":[]`)
+			}
+		}
+		for _, l := range leakcheck.Check([]byte(shown)) {
 			w.t.Errorf("bob %s shows raw Nix text: %s", strings.Join(args, " "), l)
 		}
 	}
 	return r
 }
+
+// printPathsRE matches the paths[] array of a package.finish event.
+var printPathsRE = regexp.MustCompile(`"paths"\s*:\s*\[[^\]]*\]`)
 
 func exitIs(t testing.TB, r harness.Result, want int) bool {
 	t.Helper()

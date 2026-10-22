@@ -133,7 +133,7 @@ func TestRFW060GeneratedFiles(t *testing.T) {
 			if c.fixture == "go" && strings.Contains(exclude, "go.mod") {
 				t.Errorf("go.mod is committed (R-FW-022) but bob excludes it from git:\n%s", exclude)
 			}
-			if strings.Contains(readFile(t, filepath.Join(dir, ".gitignore")), "bob generated") {
+			if strings.Contains(readOrEmpty(filepath.Join(dir, ".gitignore")), "bob generated") {
 				t.Errorf("bob edited the user's .gitignore")
 			}
 		})
@@ -177,7 +177,9 @@ func TestRFW061DriftIsRejected(t *testing.T) {
 				t.Fatalf("harness: the edit of %s changed nothing", c.file)
 			}
 			writeFile(t, path, edited)
-			before := treeHash(t, dir)
+			// bob's own state under .bob/ (evaluator cache, logs) may change; every other file,
+			// the drifted one included, must not.
+			before := treeHashSkip(t, dir, ".bob/")
 			r := bobRun(t, dir, "build", "//...", "--json")
 			if !exitIs(t, r, 3) {
 				return
@@ -189,10 +191,24 @@ func TestRFW061DriftIsRejected(t *testing.T) {
 			for _, ev := range eventsNamed(events(t, r), "package.start") {
 				t.Errorf("a package started (%v) although drift must stop bob before any Nix call", ev)
 			}
-			if treeHash(t, dir) != before {
+			if treeHashSkip(t, dir, ".bob/") != before {
 				t.Errorf("bob build changed files although it must leave drifted files unchanged")
 			}
 			human := bobRun(t, dir, "build", "//...")
+			if c.name == "go" {
+				// The template of SPEC R-FW-061, as far as it does not depend on the fixture's own
+				// go.mod (module dir, versions).
+				for _, want := range []string{
+					"✗ api/go.mod or go.sum was changed outside bob (they are generated from bob.go)",
+					"+ golang.org/x/text v0.20.0  (not declared in bob.go)",
+					"hint: declare Go modules in bob.go (golang.Require(\"golang.org/x/text\", \"v0.20.0\")) and run `bob lock`;",
+					"`go get` and `go mod tidy` are not used with bob. To discard the edit: bob gen --force",
+				} {
+					if !strings.Contains(human.Stderr, want) {
+						t.Errorf("the drift message lacks %q:\n%s", want, human.Stderr)
+					}
+				}
+			}
 			golden.Assert(t, "tests/goldens/native/drift/"+c.name+".txt", []byte(human.Stderr), golden.Human(), golden.Reqs("R-FW-061"))
 			if r := bobRun(t, dir, "gen", "--force"); !exitIs(t, r, 0) {
 				return

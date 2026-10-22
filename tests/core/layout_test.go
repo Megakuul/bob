@@ -121,15 +121,20 @@ func TestRARCH004TwoBinaries(t *testing.T) {
 	}
 	// bob-server's modes (SPEC §05/§06) and anything named like the server.
 	cmdLine := regexp.MustCompile(`^\s{2}(\S+)\s`)
+	listed := 0
 	for _, l := range lines(r.Stdout) {
 		m := cmdLine.FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}
+		listed++
 		switch name := m[1]; {
 		case name == "orchestrator", name == "worker", name == "admin", strings.Contains(name, "server"):
 			t.Errorf("bob --help lists the server command %q: %q", name, l)
 		}
+	}
+	if listed == 0 {
+		t.Errorf("bob --help lists no commands at all (the scan would be vacuous):\n%s", r.Stdout)
 	}
 	if strings.Contains(r.Stdout, "bob-server") {
 		t.Errorf("bob --help mentions bob-server:\n%s", r.Stdout)

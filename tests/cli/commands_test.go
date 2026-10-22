@@ -198,6 +198,15 @@ func TestRCLI010Lock(t *testing.T) {
 	if len(plus) != 1 {
 		t.Errorf("want exactly one `+ npm zod …` line, got %d:\n%s", len(plus), r.Stdout)
 	}
+	nplus := 0
+	for _, l := range lines(r.Stdout) {
+		if strings.HasPrefix(l, "  +") {
+			nplus++
+		}
+	}
+	if nplus != 1 {
+		t.Errorf("want exactly one `+` line in total, got %d:\n%s", nplus, r.Stdout)
+	}
 	for _, l := range lines(r.Stdout) {
 		if strings.HasPrefix(l, "  ~") || strings.HasPrefix(l, "  -") {
 			t.Errorf("unexpected change line after adding one dependency: %q", l)

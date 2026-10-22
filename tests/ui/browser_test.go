@@ -242,7 +242,9 @@ func (e *env) newTab(t *testing.T, theme string, size Size) *tab {
 			}
 		}
 	}()
-	storage := `localStorage.removeItem("bob.theme");`
+	// Empty storage means empty on the first document of the tab only: this script runs on every new
+	// document, and clearing on a reload would erase the choice R-UI-004 requires to persist.
+	storage := `if (!sessionStorage.getItem("bob.test.storage-cleared")) { sessionStorage.setItem("bob.test.storage-cleared", "1"); localStorage.removeItem("bob.theme"); }`
 	if theme != "" {
 		storage = fmt.Sprintf(`localStorage.setItem("bob.theme", %q);`, theme)
 	}
