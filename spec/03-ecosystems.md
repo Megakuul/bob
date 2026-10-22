@@ -939,7 +939,7 @@ an input of every Rust derivation; changing it rebuilds all).
   `rustc-env`), `is_proc_macro` + `proc_macro_dylib_path` (store), `is_workspace_member`
   (local crates true), `source.include_dirs`. Local crates point to the working tree, registry
   crates to their store source. Editor settings (§02) set rust-analyzer `linkedProjects` to it.
-- `Cargo.toml` (root: `[workspace] resolver = "2"`, `members` sorted) and per local crate
+- `Cargo.toml` (root: `[workspace] resolver = "3"`, `members` sorted) and per local crate
   (`[package] name, version = "0.0.0", edition, publish = false`, `[lib]/[[bin]]` path,
   `[features]`, `[dependencies]` with `version = "=<locked>"`, `features`, `default-features`,
   `package` for renames, local crates as `path`), `Cargo.lock` (format version 4, from

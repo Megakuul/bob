@@ -43,6 +43,7 @@ None yet. Fonts, icons and images under `assets/` or `web/static/` get a row her
 
 | Path | Source | Licence | Notes |
 |---|---|---|---|
+| `pkg/rust/resolve/testdata/index.tar.gz` | 32 crates.io sparse-index files (index.crates.io metadata: names, versions, checksums, dependency tables) | crates.io data policy: index metadata is public and redistributable; no crate sources | Offline Cargo-equality test of the crate resolver (I-R-crates) |
 
 ## Code taken under the cleanroom exception (D42)
 
