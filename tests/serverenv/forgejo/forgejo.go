@@ -303,7 +303,9 @@ func (in *Instance) seed(ctx context.Context) error {
 			return err
 		}
 	}
-	for repo, perm := range map[string]string{"demo": "write", "other": "read"} {
+	// Forgejo serves repository hooks only to repository admins, and bob must manage the hook of a
+	// linked repository: the bot is admin on demo (the linked one), reader on other.
+	for repo, perm := range map[string]string{"demo": "admin", "other": "read"} {
 		if err := in.API(ctx, http.MethodPut, "/api/v1/repos/alice/"+repo+"/collaborators/bobbot", owner,
 			map[string]any{"permission": perm}, nil); err != nil {
 			return err

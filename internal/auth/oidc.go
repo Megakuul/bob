@@ -86,7 +86,7 @@ func (id *Identity) listProviders(ctx context.Context) ([]*store.OidcProviderRec
 		return nil, err
 	}
 	var out []*store.OidcProviderRecord
-	for _, pid := range idx.IDs {
+	for _, pid := range idx.IDs.Value() {
 		p, err := store.Get(ctx, id.control, store.OidcProviderKey(pid))
 		if errors.Is(err, store.ErrNotFound) {
 			continue
@@ -119,12 +119,12 @@ func safeNext(next string) string {
 }
 
 func (id *Identity) oauthConfig(p *store.OidcProviderRecord, disc *oidc.Provider, redirect string) *oauth2.Config {
-	scopes := p.Scopes
+	scopes := p.Scopes.Value()
 	if len(scopes) == 0 {
 		scopes = defaultScopes
 	}
 	return &oauth2.Config{
-		ClientID: p.ClientID, ClientSecret: p.ClientSecret, Endpoint: disc.Endpoint(),
+		ClientID: p.ClientID.Value(), ClientSecret: p.ClientSecret.Value(), Endpoint: disc.Endpoint(),
 		RedirectURL: redirect, Scopes: scopes,
 	}
 }
@@ -145,7 +145,7 @@ func (id *Identity) oidcStart(w http.ResponseWriter, r *http.Request) {
 		id.httpFail(w, r, err)
 		return
 	}
-	disc, err := id.oidc.get(ctx, p.Issuer)
+	disc, err := id.oidc.get(ctx, p.Issuer.Value())
 	if err != nil {
 		id.log.Warn("OIDC provider unreachable", "provider", pid, "err", err.Error())
 		plainError(w, "the login provider is unreachable, try again later", http.StatusBadGateway)
@@ -153,15 +153,15 @@ func (id *Identity) oidcStart(w http.ResponseWriter, r *http.Request) {
 	}
 	state, nonce, verifier := newToken(""), newToken(""), oauth2.GenerateVerifier()
 	st := store.OidcStateKey(state.reveal())
-	st.Provider, st.Nonce, st.Verifier = pid, nonce.reveal(), verifier
-	st.Next, st.Redirect = safeNext(r.URL.Query().Get("next")), id.baseURL(r)+"/auth/oidc/callback"
-	st.Expires = id.now().Add(oidcStateTTL)
+	st.Provider, st.Nonce, st.Verifier = store.Set(pid), store.Set(nonce.reveal()), store.Set(verifier)
+	st.Next, st.Redirect = store.Set(safeNext(r.URL.Query().Get("next"))), store.Set(id.baseURL(r)+"/auth/oidc/callback")
+	st.Expires = store.Set(id.now().Add(oidcStateTTL))
 	if err := store.Create(ctx, id.control, st); err != nil {
 		id.httpFail(w, r, err)
 		return
 	}
-	cfg := id.oauthConfig(p, disc, st.Redirect)
-	http.Redirect(w, r, cfg.AuthCodeURL(state.reveal(), oidc.Nonce(st.Nonce), oauth2.S256ChallengeOption(verifier)), http.StatusFound)
+	cfg := id.oauthConfig(p, disc, st.Redirect.Value())
+	http.Redirect(w, r, cfg.AuthCodeURL(state.reveal(), oidc.Nonce(st.Nonce.Value()), oauth2.S256ChallengeOption(verifier)), http.StatusFound)
 }
 
 // oidcCallback: GET /auth/oidc/callback?code&state. Every failure answers a 4xx page and
@@ -187,7 +187,7 @@ func (id *Identity) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		plainError(w, "invalid or expired login state, start the login again", http.StatusBadRequest)
 		return
 	}
-	if !id.now().Before(st.Expires) {
+	if !id.now().Before(st.Expires.Value()) {
 		plainError(w, "the login took too long, start it again", http.StatusBadRequest)
 		return
 	}
@@ -195,7 +195,7 @@ func (id *Identity) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		plainError(w, "the login provider refused the login", http.StatusBadRequest)
 		return
 	}
-	p, err := store.Get(ctx, id.control, store.OidcProviderKey(st.Provider))
+	p, err := store.Get(ctx, id.control, store.OidcProviderKey(st.Provider.Value()))
 	if errors.Is(err, store.ErrNotFound) {
 		plainError(w, "unknown login provider", http.StatusBadRequest)
 		return
@@ -203,15 +203,15 @@ func (id *Identity) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		id.httpFail(w, r, err)
 		return
 	}
-	disc, err := id.oidc.get(ctx, p.Issuer)
+	disc, err := id.oidc.get(ctx, p.Issuer.Value())
 	if err != nil {
-		id.log.Warn("OIDC provider unreachable", "provider", p.ID, "err", err.Error())
+		id.log.Warn("OIDC provider unreachable", "provider", p.ID.Value(), "err", err.Error())
 		plainError(w, "the login provider is unreachable, try again later", http.StatusBadGateway)
 		return
 	}
-	tok, err := id.oauthConfig(p, disc, st.Redirect).Exchange(id.oidc.ctx(ctx), q.Get("code"), oauth2.VerifierOption(st.Verifier))
+	tok, err := id.oauthConfig(p, disc, st.Redirect.Value()).Exchange(id.oidc.ctx(ctx), q.Get("code"), oauth2.VerifierOption(st.Verifier.Value()))
 	if err != nil {
-		id.log.Warn("OIDC code exchange failed", "provider", p.ID, "err", oauthErrText(err))
+		id.log.Warn("OIDC code exchange failed", "provider", p.ID.Value(), "err", oauthErrText(err))
 		plainError(w, "the login provider did not confirm the login", http.StatusBadRequest)
 		return
 	}
@@ -220,14 +220,14 @@ func (id *Identity) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		plainError(w, "the login provider sent no ID token", http.StatusBadRequest)
 		return
 	}
-	idt, err := disc.Verifier(&oidc.Config{ClientID: p.ClientID, Now: id.now}).Verify(id.oidc.ctx(ctx), raw)
+	idt, err := disc.Verifier(&oidc.Config{ClientID: p.ClientID.Value(), Now: id.now}).Verify(id.oidc.ctx(ctx), raw)
 	if err != nil {
-		id.log.Warn("OIDC ID token rejected", "provider", p.ID, "err", err.Error())
+		id.log.Warn("OIDC ID token rejected", "provider", p.ID.Value(), "err", err.Error())
 		plainError(w, "the ID token of the login provider is not valid", http.StatusBadRequest)
 		return
 	}
-	if idt.Nonce != st.Nonce {
-		id.log.Warn("OIDC ID token with a wrong nonce", "provider", p.ID)
+	if idt.Nonce != st.Nonce.Value() {
+		id.log.Warn("OIDC ID token with a wrong nonce", "provider", p.ID.Value())
 		plainError(w, "the ID token of the login provider is not valid (nonce mismatch)", http.StatusBadRequest)
 		return
 	}
@@ -251,7 +251,7 @@ func (id *Identity) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Add("Set-Cookie", sessionCookie(iss.session, browserMax))
-	http.Redirect(w, r, st.Next, http.StatusFound)
+	http.Redirect(w, r, st.Next.Value(), http.StatusFound)
 }
 
 // oauthErrText is an oauth2 error without the response body (which could carry tokens).
@@ -272,12 +272,12 @@ func (id *Identity) oidcLogin(ctx context.Context, p *store.OidcProviderRecord, 
 	}
 	var matched []api.Binding
 	if maps != nil {
-		matched = rbac.Match(maps.Mappings, p.ID, claims)
+		matched = rbac.Match(maps.Mappings.Value(), p.ID.Value(), claims)
 	}
-	if p.RequireMapping && len(matched) == 0 {
+	if p.RequireMapping.Value() && len(matched) == 0 {
 		return "", http.StatusForbidden, msgNoMapping, nil
 	}
-	claim := p.UsernameClaim
+	claim := p.UsernameClaim.Value()
 	if claim == "" {
 		claim = "preferred_username"
 	}
@@ -297,17 +297,17 @@ func (id *Identity) oidcLogin(ctx context.Context, p *store.OidcProviderRecord, 
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
-		cur.Login, cur.Email, cur.DisplayName, cur.Provider = login, email, name, p.ID
+		cur.Login, cur.Email, cur.DisplayName, cur.Provider = store.Set(login), store.Set(email), store.Set(name), store.Set(p.ID.Value())
 		return cur, nil
 	})
 	if err != nil {
 		return "", 0, "", err
 	}
 	id.users.put(uid, u)
-	if u.Disabled {
+	if u.Disabled.Value() {
 		return "", http.StatusForbidden, "your account is disabled", nil
 	}
-	if u.Index > 0 {
+	if u.Index.Value() > 0 {
 		if err := id.indexUser(ctx, u); err != nil {
 			id.log.Warn("users index entry not updated", "user", uid, "err", err.Error())
 		}
@@ -354,8 +354,8 @@ func (id *Identity) oidcUser(ctx context.Context, p *store.OidcProviderRecord, i
 	for range 3 {
 		n, err := store.Get(ctx, id.control, store.OidcSubKey(issuer, subject))
 		if err == nil {
-			if _, err := store.Get(ctx, id.control, store.UserKey(n.ID)); err == nil {
-				return n.ID, nil
+			if _, err := store.Get(ctx, id.control, store.UserKey(n.ID.Value())); err == nil {
+				return n.ID.Value(), nil
 			} else if !errors.Is(err, store.ErrNotFound) {
 				return "", err
 			}
@@ -368,10 +368,10 @@ func (id *Identity) oidcUser(ctx context.Context, p *store.OidcProviderRecord, i
 		}
 		now := id.now()
 		u := store.UserKey("u" + newID(now))
-		u.Login, u.Source, u.Provider, u.Issuer, u.Subject, u.Created = login, sourceOIDC, p.ID, issuer, subject, now
+		u.Login, u.Source, u.Provider, u.Issuer, u.Subject, u.Created = store.Set(login), store.Set(sourceOIDC), store.Set(p.ID.Value()), store.Set(issuer), store.Set(subject), store.Set(now)
 		err = id.createUser(ctx, u, store.OidcSubKey(issuer, subject))
 		if err == nil {
-			return u.ID, nil
+			return u.ID.Value(), nil
 		}
 		var ce *connect.Error
 		if !errors.As(err, &ce) || ce.Code() != connect.CodeAlreadyExists {
@@ -386,18 +386,18 @@ func (id *Identity) oidcUser(ctx context.Context, p *store.OidcProviderRecord, i
 type oidcService struct{ id *Identity }
 
 func (s oidcService) providerMsg(p *store.OidcProviderRecord, base string) *accessv1.OidcProvider {
-	scopes := p.Scopes
+	scopes := p.Scopes.Value()
 	if len(scopes) == 0 {
 		scopes = defaultScopes
 	}
-	claim := p.UsernameClaim
+	claim := p.UsernameClaim.Value()
 	if claim == "" {
 		claim = "preferred_username"
 	}
 	m := &accessv1.OidcProvider{
-		Id: p.ID, DisplayName: p.DisplayName, IssuerUrl: p.Issuer, ClientId: p.ClientID,
-		HasClientSecret: p.ClientSecret != "", Scopes: scopes, UsernameClaim: claim,
-		RequireMapping: p.RequireMapping, Etag: p.ETag,
+		Id: p.ID.Value(), DisplayName: p.DisplayName.Value(), IssuerUrl: p.Issuer.Value(), ClientId: p.ClientID.Value(),
+		HasClientSecret: p.ClientSecret.Value() != "", Scopes: scopes, UsernameClaim: claim,
+		RequireMapping: p.RequireMapping.Value(), Etag: store.ETagOf(p.ETag),
 	}
 	if base != "" {
 		m.RedirectUrl = strings.TrimSuffix(base, "/") + "/auth/oidc/callback"
@@ -423,27 +423,27 @@ func (s oidcService) CreateOidcProvider(ctx context.Context, req *connect.Reques
 		return nil, api.InvalidArgument("provider", "field too long")
 	}
 	p := store.OidcProviderKey(in.GetId())
-	p.DisplayName, p.Issuer, p.ClientID, p.ClientSecret = in.GetDisplayName(), in.GetIssuerUrl(), in.GetClientId(), in.GetClientSecret()
-	p.Scopes, p.UsernameClaim, p.RequireMapping, p.Created = in.GetScopes(), in.GetUsernameClaim(), in.GetRequireMapping(), s.id.now()
+	p.DisplayName, p.Issuer, p.ClientID, p.ClientSecret = store.Set(in.GetDisplayName()), store.Set(in.GetIssuerUrl()), store.Set(in.GetClientId()), store.Set(in.GetClientSecret())
+	p.Scopes, p.UsernameClaim, p.RequireMapping, p.Created = store.Set(in.GetScopes()), store.Set(in.GetUsernameClaim()), store.Set(in.GetRequireMapping()), store.Set(s.id.now())
 	if _, err := store.CAS(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
 		if cur == nil {
 			cur = store.OidcProviderIndexKey()
 		}
-		if slices.Contains(cur.IDs, p.ID) {
+		if slices.Contains(cur.IDs.Value(), p.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs) >= maxProviders {
+		if len(cur.IDs.Value()) >= maxProviders {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d OIDC providers", maxProviders))
 		}
-		cur.IDs = append(cur.IDs, p.ID)
-		slices.Sort(cur.IDs)
+		cur.IDs = store.Set(append(cur.IDs.Value(), p.ID.Value()))
+		slices.Sort(cur.IDs.Value())
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)
 	}
 	if err := store.Create(ctx, s.id.control, p); err != nil {
 		if errors.Is(err, store.ErrExists) {
-			return nil, api.AlreadyExists(fmt.Sprintf("OIDC provider %s already exists", p.ID))
+			return nil, api.AlreadyExists(fmt.Sprintf("OIDC provider %s already exists", p.ID.Value()))
 		}
 		return nil, storageError(err)
 	}
@@ -505,29 +505,29 @@ func (s oidcService) UpdateOidcProvider(ctx context.Context, req *connect.Reques
 		if p == nil {
 			return nil, api.NotFound("OIDC provider")
 		}
-		if err := checkETag("provider.etag", in.GetEtag(), p.ETag); err != nil {
+		if err := checkETag("provider.etag", in.GetEtag(), store.ETagOf(p.ETag)); err != nil {
 			return nil, err
 		}
 		if paths["displayname"] {
-			p.DisplayName = in.GetDisplayName()
+			p.DisplayName = store.Set(in.GetDisplayName())
 		}
 		if paths["issuerurl"] {
-			p.Issuer = in.GetIssuerUrl()
+			p.Issuer = store.Set(in.GetIssuerUrl())
 		}
 		if paths["clientid"] {
-			p.ClientID = in.GetClientId()
+			p.ClientID = store.Set(in.GetClientId())
 		}
 		if paths["clientsecret"] {
-			p.ClientSecret = in.GetClientSecret()
+			p.ClientSecret = store.Set(in.GetClientSecret())
 		}
 		if paths["scopes"] {
-			p.Scopes = in.GetScopes()
+			p.Scopes = store.Set(in.GetScopes())
 		}
 		if paths["usernameclaim"] {
-			p.UsernameClaim = in.GetUsernameClaim()
+			p.UsernameClaim = store.Set(in.GetUsernameClaim())
 		}
 		if paths["requiremapping"] {
-			p.RequireMapping = in.GetRequireMapping()
+			p.RequireMapping = store.Set(in.GetRequireMapping())
 		}
 		return p, nil
 	})
@@ -542,33 +542,33 @@ func (s oidcService) DeleteOidcProvider(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	if e := req.Msg.GetEtag(); e != "" && e != p.ETag {
+	if e := req.Msg.GetEtag(); e != "" && e != store.ETagOf(p.ETag) {
 		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 	}
 	if err := store.Delete(ctx, s.id.control, p); err != nil {
 		return nil, storageError(err)
 	}
 	if _, err := store.CAS(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
-		if cur == nil || !slices.Contains(cur.IDs, p.ID) {
+		if cur == nil || !slices.Contains(cur.IDs.Value(), p.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		cur.IDs = slices.DeleteFunc(cur.IDs, func(x string) bool { return x == p.ID })
+		cur.IDs = store.Set(slices.DeleteFunc(cur.IDs.Value(), func(x string) bool { return x == p.ID.Value() }))
 		return cur, nil
 	}); err != nil {
-		s.id.log.Warn("OIDC provider index not updated", "provider", p.ID, "err", err.Error())
+		s.id.log.Warn("OIDC provider index not updated", "provider", p.ID.Value(), "err", err.Error())
 	}
 	if _, err := store.CAS(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		n := len(cur.Mappings)
-		cur.Mappings = slices.DeleteFunc(cur.Mappings, func(m store.OidcMappingEntry) bool { return m.Provider == p.ID })
-		if n == len(cur.Mappings) {
+		n := len(cur.Mappings.Value())
+		cur.Mappings = store.Set(slices.DeleteFunc(cur.Mappings.Value(), func(m store.OidcMappingEntry) bool { return m.Provider == p.ID.Value() }))
+		if n == len(cur.Mappings.Value()) {
 			return nil, store.ErrNoChange
 		}
 		return cur, nil
 	}); err != nil {
-		s.id.log.Warn("mappings of a deleted OIDC provider not removed", "provider", p.ID, "err", err.Error())
+		s.id.log.Warn("mappings of a deleted OIDC provider not removed", "provider", p.ID.Value(), "err", err.Error())
 	}
 	return connect.NewResponse(&accessv1.DeleteOidcProviderResponse{}), nil
 }
@@ -606,7 +606,7 @@ func (s oidcService) CreateOidcMapping(ctx context.Context, req *connect.Request
 			cur = store.OidcMappingsKey()
 		}
 		n := 0
-		for _, m := range cur.Mappings {
+		for _, m := range cur.Mappings.Value() {
 			if m.Provider == e.Provider {
 				n++
 			}
@@ -614,7 +614,7 @@ func (s oidcService) CreateOidcMapping(ctx context.Context, req *connect.Request
 		if n >= maxMappings {
 			return nil, api.FailedPrecondition(fmt.Sprintf("a provider has at most %d mappings", maxMappings))
 		}
-		cur.Mappings = append(cur.Mappings, e)
+		cur.Mappings = store.Set(append(cur.Mappings.Value(), e))
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)
@@ -630,7 +630,7 @@ func (s oidcService) ListOidcMappings(ctx context.Context, req *connect.Request[
 		return nil, storageError(err)
 	}
 	out := &accessv1.ListOidcMappingsResponse{}
-	for _, m := range maps.Mappings {
+	for _, m := range maps.Mappings.Value() {
 		if pid := req.Msg.GetProviderId(); pid == "" || m.Provider == pid {
 			out.Mappings = append(out.Mappings, mappingMsg(m))
 		}
@@ -644,9 +644,9 @@ func (s oidcService) DeleteOidcMapping(ctx context.Context, req *connect.Request
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		n := len(cur.Mappings)
-		cur.Mappings = slices.DeleteFunc(cur.Mappings, func(m store.OidcMappingEntry) bool { return m.ID == req.Msg.GetId() })
-		found = n != len(cur.Mappings)
+		n := len(cur.Mappings.Value())
+		cur.Mappings = store.Set(slices.DeleteFunc(cur.Mappings.Value(), func(m store.OidcMappingEntry) bool { return m.ID == req.Msg.GetId() }))
+		found = n != len(cur.Mappings.Value())
 		if !found {
 			return nil, store.ErrNoChange
 		}

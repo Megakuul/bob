@@ -94,10 +94,10 @@ func newEnv(t *testing.T) *env {
 	var orchPub, wrkPub ed25519.PublicKey
 	orchPub, e.orchKey, _ = ed25519.GenerateKey(rand.Reader)
 	wrkPub, e.wrkKey, _ = ed25519.GenerateKey(rand.Reader)
-	if err := store.Create(ctx, e.fleet, &store.FleetConfig{Name: "cfg", Keys: []store.FleetKey{{Kid: "k1", Pub: orchPub}}}); err != nil {
+	if err := store.Create(ctx, e.fleet, &store.FleetConfig{Name: store.ID("cfg"), Keys: store.Set([]store.FleetKey{{Kid: "k1", Pub: orchPub}})}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Create(ctx, e.fleet, &store.WorkerRecord{Wid: "w-evil1", SigPub: wrkPub}); err != nil {
+	if err := store.Create(ctx, e.fleet, &store.WorkerRecord{Wid: store.ID("w-evil1"), SigPub: store.Set(wrkPub)}); err != nil {
 		t.Fatal(err)
 	}
 	h := cache.NewHandler(cache.Config{Objects: e.obj, Vis: e.vis, Log: slog.New(slog.NewTextHandler(e.logs, nil)),
@@ -249,8 +249,8 @@ func (e *env) stage(id, project string, paths []*path, claimRefs func(*path) []*
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	rec := &store.JobRecord{ID: id, Spec: spec, SpecSig: fleet.SignSpec(e.orchKey, spec), Kid: "k1", State: "succeeded",
-		Owner: "w-evil1", Epoch: 1, Attempt: 1, Changed: time.Now(), Result: rs, ResultSig: fleet.SignResult(e.wrkKey, id, 1, rs)}
+	rec := &store.JobRecord{ID: store.ID(id), Spec: store.Set(spec), SpecSig: store.Set(fleet.SignSpec(e.orchKey, spec)), Kid: store.Set("k1"), State: store.Set("succeeded"),
+		Owner: store.Set("w-evil1"), Epoch: store.Set(1), Attempt: store.Set(1), Changed: store.Set(time.Now()), Result: store.Set(rs), ResultSig: store.Set(fleet.SignResult(e.wrkKey, id, 1, rs))}
 	if err := store.Create(e.ctx, e.fleet, rec); err != nil {
 		e.t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func (e *env) stage(id, project string, paths []*path, claimRefs func(*path) []*
 }
 
 func (e *env) record(id string) *store.JobRecord {
-	r, err := store.Get(e.ctx, e.fleet, &store.JobRecord{ID: id})
+	r, err := store.Get(e.ctx, e.fleet, &store.JobRecord{ID: store.ID(id)})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestPromoteServeAndSubstitute(t *testing.T) {
 	if err := e.promoter("o1").Run(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if pm := e.record("j1").Promotion; pm != promote.Done {
+	if pm := e.record("j1").Promotion.Value(); pm != promote.Done {
 		t.Fatalf("promotion = %q, want done", pm)
 	}
 	if !strings.Contains(e.logs.String(), "promoted 3") {
@@ -438,7 +438,7 @@ func TestTwoPromotersOneJob(t *testing.T) {
 	if !strings.Contains(logs, "promoted 3") || !strings.Contains(logs, "alreadyThere 3") {
 		t.Errorf("logs lack `promoted 3` and `alreadyThere 3`:\n%s", logs)
 	}
-	if pm := e.record("j1").Promotion; pm != promote.Done {
+	if pm := e.record("j1").Promotion.Value(); pm != promote.Done {
 		t.Fatalf("promotion = %q", pm)
 	}
 }
@@ -453,7 +453,7 @@ func TestTamperedNARFails(t *testing.T) {
 	if err := e.promoter("o1").Run(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if pm := e.record("j1").Promotion; pm != promote.Failed {
+	if pm := e.record("j1").Promotion.Value(); pm != promote.Failed {
 		t.Fatalf("promotion = %q, want %q", pm, promote.Failed)
 	}
 	for _, p := range []*path{b, c} {
@@ -483,7 +483,7 @@ func TestClaimOmittingReferenceFails(t *testing.T) {
 	if err := e.promoter("o1").Run(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if pm := e.record("j1").Promotion; pm != promote.Failed {
+	if pm := e.record("j1").Promotion.Value(); pm != promote.Failed {
 		t.Fatalf("promotion = %q, want %q", pm, promote.Failed)
 	}
 	if e.exists(cache.NarInfoKey(b.hash)) {
@@ -509,14 +509,14 @@ func TestNonReproducibleKeepsFirst(t *testing.T) {
 	if err := p.Run(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if r := e.record("j2"); r.Promotion != promote.Done || len(r.NonReproducible) != 1 || r.NonReproducible[0] != x.store() {
-		t.Fatalf("j2: pm %q nr %v", r.Promotion, r.NonReproducible)
+	if r := e.record("j2"); r.Promotion.Value() != promote.Done || len(r.NonReproducible.Value()) != 1 || r.NonReproducible.Value()[0] != x.store() {
+		t.Fatalf("j2: pm %q nr %v", r.Promotion.Value(), r.NonReproducible.Value())
 	}
 	if again := e.narinfo(x); again.NarHash != first.NarHash || again.Sigs[0] != first.Sigs[0] {
 		t.Errorf("first publication changed")
 	}
-	if r := e.record("j3"); r.Promotion != promote.Done || len(r.NonReproducible) != 0 {
-		t.Fatalf("j3: pm %q nr %v", r.Promotion, r.NonReproducible)
+	if r := e.record("j3"); r.Promotion.Value() != promote.Done || len(r.NonReproducible.Value()) != 0 {
+		t.Fatalf("j3: pm %q nr %v", r.Promotion.Value(), r.NonReproducible.Value())
 	}
 	if code, _, _ := e.get("/nix/"+x.hash+".narinfo", "p2-token", nil); code != 200 {
 		t.Errorf("p2 does not see the path it also built: %d", code)
@@ -588,7 +588,7 @@ func TestBlockedWithoutComplete(t *testing.T) {
 	if err := e.promoter("o1").Run(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if pm := e.record("j1").Promotion; pm != promote.Blocked {
+	if pm := e.record("j1").Promotion.Value(); pm != promote.Blocked {
 		t.Fatalf("promotion = %q", pm)
 	}
 }

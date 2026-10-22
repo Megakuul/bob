@@ -86,22 +86,22 @@ func CheckRecord(role, key string, body []byte) error {
 		if err := decodeInto(body, &r); err != nil {
 			return err
 		}
-		if !oneOf(r.State, StateQueued, StateClaimed, StateRunning, StateSucceeded, StateFailed, StateCancelled) {
-			return invalid("job state %q", r.State)
+		if !oneOf(r.State.Value(), StateQueued, StateClaimed, StateRunning, StateSucceeded, StateFailed, StateCancelled) {
+			return invalid("job state %q", r.State.Value())
 		}
-		if (r.State == StateClaimed || r.State == StateRunning) && (r.Owner == "" || r.Epoch < 1) {
-			return invalid("job %s without owner or epoch", r.State)
+		if (r.State.Value() == StateClaimed || r.State.Value() == StateRunning) && (r.Owner.Value() == "" || r.Epoch.Value() < 1) {
+			return invalid("job %s without owner or epoch", r.State.Value())
 		}
-		if len(r.Spec) == 0 || len(r.Spec) > store.MaxJobSpec {
-			return invalid("job spec of %d bytes", len(r.Spec))
+		if len(r.Spec.Value()) == 0 || len(r.Spec.Value()) > store.MaxJobSpec {
+			return invalid("job spec of %d bytes", len(r.Spec.Value()))
 		}
 	case "fleet/worker":
 		var r store.WorkerRecord
 		if err := decodeInto(body, &r); err != nil {
 			return err
 		}
-		if !oneOf(r.State, "active", "stale", "draining", "revoked", "gone") {
-			return invalid("worker state %q", r.State)
+		if !oneOf(r.State.Value(), "active", "stale", "draining", "revoked", "gone") {
+			return invalid("worker state %q", r.State.Value())
 		}
 	case "fleet/fleet":
 		var r store.FleetConfig
@@ -109,29 +109,29 @@ func CheckRecord(role, key string, body []byte) error {
 			return err
 		}
 		seen := map[string]bool{}
-		for _, m := range r.Members {
+		for _, m := range r.Members.Value() {
 			if m.Orch == "" || seen[m.Orch] {
 				return invalid("member %q empty or listed twice", m.Orch)
 			}
 			seen[m.Orch] = true
 		}
-		if len(r.Classes) > 256 {
-			return invalid("%d classes (limit 256)", len(r.Classes))
+		if len(r.Classes.Value()) > 256 {
+			return invalid("%d classes (limit 256)", len(r.Classes.Value()))
 		}
 	case "fleet/ctl":
 		var r store.ControllerLease
 		if err := decodeInto(body, &r); err != nil {
 			return err
 		}
-		if r.Owner != "" && r.Epoch < 1 {
-			return invalid("lease held by %s with epoch 0", r.Owner)
+		if r.Owner.Value() != "" && r.Epoch.Value() < 1 {
+			return invalid("lease held by %s with epoch 0", r.Owner.Value())
 		}
 	case "fleet/qs":
 		var r store.QueueSlot
 		if err := decodeInto(body, &r); err != nil {
 			return err
 		}
-		if r.Job == "" {
+		if r.Job.Value() == "" {
 			return invalid("queue slot without job")
 		}
 	case "fleet/orch":
@@ -145,19 +145,19 @@ func CheckRecord(role, key string, body []byte) error {
 		if err := decodeInto(body, &r); err != nil {
 			return err
 		}
-		if !oneOf(r.State, "pending", "queued", "running", "succeeded", "failed", "cancelled", "superseded", "skipped") {
-			return invalid("build state %q", r.State)
+		if !oneOf(r.State.Value(), "pending", "queued", "running", "succeeded", "failed", "cancelled", "superseded", "skipped") {
+			return invalid("build state %q", r.State.Value())
 		}
-		if len(r.Jobs) > store.MaxBuildJobs {
-			return invalid("%d jobs (limit %d)", len(r.Jobs), store.MaxBuildJobs)
+		if len(r.Jobs.Value()) > store.MaxBuildJobs {
+			return invalid("%d jobs (limit %d)", len(r.Jobs.Value()), store.MaxBuildJobs)
 		}
 	case "control/okey":
 		var r OrchKeyRecord
 		if err := decodeInto(body, &r); err != nil {
 			return err
 		}
-		if len(r.Seed) != 32 {
-			return invalid("key seed of %d bytes", len(r.Seed))
+		if len(r.Seed.Value()) != 32 {
+			return invalid("key seed of %d bytes", len(r.Seed.Value()))
 		}
 	case "control/user":
 		var r store.UserRecord

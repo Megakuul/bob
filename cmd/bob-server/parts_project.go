@@ -97,13 +97,13 @@ func (w *projectWiring) hooks(env *server.Env, cfg *buildctl.Config) {
 	}
 	cfg.Evaluated = func(ctx context.Context, rec *store.BuildRecord, r *jobspec.Report) {
 		if err := w.P.Evaluated(ctx, rec, r); err != nil {
-			env.Log.Warn("projects: pipelines cache not updated", "build", rec.ID, "err", err.Error())
+			env.Log.Warn("projects: pipelines cache not updated", "build", rec.ID.Value(), "err", err.Error())
 		}
 	}
 	finished := cfg.Finished
 	cfg.Finished = func(ctx context.Context, rec *store.BuildRecord) {
 		if err := w.P.Finished(ctx, rec); err != nil {
-			env.Log.Warn("projects: pipelines cache not updated", "build", rec.ID, "err", err.Error())
+			env.Log.Warn("projects: pipelines cache not updated", "build", rec.ID.Value(), "err", err.Error())
 		}
 		if finished != nil {
 			finished(ctx, rec)

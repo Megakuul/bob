@@ -28,11 +28,20 @@ const (
 // OrchKeyRecord is `okey/<kid>`: Ed25519 seed, created, notAfter (Create). Same encoding as
 // fleetsrv.OrchKey.
 type OrchKeyRecord struct {
-	Kid      string    `pk:"okey" cbor:"-"`
-	ETag     string    `etag:"true" cbor:"-"`
-	Seed     []byte    `cbor:"sd,omitempty"`
-	Created  time.Time `cbor:"cr,omitzero"`
-	NotAfter time.Time `cbor:"na,omitzero"`
+	Kid      store.KeyField             `pk:"okey" cbor:"-"`
+	ETag     store.ETagField            `etag:"true" cbor:"-"`
+	Seed     store.DataField[[]byte]    `cbor:"sd,omitempty"`
+	Created  store.DataField[time.Time] `cbor:"cr,omitempty"`
+	NotAfter store.DataField[time.Time] `cbor:"na,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *OrchKeyRecord) Draft() *OrchKeyRecord {
+	return &OrchKeyRecord{Kid: r.Kid,
+		ETag:     r.ETag,
+		Seed:     store.Carry(r.Seed),
+		Created:  store.Carry(r.Created),
+		NotAfter: store.Carry(r.NotAfter)}
 }
 
 // rotatedKid is the kid of the n-th rotated key: "k" + 6 digits. The key controller derives
@@ -83,7 +92,7 @@ func (k *Keys) Rotate(ctx context.Context, now time.Time) ([]store.FleetKey, err
 	}
 	var keys []store.FleetKey
 	if fc != nil {
-		keys = fc.Keys
+		keys = fc.Keys.Value()
 	}
 	fresh := func(fk store.FleetKey) bool {
 		return len(fk.Pub) == ed25519.PublicKeySize && fk.NotAfter.After(now.Add(KeyRotateBefore))
@@ -99,7 +108,7 @@ func (k *Keys) Rotate(ctx context.Context, now time.Time) ([]store.FleetKey, err
 		if err != nil {
 			return nil, err
 		}
-		add = &store.FleetKey{Kid: rec.Kid, Pub: ed25519.NewKeyFromSeed(rec.Seed).Public().(ed25519.PublicKey), NotAfter: rec.NotAfter}
+		add = &store.FleetKey{Kid: rec.Kid.Value(), Pub: ed25519.NewKeyFromSeed(rec.Seed.Value()).Public().(ed25519.PublicKey), NotAfter: rec.NotAfter.Value()}
 	}
 	if add == nil && !slices.ContainsFunc(keys, retire) {
 		return keys, nil
@@ -109,22 +118,22 @@ func (k *Keys) Rotate(ctx context.Context, now time.Time) ([]store.FleetKey, err
 		if cur != nil {
 			*next = *cur
 		}
-		had := slices.ContainsFunc(next.Keys, fresh) // another orchestrator may have rotated meanwhile
-		ks := slices.DeleteFunc(slices.Clone(next.Keys), retire)
+		had := slices.ContainsFunc(next.Keys.Value(), fresh) // another orchestrator may have rotated meanwhile
+		ks := slices.DeleteFunc(slices.Clone(next.Keys.Value()), retire)
 		if add != nil && !had {
 			ks = append(ks, *add)
 		}
-		if len(ks) == len(next.Keys) && (add == nil || had) {
+		if len(ks) == len(next.Keys.Value()) && (add == nil || had) {
 			return nil, store.ErrNoChange
 		}
-		next.Keys = ks
-		next.Gen++
+		next.Keys = store.Set(ks)
+		next.Gen = store.Set(next.Gen.Value() + 1)
 		return next, nil
 	})
 	if err != nil || got == nil {
 		return nil, err
 	}
-	return got.Keys, nil
+	return got.Keys.Value(), nil
 }
 
 // next creates okey/<kid> for the first rotated kid after top, or adopts the record an
@@ -136,15 +145,15 @@ func (k *Keys) next(ctx context.Context, top int, now time.Time) (*OrchKeyRecord
 		if _, err := rand.Read(seed); err != nil {
 			return nil, err
 		}
-		rec := &OrchKeyRecord{Kid: rotatedKid(n), Seed: seed, Created: now, NotAfter: now.Add(KeyLifetime)}
+		rec := &OrchKeyRecord{Kid: store.ID(rotatedKid(n)), Seed: store.Set(seed), Created: store.Set(now), NotAfter: store.Set(now.Add(KeyLifetime))}
 		err := store.Create(ctx, k.Control, rec)
 		if errors.Is(err, store.ErrExists) {
-			rec, err = store.Get(ctx, k.Control, &OrchKeyRecord{Kid: rotatedKid(n)})
+			rec, err = store.Get(ctx, k.Control, &OrchKeyRecord{Kid: store.ID(rotatedKid(n))})
 		}
 		if err != nil {
 			return nil, err
 		}
-		if len(rec.Seed) == ed25519.SeedSize && rec.NotAfter.After(now.Add(KeyRotateBefore)) {
+		if len(rec.Seed.Value()) == ed25519.SeedSize && rec.NotAfter.Value().After(now.Add(KeyRotateBefore)) {
 			return rec, nil
 		}
 	}

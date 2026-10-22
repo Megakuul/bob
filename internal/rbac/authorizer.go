@@ -35,7 +35,7 @@ func (r *Roles) Permissions(ctx context.Context, id string) (perms []Permission,
 	case err != nil:
 		return nil, false, fmt.Errorf("rbac: read role %s: %w", id, err)
 	}
-	return rec.Permissions, true, nil
+	return rec.Permissions.Value(), true, nil
 }
 
 // Authorizer is the RBAC api.Authorizer (SPEC §6.4.1) and the escalation check of

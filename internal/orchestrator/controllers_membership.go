@@ -94,12 +94,12 @@ func (m *Membership) beat(ctx context.Context) error {
 			return err
 		}
 	}
-	return store.PutOwned(ctx, m.Fleet, &store.OrchRecord{ID: m.ID, Endpoint: m.Endpoint, SPKIPin: m.SPKIPin,
-		Heartbeat: now, Started: m.started, Version: m.Version})
+	return store.PutOwned(ctx, m.Fleet, &store.OrchRecord{ID: store.ID(m.ID), Endpoint: store.Set(m.Endpoint), SPKIPin: store.Set(m.SPKIPin),
+		Heartbeat: store.Set(now), Started: store.Set(m.started), Version: store.Set(m.Version)})
 }
 
 func (m *Membership) listed(fc *store.FleetConfig) bool {
-	return slices.ContainsFunc(fc.Members, func(x store.FleetMember) bool {
+	return slices.ContainsFunc(fc.Members.Value(), func(x store.FleetMember) bool {
 		return x.Orch == m.ID && x.Endpoint == m.Endpoint && x.SPKIPin == m.SPKIPin
 	})
 }
@@ -114,9 +114,9 @@ func (m *Membership) join(ctx context.Context, now time.Time) error {
 		if m.listed(next) {
 			return nil, store.ErrNoChange
 		}
-		members := slices.DeleteFunc(slices.Clone(next.Members), func(x store.FleetMember) bool { return x.Orch == m.ID })
-		next.Members = append(members, store.FleetMember{Orch: m.ID, Endpoint: m.Endpoint, SPKIPin: m.SPKIPin, Since: now})
-		next.Gen++
+		members := slices.DeleteFunc(slices.Clone(next.Members.Value()), func(x store.FleetMember) bool { return x.Orch == m.ID })
+		next.Members = store.Set(append(members, store.FleetMember{Orch: m.ID, Endpoint: m.Endpoint, SPKIPin: m.SPKIPin, Since: now}))
+		next.Gen = store.Set(next.Gen.Value() + 1)
 		return next, nil
 	})
 	if err == nil {
@@ -136,7 +136,7 @@ func (m *Membership) leave() {
 
 // remove deletes orch/<id> (only while stale says so, when given) and then the member entry.
 func (m *Membership) remove(ctx context.Context, id string, stale func(*store.OrchRecord) bool) error {
-	_, err := store.CAS(ctx, m.Fleet, &store.OrchRecord{ID: id}, func(cur *store.OrchRecord) (*store.OrchRecord, error) {
+	_, err := store.CAS(ctx, m.Fleet, &store.OrchRecord{ID: store.ID(id)}, func(cur *store.OrchRecord) (*store.OrchRecord, error) {
 		if cur != nil && stale != nil && !stale(cur) {
 			return nil, errAlive
 		}
@@ -149,12 +149,12 @@ func (m *Membership) remove(ctx context.Context, id string, stale func(*store.Or
 		return err
 	}
 	_, err = store.CAS(ctx, m.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
-		if cur == nil || !slices.ContainsFunc(cur.Members, func(x store.FleetMember) bool { return x.Orch == id }) {
+		if cur == nil || !slices.ContainsFunc(cur.Members.Value(), func(x store.FleetMember) bool { return x.Orch == id }) {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Members = slices.DeleteFunc(slices.Clone(cur.Members), func(x store.FleetMember) bool { return x.Orch == id })
-		next.Gen++
+		next.Members = store.Set(slices.DeleteFunc(slices.Clone(cur.Members.Value()), func(x store.FleetMember) bool { return x.Orch == id }))
+		next.Gen = store.Set(next.Gen.Value() + 1)
 		return &next, nil
 	})
 	return err
@@ -173,11 +173,11 @@ func (m *Membership) Prune(ctx context.Context, r *Run) error {
 		return err
 	}
 	var errs []error
-	for _, mem := range fc.Members {
+	for _, mem := range fc.Members.Value() {
 		if mem.Orch == m.ID {
 			continue
 		}
-		rec, err := store.Get(ctx, m.Fleet, &store.OrchRecord{ID: mem.Orch})
+		rec, err := store.Get(ctx, m.Fleet, &store.OrchRecord{ID: store.ID(mem.Orch)})
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			if r.Now.Sub(mem.Since) <= MemberStale {
@@ -186,10 +186,10 @@ func (m *Membership) Prune(ctx context.Context, r *Run) error {
 		case err != nil:
 			errs = append(errs, err)
 			continue
-		case r.Now.Sub(rec.Heartbeat) <= MemberStale:
+		case r.Now.Sub(rec.Heartbeat.Value()) <= MemberStale:
 			continue
 		}
-		stale := func(cur *store.OrchRecord) bool { return r.Now.Sub(cur.Heartbeat) > MemberStale }
+		stale := func(cur *store.OrchRecord) bool { return r.Now.Sub(cur.Heartbeat.Value()) > MemberStale }
 		if err := m.remove(ctx, mem.Orch, stale); err != nil {
 			errs = append(errs, fmt.Errorf("remove member %s: %w", mem.Orch, err))
 			continue
@@ -231,8 +231,8 @@ func (m *Membership) List(ctx context.Context) ([]OrchestratorInfo, error) {
 		return nil, err
 	}
 	var out []OrchestratorInfo
-	for _, mem := range fc.Members {
-		rec, err := store.Get(ctx, m.Fleet, &store.OrchRecord{ID: mem.Orch})
+	for _, mem := range fc.Members.Value() {
+		rec, err := store.Get(ctx, m.Fleet, &store.OrchRecord{ID: store.ID(mem.Orch)})
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
@@ -241,8 +241,8 @@ func (m *Membership) List(ctx context.Context) ([]OrchestratorInfo, error) {
 		}
 		lo := leaders[mem.Orch]
 		sort.Strings(lo)
-		out = append(out, OrchestratorInfo{ID: mem.Orch, Endpoint: mem.Endpoint, Version: rec.Version,
-			Started: rec.Started, Heartbeat: rec.Heartbeat, LeaderOf: lo})
+		out = append(out, OrchestratorInfo{ID: mem.Orch, Endpoint: mem.Endpoint, Version: rec.Version.Value(),
+			Started: rec.Started.Value(), Heartbeat: rec.Heartbeat.Value(), LeaderOf: lo})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil

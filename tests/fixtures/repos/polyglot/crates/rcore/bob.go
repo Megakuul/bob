@@ -17,4 +17,4 @@ var Crate = bob.Define(func(p *bob.P) *rust.CLib {
 })
 
 // Test runs the unit tests of rcore (label //crates/rcore:rcore_test).
-var Test = bob.Define(func(p *bob.P) *rust.Test { return rust.Test(p, rust.TestOpts{Crate: Crate(p)}) })
+var Test = bob.Define(func(p *bob.P) *rust.TestSet { return rust.Test(p, rust.TestOpts{Crate: Crate(p)}) })

@@ -42,8 +42,14 @@ func (r *Resolver) Project(ctx context.Context, kind, id string) (string, error)
 
 // releaseHead reads only the existence of rel/<projectID>/n/<num10>.
 type releaseHead struct {
-	Project string `pk:"rel" cbor:"-"`
-	N       string `sk:"n" cbor:"-"`
+	Project store.KeyField `pk:"rel" cbor:"-"`
+	N       store.KeyField `sk:"n" cbor:"-"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *releaseHead) Draft() *releaseHead {
+	return &releaseHead{Project: r.Project,
+		N: r.N}
 }
 
 func (r *Resolver) project(ctx context.Context, kind, id string) (string, error) {
@@ -54,11 +60,11 @@ func (r *Resolver) project(ctx context.Context, kind, id string) (string, error)
 	}
 	switch kind {
 	case "build":
-		b, err := store.Get(ctx, r.Control, &store.BuildRecord{ID: id})
+		b, err := store.Get(ctx, r.Control, &store.BuildRecord{ID: store.ID(id)})
 		if err != nil {
 			return "", err
 		}
-		return b.Project, nil
+		return b.Project.Value(), nil
 	case "job":
 		if r.Job != nil {
 			return r.Job(ctx, id)
@@ -66,12 +72,12 @@ func (r *Resolver) project(ctx context.Context, kind, id string) (string, error)
 		if r.Fleet == nil {
 			return "", store.ErrNotFound
 		}
-		j, err := store.Get(ctx, r.Fleet, &store.JobRecord{ID: id})
+		j, err := store.Get(ctx, r.Fleet, &store.JobRecord{ID: store.ID(id)})
 		if err != nil {
 			return "", err
 		}
 		var spec store.JobSpec
-		if err := cbor.Unmarshal(j.Spec, &spec); err != nil {
+		if err := cbor.Unmarshal(j.Spec.Value(), &spec); err != nil {
 			return "", fmt.Errorf("decode job spec: %w", err)
 		}
 		return spec.Project, nil
@@ -86,7 +92,7 @@ func (r *Resolver) project(ctx context.Context, kind, id string) (string, error)
 			return "", store.ErrNotFound
 		}
 		numStr, _ := store.Num10(n)
-		if _, err := store.Get(ctx, r.Control, &releaseHead{Project: project, N: numStr}); err != nil {
+		if _, err := store.Get(ctx, r.Control, &releaseHead{Project: store.ID(project), N: store.ID(numStr)}); err != nil {
 			return "", err
 		}
 		return project, nil

@@ -61,21 +61,21 @@ func (id *Identity) CreateLocalUser(ctx context.Context, in NewLocalUser) (strin
 	}
 	now := id.now()
 	u := store.UserKey("u" + newID(now))
-	u.Login, u.DisplayName, u.Email, u.Source = in.Login, in.DisplayName, in.Email, sourceLocal
-	u.PasswordHash, u.MustChange, u.Created = phc, in.MustChange, now
+	u.Login, u.DisplayName, u.Email, u.Source = store.Set(in.Login), store.Set(in.DisplayName), store.Set(in.Email), store.Set(sourceLocal)
+	u.PasswordHash, u.MustChange, u.Created = store.Set(phc), store.Set(in.MustChange), store.Set(now)
 	if in.Admin {
-		u.Bindings = []store.RoleBindingEntry{{ID: bindingID(), Role: adminRole, Project: "*", Source: sourceManual, Created: now}}
+		u.Bindings = store.Set([]store.RoleBindingEntry{{ID: bindingID(), Role: adminRole, Project: "*", Source: sourceManual, Created: now}})
 	}
 	if err := id.createUser(ctx, u, store.UserNameKey(in.Login)); err != nil {
 		return "", err
 	}
 	if in.Admin {
-		if err := id.adminAdd(ctx, "user:"+u.ID); err != nil {
+		if err := id.adminAdd(ctx, "user:"+u.ID.Value()); err != nil {
 			return "", err
 		}
-		id.addMember(ctx, adminRole, "user:"+u.ID)
+		id.addMember(ctx, adminRole, "user:"+u.ID.Value())
 	}
-	return u.ID, nil
+	return u.ID.Value(), nil
 }
 
 // createUser writes a new user record with its index slot and its unique name record (uname
@@ -85,44 +85,44 @@ func (id *Identity) createUser(ctx context.Context, u *store.UserRecord, name an
 		if cur == nil {
 			cur = store.UserIndexMetaKey()
 		}
-		cur.Count++
+		cur.Count = store.Set(cur.Count.Value() + 1)
 		return cur, nil
 	})
 	if err != nil {
 		return storageError(err)
 	}
-	u.Index = meta.Count
+	u.Index = store.Set(meta.Count.Value())
 	if err := store.Create(ctx, id.control, u); err != nil {
 		return storageError(err)
 	}
 	switch n := name.(type) {
 	case *store.NameRecord:
-		n.ID = u.ID
+		n.ID = store.Set(u.ID.Value())
 		err = store.Create(ctx, id.control, n)
 	case *store.OidcSubRecord:
-		n.ID = u.ID
+		n.ID = store.Set(u.ID.Value())
 		err = store.Create(ctx, id.control, n)
 	}
 	if err != nil {
 		if derr := store.Delete(ctx, id.control, u); derr != nil {
-			id.log.Warn("user record of a failed create not removed", "user", u.ID, "err", derr.Error())
+			id.log.Warn("user record of a failed create not removed", "user", u.ID.Value(), "err", derr.Error())
 		}
 		if errors.Is(err, store.ErrExists) {
-			return api.AlreadyExists(fmt.Sprintf("user %s already exists", u.Login))
+			return api.AlreadyExists(fmt.Sprintf("user %s already exists", u.Login.Value()))
 		}
 		return storageError(err)
 	}
 	if err := id.indexUser(ctx, u); err != nil {
-		id.log.Warn("user not added to the users index", "user", u.ID, "err", err.Error())
+		id.log.Warn("user not added to the users index", "user", u.ID.Value(), "err", err.Error())
 	}
 	return nil
 }
 
 func (id *Identity) indexUser(ctx context.Context, u *store.UserRecord) error {
-	if u.Index == 0 {
+	if u.Index.Value() == 0 {
 		return nil
 	}
-	return store.UserIndex(id.control).Set(ctx, u.Index-1, store.UserIndexEntry{ID: u.ID, Login: u.Login, Source: u.Source, Disabled: u.Disabled})
+	return store.UserIndex(id.control).Set(ctx, u.Index.Value()-1, store.UserIndexEntry{ID: u.ID.Value(), Login: u.Login.Value(), Source: u.Source.Value(), Disabled: u.Disabled.Value()})
 }
 
 func userSource(s string) accessv1.UserSource {
@@ -134,15 +134,15 @@ func userSource(s string) accessv1.UserSource {
 
 func userMsg(u *store.UserRecord) *accessv1.User {
 	m := &accessv1.User{
-		Id: u.ID, Login: u.Login, DisplayName: u.DisplayName, Email: u.Email,
-		Source: userSource(u.Source), OidcProviderId: u.Provider, Disabled: u.Disabled,
-		MustChangePassword: u.MustChange, Etag: u.ETag,
+		Id: u.ID.Value(), Login: u.Login.Value(), DisplayName: u.DisplayName.Value(), Email: u.Email.Value(),
+		Source: userSource(u.Source.Value()), OidcProviderId: u.Provider.Value(), Disabled: u.Disabled.Value(),
+		MustChangePassword: u.MustChange.Value(), Etag: store.ETagOf(u.ETag),
 	}
-	if !u.Created.IsZero() {
-		m.CreatedAt = timestamppb.New(u.Created)
+	if !u.Created.Value().IsZero() {
+		m.CreatedAt = timestamppb.New(u.Created.Value())
 	}
-	if !u.LastLogin.IsZero() {
-		m.LastLoginAt = timestamppb.New(u.LastLogin)
+	if !u.LastLogin.Value().IsZero() {
+		m.LastLoginAt = timestamppb.New(u.LastLogin.Value())
 	}
 	return m
 }
@@ -210,7 +210,7 @@ func (s userService) ListUsers(ctx context.Context, req *connect.Request[accessv
 	out := &accessv1.ListUsersResponse{}
 	var page []store.UserIndexEntry
 	pageNo := ^uint64(0)
-	for ; pos < meta.Count; pos++ {
+	for ; pos < meta.Count.Value(); pos++ {
 		if len(out.Users) == size {
 			out.NextPageToken = api.EncodePageToken("users", pos)
 			break
@@ -259,45 +259,45 @@ func (s userService) UpdateUser(ctx context.Context, req *connect.Request[access
 	if err != nil {
 		return nil, err
 	}
-	if err := checkETag("user.etag", in.GetEtag(), cur.ETag); err != nil {
+	if err := checkETag("user.etag", in.GetEtag(), store.ETagOf(cur.ETag)); err != nil {
 		return nil, err
 	}
 	paths := map[string]bool{}
 	for _, p := range req.Msg.GetUpdateMask().GetPaths() {
 		paths[strings.ToLower(strings.ReplaceAll(p, "_", ""))] = true
 	}
-	if paths["email"] && cur.Source != sourceLocal {
+	if paths["email"] && cur.Source.Value() != sourceLocal {
 		return nil, api.InvalidArgument("user.email", "the email of an OIDC user comes from its provider")
 	}
 	if len(in.GetDisplayName()) > 200 || len(in.GetEmail()) > 254 {
 		return nil, api.InvalidArgument("user", "display name or email too long")
 	}
-	principal := "user:" + cur.ID
-	wasAdmin := isAdmin(cur.Bindings, cur.Disabled)
-	willAdmin := isAdmin(cur.Bindings, paths["disabled"] && in.GetDisabled() || !paths["disabled"] && cur.Disabled)
+	principal := "user:" + cur.ID.Value()
+	wasAdmin := isAdmin(cur.Bindings.Value(), cur.Disabled.Value())
+	willAdmin := isAdmin(cur.Bindings.Value(), paths["disabled"] && in.GetDisabled() || !paths["disabled"] && cur.Disabled.Value())
 	if wasAdmin && !willAdmin {
 		if err := s.id.adminRemove(ctx, principal); err != nil {
 			return nil, err
 		}
 	}
-	next, err := store.CAS(ctx, s.id.control, store.UserKey(cur.ID), func(u *store.UserRecord) (*store.UserRecord, error) {
+	next, err := store.CAS(ctx, s.id.control, store.UserKey(cur.ID.Value()), func(u *store.UserRecord) (*store.UserRecord, error) {
 		if u == nil {
 			return nil, api.NotFound("user")
 		}
-		if in.GetEtag() != "" && u.ETag != in.GetEtag() {
+		if in.GetEtag() != "" && store.ETagOf(u.ETag) != in.GetEtag() {
 			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 		}
 		if paths["displayname"] {
-			u.DisplayName = in.GetDisplayName()
+			u.DisplayName = store.Set(in.GetDisplayName())
 		}
 		if paths["email"] {
-			u.Email = in.GetEmail()
+			u.Email = store.Set(in.GetEmail())
 		}
 		if paths["disabled"] {
-			u.Disabled = in.GetDisabled()
+			u.Disabled = store.Set(in.GetDisabled())
 		}
 		if paths["mustchangepassword"] {
-			u.MustChange = in.GetMustChangePassword()
+			u.MustChange = store.Set(in.GetMustChangePassword())
 		}
 		return u, nil
 	})
@@ -307,18 +307,18 @@ func (s userService) UpdateUser(ctx context.Context, req *connect.Request[access
 		}
 		return nil, storageError(err)
 	}
-	s.id.users.put(next.ID, next)
+	s.id.users.put(next.ID.Value(), next)
 	if !wasAdmin && willAdmin {
 		if err := s.id.adminAdd(ctx, principal); err != nil {
 			return nil, err
 		}
 	}
-	if next.Disabled != cur.Disabled {
+	if next.Disabled.Value() != cur.Disabled.Value() {
 		if err := s.id.indexUser(ctx, next); err != nil {
-			s.id.log.Warn("users index entry not updated", "user", next.ID, "err", err.Error())
+			s.id.log.Warn("users index entry not updated", "user", next.ID.Value(), "err", err.Error())
 		}
-		if next.Disabled {
-			if _, err := s.id.revokeSessions(ctx, next.ID, func(store.SessionRef) bool { return false }); err != nil {
+		if next.Disabled.Value() {
+			if _, err := s.id.revokeSessions(ctx, next.ID.Value(), func(store.SessionRef) bool { return false }); err != nil {
 				return nil, err
 			}
 		}
@@ -332,7 +332,7 @@ func (s userService) DeleteUser(ctx context.Context, req *connect.Request[access
 	if err != nil {
 		return nil, err
 	}
-	if req.Msg.GetEtag() != "" && req.Msg.GetEtag() != cur.ETag {
+	if req.Msg.GetEtag() != "" && req.Msg.GetEtag() != store.ETagOf(cur.ETag) {
 		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 	}
 	if err := s.id.deleteUser(ctx, cur); err != nil {
@@ -342,14 +342,14 @@ func (s userService) DeleteUser(ctx context.Context, req *connect.Request[access
 }
 
 func (id *Identity) deleteUser(ctx context.Context, cur *store.UserRecord) error {
-	principal := "user:" + cur.ID
-	admin := isAdmin(cur.Bindings, cur.Disabled)
+	principal := "user:" + cur.ID.Value()
+	admin := isAdmin(cur.Bindings.Value(), cur.Disabled.Value())
 	if admin {
 		if err := id.adminRemove(ctx, principal); err != nil {
 			return err
 		}
 	}
-	if _, err := id.revokeSessions(ctx, cur.ID, func(store.SessionRef) bool { return false }); err != nil {
+	if _, err := id.revokeSessions(ctx, cur.ID.Value(), func(store.SessionRef) bool { return false }); err != nil {
 		if admin {
 			_ = id.adminAdd(ctx, principal)
 		}
@@ -364,29 +364,29 @@ func (id *Identity) deleteUser(ctx context.Context, cur *store.UserRecord) error
 		}
 		return storageError(err)
 	}
-	id.users.drop(cur.ID)
-	for _, b := range cur.Bindings {
+	id.users.drop(cur.ID.Value())
+	for _, b := range cur.Bindings.Value() {
 		id.removeMember(ctx, b.Role, principal, nil)
 	}
-	switch cur.Source {
+	switch cur.Source.Value() {
 	case sourceLocal:
-		id.deleteName(ctx, store.UserNameKey(cur.Login), cur.ID)
+		id.deleteName(ctx, store.UserNameKey(cur.Login.Value()), cur.ID.Value())
 	case sourceOIDC:
-		k := store.OidcSubKey(cur.Issuer, cur.Subject)
-		if n, err := store.Get(ctx, id.control, k); err == nil && n.ID == cur.ID {
+		k := store.OidcSubKey(cur.Issuer.Value(), cur.Subject.Value())
+		if n, err := store.Get(ctx, id.control, k); err == nil && n.ID.Value() == cur.ID.Value() {
 			_ = store.Delete(ctx, id.control, n)
 		}
 	}
-	if cur.Index > 0 {
-		if err := store.UserIndex(id.control).Set(ctx, cur.Index-1, store.UserIndexEntry{}); err != nil {
-			id.log.Warn("users index entry not cleared", "user", cur.ID, "err", err.Error())
+	if cur.Index.Value() > 0 {
+		if err := store.UserIndex(id.control).Set(ctx, cur.Index.Value()-1, store.UserIndexEntry{}); err != nil {
+			id.log.Warn("users index entry not cleared", "user", cur.ID.Value(), "err", err.Error())
 		}
 	}
 	return nil
 }
 
 func (id *Identity) deleteName(ctx context.Context, key *store.NameRecord, uid string) {
-	if n, err := store.Get(ctx, id.control, key); err == nil && n.ID == uid {
+	if n, err := store.Get(ctx, id.control, key); err == nil && n.ID.Value() == uid {
 		if err := store.Delete(ctx, id.control, n); err != nil {
 			id.log.Warn("login name not released", "user", uid, "err", err.Error())
 		}
@@ -402,13 +402,13 @@ func (s userService) SetUserPassword(ctx context.Context, req *connect.Request[a
 	if err != nil {
 		return nil, err
 	}
-	if cur.Source != sourceLocal {
+	if cur.Source.Value() != sourceLocal {
 		return nil, api.FailedPrecondition("an OIDC user has no password")
 	}
-	if err := s.id.setPassword(ctx, cur.ID, pw, req.Msg.GetMustChange()); err != nil {
+	if err := s.id.setPassword(ctx, cur.ID.Value(), pw, req.Msg.GetMustChange()); err != nil {
 		return nil, err
 	}
-	if _, err := s.id.revokeSessions(ctx, cur.ID, func(store.SessionRef) bool { return false }); err != nil {
+	if _, err := s.id.revokeSessions(ctx, cur.ID.Value(), func(store.SessionRef) bool { return false }); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&accessv1.SetUserPasswordResponse{}), nil
@@ -423,7 +423,7 @@ func (id *Identity) setPassword(ctx context.Context, uid string, pw Secret, must
 		if u == nil {
 			return nil, api.NotFound("user")
 		}
-		u.PasswordHash, u.MustChange = phc, mustChange
+		u.PasswordHash, u.MustChange = store.Set(phc), store.Set(mustChange)
 		return u, nil
 	})
 	if err != nil {
@@ -444,13 +444,13 @@ func (id *Identity) lookupLogin(ctx context.Context, login string) (*store.UserR
 	} else if err != nil {
 		return nil, storageError(err)
 	}
-	u, err := store.Get(ctx, id.control, store.UserKey(n.ID))
+	u, err := store.Get(ctx, id.control, store.UserKey(n.ID.Value()))
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, nil
 	} else if err != nil {
 		return nil, storageError(err)
 	}
-	if u.Source != sourceLocal || u.Login != login {
+	if u.Source.Value() != sourceLocal || u.Login.Value() != login {
 		return nil, nil
 	}
 	return u, nil

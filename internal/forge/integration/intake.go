@@ -112,7 +112,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 	}
 	key := DeliveryKey(id, did)
 	rec := *key
-	rec.Received, rec.Event, rec.Result = in.Registry.now().UTC(), string(ev.Type), resultPending
+	rec.Received, rec.Event, rec.Result = store.Set(in.Registry.now().UTC()), store.Set(string(ev.Type)), store.Set(resultPending)
 	err := store.Create(ctx, in.Registry.Control, &rec)
 	if errors.Is(err, store.ErrExists) {
 		cur, gerr := store.Get(ctx, in.Registry.Control, DeliveryKey(id, did))
@@ -120,7 +120,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 			log.Error("webhook intake: delivery record", "integration", id, "err", gerr)
 			return http.StatusServiceUnavailable, "storage unavailable"
 		}
-		if cur.Result != resultPending {
+		if cur.Result.Value() != resultPending {
 			return http.StatusOK, "duplicate"
 		}
 		rec = *cur // unfinished: finish it (the build creation is idempotent on the key)
@@ -146,9 +146,9 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 		case in.Builds == nil:
 			return http.StatusServiceUnavailable, "builds are not available on this server yet"
 		default:
-			build, err = in.Builds.CreateFromEvent(ctx, link.Project, rec.Key, ev)
+			build, err = in.Builds.CreateFromEvent(ctx, link.Project.Value(), rec.Key.Value(), ev)
 			if err != nil {
-				log.Error("webhook intake: create build", "integration", id, "project", link.Project, "err", err)
+				log.Error("webhook intake: create build", "integration", id, "project", link.Project.Value(), "err", err)
 				return http.StatusServiceUnavailable, "build not created, retry"
 			}
 			result = resultAccepted
@@ -158,7 +158,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 		if cur == nil {
 			cur = &rec
 		}
-		cur.Result, cur.Build = result, build
+		cur.Result, cur.Build = store.Set(result), store.Set(build)
 		return cur, nil
 	}); err != nil {
 		// The build exists (idempotent on the key): a repeat finishes the record.
@@ -177,13 +177,13 @@ func (in *Intake) ring(ctx context.Context, id string, e RingEntry) {
 	if len(e.ID) > 255 {
 		e.ID = e.ID[:255]
 	}
-	_, err := store.CAS(ctx, in.Registry.Control, &DeliveryRing{Forge: id}, func(cur *DeliveryRing) (*DeliveryRing, error) {
+	_, err := store.CAS(ctx, in.Registry.Control, &DeliveryRing{Forge: store.ID(id)}, func(cur *DeliveryRing) (*DeliveryRing, error) {
 		if cur == nil {
-			cur = &DeliveryRing{Forge: id}
+			cur = &DeliveryRing{Forge: store.ID(id)}
 		}
-		cur.Entries = append(cur.Entries, e)
-		if n := len(cur.Entries); n > RingSize {
-			cur.Entries = append([]RingEntry(nil), cur.Entries[n-RingSize:]...)
+		cur.Entries = store.Set(append(cur.Entries.Value(), e))
+		if n := len(cur.Entries.Value()); n > RingSize {
+			cur.Entries = store.Set(append([]RingEntry(nil), cur.Entries.Value()[n-RingSize:]...))
 		}
 		return cur, nil
 	})

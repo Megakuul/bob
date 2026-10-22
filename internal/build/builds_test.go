@@ -119,7 +119,7 @@ func newLab(t *testing.T, be *env.Backend, await ...bool) *lab {
 	}
 	pub, key, _ := ed25519.GenerateKey(rand.Reader)
 	l.wid, l.key = "w1", key
-	if err := store.Create(ctx, l.fleet, &store.WorkerRecord{Wid: l.wid, State: "active", SigPub: pub}); err != nil {
+	if err := store.Create(ctx, l.fleet, &store.WorkerRecord{Wid: store.ID(l.wid), State: store.Set("active"), SigPub: store.Set(pub)}); err != nil {
 		t.Fatal(err)
 	}
 	return l
@@ -144,8 +144,8 @@ func (l *lab) build(id string) *store.BuildRecord {
 // job returns the live record of the only non-terminal job row of build id.
 func (l *lab) job(id string) *store.JobRecord {
 	l.t.Helper()
-	for _, row := range l.build(id).Jobs {
-		if j, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: row.ID}); err == nil {
+	for _, row := range l.build(id).Jobs.Value() {
+		if j, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(row.ID)}); err == nil {
 			return j
 		}
 	}
@@ -158,20 +158,20 @@ func (l *lab) run(j *store.JobRecord, status string, report *jobspec.Report, fai
 	l.t.Helper()
 	claimed, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
-		n.State, n.Owner, n.Epoch, n.Attempt, n.Claimed, n.Changed = "running", l.wid, cur.Epoch+1, cur.Attempt+1, time.Now(), time.Now()
+		n.State, n.Owner, n.Epoch, n.Attempt, n.Claimed, n.Changed = store.Set("running"), store.Set(l.wid), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(time.Now()), store.Set(time.Now())
 		return &n, nil
 	})
 	if err != nil {
 		l.t.Fatal(err)
 	}
-	spec, _ := fleet.DecodeSpec(claimed.Spec)
+	spec, _ := fleet.DecodeSpec(claimed.Spec.Value())
 	res := store.JobResult{V: 1, Status: status, Failed: failed, Finished: time.Now().Unix()}
 	if status == "failed" {
 		res.Error = "✗ BOB-E-2005 test //cmd/api:test failed"
 	}
 	if report != nil {
 		body, _ := json.Marshal(report)
-		l.art.put(jobspec.ReportKey(jobspec.StagingPrefix(spec.Staging, claimed.Attempt)), body)
+		l.art.put(jobspec.ReportKey(jobspec.StagingPrefix(spec.Staging, claimed.Attempt.Value())), body)
 		res.EvalSHA = jobspec.SHA256(body)
 	}
 	rs, _ := fleet.Encode(res)
@@ -181,7 +181,7 @@ func (l *lab) run(j *store.JobRecord, status string, report *jobspec.Report, fai
 	}
 	if _, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
-		n.State, n.Result, n.ResultSig, n.Changed = state, rs, fleet.SignResult(l.key, j.ID, cur.Epoch, rs), time.Now()
+		n.State, n.Result, n.ResultSig, n.Changed = store.Set(state), store.Set(rs), store.Set(fleet.SignResult(l.key, j.ID.Value(), cur.Epoch.Value(), rs)), store.Set(time.Now())
 		return &n, nil
 	}); err != nil {
 		l.t.Fatal(err)
@@ -223,23 +223,23 @@ func pushSucceeds(t *testing.T, l *lab) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec := l.build(id); rec.State != buildctl.StatePending || rec.Number != 1 {
-		t.Fatalf("created %s #%d", rec.State, rec.Number)
+	if rec := l.build(id); rec.State.Value() != buildctl.StatePending || rec.Number.Value() != 1 {
+		t.Fatalf("created %s #%d", rec.State.Value(), rec.Number.Value())
 	}
 	l.pass()
 	j := l.job(id)
-	spec, _ := fleet.DecodeSpec(j.Spec)
-	if j.State != "queued" || spec.Kind != buildctl.KindEvalBuild || !slices.Equal(spec.Targets, []string{"@event:push:main"}) || spec.Repo != "f1/1" {
-		t.Fatalf("job %s %+v", j.State, spec)
+	spec, _ := fleet.DecodeSpec(j.Spec.Value())
+	if j.State.Value() != "queued" || spec.Kind != buildctl.KindEvalBuild || !slices.Equal(spec.Targets, []string{"@event:push:main"}) || spec.Repo != "f1/1" {
+		t.Fatalf("job %s %+v", j.State.Value(), spec)
 	}
-	if rec := l.build(id); rec.State != buildctl.StateQueued || rec.Phase != buildctl.PhaseEvaluating {
-		t.Fatalf("after plan: %s %s", rec.State, rec.Phase)
+	if rec := l.build(id); rec.State.Value() != buildctl.StateQueued || rec.Phase.Value() != buildctl.PhaseEvaluating {
+		t.Fatalf("after plan: %s %s", rec.State.Value(), rec.Phase.Value())
 	}
 	l.run(j, "ok", okReport("ci"))
 	l.pass()
 	rec := l.build(id)
-	if rec.State != buildctl.StateSucceeded || len(rec.Pipelines) != 1 || rec.Pipelines[0].Name != "ci" || rec.Counts.Built != 1 || rec.Counts.Cached != 1 {
-		t.Fatalf("build: %s %+v %+v errors %+v", rec.State, rec.Pipelines, rec.Counts, rec.Errors)
+	if rec.State.Value() != buildctl.StateSucceeded || len(rec.Pipelines.Value()) != 1 || rec.Pipelines.Value()[0].Name != "ci" || rec.Counts.Value().Built != 1 || rec.Counts.Value().Cached != 1 {
+		t.Fatalf("build: %s %+v %+v errors %+v", rec.State.Value(), rec.Pipelines.Value(), rec.Counts.Value(), rec.Errors.Value())
 	}
 	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("job record after finalise: %v, want deleted", err)
@@ -254,15 +254,15 @@ func pushSucceeds(t *testing.T, l *lab) {
 		t.Errorf("bob/release statuses %v for a push", rel)
 	}
 	l.pass() // settles: leaves bidx/running
-	running, err := store.Get(l.ctx, l.control, &store.RunningBuilds{Name: "running"})
-	if err != nil || len(running.Builds) != 0 {
+	running, err := store.Get(l.ctx, l.control, &store.RunningBuilds{Name: store.ID("running")})
+	if err != nil || len(running.Builds.Value()) != 0 {
 		t.Errorf("bidx/running after the build: %+v %v", running, err)
 	}
-	if p, err := l.b.JobProject(l.ctx, j.ID); err != nil || p != "acme" {
-		t.Errorf("job %s resolves to %q %v", j.ID, p, err)
+	if p, err := l.b.JobProject(l.ctx, j.ID.Value()); err != nil || p != "acme" {
+		t.Errorf("job %s resolves to %q %v", j.ID.Value(), p, err)
 	}
 	nodes, _ := l.b.Nodes(l.ctx, id)
-	if nodes == nil || len(nodes.Nodes) != 2 {
+	if nodes == nil || len(nodes.Nodes.Value()) != 2 {
 		t.Errorf("bnodes %+v", nodes)
 	}
 	pb, err := l.b.ToProto(l.ctx, rec)
@@ -281,22 +281,22 @@ func forgedMatch(t *testing.T, l *lab) {
 	l.run(l.job(id), "ok", forged)
 	l.pass()
 	rec := l.build(id)
-	if rec.State != buildctl.StateFailed || len(rec.Errors) == 0 || !strings.Contains(rec.Errors[0].Message, "evaluation result rejected: pipeline match mismatch") {
-		t.Fatalf("forged report: %s %+v", rec.State, rec.Errors)
+	if rec.State.Value() != buildctl.StateFailed || len(rec.Errors.Value()) == 0 || !strings.Contains(rec.Errors.Value()[0].Message, "evaluation result rejected: pipeline match mismatch") {
+		t.Fatalf("forged report: %s %+v", rec.State.Value(), rec.Errors.Value())
 	}
-	if len(rec.Pipelines) != 0 {
-		t.Errorf("pipelines of a rejected report were taken: %+v", rec.Pipelines)
+	if len(rec.Pipelines.Value()) != 0 {
+		t.Errorf("pipelines of a rejected report were taken: %+v", rec.Pipelines.Value())
 	}
 	// a report whose bytes differ from the signed sha is rejected too
 	id2, _ := l.b.CreateFromEvent(l.ctx, "acme", "k2", push("main"))
 	l.pass()
 	j := l.job(id2)
 	l.run(j, "ok", okReport("ci"))
-	spec, _ := fleet.DecodeSpec(j.Spec)
+	spec, _ := fleet.DecodeSpec(j.Spec.Value())
 	l.art.put(jobspec.ReportKey(jobspec.StagingPrefix(spec.Staging, 1)), []byte(`{"v":1}`))
 	l.pass()
-	if rec := l.build(id2); rec.State != buildctl.StateFailed {
-		t.Errorf("tampered report: build %s", rec.State)
+	if rec := l.build(id2); rec.State.Value() != buildctl.StateFailed {
+		t.Errorf("tampered report: build %s", rec.State.Value())
 	}
 }
 
@@ -315,25 +315,25 @@ func supersede(t *testing.T, l *lab) {
 	l.pass()
 	second := apiBuild(t, l, "refs/heads/feature", strings.Repeat("ab", 20))
 	l.pass()
-	got := l.build(first.ID)
-	if got.State != buildctl.StateSuperseded || got.SupersededBy != second.Number {
-		t.Fatalf("first: %s sp %d", got.State, got.SupersededBy)
+	got := l.build(first.ID.Value())
+	if got.State.Value() != buildctl.StateSuperseded || got.SupersededBy.Value() != second.Number.Value() {
+		t.Fatalf("first: %s sp %d", got.State.Value(), got.SupersededBy.Value())
 	}
 	pb, _ := l.b.ToProto(l.ctx, got)
-	if pb.GetTrigger().GetSupersededBy() != second.ID {
-		t.Errorf("superseded_by %q, want %s", pb.GetTrigger().GetSupersededBy(), second.ID)
+	if pb.GetTrigger().GetSupersededBy() != second.ID.Value() {
+		t.Errorf("superseded_by %q, want %s", pb.GetTrigger().GetSupersededBy(), second.ID.Value())
 	}
 	if s := l.statuses.states(buildctl.ContextEvaluate); len(s) == 0 || !slices.ContainsFunc(s, func(x string) bool {
-		return strings.HasPrefix(x, "cancelled") && strings.Contains(x, fmt.Sprintf("superseded by #%d", second.Number))
+		return strings.HasPrefix(x, "cancelled") && strings.Contains(x, fmt.Sprintf("superseded by #%d", second.Number.Value()))
 	}) {
 		t.Errorf("statuses of the superseded build: %v", s)
 	}
-	if st := l.build(second.ID).State; st != buildctl.StateQueued {
+	if st := l.build(second.ID.Value()).State.Value(); st != buildctl.StateQueued {
 		t.Errorf("second: %s", st)
 	}
 	l.pass()
-	if j, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: got.Jobs[0].ID}); err == nil && j.State != "cancelled" {
-		t.Errorf("job of the superseded build: %s", j.State)
+	if j, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(got.Jobs.Value()[0].ID)}); err == nil && j.State.Value() != "cancelled" {
+		t.Errorf("job of the superseded build: %s", j.State.Value())
 	}
 }
 
@@ -344,16 +344,16 @@ func queue(t *testing.T, l *lab) {
 	ev.Push.After = strings.Repeat("cd", 20)
 	bID, _ := l.b.CreateFromEvent(l.ctx, "acme", "k2", ev)
 	l.pass()
-	if st := l.build(bID).State; st != buildctl.StatePending {
+	if st := l.build(bID).State.Value(); st != buildctl.StatePending {
 		t.Fatalf("newer push to main: %s, want pending (queue)", st)
 	}
 	l.run(l.job(a), "ok", okReport("ci"))
 	l.pass()
 	l.pass()
-	if st := l.build(a).State; st != buildctl.StateSucceeded {
+	if st := l.build(a).State.Value(); st != buildctl.StateSucceeded {
 		t.Fatalf("older: %s", st)
 	}
-	if st := l.build(bID).State; st != buildctl.StateQueued {
+	if st := l.build(bID).State.Value(); st != buildctl.StateQueued {
 		t.Fatalf("newer after the older finished: %s", st)
 	}
 }
@@ -361,41 +361,41 @@ func queue(t *testing.T, l *lab) {
 func cancelRetryRerun(t *testing.T, l *lab) {
 	rec := apiBuild(t, l, "refs/heads/main", sha1)
 	l.pass()
-	l.run(l.job(rec.ID), "failed", okReport("ci"), "//cmd/api:test")
+	l.run(l.job(rec.ID.Value()), "failed", okReport("ci"), "//cmd/api:test")
 	l.pass()
-	failed := l.build(rec.ID)
-	if failed.State != buildctl.StateFailed || failed.Pipelines[0].State != buildctl.StateFailed {
-		t.Fatalf("failed build: %s %+v", failed.State, failed.Pipelines)
+	failed := l.build(rec.ID.Value())
+	if failed.State.Value() != buildctl.StateFailed || failed.Pipelines.Value()[0].State != buildctl.StateFailed {
+		t.Fatalf("failed build: %s %+v", failed.State.Value(), failed.Pipelines.Value())
 	}
-	if _, err := l.b.Cancel(l.ctx, rec.ID, "u"); !errors.Is(err, buildctl.ErrFinished) {
+	if _, err := l.b.Cancel(l.ctx, rec.ID.Value(), "u"); !errors.Is(err, buildctl.ErrFinished) {
 		t.Errorf("cancel of a finished build: %v", err)
 	}
-	retry, err := l.b.Retry(l.ctx, rec.ID, "user:u1")
+	retry, err := l.b.Retry(l.ctx, rec.ID.Value(), "user:u1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pb, _ := l.b.ToProto(l.ctx, retry)
-	if pb.GetTrigger().GetRetryOf() != rec.ID || pb.GetAttempt() != 2 || pb.GetTrigger().GetKind().String() != "TRIGGER_KIND_RETRY" || retry.Pipeline != "ci" {
-		t.Errorf("retry: %v pipeline %q", pb.GetTrigger(), retry.Pipeline)
+	if pb.GetTrigger().GetRetryOf() != rec.ID.Value() || pb.GetAttempt() != 2 || pb.GetTrigger().GetKind().String() != "TRIGGER_KIND_RETRY" || retry.Pipeline.Value() != "ci" {
+		t.Errorf("retry: %v pipeline %q", pb.GetTrigger(), retry.Pipeline.Value())
 	}
-	rerun, err := l.b.Rerun(l.ctx, rec.ID, "user:u1")
+	rerun, err := l.b.Rerun(l.ctx, rec.ID.Value(), "user:u1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pb, _ := l.b.ToProto(l.ctx, rerun); pb.GetTrigger().GetRerunOf() != rec.ID {
+	if pb, _ := l.b.ToProto(l.ctx, rerun); pb.GetTrigger().GetRerunOf() != rec.ID.Value() {
 		t.Errorf("rerun: %v", pb.GetTrigger())
 	}
 	l.pass() // retry and rerun: parallel builds of main queue behind each other
-	running := l.build(retry.ID)
-	if running.State != buildctl.StateQueued {
-		t.Fatalf("retry build %s", running.State)
+	running := l.build(retry.ID.Value())
+	if running.State.Value() != buildctl.StateQueued {
+		t.Fatalf("retry build %s", running.State.Value())
 	}
-	c, err := l.b.Cancel(l.ctx, retry.ID, "u")
-	if err != nil || c.State != buildctl.StateCancelled {
+	c, err := l.b.Cancel(l.ctx, retry.ID.Value(), "u")
+	if err != nil || c.State.Value() != buildctl.StateCancelled {
 		t.Fatalf("cancel: %v %v", c, err)
 	}
 	l.pass()
-	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: running.Jobs[0].ID}); !errors.Is(err, store.ErrNotFound) {
+	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(running.Jobs.Value()[0].ID)}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("cancelled job not finalised: %v", err)
 	}
 }
@@ -404,16 +404,16 @@ func infraRetries(t *testing.T, l *lab) {
 	rec := apiBuild(t, l, "refs/heads/main", sha1)
 	l.pass()
 	for i := range 3 {
-		j := l.job(rec.ID)
-		if j.Attempt != int64(i) {
-			t.Fatalf("attempt %d: job %s has attempt %d", i+1, j.ID, j.Attempt)
+		j := l.job(rec.ID.Value())
+		if j.Attempt.Value() != int64(i) {
+			t.Fatalf("attempt %d: job %s has attempt %d", i+1, j.ID.Value(), j.Attempt.Value())
 		}
 		l.run(j, "infra", nil)
 		l.pass()
 	}
-	got := l.build(rec.ID)
-	if got.State != buildctl.StateFailed || len(got.Errors) == 0 || !strings.Contains(got.Errors[0].Message, "failed 3 times on workers (infrastructure)") {
-		t.Fatalf("after 3 infra failures: %s %+v (%d jobs)", got.State, got.Errors, len(got.Jobs))
+	got := l.build(rec.ID.Value())
+	if got.State.Value() != buildctl.StateFailed || len(got.Errors.Value()) == 0 || !strings.Contains(got.Errors.Value()[0].Message, "failed 3 times on workers (infrastructure)") {
+		t.Fatalf("after 3 infra failures: %s %+v (%d jobs)", got.State.Value(), got.Errors.Value(), len(got.Jobs.Value()))
 	}
 }
 
@@ -433,9 +433,9 @@ func eventIdempotent(t *testing.T, l *lab) {
 
 func setPM(t *testing.T, l *lab, id, pm string, nr ...string) {
 	t.Helper()
-	if _, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: id}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	if _, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
-		n.Promotion, n.NonReproducible = pm, nr
+		n.Promotion, n.NonReproducible = store.Set(pm), store.Set(nr)
 		return &n, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -448,24 +448,24 @@ func promotion(t *testing.T, l *lab) {
 	j := l.job(id)
 	l.run(j, "ok", okReport("ci"))
 	l.pass()
-	if rec := l.build(id); rec.State != buildctl.StateRunning || rec.Phase != buildctl.PhasePromoting {
-		t.Fatalf("waiting for promotion: %s %s", rec.State, rec.Phase)
+	if rec := l.build(id); rec.State.Value() != buildctl.StateRunning || rec.Phase.Value() != buildctl.PhasePromoting {
+		t.Fatalf("waiting for promotion: %s %s", rec.State.Value(), rec.Phase.Value())
 	}
 	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}); err != nil {
 		t.Fatalf("job finalised before its promotion: %v", err)
 	}
-	setPM(t, l, j.ID, "blocked: staging incomplete")
+	setPM(t, l, j.ID.Value(), "blocked: staging incomplete")
 	l.pass()
 	j2 := l.job(id)
-	if j2.ID == j.ID || j2.State != "queued" {
-		t.Fatalf("blocked promotion: next job %s %s", j2.ID, j2.State)
+	if j2.ID.Value() == j.ID.Value() || j2.State.Value() != "queued" {
+		t.Fatalf("blocked promotion: next job %s %s", j2.ID.Value(), j2.State.Value())
 	}
 	l.run(j2, "ok", okReport("ci"))
-	setPM(t, l, j2.ID, "done", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-x")
+	setPM(t, l, j2.ID.Value(), "done", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-x")
 	l.pass()
 	rec := l.build(id)
-	if rec.State != buildctl.StateSucceeded {
-		t.Fatalf("after promotion done: %s %+v", rec.State, rec.Errors)
+	if rec.State.Value() != buildctl.StateSucceeded {
+		t.Fatalf("after promotion done: %s %+v", rec.State.Value(), rec.Errors.Value())
 	}
 	s := &buildctl.Service{B: l.b}
 	pj, err := s.B.ToProto(l.ctx, rec)
@@ -473,12 +473,12 @@ func promotion(t *testing.T, l *lab) {
 		t.Fatal(pj, err)
 	}
 	var row store.BuildJob
-	for _, r := range rec.Jobs {
-		if r.ID == j2.ID {
+	for _, r := range rec.Jobs.Value() {
+		if r.ID == j2.ID.Value() {
 			row = r
 		}
 	}
-	if row.Promotion != "done" || len(rec.NonReproducible[j2.ID]) != 1 {
-		t.Errorf("row %+v nr %v", row, rec.NonReproducible)
+	if row.Promotion != "done" || len(rec.NonReproducible.Value()[j2.ID.Value()]) != 1 {
+		t.Errorf("row %+v nr %v", row, rec.NonReproducible.Value())
 	}
 }

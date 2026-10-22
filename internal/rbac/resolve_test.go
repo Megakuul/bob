@@ -24,17 +24,17 @@ func TestResolver(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	if err := store.Create(ctx, control, &store.BuildRecord{ID: "01jabcdefghjkmnpqrstvwxyz0", Project: "p1", Number: 1}); err != nil {
+	if err := store.Create(ctx, control, &store.BuildRecord{ID: store.ID("01jabcdefghjkmnpqrstvwxyz0"), Project: store.Set("p1"), Number: store.Set(1)}); err != nil {
 		t.Fatal(err)
 	}
 	spec, err := cbor.Marshal(store.JobSpec{V: 1, JobID: "01jjob00000000000000000000", Project: "p2"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Create(ctx, fleet, &store.JobRecord{ID: "01jjob00000000000000000000", Spec: spec, State: "queued"}); err != nil {
+	if err := store.Create(ctx, fleet, &store.JobRecord{ID: store.ID("01jjob00000000000000000000"), Spec: store.Set(spec), State: store.Set("queued")}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Create(ctx, control, &releaseHead{Project: "p3", N: "0000000007"}); err != nil {
+	if err := store.Create(ctx, control, &releaseHead{Project: store.ID("p3"), N: store.ID("0000000007")}); err != nil {
 		t.Fatal(err)
 	}
 	r := &Resolver{Control: control, Fleet: fleet}
@@ -63,7 +63,7 @@ func TestResolver(t *testing.T) {
 	}
 	// roles: a deleted role stops granting on the next call (conditional GET, no stale cache)
 	roles := NewRoles(control)
-	rec := &store.RoleRecord{ID: "dev", Permissions: []Permission{p(getBuild, "*")}}
+	rec := &store.RoleRecord{ID: store.ID("dev"), Permissions: store.Set([]Permission{p(getBuild, "*")})}
 	if err := store.Create(ctx, control, rec); err != nil {
 		t.Fatal(err)
 	}

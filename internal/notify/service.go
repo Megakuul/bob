@@ -39,8 +39,8 @@ func storageErr(err error) error {
 }
 
 func msg(h *HookRecord) *notifyv1.NotifyWebhook {
-	return &notifyv1.NotifyWebhook{Id: h.ID, Url: h.URL, Events: h.Events, Projects: h.Projects, Enabled: h.Enabled,
-		LastResult: h.LastResult, Etag: h.ETag}
+	return &notifyv1.NotifyWebhook{Id: h.ID.Value(), Url: h.URL.Value(), Events: h.Events.Value(), Projects: h.Projects.Value(), Enabled: h.Enabled.Value(),
+		LastResult: h.LastResult.Value(), Etag: store.ETagOf(h.ETag)}
 }
 
 func checkURL(raw string) error {
@@ -98,16 +98,16 @@ func (s Service) CreateNotifyWebhook(ctx context.Context, req *connect.Request[n
 		return nil, err
 	}
 	h := HookKey("wh-" + hex.EncodeToString(b[:8]))
-	h.URL, h.Secret, h.Events, h.Projects, h.Enabled, h.Created = in.GetUrl(), hex.EncodeToString(b[8:]), dedupe(in.GetEvents()),
-		dedupe(in.GetProjects()), in.GetEnabled(), s.N.Now().UTC()
+	h.URL, h.Secret, h.Events, h.Projects, h.Enabled, h.Created = store.Set(in.GetUrl()), store.Set(hex.EncodeToString(b[8:])), store.Set(dedupe(in.GetEvents())),
+		store.Set(dedupe(in.GetProjects())), store.Set(in.GetEnabled()), store.Set(s.N.Now().UTC())
 	if _, err := store.CAS(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
 		if cur == nil {
 			cur = HookIndexKey()
 		}
-		if len(cur.IDs) >= MaxHooks {
+		if len(cur.IDs.Value()) >= MaxHooks {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d notification webhooks", MaxHooks))
 		}
-		cur.IDs = append(cur.IDs, h.ID)
+		cur.IDs = store.Set(append(cur.IDs.Value(), h.ID.Value()))
 		return cur, nil
 	}); err != nil {
 		return nil, storageErr(err)
@@ -115,7 +115,7 @@ func (s Service) CreateNotifyWebhook(ctx context.Context, req *connect.Request[n
 	if err := store.Create(ctx, s.N.Control, h); err != nil {
 		return nil, storageErr(err)
 	}
-	return connect.NewResponse(&notifyv1.CreateNotifyWebhookResponse{Webhook: msg(h), Secret: h.Secret}), nil
+	return connect.NewResponse(&notifyv1.CreateNotifyWebhookResponse{Webhook: msg(h), Secret: h.Secret.Value()}), nil
 }
 
 func (s Service) get(ctx context.Context, id string) (*HookRecord, error) {
@@ -148,7 +148,7 @@ func (s Service) ListNotifyWebhooks(ctx context.Context, _ *connect.Request[noti
 	if idx == nil {
 		return connect.NewResponse(out), nil
 	}
-	for _, id := range idx.IDs {
+	for _, id := range idx.IDs.Value() {
 		h, err := store.Get(ctx, s.N.Control, HookKey(id))
 		if errors.Is(err, store.ErrNotFound) {
 			continue // intent-first entry of an unfinished create
@@ -174,7 +174,7 @@ func (s Service) UpdateNotifyWebhook(ctx context.Context, req *connect.Request[n
 		if cur == nil {
 			return nil, api.NotFound("notification webhook")
 		}
-		if in.GetEtag() != "" && in.GetEtag() != cur.ETag {
+		if in.GetEtag() != "" && in.GetEtag() != store.ETagOf(cur.ETag) {
 			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 		}
 		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
@@ -183,19 +183,19 @@ func (s Service) UpdateNotifyWebhook(ctx context.Context, req *connect.Request[n
 				if err := checkURL(in.GetUrl()); err != nil {
 					return nil, err
 				}
-				cur.URL = in.GetUrl()
+				cur.URL = store.Set(in.GetUrl())
 			case "events":
 				if err := checkEvents(in.GetEvents()); err != nil {
 					return nil, err
 				}
-				cur.Events = dedupe(in.GetEvents())
+				cur.Events = store.Set(dedupe(in.GetEvents()))
 			case "projects":
 				if err := checkProjects(in.GetProjects()); err != nil {
 					return nil, err
 				}
-				cur.Projects = dedupe(in.GetProjects())
+				cur.Projects = store.Set(dedupe(in.GetProjects()))
 			case "enabled":
-				cur.Enabled = in.GetEnabled()
+				cur.Enabled = store.Set(in.GetEnabled())
 			}
 		}
 		return cur, nil
@@ -216,10 +216,10 @@ func (s Service) DeleteNotifyWebhook(ctx context.Context, req *connect.Request[n
 		return nil, storageErr(err)
 	}
 	if _, err := store.CAS(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
-		if cur == nil || !slices.Contains(cur.IDs, h.ID) {
+		if cur == nil || !slices.Contains(cur.IDs.Value(), h.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		cur.IDs = slices.DeleteFunc(cur.IDs, func(id string) bool { return id == h.ID })
+		cur.IDs = store.Set(slices.DeleteFunc(cur.IDs.Value(), func(id string) bool { return id == h.ID.Value() }))
 		return cur, nil
 	}); err != nil {
 		return nil, storageErr(err)

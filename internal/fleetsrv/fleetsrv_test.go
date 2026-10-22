@@ -70,7 +70,7 @@ func TestFleet(t *testing.T) {
 		t.Fatalf("a later orchestrator: %v, kid %v", err, again)
 	}
 	cfg, err := store.Get(ctx, fl, store.FleetConfigKey())
-	if err != nil || cfg.Params.PollInterval != 30*time.Second {
+	if err != nil || cfg.Params.Value().PollInterval != 30*time.Second {
 		t.Fatalf("fleet/cfg params not published: %+v %v", cfg, err)
 	}
 

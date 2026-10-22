@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -52,8 +53,10 @@ type WriterConfig struct {
 
 // Writer batches log lines, package runs and job runs in memory and commits them to their
 // lake partitions: on the interval, at CommitLines / CommitBytes, and when asked (package end,
-// job end). It never blocks a caller of Add on S3. Lines survive until their batch commits;
-// a crash loses only the lines after the last successful commit (R-LOG-001).
+// job end). It never blocks a caller of Add on S3: Add only queues rows; the commit loop moves
+// them into the partition's lake.Ingestor (Insert) and calls Commit. A failed Commit keeps the
+// rows in the Ingestor's backlog and the next Commit writes them (lake's documented
+// behaviour). A crash loses only the lines after the last successful commit (R-LOG-001).
 type Writer struct {
 	cfg    WriterConfig
 	client *s3.Client
@@ -71,22 +74,34 @@ type Writer struct {
 	committed atomic.Int64 // lines committed
 }
 
-// partition is the uncommitted data of one lake partition.
+// partition is the uncommitted data of one lake partition. Fields above commit are guarded by
+// Writer.mu.
 type partition struct {
 	name   string
-	lines  []LogLine
+	lines  []LogLine // queued: not yet given to the ingestor
 	runs   []PackageRun
 	jobs   []JobRun
-	bytes  int
+	bytes  int       // queued bytes
 	since  time.Time // when the oldest uncommitted row arrived
 	due    time.Time // next commit attempt after a failure
 	fails  int
 	urgent bool // a size trigger or an explicit flush asked for a commit
-	// inflight is the prefix of lines a running commit sends; bound never drops it.
-	inflight int
 
-	commit sync.Mutex // one commit at a time per partition
+	// Rows inserted into the ingestors and not committed yet (in lake's writer or backlog).
+	held      int // bytes
+	heldLines int
+	heldLast  map[string]map[string]int64 // build → package → highest held seq
+	discard   bool                        // the memory bound asks to drop the held rows
+
+	commit sync.Mutex // one commit at a time per partition; guards the fields below
 	bucket *lake.Bucket
+	logIn  *lake.Ingestor[LogLine]
+	runIn  *lake.Ingestor[PackageRun]
+	jobIn  *lake.Ingestor[JobRun]
+}
+
+func (p *partition) empty() bool {
+	return len(p.lines) == 0 && len(p.runs) == 0 && len(p.jobs) == 0 && p.held == 0
 }
 
 // NewWriter performs no I/O.
@@ -116,7 +131,7 @@ func NewWriter(cfg WriterConfig) *Writer {
 	if cfg.Client == nil {
 		w.err = errors.New("logstore: writer has no S3 client")
 	} else {
-		w.client, w.err = PrefixClient(cfg.Client, cfg.Bucket, nil)
+		w.client, w.err = PrefixClient(cfg.Client, cfg.Bucket)
 	}
 	return w
 }
@@ -172,7 +187,7 @@ func (w *Writer) Add(buildID, drv string, lines ...Line) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	p := w.part(name)
-	if len(p.lines) == 0 && len(p.runs) == 0 && len(p.jobs) == 0 {
+	if p.empty() {
 		p.since = now
 	}
 	for _, l := range lines {
@@ -199,7 +214,7 @@ func (w *Writer) AddRun(r PackageRun) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	p := w.part(name)
-	if len(p.runs) == 0 {
+	if p.empty() {
 		p.since = w.cfg.Now()
 	}
 	p.runs = append(p.runs, r)
@@ -213,7 +228,7 @@ func (w *Writer) AddJobRun(t time.Time, r JobRun) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	p := w.part(JobPartition(t))
-	if len(p.jobs) == 0 {
+	if p.empty() {
 		p.since = w.cfg.Now()
 	}
 	p.jobs = append(p.jobs, r)
@@ -221,26 +236,33 @@ func (w *Writer) AddJobRun(t time.Time, r JobRun) {
 	w.pending += rowOverhead * 2
 }
 
-// bound drops the oldest uncommitted lines of the biggest partition while the writer holds
-// more than MaxPending bytes. Called with w.mu held.
+// bound drops the oldest queued lines of the biggest partition while the writer holds more
+// than MaxPending bytes. When no queued lines are left to drop, the partition with the most
+// held (inserted, uncommitted) rows drops them at its next commit. Called with w.mu held.
 func (w *Writer) bound() {
 	for w.pending > w.cfg.MaxPending {
-		var big *partition
+		var big, held *partition
 		for _, p := range w.parts {
-			if big == nil || p.bytes > big.bytes {
+			if len(p.lines) > 0 && (big == nil || p.bytes > big.bytes) {
 				big = p
 			}
+			if held == nil || p.held > held.held {
+				held = p
+			}
 		}
-		if big == nil || len(big.lines) <= big.inflight {
+		if big == nil {
+			if held != nil && held.held > 0 {
+				held.discard = true
+			}
 			return
 		}
-		n := max(1, (len(big.lines)-big.inflight)/10)
-		for _, l := range big.lines[big.inflight : big.inflight+n] {
+		n := max(1, len(big.lines)/10)
+		for _, l := range big.lines[:n] {
 			b := len(l.Line) + len(l.Package.Data) + rowOverhead
 			big.bytes -= b
 			w.pending -= b
 		}
-		big.lines = slices.Delete(big.lines, big.inflight, big.inflight+n)
+		big.lines = slices.Delete(big.lines, 0, n)
 		w.dropped.Add(int64(n))
 		w.cfg.Log.Error("logstore: uncommitted log lines dropped: the analytics bucket refuses commits and the buffer is full",
 			"partition", big.name, "lines", n)
@@ -370,7 +392,7 @@ func (w *Writer) commitDue(ctx context.Context) {
 	w.mu.Lock()
 	var due []*partition
 	for _, p := range w.parts {
-		if len(p.lines) == 0 && len(p.runs) == 0 && len(p.jobs) == 0 {
+		if p.empty() {
 			continue
 		}
 		if now.Before(p.due) {
@@ -393,27 +415,12 @@ func (w *Writer) commitDue(ctx context.Context) {
 	}
 }
 
-// commitPartition commits what p holds now. done reports that nothing queued before the call
-// is left uncommitted. A failure keeps the rows and schedules the next try with backoff
-// (unless force, which the caller paces).
+// commitPartition gives the queued rows of p to its ingestors and commits them. done reports
+// that nothing queued before the call is left uncommitted. A failure leaves the rows in lake's
+// backlog and schedules the next try with backoff (unless force, which the caller paces).
 func (w *Writer) commitPartition(ctx context.Context, p *partition, force bool) (done bool, err error) {
 	p.commit.Lock()
 	defer p.commit.Unlock()
-
-	w.mu.Lock()
-	lines := slices.Clone(p.lines)
-	runs := slices.Clone(p.runs)
-	jobs := slices.Clone(p.jobs)
-	p.inflight = len(lines)
-	w.mu.Unlock()
-	defer func() {
-		w.mu.Lock()
-		p.inflight = 0
-		w.mu.Unlock()
-	}()
-	if len(lines) == 0 && len(runs) == 0 && len(jobs) == 0 {
-		return true, nil
-	}
 
 	if p.bucket == nil {
 		if p.bucket, err = openPartition(ctx, w.client, p.name); err != nil {
@@ -422,52 +429,73 @@ func (w *Writer) commitPartition(ctx context.Context, p *partition, force bool) 
 			return false, err
 		}
 	}
+	w.mu.Lock()
+	if p.discard {
+		w.dropped.Add(int64(p.heldLines))
+		w.pending -= p.held
+		w.cfg.Log.Error("logstore: uncommitted log lines dropped: the analytics bucket refuses commits and the buffer is full",
+			"partition", p.name, "lines", p.heldLines)
+		p.logIn, p.runIn, p.jobIn = nil, nil, nil
+		p.held, p.heldLines, p.heldLast, p.discard = 0, 0, nil, false
+	}
+	lines, runs, jobs := p.lines, p.runs, p.jobs
+	p.lines, p.runs, p.jobs = nil, nil, nil
+	p.held += p.bytes
+	p.bytes = 0
+	p.heldLines += len(lines)
+	for _, l := range lines {
+		if p.heldLast == nil {
+			p.heldLast = map[string]map[string]int64{}
+		}
+		m := p.heldLast[l.BuildID.Data]
+		if m == nil {
+			m = map[string]int64{}
+			p.heldLast[l.BuildID.Data] = m
+		}
+		m[l.Package.Data] = max(m[l.Package.Data], l.Seq.Data)
+	}
+	nothing := p.held == 0
+	w.mu.Unlock()
+	if nothing {
+		return true, nil
+	}
+
+	// No sort tag on log_line (plan/progress/I-B16-repro/l1-sort: a filtered Scan over sorted,
+	// overlapping shards hangs), so the writer orders a batch itself: tight page statistics
+	// for lake's page pruning.
 	slices.SortFunc(lines, func(a, b LogLine) int {
 		return cmp.Or(strings.Compare(a.BuildID.Data, b.BuildID.Data), strings.Compare(a.Package.Data, b.Package.Data),
 			cmp.Compare(a.Seq.Data, b.Seq.Data), cmp.Compare(a.Attempt, b.Attempt))
 	})
-	if len(lines) > 0 {
-		err = commitRows(ctx, p.bucket, lines)
-	}
-	if err == nil && len(runs) > 0 {
-		err = commitRows(ctx, p.bucket, runs)
-	}
-	if err == nil && len(jobs) > 0 {
-		err = commitRows(ctx, p.bucket, jobs)
+	err = errors.Join(insert(ctx, &p.logIn, p.bucket, lines), insert(ctx, &p.runIn, p.bucket, runs),
+		insert(ctx, &p.jobIn, p.bucket, jobs))
+	if err == nil {
+		err = errors.Join(commit(ctx, p.logIn), commit(ctx, p.runIn), commit(ctx, p.jobIn))
 	}
 	if err != nil {
-		if !isLockFailure(err) {
-			// Ambiguous: the shard may have landed. The batch is retried; readers
-			// deduplicate by (build, package, attempt, seq).
-			p.bucket = nil // reload the catalog next time
-		}
+		// A commit error may be ambiguous (the shard may have landed); lake writes the
+		// backlog again on the next Commit, and readers deduplicate by
+		// (build, package, attempt, seq) (R-LOG-001).
 		w.failed(p, force)
 		return false, err
 	}
 
 	w.commits.Add(1)
-	w.committed.Add(int64(len(lines)))
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	// Rows added during the commit are behind the committed prefix.
-	sent := 0
-	for _, l := range p.lines[:len(lines)] {
-		sent += len(l.Line) + len(l.Package.Data) + rowOverhead
-		m := w.last[l.BuildID.Data]
+	w.committed.Add(int64(p.heldLines))
+	for b, pkgs := range p.heldLast {
+		m := w.last[b]
 		if m == nil {
 			m = map[string]int64{}
-			w.last[l.BuildID.Data] = m
+			w.last[b] = m
 		}
-		if l.Seq.Data > m[l.Package.Data] {
-			m[l.Package.Data] = l.Seq.Data
+		for pkg, seq := range pkgs {
+			m[pkg] = max(m[pkg], seq)
 		}
 	}
-	sent += rowOverhead * (4*len(runs) + 2*len(jobs))
-	p.lines = slices.Delete(p.lines, 0, len(lines))
-	p.runs = slices.Delete(p.runs, 0, len(runs))
-	p.jobs = slices.Delete(p.jobs, 0, len(jobs))
-	p.bytes -= sent
-	w.pending -= sent
+	w.pending -= p.held
+	p.held, p.heldLines, p.heldLast = 0, 0, nil
 	p.fails, p.due, p.urgent = 0, time.Time{}, false
 	p.since = w.cfg.Now()
 	return true, nil
@@ -485,16 +513,28 @@ func (w *Writer) failed(p *partition, force bool) {
 	}
 }
 
-// commitRows writes one batch as one shard with a fresh ingestor: lake's ingestor keeps
-// failed shards in a backlog of its own that drops entries silently (S10 F6), so bob keeps the
-// rows itself and builds the shard again on a retry.
-func commitRows[T any](ctx context.Context, b *lake.Bucket, rows []T) error {
+// insert gives rows to the partition's ingestor of their table, creating it on first use.
+// lake's default backlog keeps 100 failed commits and then drops the oldest silently; bob
+// bounds the memory by bytes itself (MaxPending, counted and logged), so the backlog is
+// unbounded here (lake.WithMaxBacklogSize).
+func insert[T any](ctx context.Context, in **lake.Ingestor[T], b *lake.Bucket, rows []T) error {
+	if len(rows) == 0 {
+		return nil
+	}
 	_, err := guard(func() (struct{}, error) {
-		in := lake.NewIngestor[T](b)
-		if err := in.Insert(ctx, rows...); err != nil {
-			return struct{}{}, err
+		if *in == nil {
+			*in = lake.NewIngestor[T](b, lake.WithMaxBacklogSize[T](math.MaxInt))
 		}
-		return struct{}{}, in.Commit(ctx)
+		return struct{}{}, (*in).Insert(ctx, rows...)
 	})
+	return err
+}
+
+// commit commits an ingestor (its new rows and its backlog); nil is a no-op.
+func commit[T any](ctx context.Context, in *lake.Ingestor[T]) error {
+	if in == nil {
+		return nil
+	}
+	_, err := guard(func() (struct{}, error) { return struct{}{}, in.Commit(ctx) })
 	return err
 }

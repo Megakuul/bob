@@ -46,7 +46,8 @@ func TestGitLabLive(t *testing.T) {
 	t.Cleanup(func() { _ = gl.Stop() })
 
 	token := forge.NewSecret(gl.RootToken)
-	a, err := gitlabad.New(gitlabad.Config{BaseURL: gl.URL, AccessToken: token, SigningToken: forge.NewSecret("whsec_" + base64.StdEncoding.EncodeToString([]byte("gitlab-live-signing-key-0123456789")))})
+	// GitLab accepts a 32-byte signing key (as the S16 spike and the recorded SIGNING_TOKEN.test).
+	a, err := gitlabad.New(gitlabad.Config{BaseURL: gl.URL, AccessToken: token, SigningToken: forge.NewSecret("whsec_" + base64.StdEncoding.EncodeToString([]byte("gitlab-live-signing-key-01234567")))})
 	if err != nil {
 		var de *diag.Error
 		if errors.As(err, &de) && de.Code == diag.CodeNotImplemented {
@@ -109,7 +110,7 @@ func TestGitLabLive(t *testing.T) {
 		}))
 		defer recv.Close()
 		for i := 0; i < 2; i++ {
-			if err := a.EnsureWebhook(ctx, repo, recv.URL, forge.NewSecret("whsec_"+base64.StdEncoding.EncodeToString([]byte("gitlab-live-signing-key-0123456789")))); err != nil {
+			if err := a.EnsureWebhook(ctx, repo, recv.URL, forge.NewSecret("whsec_"+base64.StdEncoding.EncodeToString([]byte("gitlab-live-signing-key-01234567")))); err != nil {
 				t.Fatalf("EnsureWebhook #%d: %v", i+1, err)
 			}
 		}

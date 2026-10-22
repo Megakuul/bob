@@ -46,7 +46,7 @@ func TestForUpload(t *testing.T) {
 		}
 	}
 	rec, err := p.Get(ctx, "remote")
-	if err != nil || rec.DisplayName != "remote" || rec.Forge != "" {
+	if err != nil || rec.DisplayName.Value() != "remote" || rec.Forge.Value() != "" {
 		t.Fatalf("project record after ForUpload: %+v, %v", rec, err)
 	}
 	ids, _, err := p.List(ctx, 0, 10, func(project.Entry) bool { return true })

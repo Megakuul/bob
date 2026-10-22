@@ -140,11 +140,11 @@ func (q *Queue) Enqueue(ctx context.Context, j Job, o Order) (uint64, error) {
 	if err := q.active().Add(ctx, j.ID, store.ActiveJob{Build: j.Build, Class: q.Class, Created: now}); err != nil {
 		return 0, err
 	}
-	rec := &store.JobRecord{ID: j.ID, Spec: spec, SpecSig: fleet.SignSpec(q.Key, spec), Kid: q.Kid,
-		State: StateQueued, Queued: now, Attempt: j.Attempts}
+	rec := &store.JobRecord{ID: store.ID(j.ID), Spec: store.Set(spec), SpecSig: store.Set(fleet.SignSpec(q.Key, spec)), Kid: store.Set(q.Kid),
+		State: store.Set(StateQueued), Queued: store.Set(now), Attempt: store.Set(j.Attempts)}
 	createJob := func() error { return store.Create(ctx, q.Fleet, rec) }
 	appendSlot := func() (uint64, error) {
-		return store.Queue(q.Fleet, q.Class).Append(ctx, &store.QueueSlot{Job: j.ID, At: now})
+		return store.Queue(q.Fleet, q.Class).Append(ctx, &store.QueueSlot{Job: store.Set(j.ID), At: store.Set(now)})
 	}
 	between := func() error {
 		if q.BetweenWrites == nil {
@@ -183,8 +183,8 @@ type JobView struct {
 }
 
 func viewOf(r *store.JobRecord) *JobView {
-	v := &JobView{State: r.State, Owner: r.Owner, Epoch: r.Epoch, Attempt: r.Attempt, Cancel: r.Cancel, Promotion: r.Promotion}
-	if res, ok := fleet.DecodeResult(r.Result); ok {
+	v := &JobView{State: r.State.Value(), Owner: r.Owner.Value(), Epoch: r.Epoch.Value(), Attempt: r.Attempt.Value(), Cancel: r.Cancel.Value(), Promotion: r.Promotion.Value()}
+	if res, ok := fleet.DecodeResult(r.Result.Value()); ok {
 		v.Result = res.Status
 	}
 	return v
@@ -194,7 +194,7 @@ func (q *Queue) record(ctx context.Context, id string) (*store.JobRecord, error)
 	if _, err := store.Segment(id); err != nil {
 		return nil, fmt.Errorf("orchestrator: job id %q: %w", id, store.ErrNotFound)
 	}
-	return store.Get(ctx, q.Fleet, &store.JobRecord{ID: id})
+	return store.Get(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)})
 }
 
 // Job reads job/<id>. store.ErrNotFound when the record does not exist (never created or finalised).
@@ -212,25 +212,25 @@ func (q *Queue) SlotTaken(ctx context.Context, seq uint64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return s.Taken, nil
+	return s.Taken.Value(), nil
 }
 
 // Cancel requests cancellation of a job (queued: cancelled at once; claimed or running: cx).
 func (q *Queue) Cancel(ctx context.Context, id string) error {
 	now := q.now()
-	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: id}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
 		next := *cur
-		switch cur.State {
+		switch cur.State.Value() {
 		case StateQueued:
-			next.State, next.Changed = StateCancelled, now
+			next.State, next.Changed = store.Set(StateCancelled), store.Set(now)
 		case StateClaimed, StateRunning:
-			if cur.Cancel {
+			if cur.Cancel.Value() {
 				return nil, store.ErrNoChange
 			}
-			next.Cancel = true
+			next.Cancel = store.Set(true)
 		default:
 			return nil, store.ErrNoChange
 		}
@@ -257,23 +257,23 @@ func (q *Queue) Finalise(ctx context.Context, id string) (accepted bool, err err
 	if err != nil {
 		return false, err
 	}
-	if !Terminal(rec.State) {
-		return false, fmt.Errorf("orchestrator: job %s is %s, not terminal", id, rec.State)
+	if !Terminal(rec.State.Value()) {
+		return false, fmt.Errorf("orchestrator: job %s is %s, not terminal", id, rec.State.Value())
 	}
-	if rec.State != StateCancelled && !q.signedByOwner(rec) {
+	if rec.State.Value() != StateCancelled && !q.signedByOwner(rec) {
 		return false, q.dropForged(ctx, rec)
 	}
-	spec, _ := fleet.DecodeSpec(rec.Spec)
+	spec, _ := fleet.DecodeSpec(rec.Spec.Value())
 	if q.Control != nil && spec.BuildID != "" {
 		if err := q.summarise(ctx, spec.BuildID, rec); err != nil {
 			return false, err
 		}
 	}
-	_, err = store.CAS(ctx, q.Fleet, &store.JobRecord{ID: id}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	_, err = store.CAS(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		if cur.State != rec.State || cur.Epoch != rec.Epoch || cur.Owner != rec.Owner {
+		if cur.State.Value() != rec.State.Value() || cur.Epoch.Value() != rec.Epoch.Value() || cur.Owner.Value() != rec.Owner.Value() {
 			return nil, errJobChanged
 		}
 		return nil, nil
@@ -291,7 +291,7 @@ func (q *Queue) signedByOwner(rec *store.JobRecord) bool {
 	if q.WorkerKey == nil {
 		return false
 	}
-	return fleet.VerifyResult(q.WorkerKey(rec.Owner), rec.ID, rec.Epoch, rec.Result, rec.ResultSig)
+	return fleet.VerifyResult(q.WorkerKey(rec.Owner.Value()), rec.ID.Value(), rec.Epoch.Value(), rec.Result.Value(), rec.ResultSig.Value())
 }
 
 // dropForged counts a result that the owner did not sign and puts the job back to the state
@@ -299,13 +299,13 @@ func (q *Queue) signedByOwner(rec *store.JobRecord) bool {
 func (q *Queue) dropForged(ctx context.Context, rec *store.JobRecord) error {
 	forged.Add(1)
 	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
-		if cur == nil || cur.ETag != rec.ETag {
+		if cur == nil || store.ETagOf(cur.ETag) != store.ETagOf(rec.ETag) {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.State, next.Result, next.ResultSig = StateRunning, nil, nil
-		if cur.Changed.IsZero() {
-			next.State = StateClaimed
+		next.State, next.Result, next.ResultSig = store.Set(StateRunning), store.Set(nil), store.Set(nil)
+		if cur.Changed.Value().IsZero() {
+			next.State = store.Set(StateClaimed)
 		}
 		return &next, nil
 	})
@@ -314,32 +314,32 @@ func (q *Queue) dropForged(ctx context.Context, rec *store.JobRecord) error {
 
 // summarise copies the job's final row into build/<id>.jb (absent build: nothing to do).
 func (q *Queue) summarise(ctx context.Context, buildID string, rec *store.JobRecord) error {
-	_, err := store.CAS(ctx, q.Control, &store.BuildRecord{ID: buildID}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
+	_, err := store.CAS(ctx, q.Control, &store.BuildRecord{ID: store.ID(buildID)}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		row := store.BuildJob{ID: rec.ID, State: rec.State, Attempts: rec.Attempt, Epoch: rec.Epoch, Worker: rec.Owner, Promotion: rec.Promotion}
-		if spec, ok := fleet.DecodeSpec(rec.Spec); ok {
+		row := store.BuildJob{ID: rec.ID.Value(), State: rec.State.Value(), Attempts: rec.Attempt.Value(), Epoch: rec.Epoch.Value(), Worker: rec.Owner.Value(), Promotion: rec.Promotion.Value()}
+		if spec, ok := fleet.DecodeSpec(rec.Spec.Value()); ok {
 			row.Kind, row.Class = spec.Kind, spec.Class
 		}
-		if !rec.Claimed.IsZero() && !rec.Changed.IsZero() {
-			row.Duration = rec.Changed.Sub(rec.Claimed)
+		if !rec.Claimed.Value().IsZero() && !rec.Changed.Value().IsZero() {
+			row.Duration = rec.Changed.Value().Sub(rec.Claimed.Value())
 		}
-		next.Jobs = append([]store.BuildJob(nil), cur.Jobs...)
-		for i := range next.Jobs {
-			if next.Jobs[i].ID == rec.ID {
-				if next.Jobs[i] == row {
+		next.Jobs = store.Set(append([]store.BuildJob(nil), cur.Jobs.Value()...))
+		for i := range next.Jobs.Value() {
+			if next.Jobs.Value()[i].ID == rec.ID.Value() {
+				if next.Jobs.Value()[i] == row {
 					return nil, store.ErrNoChange
 				}
-				next.Jobs[i] = row
+				next.Jobs.Value()[i] = row
 				return &next, nil
 			}
 		}
-		if len(next.Jobs) >= store.MaxBuildJobs {
-			return nil, fmt.Errorf("orchestrator: build %s has %d jobs, the limit is %d", buildID, len(next.Jobs), store.MaxBuildJobs)
+		if len(next.Jobs.Value()) >= store.MaxBuildJobs {
+			return nil, fmt.Errorf("orchestrator: build %s has %d jobs, the limit is %d", buildID, len(next.Jobs.Value()), store.MaxBuildJobs)
 		}
-		next.Jobs = append(next.Jobs, row)
+		next.Jobs = store.Set(append(next.Jobs.Value(), row))
 		return &next, nil
 	})
 	return err

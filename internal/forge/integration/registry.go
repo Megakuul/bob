@@ -92,12 +92,12 @@ func (r *Registry) adapters(ctx context.Context, id string) (*ForgeRecord, built
 	if b, ok := r.built[id]; ok && b.fingerprint == fp {
 		return rec, b, nil
 	}
-	b := built{fingerprint: fp, prevUntil: rec.PrevUntil}
-	if b.cur, err = NewAdapter(rec, rec.Secret); err != nil {
+	b := built{fingerprint: fp, prevUntil: rec.PrevUntil.Value()}
+	if b.cur, err = NewAdapter(rec, rec.Secret.Value()); err != nil {
 		return nil, built{}, err
 	}
-	if rec.PrevSecret != "" {
-		if b.prev, err = NewAdapter(rec, rec.PrevSecret); err != nil {
+	if rec.PrevSecret.Value() != "" {
+		if b.prev, err = NewAdapter(rec, rec.PrevSecret.Value()); err != nil {
 			return nil, built{}, err
 		}
 	}
@@ -126,8 +126,8 @@ func (r *Registry) ParseWebhook(ctx context.Context, id string, h http.Header, b
 // fingerprint identifies what an adapter is built from.
 func fingerprint(rec *ForgeRecord) string {
 	h := sha256.New()
-	for _, s := range []string{rec.Kind, rec.BaseURL, fmt.Sprint(rec.AppID, rec.InstallationID, rec.AllowPlaintext),
-		rec.PrivateKeyPEM, rec.BotLogin, rec.BotPassword, rec.AccessToken, rec.Secret, rec.PrevSecret, rec.PrevUntil.String()} {
+	for _, s := range []string{rec.Kind.Value(), rec.BaseURL.Value(), fmt.Sprint(rec.AppID.Value(), rec.InstallationID.Value(), rec.AllowPlaintext.Value()),
+		rec.PrivateKeyPEM.Value(), rec.BotLogin.Value(), rec.BotPassword.Value(), rec.AccessToken.Value(), rec.Secret.Value(), rec.PrevSecret.Value(), rec.PrevUntil.Value().String()} {
 		h.Write([]byte(s))
 		h.Write([]byte{0})
 	}
@@ -136,22 +136,22 @@ func fingerprint(rec *ForgeRecord) string {
 
 // NewAdapter builds the adapter of rec with webhook secret secret.
 func NewAdapter(rec *ForgeRecord, secret string) (forge.Adapter, error) {
-	switch forge.Kind(rec.Kind) {
+	switch forge.Kind(rec.Kind.Value()) {
 	case forge.GitHub:
-		base := rec.BaseURL
+		base := rec.BaseURL.Value()
 		if base == "" {
 			base = GitHubAPI
 		}
-		return github.New(github.Config{BaseURL: base, AppID: rec.AppID, InstallationID: rec.InstallationID,
-			PrivateKeyPEM: forge.NewSecret(rec.PrivateKeyPEM), WebhookSecret: forge.NewSecret(secret)})
+		return github.New(github.Config{BaseURL: base, AppID: rec.AppID.Value(), InstallationID: rec.InstallationID.Value(),
+			PrivateKeyPEM: forge.NewSecret(rec.PrivateKeyPEM.Value()), WebhookSecret: forge.NewSecret(secret)})
 	case forge.Forgejo:
-		return forgejo.New(forgejo.Config{BaseURL: rec.BaseURL, BotLogin: rec.BotLogin,
-			BotPassword: forge.NewSecret(rec.BotPassword), WebhookSecret: forge.NewSecret(secret)})
+		return forgejo.New(forgejo.Config{BaseURL: rec.BaseURL.Value(), BotLogin: rec.BotLogin.Value(),
+			BotPassword: forge.NewSecret(rec.BotPassword.Value()), WebhookSecret: forge.NewSecret(secret)})
 	case forge.GitLab:
-		return gitlab.New(gitlab.Config{BaseURL: rec.BaseURL, AccessToken: forge.NewSecret(rec.AccessToken),
-			SigningToken: forge.NewSecret(secret), AllowPlaintextSecret: rec.AllowPlaintext})
+		return gitlab.New(gitlab.Config{BaseURL: rec.BaseURL.Value(), AccessToken: forge.NewSecret(rec.AccessToken.Value()),
+			SigningToken: forge.NewSecret(secret), AllowPlaintextSecret: rec.AllowPlaintext.Value()})
 	}
-	return nil, fmt.Errorf("forge: unknown kind %q", rec.Kind)
+	return nil, fmt.Errorf("forge: unknown kind %q", rec.Kind.Value())
 }
 
 // NewSecret generates a webhook secret: 32 random bytes, hex; GitLab signing tokens are
@@ -179,14 +179,14 @@ func (r *Registry) Report(ctx context.Context, id string, callErr error) {
 		return
 	}
 	cur, err := r.Record(ctx, id)
-	if err != nil || (cur.Health == int32(health) && cur.HealthMsg == msg) {
+	if err != nil || (cur.Health.Value() == int32(health) && cur.HealthMsg.Value() == msg) {
 		return
 	}
 	_, err = store.CAS(ctx, r.Control, ForgeKey(id), func(cur *ForgeRecord) (*ForgeRecord, error) {
-		if cur == nil || (cur.Health == int32(health) && cur.HealthMsg == msg) {
+		if cur == nil || (cur.Health.Value() == int32(health) && cur.HealthMsg.Value() == msg) {
 			return nil, store.ErrNoChange
 		}
-		cur.Health, cur.HealthMsg = int32(health), msg
+		cur.Health, cur.HealthMsg = store.Set(int32(health)), store.Set(msg)
 		return cur, nil
 	})
 	if err != nil {

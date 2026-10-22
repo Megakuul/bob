@@ -2,6 +2,7 @@ package logstore
 
 import (
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/megakuul/lake"
@@ -9,7 +10,7 @@ import (
 
 // LogLine is one row of the `log_line` table (S10 §5.1). Only the filter columns are lake
 // types; the rest are plain columns with parquet encodings (2.8× smaller files). No sort tag:
-// lake bug L1 hangs filtered scans over sorted, overlapping shards (R-LOG-100).
+// a filtered Scan over sorted, overlapping shards hangs (plan/progress/I-B16-repro/l1-sort).
 type LogLine struct {
 	lake.Table `name:"log_line"`
 	BuildID    lake.String `parquet:"build_id"`
@@ -47,6 +48,31 @@ type JobRun struct {
 	Drvs       int64       `parquet:"drvs,zstd"`
 	SlotMs     int64       `parquet:"slot_ms,zstd"`
 	WallMs     int64       `parquet:"wall_ms,zstd"`
+}
+
+// RunInfo describes one finished package build; NewPackageRun turns it into a package_run row,
+// so that callers never build lake values (the dbusage lint rule: lake only in logstore).
+type RunInfo struct {
+	BuildID, Project, Package, Drv, Worker string
+	Status                                 string // ok | failed | cached | cancelled
+	Start, End                             time.Time
+	Lines                                  int64
+}
+
+// NewPackageRun returns the package_run row of r.
+func NewPackageRun(r RunInfo) PackageRun {
+	return PackageRun{
+		BuildID: lake.NewString(r.BuildID), Project: lake.NewString(r.Project), Package: lake.NewString(r.Package),
+		Drv: lake.NewString(r.Drv), Worker: lake.NewString(r.Worker), Status: lake.NewString(r.Status),
+		Start: lake.NewInt(r.Start.UnixNano()), End: lake.NewInt(r.End.UnixNano()),
+		DurationMs: lake.NewInt(r.End.Sub(r.Start).Milliseconds()), Lines: lake.NewInt(r.Lines),
+	}
+}
+
+// NewJobRun returns the job_run row of one finalised job.
+func NewJobRun(buildID, jobID, class, worker string, drvs, slotMs, wallMs int64) JobRun {
+	return JobRun{BuildID: lake.NewString(buildID), JobID: lake.NewString(jobID), Class: class, Worker: worker,
+		Drvs: drvs, SlotMs: slotMs, WallMs: wallMs}
 }
 
 // Streams of a line.

@@ -376,7 +376,7 @@ func hasPaths(res *build.Result) bool {
 // unit, the warning and error blocks, and `bob: N passed, N failed, N cached (exit E)`.
 func renderTests(o *out, res *build.Result) {
 	r := res.Report
-	var pass, fail, cached int
+	var pass, fail, cached, skipped int
 	for _, t := range res.Tests {
 		dur := fmt.Sprintf(" (%.1fs)", float64(t.DurationMs)/1000)
 		if t.Runner != "" {
@@ -384,6 +384,7 @@ func renderTests(o *out, res *build.Result) {
 		}
 		switch t.Status {
 		case "skipped":
+			skipped++
 			fmt.Fprintf(o.w, "%s    %s: %s\n", paint(o.style, sgrYellow, "SKIP"), t.Label, t.Reason)
 		case "pass":
 			pass++
@@ -419,6 +420,9 @@ func renderTests(o *out, res *build.Result) {
 	}
 	fmt.Fprintln(w)
 	line := fmt.Sprintf("bob: %d passed, %d failed, %d cached", pass, fail, cached)
+	if skipped > 0 {
+		line += fmt.Sprintf(", %d skipped", skipped)
+	}
 	if res.ExitCode != 0 {
 		fmt.Fprintf(w, "%s (exit %d)\n", paint(o.style, sgrRedBold, line), res.ExitCode)
 		return

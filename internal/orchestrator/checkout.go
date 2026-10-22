@@ -51,9 +51,16 @@ type CheckoutRecord struct {
 
 // checkoutShard is ftok/<sh2(jobID)>: job id -> its outstanding tokens.
 type checkoutShard struct {
-	Shard string                      `pk:"ftok" cbor:"-"`
-	ETag  string                      `etag:"true" cbor:"-"`
-	Jobs  map[string][]CheckoutRecord `cbor:"m,omitempty"`
+	Shard store.KeyField                               `pk:"ftok" cbor:"-"`
+	ETag  store.ETagField                              `etag:"true" cbor:"-"`
+	Jobs  store.DataField[map[string][]CheckoutRecord] `cbor:"m,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *checkoutShard) Draft() *checkoutShard {
+	return &checkoutShard{Shard: r.Shard,
+		ETag: r.ETag,
+		Jobs: store.Carry(r.Jobs)}
 }
 
 func shardOf(jobID string) (*checkoutShard, error) {
@@ -61,7 +68,7 @@ func shardOf(jobID string) (*checkoutShard, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &checkoutShard{Shard: sh}, nil
+	return &checkoutShard{Shard: store.ID(sh)}, nil
 }
 
 // Checkouts serves GetCheckoutCredential and the forge-sweeper.
@@ -92,10 +99,10 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 	if err != nil {
 		return Checkout{}, err
 	}
-	if rec.Owner != wid || rec.Epoch != epoch || (rec.State != StateClaimed && rec.State != StateRunning) {
+	if rec.Owner.Value() != wid || rec.Epoch.Value() != epoch || (rec.State.Value() != StateClaimed && rec.State.Value() != StateRunning) {
 		return Checkout{}, errNoLease(jobID)
 	}
-	spec, _ := fleet.DecodeSpec(rec.Spec)
+	spec, _ := fleet.DecodeSpec(rec.Spec.Value())
 	if spec.Repo == "" {
 		return Checkout{}, fmt.Errorf("job %s has no repository (uploaded source)", jobID)
 	}
@@ -120,14 +127,14 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 	forge, _, _ := strings.Cut(spec.Repo, "/")
 	entry := CheckoutRecord{Epoch: epoch, Forge: forge, Handle: handle, Expires: now.Add(CheckoutTTL), ForgeExpires: co.Expires.UTC()}
 	_, err = store.CAS(ctx, c.Control, key, func(cur *checkoutShard) (*checkoutShard, error) {
-		next := checkoutShard{Shard: key.Shard, Jobs: map[string][]CheckoutRecord{}}
+		next := checkoutShard{Shard: key.Shard, Jobs: store.Set(map[string][]CheckoutRecord{})}
 		if cur != nil {
 			next.ETag = cur.ETag
-			for k, v := range cur.Jobs {
-				next.Jobs[k] = v
+			for k, v := range cur.Jobs.Value() {
+				next.Jobs.Value()[k] = v
 			}
 		}
-		next.Jobs[jobID] = append(append([]CheckoutRecord(nil), next.Jobs[jobID]...), entry)
+		next.Jobs.Value()[jobID] = append(append([]CheckoutRecord(nil), next.Jobs.Value()[jobID]...), entry)
 		return &next, nil
 	})
 	if err != nil {
@@ -162,7 +169,7 @@ func (c *Checkouts) JobEnded(ctx context.Context, jobID string) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.revoke(ctx, key, map[string][]CheckoutRecord{jobID: cur.Jobs[jobID]})
+	_, err = c.revoke(ctx, key, map[string][]CheckoutRecord{jobID: cur.Jobs.Value()[jobID]})
 	return err
 }
 
@@ -172,7 +179,7 @@ func (c *Checkouts) Sweep(ctx context.Context) (revoked int, err error) {
 	now := c.now()
 	var errs []error
 	for i := 0; i < checkoutShards; i++ {
-		key := &checkoutShard{Shard: fmt.Sprintf("%02d", i)}
+		key := &checkoutShard{Shard: store.ID(fmt.Sprintf("%02d", i))}
 		cur, _, err := store.GetCached(ctx, c.Control, &c.cache, key)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
@@ -181,7 +188,7 @@ func (c *Checkouts) Sweep(ctx context.Context) (revoked int, err error) {
 			return revoked, err
 		}
 		due := map[string][]CheckoutRecord{}
-		for jobID, entries := range cur.Jobs {
+		for jobID, entries := range cur.Jobs.Value() {
 			v, err := c.Queue.Job(ctx, jobID)
 			ended := errors.Is(err, store.ErrNotFound) || (err == nil && Terminal(v.State))
 			if err != nil && !ended {
@@ -225,8 +232,8 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		next := checkoutShard{Shard: key.Shard, ETag: cur.ETag, Jobs: map[string][]CheckoutRecord{}}
-		for jobID, entries := range cur.Jobs {
+		next := checkoutShard{Shard: key.Shard, ETag: cur.ETag, Jobs: store.Set(map[string][]CheckoutRecord{})}
+		for jobID, entries := range cur.Jobs.Value() {
 			var keep []CheckoutRecord
 			for _, e := range entries {
 				if !gone[e.Handle] {
@@ -234,10 +241,10 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 				}
 			}
 			if len(keep) > 0 {
-				next.Jobs[jobID] = keep
+				next.Jobs.Value()[jobID] = keep
 			}
 		}
-		if len(next.Jobs) == 0 {
+		if len(next.Jobs.Value()) == 0 {
 			return nil, nil // last entry: delete the shard document
 		}
 		return &next, nil

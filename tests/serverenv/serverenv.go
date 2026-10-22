@@ -342,8 +342,12 @@ func NixTool(ctx context.Context, name string) (string, error) {
 	if err := os.WriteFile(link+".attr", []byte(ref), 0o644); err != nil {
 		return "", fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 	}
-	// A multi-output attribute prints one path per output; the first is the
-	// one requested (e.g. openssl.bin).
+	// A multi-output attribute prints one path per output in no fixed order (rustc printed its
+	// -man output first); the out link is the requested output (e.g. openssl.bin), the same path
+	// the warm-cache branch above returns.
+	if p, err := filepath.EvalSymlinks(link); err == nil {
+		return p, nil
+	}
 	return strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0], nil
 }
 

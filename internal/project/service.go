@@ -76,10 +76,10 @@ func apiError(err error) error {
 }
 
 func (s *Service) message(ctx context.Context, rec *Record) *projectv1.Project {
-	return &projectv1.Project{Id: rec.ID, DisplayName: rec.DisplayName, Description: rec.Description,
-		ForgeIntegrationId: rec.Forge, RepoFullName: rec.RepoName, RepoId: rec.RepoID,
-		DefaultBranch: rec.DefaultBranch, RepoWebUrl: rec.WebURL, LinkHealth: s.P.Health(ctx, rec),
-		CreatedAt: timestamppb.New(rec.Created), Etag: rec.ETag}
+	return &projectv1.Project{Id: rec.ID.Value(), DisplayName: rec.DisplayName.Value(), Description: rec.Description.Value(),
+		ForgeIntegrationId: rec.Forge.Value(), RepoFullName: rec.RepoName.Value(), RepoId: rec.RepoID.Value(),
+		DefaultBranch: rec.DefaultBranch.Value(), RepoWebUrl: rec.WebURL.Value(), LinkHealth: s.P.Health(ctx, rec),
+		CreatedAt: timestamppb.New(rec.Created.Value()), Etag: store.ETagOf(rec.ETag)}
 }
 
 func entryMessage(e Entry) *projectv1.Project {
@@ -209,10 +209,10 @@ func (s *Service) ListPipelines(ctx context.Context, req *connect.Request[projec
 	if rec == nil {
 		return connect.NewResponse(out), nil
 	}
-	out.EvaluatedSha = rec.SHA
-	for _, d := range rec.Defs {
+	out.EvaluatedSha = rec.SHA.Value()
+	for _, d := range rec.Defs.Value() {
 		pl := &projectv1.Pipeline{Name: d.Name, Triggers: d.Triggers, Concurrency: concurrency[d.Concurrency], Releases: d.Releases}
-		if last, ok := rec.Last[d.Name]; ok {
+		if last, ok := rec.Last.Value()[d.Name]; ok {
 			pl.LastBuildId, pl.LastState = last.Build, stateName(last.State)
 		}
 		out.Pipelines = append(out.Pipelines, pl)

@@ -139,7 +139,7 @@ func (p *Projects) Get(ctx context.Context, id string) (*Record, error) {
 	if !ValidID(id) {
 		return nil, ErrNotFound
 	}
-	rec, _, err := store.GetCached(ctx, p.cfg.Control, &p.recs, &Record{ID: id})
+	rec, _, err := store.GetCached(ctx, p.cfg.Control, &p.recs, &Record{ID: store.ID(id)})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, ErrNotFound
 	}
@@ -155,7 +155,7 @@ func (p *Projects) Project(ctx context.Context, id string) (*buildctl.Project, e
 	if err != nil {
 		return nil, err
 	}
-	return &buildctl.Project{ID: rec.ID, DefaultBranch: rec.DefaultBranch, Repo: rec.Repo()}, nil
+	return &buildctl.Project{ID: rec.ID.Value(), DefaultBranch: rec.DefaultBranch.Value(), Repo: rec.Repo()}, nil
 }
 
 // ForUpload implements buildctl.UploadProjects: the first `--remote` build of a project id
@@ -175,11 +175,11 @@ func (p *Projects) ForUpload(ctx context.Context, id string) (*buildctl.Project,
 // Health is the link health of a project; it reads the integration's health (one
 // conditional GET) when the project has a link.
 func (p *Projects) Health(ctx context.Context, rec *Record) projectv1.LinkHealth {
-	if rec.Forge == "" {
+	if rec.Forge.Value() == "" {
 		return projectv1.LinkHealth_LINK_HEALTH_UNSPECIFIED
 	}
 	if p.cfg.Links != nil {
-		if f, err := p.cfg.Links.Record(ctx, rec.Forge); err == nil && f.Health == int32(forgev1.Health_HEALTH_AUTH_FAILED) {
+		if f, err := p.cfg.Links.Record(ctx, rec.Forge.Value()); err == nil && f.Health.Value() == int32(forgev1.Health_HEALTH_AUTH_FAILED) {
 			return projectv1.LinkHealth_LINK_HEALTH_AUTH_FAILED
 		}
 	}
@@ -188,18 +188,18 @@ func (p *Projects) Health(ctx context.Context, rec *Record) projectv1.LinkHealth
 
 func storedHealth(rec *Record) projectv1.LinkHealth {
 	switch {
-	case rec.Forge == "":
+	case rec.Forge.Value() == "":
 		return projectv1.LinkHealth_LINK_HEALTH_UNSPECIFIED
-	case rec.HookErr != "":
+	case rec.HookErr.Value() != "":
 		return projectv1.LinkHealth_LINK_HEALTH_WEBHOOK_MISSING
 	}
 	return projectv1.LinkHealth_LINK_HEALTH_OK
 }
 
 func entryOf(rec *Record, pending bool, at time.Time) Entry {
-	return Entry{ID: rec.ID, Pending: pending, At: at, DisplayName: rec.DisplayName, Description: rec.Description,
-		Forge: rec.Forge, RepoName: rec.RepoName, RepoID: rec.RepoID, DefaultBranch: rec.DefaultBranch,
-		WebURL: rec.WebURL, Health: int32(storedHealth(rec)), Created: rec.Created}
+	return Entry{ID: rec.ID.Value(), Pending: pending, At: at, DisplayName: rec.DisplayName.Value(), Description: rec.Description.Value(),
+		Forge: rec.Forge.Value(), RepoName: rec.RepoName.Value(), RepoID: rec.RepoID.Value(), DefaultBranch: rec.DefaultBranch.Value(),
+		WebURL: rec.WebURL.Value(), Health: int32(storedHealth(rec)), Created: rec.Created.Value()}
 }
 
 // link links repository repo of integration forgeID to rec's project and copies what the
@@ -208,7 +208,7 @@ func (p *Projects) link(ctx context.Context, rec *Record, forgeID, repo string) 
 	if p.cfg.Links == nil {
 		return invalid("project.forgeIntegrationId", "forge integrations are not available on this server")
 	}
-	l, err := p.cfg.Links.LinkRepo(ctx, forgeID, repo, rec.ID, p.cfg.BaseURL)
+	l, err := p.cfg.Links.LinkRepo(ctx, forgeID, repo, rec.ID.Value(), p.cfg.BaseURL)
 	switch {
 	case errors.Is(err, integration.ErrLinked):
 		return &LinkError{Linked: true, Msg: "repository " + repo + " is already linked to another project"}
@@ -219,16 +219,16 @@ func (p *Projects) link(ctx context.Context, rec *Record, forgeID, repo string) 
 	case errors.Is(err, forge.ErrAuth):
 		return &LinkError{Msg: fmt.Sprintf("forge: integration %s: forge rejected bob's credentials (HTTP 401); re-enter the credentials in Settings → Forges", forgeID)}
 	case err != nil:
-		p.cfg.Log.Warn("project: linking the repository failed", "project", rec.ID, "integration", forgeID, "repository", repo, "err", err.Error())
+		p.cfg.Log.Warn("project: linking the repository failed", "project", rec.ID.Value(), "integration", forgeID, "repository", repo, "err", err.Error())
 		return &LinkError{Msg: fmt.Sprintf("forge integration %s: the repository could not be linked, try again", forgeID)}
 	}
-	rec.Forge, rec.RepoName, rec.RepoID = forgeID, l.Repo.FullName, l.Repo.ID
-	if rec.RepoName == "" {
-		rec.RepoName = repo
+	rec.Forge, rec.RepoName, rec.RepoID = store.Set(forgeID), store.Set(l.Repo.FullName), store.Set(l.Repo.ID)
+	if rec.RepoName.Value() == "" {
+		rec.RepoName = store.Set(repo)
 	}
-	rec.DefaultBranch, rec.WebURL, rec.HookErr = l.Repo.DefaultBranch, l.Repo.WebURL, ""
+	rec.DefaultBranch, rec.WebURL, rec.HookErr = store.Set(l.Repo.DefaultBranch), store.Set(l.Repo.WebURL), store.Set("")
 	if l.HookErr != nil {
-		rec.HookErr = "bob's webhook could not be created on the repository; add it by hand or give the integration admin rights"
+		rec.HookErr = store.Set("bob's webhook could not be created on the repository; add it by hand or give the integration admin rights")
 	}
 	return nil
 }
@@ -244,18 +244,18 @@ func (p *Projects) unlink(ctx context.Context, forgeID string, repoID int64) {
 
 // allocate takes the next slot of the projects index.
 func (p *Projects) allocate(ctx context.Context) (uint64, error) {
-	c, err := store.CAS(ctx, p.cfg.Control, &IndexCounter{Name: "all"}, func(cur *IndexCounter) (*IndexCounter, error) {
-		next := IndexCounter{Name: "all"}
+	c, err := store.CAS(ctx, p.cfg.Control, &IndexCounter{Name: store.ID("all")}, func(cur *IndexCounter) (*IndexCounter, error) {
+		next := IndexCounter{Name: store.ID("all")}
 		if cur != nil {
-			next.Count = cur.Count
+			next.Count = store.Set(cur.Count.Value())
 		}
-		next.Count++
+		next.Count = store.Set(next.Count.Value() + 1)
 		return &next, nil
 	})
 	if err != nil {
 		return 0, fmt.Errorf("pidxm/all: %w", err)
 	}
-	return c.Count - 1, nil
+	return c.Count.Value() - 1, nil
 }
 
 // Create creates a project, linking its repository first when it names one. Intent first
@@ -264,15 +264,15 @@ func (p *Projects) Create(ctx context.Context, s Spec) (*Record, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
-	if _, err := store.Get(ctx, p.cfg.Control, &Record{ID: s.ID}); err == nil {
+	if _, err := store.Get(ctx, p.cfg.Control, &Record{ID: store.ID(s.ID)}); err == nil {
 		return nil, ErrExists
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
 	now := p.now()
-	rec := &Record{ID: s.ID, DisplayName: s.DisplayName, Description: s.Description, Created: now}
-	if rec.DisplayName == "" {
-		rec.DisplayName = s.ID
+	rec := &Record{ID: store.ID(s.ID), DisplayName: store.Set(s.DisplayName), Description: store.Set(s.Description), Created: store.Set(now)}
+	if rec.DisplayName.Value() == "" {
+		rec.DisplayName = store.Set(s.ID)
 	}
 	if s.Forge != "" {
 		if err := p.link(ctx, rec, s.Forge, s.RepoName); err != nil {
@@ -283,7 +283,7 @@ func (p *Projects) Create(ctx context.Context, s Spec) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	rec.Slot = slot + 1
+	rec.Slot = store.Set(slot + 1)
 	if err := p.idx.Set(ctx, slot, entryOf(rec, true, now)); err != nil {
 		return nil, fmt.Errorf("pidx: %w", err)
 	}
@@ -295,28 +295,28 @@ func (p *Projects) Create(ctx context.Context, s Spec) (*Record, error) {
 		return nil, err
 	}
 	if err := p.idx.Set(ctx, slot, entryOf(rec, false, now)); err != nil {
-		p.cfg.Log.Warn("project: index entry left pending; index repair shows it", "project", rec.ID, "err", err.Error())
+		p.cfg.Log.Warn("project: index entry left pending; index repair shows it", "project", rec.ID.Value(), "err", err.Error())
 	}
-	p.cfg.Log.Info("project created", "project", rec.ID, "integration", rec.Forge, "repository", rec.RepoName)
+	p.cfg.Log.Info("project created", "project", rec.ID.Value(), "integration", rec.Forge.Value(), "repository", rec.RepoName.Value())
 	return rec, nil
 }
 
 // Update changes the fields named in mask (display_name, description, forge_integration_id,
 // repo_full_name). etag "" updates unconditionally (decision D-IB4-3).
 func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag string) (*Record, error) {
-	cur, err := store.Get(ctx, p.cfg.Control, &Record{ID: s.ID})
+	cur, err := store.Get(ctx, p.cfg.Control, &Record{ID: store.ID(s.ID)})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	if etag != "" && etag != cur.ETag {
+	if etag != "" && etag != store.ETagOf(cur.ETag) {
 		return nil, ErrConflict
 	}
 	want := *cur
 	relink := false
-	next := Spec{ID: cur.ID, DisplayName: cur.DisplayName, Description: cur.Description, Forge: cur.Forge, RepoName: cur.RepoName}
+	next := Spec{ID: cur.ID.Value(), DisplayName: cur.DisplayName.Value(), Description: cur.Description.Value(), Forge: cur.Forge.Value(), RepoName: cur.RepoName.Value()}
 	for _, f := range mask {
 		switch f {
 		case "display_name":
@@ -333,31 +333,31 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 		return nil, err
 	}
 	if next.DisplayName == "" {
-		next.DisplayName = cur.ID
+		next.DisplayName = cur.ID.Value()
 	}
-	want.DisplayName, want.Description = next.DisplayName, next.Description
-	relink = relink && (next.Forge != cur.Forge || !strings.EqualFold(next.RepoName, cur.RepoName))
+	want.DisplayName, want.Description = store.Set(next.DisplayName), store.Set(next.Description)
+	relink = relink && (next.Forge != cur.Forge.Value() || !strings.EqualFold(next.RepoName, cur.RepoName.Value()))
 	if relink {
-		want.Forge, want.RepoName, want.RepoID, want.DefaultBranch, want.WebURL, want.HookErr = "", "", 0, "", "", ""
+		want.Forge, want.RepoName, want.RepoID, want.DefaultBranch, want.WebURL, want.HookErr = store.Set(""), store.Set(""), store.Set(0), store.Set(""), store.Set(""), store.Set("")
 		if next.Forge != "" {
 			if err := p.link(ctx, &want, next.Forge, next.RepoName); err != nil {
 				return nil, err
 			}
 		}
 	}
-	rec, err := store.CAS(ctx, p.cfg.Control, &Record{ID: s.ID}, func(c *Record) (*Record, error) {
+	rec, err := store.CAS(ctx, p.cfg.Control, &Record{ID: store.ID(s.ID)}, func(c *Record) (*Record, error) {
 		if c == nil {
 			return nil, ErrNotFound
 		}
-		if c.ETag != cur.ETag {
+		if store.ETagOf(c.ETag) != store.ETagOf(cur.ETag) {
 			return nil, ErrConflict
 		}
 		w := want
 		return &w, nil
 	})
 	if err != nil {
-		if relink && (want.Forge != cur.Forge || want.RepoID != cur.RepoID) {
-			p.unlink(ctx, want.Forge, want.RepoID) // the new link must not outlive a refused update
+		if relink && (want.Forge.Value() != cur.Forge.Value() || want.RepoID.Value() != cur.RepoID.Value()) {
+			p.unlink(ctx, want.Forge.Value(), want.RepoID.Value()) // the new link must not outlive a refused update
 		}
 		switch {
 		case errors.Is(err, ErrNotFound), errors.Is(err, ErrConflict):
@@ -367,12 +367,12 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 		}
 		return nil, err
 	}
-	if relink && (want.Forge != cur.Forge || want.RepoID != cur.RepoID) {
-		p.unlink(ctx, cur.Forge, cur.RepoID)
+	if relink && (want.Forge.Value() != cur.Forge.Value() || want.RepoID.Value() != cur.RepoID.Value()) {
+		p.unlink(ctx, cur.Forge.Value(), cur.RepoID.Value())
 	}
-	if rec.Slot > 0 {
-		if err := p.idx.Set(ctx, rec.Slot-1, entryOf(rec, false, p.now())); err != nil {
-			p.cfg.Log.Warn("project: index entry not updated; index repair refreshes it", "project", rec.ID, "err", err.Error())
+	if rec.Slot.Value() > 0 {
+		if err := p.idx.Set(ctx, rec.Slot.Value()-1, entryOf(rec, false, p.now())); err != nil {
+			p.cfg.Log.Warn("project: index entry not updated; index repair refreshes it", "project", rec.ID.Value(), "err", err.Error())
 		}
 	}
 	return rec, nil
@@ -382,37 +382,37 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 // then the repository is unlinked and the record deleted, then the entry cleared. Builds,
 // logs and releases of the project are left to retention. etag "" deletes unconditionally.
 func (p *Projects) Delete(ctx context.Context, id, etag string) error {
-	cur, err := store.Get(ctx, p.cfg.Control, &Record{ID: id})
+	cur, err := store.Get(ctx, p.cfg.Control, &Record{ID: store.ID(id)})
 	if errors.Is(err, store.ErrNotFound) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-	if etag != "" && etag != cur.ETag {
+	if etag != "" && etag != store.ETagOf(cur.ETag) {
 		return ErrConflict
 	}
-	running, _, err := store.GetCached(ctx, p.cfg.Control, &p.run, &store.RunningBuilds{Name: "running"})
+	running, _, err := store.GetCached(ctx, p.cfg.Control, &p.run, &store.RunningBuilds{Name: store.ID("running")})
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
 	if running != nil {
-		for _, b := range running.Builds {
+		for _, b := range running.Builds.Value() {
 			if b.Project == id {
 				return ErrRunning
 			}
 		}
 	}
-	if cur.Slot > 0 {
+	if cur.Slot.Value() > 0 {
 		hidden := entryOf(cur, true, p.now())
-		if err := p.idx.Set(ctx, cur.Slot-1, hidden); err != nil {
+		if err := p.idx.Set(ctx, cur.Slot.Value()-1, hidden); err != nil {
 			return fmt.Errorf("pidx: %w", err)
 		}
 	}
-	p.unlink(ctx, cur.Forge, cur.RepoID)
+	p.unlink(ctx, cur.Forge.Value(), cur.RepoID.Value())
 	if err := store.Delete(ctx, p.cfg.Control, cur); err != nil {
-		if cur.Forge != "" && p.cfg.Links != nil {
-			_, _ = p.cfg.Links.LinkRepo(ctx, cur.Forge, cur.RepoName, cur.ID, p.cfg.BaseURL) // undo
+		if cur.Forge.Value() != "" && p.cfg.Links != nil {
+			_, _ = p.cfg.Links.LinkRepo(ctx, cur.Forge.Value(), cur.RepoName.Value(), cur.ID.Value(), p.cfg.BaseURL) // undo
 		}
 		if errors.Is(err, store.ErrConflict) {
 			return ErrConflict
@@ -422,12 +422,12 @@ func (p *Projects) Delete(ctx context.Context, id, etag string) error {
 		}
 		return err
 	}
-	if cur.Slot > 0 {
-		if err := p.idx.Set(ctx, cur.Slot-1, Entry{}); err != nil {
+	if cur.Slot.Value() > 0 {
+		if err := p.idx.Set(ctx, cur.Slot.Value()-1, Entry{}); err != nil {
 			p.cfg.Log.Warn("project: index entry left pending; index repair clears it", "project", id, "err", err.Error())
 		}
 	}
-	if _, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: id}, func(*PipelinesRecord) (*PipelinesRecord, error) {
+	if _, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(id)}, func(*PipelinesRecord) (*PipelinesRecord, error) {
 		return nil, nil // deletes the pipelines cache
 	}); err != nil {
 		p.cfg.Log.Debug("project: pipelines cache not removed", "project", id, "err", err.Error())
@@ -438,14 +438,14 @@ func (p *Projects) Delete(ctx context.Context, id, etag string) error {
 
 // count is the number of slots of the projects index.
 func (p *Projects) count(ctx context.Context) (uint64, error) {
-	c, _, err := store.GetCached(ctx, p.cfg.Control, &p.ctr, &IndexCounter{Name: "all"})
+	c, _, err := store.GetCached(ctx, p.cfg.Control, &p.ctr, &IndexCounter{Name: store.ID("all")})
 	if errors.Is(err, store.ErrNotFound) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
 	}
-	return c.Count, nil
+	return c.Count.Value(), nil
 }
 
 // List returns visible index entries newest first, starting after skip slots from the end,
@@ -514,9 +514,9 @@ func (p *Projects) Repair(ctx context.Context) error {
 			}
 			slot := k*indexPage + uint64(i)
 			want := Entry{}
-			rec, err := store.Get(ctx, p.cfg.Control, &Record{ID: e.ID})
+			rec, err := store.Get(ctx, p.cfg.Control, &Record{ID: store.ID(e.ID)})
 			switch {
-			case err == nil && rec.Slot == slot+1:
+			case err == nil && rec.Slot.Value() == slot+1:
 				want = entryOf(rec, false, now)
 			case err != nil && !errors.Is(err, store.ErrNotFound):
 				errs = append(errs, err)

@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsmw "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go/middleware"
+	"github.com/megakuul/dynamitedb"
 
 	"github.com/megakuul/bob/internal/store/s3client"
 )
@@ -18,13 +22,15 @@ import (
 // Bucket is one dynamitedb bucket plus a raw S3 client for conditional GETs.
 // It is safe for concurrent use.
 //
-// The store keeps dynamitedb's object format (keys <pk>/<pkval>[/<sk>/<skval>], one CBOR map
-// per record, ETag optimistic locking) but issues the requests itself; see doc.go for why.
+// Records are read and written only through dynamitedb (db). The raw client s3 serves what
+// the library does not cover: the conformance probe, GET If-None-Match of GetCached, and the
+// re-read that decides a write whose response was lost (R-STORE-103 rule 7).
 type Bucket struct {
 	name     string
 	endpoint string
 	role     string
 	s3       *s3.Client
+	db       *dynamitedb.Bucket
 }
 
 // BucketConfig selects one bucket. Credentials come from the AWS SDK default chain.
@@ -57,39 +63,20 @@ func newBucket(ctx context.Context, cfg BucketConfig) (*Bucket, error) {
 	if _, err := Segment(cfg.Name); err != nil {
 		return nil, fmt.Errorf("store: bucket name %q is invalid", cfg.Name)
 	}
-	c, err := s3client.New(ctx, s3client.Options{Endpoint: cfg.Endpoint, Region: cfg.Region})
+	c, err := s3client.New(ctx, s3client.Options{Endpoint: cfg.Endpoint, Region: cfg.Region,
+		Retries: 3, APIOptions: []func(*middleware.Stack) error{observeWire}})
 	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
-	return &Bucket{name: cfg.Name, endpoint: cfg.Endpoint, role: cfg.Role, s3: c}, nil
+	return &Bucket{name: cfg.Name, endpoint: cfg.Endpoint, role: cfg.Role, s3: c,
+		db: dynamitedb.NewFromClient(c, cfg.Name)}, nil
 }
 
 // Name is the bucket name.
 func (b *Bucket) Name() string { return b.name }
 
-// Internal errors of the request layer. Model operations map them to the exported errors.
-var (
-	errPrecondition = errors.New("precondition failed")
-	errNoETag       = fmt.Errorf("%w: the backend returned no ETag header", ErrPanic)
-	errTooLarge     = fmt.Errorf("record larger than %d bytes", maxBody)
-)
-
-// maxBody caps a record read from the bucket (hostile-input rule, AGENTS.md §5.4). The largest
-// record of SPEC §05.4 (BuildRecord with 1,024 jobs) is far below it.
-const maxBody = 8 << 20
-
-// object is one stored record: its raw CBOR body and ETag.
-type object struct {
-	body []byte
-	etag string
-}
-
-// transient reports whether err left the outcome of a request unknown: no response, or a
-// server error. Client errors (4xx) are definite answers.
-func transient(err error) bool {
-	st := s3client.Status(err)
-	return st == 0 || st >= 500
-}
+// errNoETag is a raw read without an ETag header (a non-compliant backend).
+var errNoETag = fmt.Errorf("%w: the backend returned no ETag header", ErrPanic)
 
 // failed returns ctx's error when the context ended (S9 B11: check ctx first), else err.
 func failed(ctx context.Context, err error) error {
@@ -110,151 +97,133 @@ func pause(ctx context.Context, min, max time.Duration) error {
 	}
 }
 
-// get reads key. With ifNoneMatch set, an unchanged object returns notModified=true and no body.
-// Transient failures are retried (a GET is idempotent).
-func (b *Bucket) get(ctx context.Context, key, ifNoneMatch string) (o object, notModified bool, err error) {
-	for attempt := 0; ; attempt++ {
-		o, notModified, err = b.getOnce(ctx, key, ifNoneMatch)
-		definite := errors.Is(err, ErrNotFound) || errors.Is(err, errNoETag) || errors.Is(err, errTooLarge)
-		if err == nil || ctx.Err() != nil || definite || !transient(err) || attempt == 2 {
-			return o, notModified, failed(ctx, err)
-		}
-		if perr := pause(ctx, 20*time.Millisecond, 100*time.Millisecond); perr != nil {
-			return o, false, perr
-		}
-	}
-}
-
-func (b *Bucket) getOnce(ctx context.Context, key, ifNoneMatch string) (object, bool, error) {
-	in := &s3.GetObjectInput{Bucket: aws.String(b.name), Key: aws.String(key)}
-	if ifNoneMatch != "" {
-		in.IfNoneMatch = aws.String(ifNoneMatch)
-	}
-	resp, err := b.s3.GetObject(ctx, in)
+// unchanged sends GET If-None-Match: etag (GetCached). It reports true on 304; on 200 the
+// body is discarded (the caller reads the record with dynamitedb.Get).
+func (b *Bucket) unchanged(ctx context.Context, key, etag string) (bool, error) {
+	resp, err := b.s3.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(b.name), Key: aws.String(key), IfNoneMatch: aws.String(etag)})
 	if err != nil {
 		switch s3client.Status(err) {
 		case 304:
-			return object{}, true, nil
+			return true, nil
 		case 404:
-			return object{}, false, ErrNotFound
+			return false, ErrNotFound
 		}
-		return object{}, false, err
+		return false, failed(ctx, err)
+	}
+	_ = resp.Body.Close()
+	return false, nil
+}
+
+// holds re-reads key raw and reports whether it holds exactly body (mine) and whether it
+// exists at all (found). It decides writes whose response was lost (R-STORE-103 rule 7).
+func (b *Bucket) holds(ctx context.Context, key string, body []byte) (mine, found bool, err error) {
+	resp, err := b.s3.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(b.name), Key: aws.String(key)})
+	if err != nil {
+		if s3client.Status(err) == 404 {
+			return false, false, nil
+		}
+		return false, false, failed(ctx, err)
 	}
 	defer resp.Body.Close()
-	if resp.ETag == nil || *resp.ETag == "" {
-		return object{}, false, errNoETag
+	if resp.ETag == nil {
+		return false, true, errNoETag
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	got, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return object{}, false, err
+		return false, true, failed(ctx, err)
 	}
-	if len(body) > maxBody {
-		return object{}, false, errTooLarge
-	}
-	return object{body: body, etag: *resp.ETag}, false, nil
+	return body != nil && bytes.Equal(got, body), true, nil
 }
 
-// cond is the precondition of a write.
-type cond int
-
+// Operation names of the wire log.
 const (
-	always   cond = iota // unconditional (PutOwned)
-	ifAbsent             // If-None-Match: *
-	ifMatch              // If-Match: <etag>
+	opGet    = "GetObject"
+	opPut    = "PutObject"
+	opDelete = "DeleteObject"
 )
 
-func (b *Bucket) putOnce(ctx context.Context, key string, body []byte, c cond, etag string) (string, error) {
-	in := &s3.PutObjectInput{
-		Bucket: aws.String(b.name), Key: aws.String(key),
-		Body: bytes.NewReader(body), ContentLength: aws.Int64(int64(len(body))),
-		ContentType: aws.String("application/cbor"),
-	}
-	switch c {
-	case ifAbsent:
-		in.IfNoneMatch = aws.String("*")
-	case ifMatch:
-		in.IfMatch = aws.String(etag)
-	}
-	resp, err := b.s3.PutObject(ctx, in)
-	if err != nil {
-		// 409 is AWS's answer to a conditional write racing another one on the same key.
-		if st := s3client.Status(err); st == 412 || st == 409 {
-			return "", errPrecondition
-		}
-		return "", err
-	}
-	if resp.ETag == nil {
-		return "", errNoETag
-	}
-	return *resp.ETag, nil
+// wire is what the S3 client saw while one store call ran dynamitedb: per operation the
+// number of attempts and the HTTP status of the last one (0 = no response), and the body of
+// the last PutObject. dynamitedb hides S3 errors behind its sentinels (by design); the store
+// still needs to know whether a write's answer was lost (rule 7), whether a PUT If-Match hit
+// a deleted key (S9 B13), and whether dynamitedb.Delete found the key.
+type wire struct {
+	mu       sync.Mutex
+	attempts map[string]int
+	last     map[string]int
+	body     []byte
 }
 
-// put writes body at key under c and returns the new ETag. When the outcome of a write is
-// unknown (no response, 5xx), put re-reads the key: if it holds exactly body, the write is
-// ours and succeeded (R-STORE-103 rule 7; records that several parties write carry a write
-// id, so equal bytes mean the same writer); if the precondition still holds, the write did not
-// land and is sent again; otherwise somebody else wrote first (errPrecondition).
-func (b *Bucket) put(ctx context.Context, key string, body []byte, c cond, etag string) (string, error) {
-	for attempt := 0; ; attempt++ {
-		tag, err := b.putOnce(ctx, key, body, c, etag)
-		if err == nil || errors.Is(err, errPrecondition) || ctx.Err() != nil || !transient(err) {
-			return tag, failed(ctx, err)
-		}
-		if attempt == 3 {
-			return "", fmt.Errorf("write outcome unknown after %d attempts: %w", attempt+1, err)
-		}
-		if perr := pause(ctx, 20*time.Millisecond, 100*time.Millisecond); perr != nil {
-			return "", perr
-		}
-		cur, _, gerr := b.get(ctx, key, "")
-		switch {
-		case gerr == nil && bytes.Equal(cur.body, body):
-			return cur.etag, nil
-		case c == always:
-		case c == ifAbsent && errors.Is(gerr, ErrNotFound):
-		case c == ifMatch && gerr == nil && cur.etag == etag:
-		case gerr == nil || errors.Is(gerr, ErrNotFound):
-			return "", errPrecondition
-		default:
-			return "", gerr
-		}
-	}
+type wireKey struct{}
+
+// observe returns ctx carrying a fresh wire log.
+func observe(ctx context.Context) (context.Context, *wire) {
+	w := &wire{attempts: map[string]int{}, last: map[string]int{}}
+	return context.WithValue(ctx, wireKey{}, w), w
 }
 
-// del deletes key; with etag set only while the stored ETag matches. A lost response is
-// resolved like in put: gone means done.
-func (b *Bucket) del(ctx context.Context, key, etag string) error {
-	for attempt := 0; ; attempt++ {
-		in := &s3.DeleteObjectInput{Bucket: aws.String(b.name), Key: aws.String(key)}
-		if etag != "" {
-			in.IfMatch = aws.String(etag)
+func (w *wire) retried(op string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.attempts[op] > 1
+}
+
+// unanswered reports whether the last attempt of op got no definite answer (no response or 5xx).
+func (w *wire) unanswered(op string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	st, ok := w.last[op]
+	return ok && (st == 0 || st >= 500)
+}
+
+func (w *wire) status(op string) int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.last[op]
+}
+
+func (w *wire) sent() []byte {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.body
+}
+
+// observeWire adds the wire log middlewares to a client: the PutObject body is captured once
+// per call (initialize step) and every attempt's status is recorded after the SDK's retry
+// middleware (finalize step). Calls without a wire log in their context are not touched.
+func observeWire(st *middleware.Stack) error {
+	body := middleware.InitializeMiddlewareFunc("bobWireBody", func(ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler) (middleware.InitializeOutput, middleware.Metadata, error) {
+		if w, ok := ctx.Value(wireKey{}).(*wire); ok {
+			if p, ok := in.Parameters.(*s3.PutObjectInput); ok && p.Body != nil {
+				b, err := io.ReadAll(p.Body)
+				if err != nil {
+					return middleware.InitializeOutput{}, middleware.Metadata{}, err
+				}
+				p.Body = bytes.NewReader(b)
+				w.mu.Lock()
+				w.body = b
+				w.mu.Unlock()
+			}
 		}
-		_, err := b.s3.DeleteObject(ctx, in)
-		if err == nil {
-			return nil
+		return next.HandleInitialize(ctx, in)
+	})
+	attempt := middleware.FinalizeMiddlewareFunc("bobWireAttempt", func(ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
+		out, md, err := next.HandleFinalize(ctx, in)
+		if w, ok := ctx.Value(wireKey{}).(*wire); ok {
+			st := 200
+			if err != nil {
+				st = s3client.Status(err)
+			}
+			op := awsmw.GetOperationName(ctx)
+			w.mu.Lock()
+			w.attempts[op]++
+			w.last[op] = st
+			w.mu.Unlock()
 		}
-		switch st := s3client.Status(err); {
-		case st == 412 || st == 409:
-			return errPrecondition
-		case st == 404:
-			return ErrNotFound
-		case ctx.Err() != nil || !transient(err):
-			return failed(ctx, err)
-		}
-		if attempt == 3 {
-			return fmt.Errorf("delete outcome unknown after %d attempts: %w", attempt+1, err)
-		}
-		if perr := pause(ctx, 20*time.Millisecond, 100*time.Millisecond); perr != nil {
-			return perr
-		}
-		cur, _, gerr := b.get(ctx, key, "")
-		switch {
-		case errors.Is(gerr, ErrNotFound):
-			return nil
-		case gerr != nil:
-			return gerr
-		case etag != "" && cur.etag != etag:
-			return errPrecondition
-		}
+		return out, md, err
+	})
+	if err := st.Initialize.Add(body, middleware.Before); err != nil {
+		return err
 	}
+	return st.Finalize.Insert(attempt, "Retry", middleware.After)
 }

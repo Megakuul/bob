@@ -53,19 +53,19 @@ func (id *Identity) createSession(ctx context.Context, uid, kind, userAgent stri
 	}
 	out := &issued{session: newToken(prefix)}
 	rec := store.SessionKey(out.session.reveal())
-	rec.ID = newID(now)
-	rec.User, rec.Kind, rec.UserAgent = uid, kind, truncate(userAgent, 200)
-	rec.Created, rec.LastUsed = now, now
-	rec.IdleUntil, rec.MaxUntil = now.Add(idle), now.Add(maxAge)
+	rec.ID = store.Set(newID(now))
+	rec.User, rec.Kind, rec.UserAgent = store.Set(uid), store.Set(kind), store.Set(truncate(userAgent, 200))
+	rec.Created, rec.LastUsed = store.Set(now), store.Set(now)
+	rec.IdleUntil, rec.MaxUntil = store.Set(now.Add(idle)), store.Set(now.Add(maxAge))
 	if kind == "cli" {
 		out.download = newToken(PrefixDownload)
 		dt := store.TokenKey(out.download.reveal())
-		dt.Owner, dt.Kind, dt.Scope, dt.Session = "user:"+uid, "dt", "download", rec.Hash
-		dt.Expires, dt.Created = rec.MaxUntil, now
+		dt.Owner, dt.Kind, dt.Scope, dt.Session = store.Set("user:"+uid), store.Set("dt"), store.Set("download"), store.Set(rec.Hash.Value())
+		dt.Expires, dt.Created = store.Set(rec.MaxUntil.Value()), store.Set(now)
 		if err := store.Create(ctx, id.control, dt); err != nil {
 			return nil, storageError(err)
 		}
-		rec.Download = dt.Hash
+		rec.Download = store.Set(dt.Hash.Value())
 	}
 	if err := store.Create(ctx, id.control, rec); err != nil {
 		return nil, storageError(err)
@@ -76,21 +76,21 @@ func (id *Identity) createSession(ctx context.Context, uid, kind, userAgent stri
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		cur.Sessions = append(cur.Sessions, store.SessionRef{ID: rec.ID, Hash: rec.Hash})
+		cur.Sessions = store.Set(append(cur.Sessions.Value(), store.SessionRef{ID: rec.ID.Value(), Hash: rec.Hash.Value()}))
 		evicted = nil
-		for len(cur.Sessions) > maxSessions {
-			evicted = append(evicted, cur.Sessions[0].Hash)
-			cur.Sessions = cur.Sessions[1:]
+		for len(cur.Sessions.Value()) > maxSessions {
+			evicted = append(evicted, cur.Sessions.Value()[0].Hash)
+			cur.Sessions = store.Set(cur.Sessions.Value()[1:])
 		}
-		cur.LastLogin = now
+		cur.LastLogin = store.Set(now)
 		return cur, nil
 	})
 	if err != nil {
-		id.deleteSession(ctx, rec.Hash)
+		id.deleteSession(ctx, rec.Hash.Value())
 		return nil, storageError(err)
 	}
-	if u == nil || u.Disabled {
-		id.deleteSession(ctx, rec.Hash)
+	if u == nil || u.Disabled.Value() {
+		id.deleteSession(ctx, rec.Hash.Value())
 		return nil, errInvalidToken
 	}
 	id.users.put(uid, u)
@@ -106,8 +106,8 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 	now := id.now()
 	at := newToken(PrefixAccess)
 	rec := store.TokenKey(at.reveal())
-	rec.Owner, rec.Kind, rec.Scope, rec.Session = "user:"+s.User, "at", "api", s.Hash
-	rec.Expires, rec.Created = now.Add(accessTTL), now
+	rec.Owner, rec.Kind, rec.Scope, rec.Session = store.Set("user:"+s.User.Value()), store.Set("at"), store.Set("api"), store.Set(s.Hash.Value())
+	rec.Expires, rec.Created = store.Set(now.Add(accessTTL)), store.Set(now)
 	if err := store.Create(ctx, id.control, rec); err != nil {
 		return "", storageError(err)
 	}
@@ -117,28 +117,28 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 			return nil, store.ErrNoChange
 		}
 		expired = nil
-		live := cur.Access[:0:0]
-		for _, t := range cur.Access {
+		live := cur.Access.Value()[:0:0]
+		for _, t := range cur.Access.Value() {
 			if now.Before(t.Expires) {
 				live = append(live, t)
 			} else {
 				expired = append(expired, t.Hash)
 			}
 		}
-		cur.Access = append(live, store.TokenRef{Hash: rec.Hash, Expires: rec.Expires})
-		cur.LastUsed = now
-		cur.IdleUntil = minTime(now.Add(cliIdle), cur.MaxUntil)
+		cur.Access = store.Set(append(live, store.TokenRef{Hash: rec.Hash.Value(), Expires: rec.Expires.Value()}))
+		cur.LastUsed = store.Set(now)
+		cur.IdleUntil = store.Set(minTime(now.Add(cliIdle), cur.MaxUntil.Value()))
 		return cur, nil
 	})
 	if err != nil {
-		id.deleteToken(ctx, rec.Hash)
+		id.deleteToken(ctx, rec.Hash.Value())
 		return "", storageError(err)
 	}
 	if next == nil {
-		id.deleteToken(ctx, rec.Hash)
+		id.deleteToken(ctx, rec.Hash.Value())
 		return "", errInvalidToken
 	}
-	id.sessions.put(s.Hash, next)
+	id.sessions.put(s.Hash.Value(), next)
 	for _, h := range expired {
 		id.deleteToken(ctx, h)
 	}
@@ -148,7 +148,7 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 // deleteToken removes tok/<hash> (absent is fine) and drops it from this orchestrator's cache.
 func (id *Identity) deleteToken(ctx context.Context, hash string) {
 	id.tokens.drop(hash)
-	if _, err := store.CAS(ctx, id.control, &store.TokenRecord{Hash: hash}, func(cur *store.TokenRecord) (*store.TokenRecord, error) {
+	if _, err := store.CAS(ctx, id.control, &store.TokenRecord{Hash: store.ID(hash)}, func(cur *store.TokenRecord) (*store.TokenRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
@@ -164,16 +164,16 @@ func (id *Identity) deleteToken(ctx context.Context, hash string) {
 func (id *Identity) deleteSession(ctx context.Context, hash string) {
 	id.sessions.drop(hash)
 	var tokens []string
-	_, err := store.CAS(ctx, id.control, &store.SessionRecord{Hash: hash}, func(cur *store.SessionRecord) (*store.SessionRecord, error) {
+	_, err := store.CAS(ctx, id.control, &store.SessionRecord{Hash: store.ID(hash)}, func(cur *store.SessionRecord) (*store.SessionRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
 		tokens = nil
-		for _, t := range cur.Access {
+		for _, t := range cur.Access.Value() {
 			tokens = append(tokens, t.Hash)
 		}
-		if cur.Download != "" {
-			tokens = append(tokens, cur.Download)
+		if cur.Download.Value() != "" {
+			tokens = append(tokens, cur.Download.Value())
 		}
 		return nil, nil
 	})
@@ -195,8 +195,8 @@ func (id *Identity) revokeSessions(ctx context.Context, uid string, keep func(st
 			return nil, store.ErrNoChange
 		}
 		gone = nil
-		kept := cur.Sessions[:0:0]
-		for _, s := range cur.Sessions {
+		kept := cur.Sessions.Value()[:0:0]
+		for _, s := range cur.Sessions.Value() {
 			if keep(s) {
 				kept = append(kept, s)
 			} else {
@@ -206,7 +206,7 @@ func (id *Identity) revokeSessions(ctx context.Context, uid string, keep func(st
 		if len(gone) == 0 {
 			return nil, store.ErrNoChange
 		}
-		cur.Sessions = kept
+		cur.Sessions = store.Set(kept)
 		return cur, nil
 	})
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
@@ -225,8 +225,8 @@ func (id *Identity) revokeSessions(ctx context.Context, uid string, keep func(st
 func (id *Identity) sessionsOf(ctx context.Context, u *store.UserRecord) ([]*store.SessionRecord, error) {
 	now := id.now()
 	var out []*store.SessionRecord
-	for _, ref := range u.Sessions {
-		s, err := store.Get(ctx, id.control, &store.SessionRecord{Hash: ref.Hash})
+	for _, ref := range u.Sessions.Value() {
+		s, err := store.Get(ctx, id.control, &store.SessionRecord{Hash: store.ID(ref.Hash)})
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
@@ -237,7 +237,7 @@ func (id *Identity) sessionsOf(ctx context.Context, u *store.UserRecord) ([]*sto
 			out = append(out, s)
 		}
 	}
-	slices.SortFunc(out, func(a, b *store.SessionRecord) int { return b.Created.Compare(a.Created) })
+	slices.SortFunc(out, func(a, b *store.SessionRecord) int { return b.Created.Value().Compare(a.Created.Value()) })
 	return out, nil
 }
 

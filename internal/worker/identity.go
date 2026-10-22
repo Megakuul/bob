@@ -116,19 +116,19 @@ func RegisterRaw(ctx context.Context, fleetB *store.Bucket, wid string, doc []by
 	if err := fleet.Decode(doc, &d); err != nil {
 		return 0, fmt.Errorf("worker: registration document: %w", err)
 	}
-	if err := store.Create(ctx, fleetB, &store.WorkerReg{Wid: wid, Body: d.B, Sig: d.S}); err != nil {
+	if err := store.Create(ctx, fleetB, &store.WorkerReg{Wid: store.ID(wid), Body: store.Set(d.B), Sig: store.Set(d.S)}); err != nil {
 		return 0, err
 	}
-	return store.RegLog(fleetB).Append(ctx, &store.RegSlot{Wid: wid, At: now})
+	return store.RegLog(fleetB).Append(ctx, &store.RegSlot{Wid: store.Set(wid), At: store.Set(now)})
 }
 
 // RawReg reads the stored registration document of wid.
 func RawReg(ctx context.Context, fleetB *store.Bucket, wid string) ([]byte, error) {
-	r, err := store.Get(ctx, fleetB, &store.WorkerReg{Wid: wid})
+	r, err := store.Get(ctx, fleetB, &store.WorkerReg{Wid: store.ID(wid)})
 	if err != nil {
 		return nil, err
 	}
-	return fleet.Encode(regDoc{B: r.Body, S: r.Sig})
+	return fleet.Encode(regDoc{B: r.Body.Value(), S: r.Sig.Value()})
 }
 
 // Sealed is the sealed token of a worker record plus what binds it.
@@ -142,14 +142,14 @@ type Sealed struct {
 // FetchSealed reads `worker/<wid>`. store.ErrNotFound until the registrar approved it;
 // ErrRevoked once it is revoked.
 func FetchSealed(ctx context.Context, fleetB *store.Bucket, wid string) (*Sealed, error) {
-	r, err := store.Get(ctx, fleetB, &store.WorkerRecord{Wid: wid})
+	r, err := store.Get(ctx, fleetB, &store.WorkerRecord{Wid: store.ID(wid)})
 	if err != nil {
 		return nil, err
 	}
-	if r.State == "revoked" {
+	if r.State.Value() == "revoked" {
 		return nil, fmt.Errorf("worker %s: %w", wid, ErrRevoked)
 	}
-	return &Sealed{Bytes: r.Sealed, Serial: uint64(r.Serial), Gen: uint64(r.Gen), Expiry: r.TokenExp}, nil
+	return &Sealed{Bytes: r.Sealed.Value(), Serial: uint64(r.Serial.Value()), Gen: uint64(r.Gen.Value()), Expiry: r.TokenExp.Value()}, nil
 }
 
 // Token is an opened worker token (`bwt1`).
@@ -196,7 +196,7 @@ func Heartbeat(ctx context.Context, fleetB *store.Bucket, id *Identity, free int
 }
 
 func heartbeat(ctx context.Context, fleetB *store.Bucket, wid string, key ed25519.PrivateKey, free int, held []store.HeldJobEpoch, now time.Time) error {
-	hb := &store.Heartbeat{Wid: wid, At: now.UTC(), Free: free, Jobs: held}
+	hb := &store.Heartbeat{Wid: store.ID(wid), At: store.Set(now.UTC()), Free: store.Set(free), Jobs: store.Set(held)}
 	fleet.SignHeartbeat(key, hb)
 	return store.PutOwned(ctx, fleetB, hb)
 }
@@ -208,13 +208,13 @@ func ForgeResult(ctx context.Context, fleetB *store.Bucket, forger *Identity, ow
 	if err != nil {
 		return err
 	}
-	_, err = store.CAS(ctx, fleetB, &store.JobRecord{ID: jobID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	_, err = store.CAS(ctx, fleetB, &store.JobRecord{ID: store.ID(jobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
 		next := *cur
-		next.State, next.Owner, next.Epoch = "succeeded", owner, epoch
-		next.Result, next.ResultSig = rs, fleet.SignResult(forger.sig, jobID, epoch, rs)
+		next.State, next.Owner, next.Epoch = store.Set("succeeded"), store.Set(owner), store.Set(epoch)
+		next.Result, next.ResultSig = store.Set(rs), store.Set(fleet.SignResult(forger.sig, jobID, epoch, rs))
 		return &next, nil
 	})
 	return err

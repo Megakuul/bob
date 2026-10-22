@@ -75,7 +75,7 @@ func (p *Process) attachAddrs(ctx context.Context) []string {
 		return nil
 	}
 	var out []string
-	for _, m := range fc.Members {
+	for _, m := range fc.Members.Value() {
 		if strings.HasPrefix(m.Endpoint, "http://") || strings.HasPrefix(m.Endpoint, "https://") {
 			out = append(out, m.Endpoint)
 		}

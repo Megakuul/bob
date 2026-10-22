@@ -72,39 +72,43 @@ func TestRecordTypes(t *testing.T) {
 
 	t.Run("FleetConfig", func(t *testing.T) {
 		v := store.FleetConfigKey()
-		v.Gen = 1
-		v.Classes = []store.FleetClass{{ID: "x86_64-linux.aaaaaaaaaa", Platform: "x86_64-linux"}}
-		v.Params = store.FleetParams{Heartbeat: 15 * time.Second, JobShards: 16}
-		recordCase(t, ctx, be, b, v, func(c *store.FleetConfig) { c.Gen++ })
+		v.Gen = store.Set(1)
+		v.Classes = store.Set([]store.FleetClass{{ID: "x86_64-linux.aaaaaaaaaa", Platform: "x86_64-linux"}})
+		v.Params = store.Set(store.FleetParams{Heartbeat: 15 * time.Second, JobShards: 16})
+		recordCase(t, ctx, be, b, v, func(c *store.FleetConfig) { c.Gen = store.Set(c.Gen.Value() + 1) })
 	})
 	t.Run("OrchRecord", func(t *testing.T) {
-		recordCase(t, ctx, be, b, &store.OrchRecord{ID: "o1", Endpoint: "https://o1", Started: now},
-			func(c *store.OrchRecord) { c.Heartbeat = c.Heartbeat.Add(time.Second) })
+		recordCase(t, ctx, be, b, &store.OrchRecord{ID: store.ID("o1"), Endpoint: store.Set("https://o1"), Started: store.Set(now)},
+			func(c *store.OrchRecord) { c.Heartbeat = store.Set(c.Heartbeat.Value().Add(time.Second)) })
 	})
 	t.Run("WorkerRecord", func(t *testing.T) {
-		recordCase(t, ctx, be, b, &store.WorkerRecord{Wid: "w1", State: "active", Serial: 1, Caps: []string{"kvm"}, TokenExp: now},
-			func(c *store.WorkerRecord) { c.Serial++ })
+		recordCase(t, ctx, be, b, &store.WorkerRecord{Wid: store.ID("w1"), State: store.Set("active"), Serial: store.Set(1), Caps: store.Set([]string{"kvm"}), TokenExp: store.Set(now)},
+			func(c *store.WorkerRecord) { c.Serial = store.Set(c.Serial.Value() + 1) })
 	})
 	t.Run("Heartbeat", func(t *testing.T) {
-		recordCase(t, ctx, be, b, &store.Heartbeat{Wid: "w1", At: now, Jobs: []store.HeldJobEpoch{{Job: "j1", Epoch: 2}}},
-			func(c *store.Heartbeat) { c.Free++ })
+		recordCase(t, ctx, be, b, &store.Heartbeat{Wid: store.ID("w1"), At: store.Set(now), Jobs: store.Set([]store.HeldJobEpoch{{Job: "j1", Epoch: 2}})},
+			func(c *store.Heartbeat) { c.Free = store.Set(c.Free.Value() + 1) })
 	})
 	t.Run("QueueSlot", func(t *testing.T) {
 		v := store.QueueSlotKey("x86_64-linux.aaaaaaaaaa", 7)
-		v.Job, v.At = "j1", now
-		recordCase(t, ctx, be, b, v, func(c *store.QueueSlot) { c.Taken += "w" })
+		v.Job, v.At = store.Set("j1"), store.Set(now)
+		recordCase(t, ctx, be, b, v, func(c *store.QueueSlot) { c.Taken = store.Set(c.Taken.Value() + ("w")) })
 	})
 	t.Run("JobRecord", func(t *testing.T) {
-		recordCase(t, ctx, be, b, &store.JobRecord{ID: "j1", Spec: []byte{1, 2}, State: "queued", Queued: now},
-			func(c *store.JobRecord) { c.Epoch++; c.Owner = "w1"; c.State = "claimed" })
+		recordCase(t, ctx, be, b, &store.JobRecord{ID: store.ID("j1"), Spec: store.Set([]byte{1, 2}), State: store.Set("queued"), Queued: store.Set(now)},
+			func(c *store.JobRecord) {
+				c.Epoch = store.Set(c.Epoch.Value() + 1)
+				c.Owner = store.Set("w1")
+				c.State = store.Set("claimed")
+			})
 	})
 	t.Run("BuildRecord", func(t *testing.T) {
-		recordCase(t, ctx, be, b, &store.BuildRecord{ID: "b1", Project: "p1", Number: 1, State: "pending",
-			Trigger: store.BuildTrigger{Kind: "push"}, Jobs: []store.BuildJob{{ID: "j1"}}, Created: now},
-			func(c *store.BuildRecord) { c.Jobs[0].Attempts++ })
+		recordCase(t, ctx, be, b, &store.BuildRecord{ID: store.ID("b1"), Project: store.Set("p1"), Number: store.Set(1), State: store.Set("pending"),
+			Trigger: store.Set(store.BuildTrigger{Kind: "push"}), Jobs: store.Set([]store.BuildJob{{ID: "j1"}}), Created: store.Set(now)},
+			func(c *store.BuildRecord) { c.Jobs.Value()[0].Attempts++ })
 	})
 	t.Run("ProjectCounters", func(t *testing.T) {
-		recordCase(t, ctx, be, b, &store.ProjectCounters{Project: "p1"}, func(c *store.ProjectCounters) { c.Builds++ })
+		recordCase(t, ctx, be, b, &store.ProjectCounters{Project: store.ID("p1")}, func(c *store.ProjectCounters) { c.Builds = store.Set(c.Builds.Value() + 1) })
 	})
 }
 

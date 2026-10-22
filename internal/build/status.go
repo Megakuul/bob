@@ -26,20 +26,20 @@ const ContextEvaluate = "bob/evaluate"
 // Statuses are the commit statuses build rec should show now, by context (§6.9.4): bob/evaluate
 // pending while queued, then success/failure; one bob/<pipeline> per matched pipeline.
 func Statuses(rec *store.BuildRecord, webURL string) map[string]forge.Status {
-	sha := rec.Commit
+	sha := rec.Commit.Value()
 	if sha == "" {
-		sha = rec.Source.SHA
+		sha = rec.Source.Value().SHA
 	}
 	if sha == "" || !shaRE.MatchString(sha) {
 		return nil
 	}
 	desc := func(state string) string {
-		if rec.State == StateSuperseded && rec.SupersededBy > 0 {
-			return fmt.Sprintf("#%d superseded by #%d", rec.Number, rec.SupersededBy)
+		if rec.State.Value() == StateSuperseded && rec.SupersededBy.Value() > 0 {
+			return fmt.Sprintf("#%d superseded by #%d", rec.Number.Value(), rec.SupersededBy.Value())
 		}
-		d := fmt.Sprintf("#%d %s", rec.Number, state)
-		if len(rec.Errors) > 0 {
-			e := rec.Errors[0]
+		d := fmt.Sprintf("#%d %s", rec.Number.Value(), state)
+		if len(rec.Errors.Value()) > 0 {
+			e := rec.Errors.Value()[0]
 			msg := e.Message
 			if e.Code != "" && !containsCode(msg, e.Code) {
 				msg = e.Code + " " + msg
@@ -53,20 +53,20 @@ func Statuses(rec *store.BuildRecord, webURL string) map[string]forge.Status {
 	}
 	out := map[string]forge.Status{}
 	switch {
-	case rec.Evaluated && rec.State == StateSkipped:
+	case rec.Evaluated.Value() && rec.State.Value() == StateSkipped:
 		out[ContextEvaluate] = forge.Status{SHA: sha, Context: ContextEvaluate, State: forge.StateSuccess,
-			Description: fmt.Sprintf("#%d skipped: no pipeline matched", rec.Number), TargetURL: webURL}
-	case rec.Evaluated:
+			Description: fmt.Sprintf("#%d skipped: no pipeline matched", rec.Number.Value()), TargetURL: webURL}
+	case rec.Evaluated.Value():
 		out[ContextEvaluate] = st(ContextEvaluate, forge.StateSuccess, "evaluated")
-	case rec.State == StatePending:
+	case rec.State.Value() == StatePending:
 	default:
-		out[ContextEvaluate] = st(ContextEvaluate, forgeState(rec.State), rec.State)
+		out[ContextEvaluate] = st(ContextEvaluate, forgeState(rec.State.Value()), rec.State.Value())
 	}
-	for _, p := range rec.Pipelines {
+	for _, p := range rec.Pipelines.Value() {
 		state := p.State
-		if Terminal(rec.State) {
-			state = rec.State
-		} else if rec.State == StateQueued {
+		if Terminal(rec.State.Value()) {
+			state = rec.State.Value()
+		} else if rec.State.Value() == StateQueued {
 			state = StateQueued
 		}
 		out["bob/"+p.Name] = st("bob/"+p.Name, forgeState(state), state)
@@ -98,7 +98,7 @@ func (b *Builds) WebURL(rec *store.BuildRecord) string {
 	if b.cfg.BaseURL == "" {
 		return ""
 	}
-	return b.cfg.BaseURL + "/p/" + rec.Project + "/builds/" + rec.ID
+	return b.cfg.BaseURL + "/p/" + rec.Project.Value() + "/builds/" + rec.ID.Value()
 }
 
 // report sends the statuses of rec that differ from BuildRecord.rp and records what was sent.
@@ -114,10 +114,10 @@ func (b *Builds) report(ctx context.Context, rec *store.BuildRecord) bool {
 	for _, c := range slices.Sorted(maps.Keys(want)) {
 		s := want[c]
 		mark := string(s.State) + " " + s.Description
-		if rec.Reported[c] == mark {
+		if rec.Reported.Value()[c] == mark {
 			continue
 		}
-		key := rec.ID + "|" + c
+		key := rec.ID.Value() + "|" + c
 		b.mu.Lock()
 		r := b.retry[key]
 		b.mu.Unlock()
@@ -125,14 +125,14 @@ func (b *Builds) report(ctx context.Context, rec *store.BuildRecord) bool {
 			settled = false
 			continue
 		}
-		if err := b.cfg.Statuses.SetStatus(ctx, rec.Project, s); err != nil {
+		if err := b.cfg.Statuses.SetStatus(ctx, rec.Project.Value(), s); err != nil {
 			settled = false
 			r.delay = min(max(2*r.delay, statusBackoffMin), statusBackoffMax)
 			r.next = now.Add(r.delay)
 			b.mu.Lock()
 			b.retry[key] = r
 			b.mu.Unlock()
-			b.cfg.Log.Warn("build: commit status not written; retrying", "build", rec.ID, "context", c, "in", r.delay, "err", err.Error())
+			b.cfg.Log.Warn("build: commit status not written; retrying", "build", rec.ID.Value(), "context", c, "in", r.delay, "err", err.Error())
 			continue
 		}
 		b.mu.Lock()
@@ -143,12 +143,12 @@ func (b *Builds) report(ctx context.Context, rec *store.BuildRecord) bool {
 	if len(sent) == 0 {
 		return settled
 	}
-	if _, err := b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
-		if cur.Reported == nil {
-			cur.Reported = map[string]string{}
+	if _, err := b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
+		if cur.Reported.Value() == nil {
+			cur.Reported = store.Set(map[string]string{})
 		}
 		for c, m := range sent {
-			cur.Reported[c] = m
+			cur.Reported.Value()[c] = m
 		}
 		return nil
 	}); err != nil {

@@ -38,16 +38,16 @@ func TestRSTORE106SeqLog(t *testing.T) {
 			for i := range each {
 				// Each appender uses its own handle: the log is a value type that performs no I/O.
 				l := store.NewSeqLog[slot](b, "tqs", "tqt", "tqh", "x86_64-linux.k3j9d0a1b2")
-				seq, err := l.Append(ctx, &slot{ID: fmt.Sprintf("a%d-%d", w, i), By: int64(w), Ord: int64(i)})
+				seq, err := l.Append(ctx, &slot{ID: store.ID(fmt.Sprintf("a%d-%d", w, i)), By: store.Set(int64(w)), Ord: store.Set(int64(i))})
 				if err != nil {
 					errc <- fmt.Errorf("writer %d append %d: %w", w, i, err)
 					return
 				}
 				mu.Lock()
 				if prev, dup := got[seq]; dup {
-					errc <- fmt.Errorf("slot %d returned twice (writers %d and %d)", seq, prev.By, w)
+					errc <- fmt.Errorf("slot %d returned twice (writers %d and %d)", seq, prev.By.Value(), w)
 				}
-				got[seq] = slot{By: int64(w), Ord: int64(i)}
+				got[seq] = slot{By: store.Set(int64(w)), Ord: store.Set(int64(i))}
 				mu.Unlock()
 			}
 		}()
@@ -69,8 +69,8 @@ func TestRSTORE106SeqLog(t *testing.T) {
 			t.Errorf("slot %d is missing or unreadable: %v (the log must have no gaps)", s, err)
 			continue
 		}
-		if want := got[s]; v.By != want.By || v.Ord != want.Ord {
-			t.Errorf("slot %d holds writer %d/%d, the appender that got it was %d/%d", s, v.By, v.Ord, want.By, want.Ord)
+		if want := got[s]; v.By.Value() != want.By.Value() || v.Ord.Value() != want.Ord.Value() {
+			t.Errorf("slot %d holds writer %d/%d, the appender that got it was %d/%d", s, v.By.Value(), v.Ord.Value(), want.By.Value(), want.Ord.Value())
 		}
 	}
 	if _, err := q.Read(ctx, writers*each+1); !errors.Is(err, store.ErrNotFound) {
@@ -88,10 +88,10 @@ func TestRSTORE106SeqLog(t *testing.T) {
 	sort.Slice(seqs, func(i, j int) bool { return seqs[i] < seqs[j] })
 	for _, s := range seqs {
 		v := got[s]
-		if prev, ok := last[v.By]; ok && v.Ord != prev+1 {
-			t.Errorf("writer %d: append %d landed after append %d", v.By, v.Ord, prev)
+		if prev, ok := last[v.By.Value()]; ok && v.Ord.Value() != prev+1 {
+			t.Errorf("writer %d: append %d landed after append %d", v.By.Value(), v.Ord.Value(), prev)
 		}
-		last[v.By] = v.Ord
+		last[v.By.Value()] = v.Ord.Value()
 	}
 
 	// Hints: tail never exceeds the first free slot; head only moves up.

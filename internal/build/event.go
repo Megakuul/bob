@@ -43,10 +43,18 @@ func FromEvent(project string, ev forge.Event) (Request, error) {
 // buildKey is `bkey/<hash64(key)>`: the build created for one delivery key (idempotent
 // CreateFromEvent).
 type buildKey struct {
-	Hash  string    `pk:"bkey" cbor:"-"`
-	ETag  string    `etag:"true" cbor:"-"`
-	Build string    `cbor:"b,omitempty"`
-	At    time.Time `cbor:"at,omitzero"`
+	Hash  store.KeyField             `pk:"bkey" cbor:"-"`
+	ETag  store.ETagField            `etag:"true" cbor:"-"`
+	Build store.DataField[string]    `cbor:"b,omitempty"`
+	At    store.DataField[time.Time] `cbor:"at,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *buildKey) Draft() *buildKey {
+	return &buildKey{Hash: r.Hash,
+		ETag:  r.ETag,
+		Build: store.Carry(r.Build),
+		At:    store.Carry(r.At)}
 }
 
 // CreateFromEvent implements the webhook intake's Builds (internal/forge/integration): it
@@ -65,14 +73,14 @@ func (b *Builds) CreateFromEvent(ctx context.Context, project, key string, ev fo
 	if err != nil {
 		return "", err
 	}
-	k := &buildKey{Hash: h, Build: id, At: b.now()}
+	k := &buildKey{Hash: store.ID(h), Build: store.Set(id), At: store.Set(b.now())}
 	err = store.Create(ctx, b.cfg.Control, k)
 	if errors.Is(err, store.ErrExists) {
-		cur, gerr := store.Get(ctx, b.cfg.Control, &buildKey{Hash: h})
+		cur, gerr := store.Get(ctx, b.cfg.Control, &buildKey{Hash: store.ID(h)})
 		if gerr != nil {
 			return "", gerr
 		}
-		id = cur.Build
+		id = cur.Build.Value()
 		if _, gerr := b.Get(ctx, id); gerr == nil {
 			return id, nil
 		} else if !errors.Is(gerr, store.ErrNotFound) {
@@ -86,5 +94,5 @@ func (b *Builds) CreateFromEvent(ctx context.Context, project, key string, ev fo
 	if err != nil {
 		return "", err
 	}
-	return rec.ID, nil
+	return rec.ID.Value(), nil
 }

@@ -195,7 +195,7 @@ func TestForgejoLive(t *testing.T) {
 	t.Run("statuses", func(t *testing.T) {
 		sha := l.commit("demo", "main", "status.txt", "x")
 		want := map[forge.State]string{forge.StatePending: "pending", forge.StateRunning: "pending", forge.StateSuccess: "success",
-			forge.StateFailure: "failure", forge.StateError: "error", forge.StateCancelled: "error"}
+			forge.StateFailure: "failure", forge.StateError: "error", forge.StateCancelled: "warning"} // SPEC 6.9.2 table
 		for st := range want {
 			err := l.a.SetStatus(ctx, l.repo, forge.Status{SHA: sha, Context: "bob/" + string(st), State: st,
 				Description: "#7 " + string(st) + ": description", TargetURL: "https://bob.example/builds/7"})
@@ -203,7 +203,10 @@ func TestForgejoLive(t *testing.T) {
 				t.Fatalf("SetStatus %s: %v", st, err)
 			}
 		}
-		var statuses []struct{ Context, Status, Description, TargetURL string }
+		var statuses []struct {
+			Context, Status, Description string
+			TargetURL                    string `json:"target_url"`
+		}
 		if err := l.api(http.MethodGet, "/api/v1/repos/alice/demo/commits/"+sha+"/statuses", l.owner(), nil, &statuses); err != nil {
 			t.Fatalf("harness error: %v", err)
 		}
@@ -246,12 +249,13 @@ func TestForgejoLive(t *testing.T) {
 		if got, out, err := l.shallowFetch(co, sha); err != nil || got != sha {
 			t.Fatalf("shallow fetch of %s: %q %v: %s", sha, got, err, out)
 		}
-		// R-FLEET-006 (ruling G3): the forge decides the status for a repo outside the token scope;
-		// the measured Forgejo behaviour (S16) is HTTP 403, not 404. The worker-side denial text
-		// `permission_denied: worker holds no lease on job <id>` is asserted in tests/store/fleet.
-		// the token is limited to the one repository: the other private repo answers 403
-		if err := l.api(http.MethodGet, "/api/v1/repos/alice/other", forgejo.Auth{Token: co.Token.Reveal()}, nil, nil); !isStatus(err, http.StatusForbidden) {
-			t.Errorf("job token on alice/other: %v, want 403", err)
+		// R-FLEET-006 (ruling G3, A104): the forge decides the status for a repo outside the token
+		// scope: 403 or 404, never 2xx (S16 measured 403; the harness's Forgejo answers 404). The
+		// worker-side denial text `permission_denied: worker holds no lease on job <id>` is
+		// asserted in tests/store/fleet.
+		// the token is limited to the one repository: the other private repo is denied
+		if err := l.api(http.MethodGet, "/api/v1/repos/alice/other", forgejo.Auth{Token: co.Token.Reveal()}, nil, nil); !isStatus(err, http.StatusForbidden) && !isStatus(err, http.StatusNotFound) {
+			t.Errorf("job token on alice/other: %v, want 403 or 404", err)
 		}
 		if out, err := l.git(t.TempDir(), co.Username, co.Token.Reveal(), "ls-remote", strings.Replace(co.CloneURL, "alice/demo", "alice/other", 1)); err == nil {
 			t.Errorf("git ls-remote of alice/other with the job token succeeded: %s", out)

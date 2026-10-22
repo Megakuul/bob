@@ -35,8 +35,22 @@ pkg/cli/link.go (blank import pkg/rust/gen) and cmd/bob-builder/main.go (rustbop
 - PrepareDev (pkg/rust/gen/dev.go; engine.DevPreparer is another unit's WIP, not in HEAD):
   rustc, cargo, rust-analyzer, rustPlatform.rustLibSrc packages, rust-project.json.
 
+- Full rust fixture (with TEST PROBLEM 1+2 applied in a copy, /var/tmp/i-m8a/fx; pkg/cc now in
+  HEAD): bob lock (53 crates, R-RS-005 facts present: serde features, serde_derive deps,
+  zstd-sys features + links "zstd", tokio deps + features, every meta.edition), bob build //...
+  builds all 8 packages; demo and usec (Rust bin + bob C static lib: cfoo_mul(6,7)=42) run under
+  env -i; cmain (C + Rust cdylib + staticlib) prints rdyn_add(40,2)=42 rcore_num_hex(7)=37 with
+  LD_LIBRARY_PATH (see TEST PROBLEM 7); bob test //...: corelib_test and corelib_test_num pass.
+  Its Cargo.lock is byte-identical to cargo generate-lockfile (59 packages).
+- TestRRS002aCfgTablesEqualRustc: PASS (shared tree; warm harness cache, TEST PROBLEM 5).
+- R-RS-002a corpus with a warm BOB_HOME (/var/tmp/i-m8a/corpus.sh, same layout and cargo call as
+  the test, pinned cargo 1.95.0 through the regmirror): see "corpus" below.
+- Stale: unchanged inputs → fresh; otherwise the graph's crates are resolved against the locked
+  crates only (a build of part of the repository is not reported stale).
+- Variant features (AxisFeatures, Proj "features") are added to a root's Enable list.
+
 ## next
-- full R-RS-002a corpus run (running), error-path checks.
+- nothing in this chain beyond NEEDS / TEST PROBLEM.
 
 ## DECISIONS
 - D-M8a-1: rust.Test's result type is rust.TestSet (SPEC names type and function Test).
@@ -92,3 +106,10 @@ pkg/cli/link.go (blank import pkg/rust/gen) and cmd/bob-builder/main.go (rustbop
 6. On this loaded host (load 25–30 on 8 CPUs) a fresh BOB_HOME's first `bob lock` (nixpkgs
    tarball import) exceeds the harness's 5-minute cap per bob run; the corpus subtests then
    exit -1. Measured with a warm home instead (corpus.sh, results below).
+7. TestRRS001a runs outputs straight from $BOB_HOME/nix/store under env -i. Their ELF
+   interpreter and RUNPATH name /nix/store/... paths (they must: that is where they live inside
+   bob's namespace). demo and usec only need glibc/gcc-lib, which this host's own /nix/store
+   happens to hold; cmain also needs librdyn.so from the Rust cdylib, which exists only in bob's
+   store, so it fails with "librdyn.so: cannot open shared object file" outside the namespace
+   (it runs with LD_LIBRARY_PATH=<home store>/…-rdyn/lib). The test needs to run the outputs
+   inside bob's namespace (or a host /nix bind), as it does for the foreign platform via qemu -L.

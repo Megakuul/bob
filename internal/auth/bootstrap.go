@@ -27,7 +27,7 @@ func (id *Identity) Bootstrap(ctx context.Context, token string) error {
 			return err
 		}
 		if u != nil {
-			uid = u.ID
+			uid = u.ID.Value()
 			break
 		}
 		uid, err = id.CreateLocalUser(ctx, NewLocalUser{
@@ -66,7 +66,7 @@ func (id *Identity) bootstrapPrincipal(ctx context.Context, bearer string) (p *a
 		return nil, false, nil
 	}
 	u, err := id.user(ctx, id.bootUser)
-	if errors.Is(err, store.ErrNotFound) || err == nil && u.Disabled {
+	if errors.Is(err, store.ErrNotFound) || err == nil && u.Disabled.Value() {
 		return nil, true, errInvalidToken
 	} else if err != nil {
 		return nil, true, storageError(err)

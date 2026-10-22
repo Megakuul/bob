@@ -20,8 +20,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/megakuul/lake"
-
 	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/isolation"
 	"github.com/megakuul/bob/internal/logstore"
@@ -269,14 +267,14 @@ func (p *Process) register(ctx context.Context) (*Identity, *Token, error) {
 func (p *Process) fleetConfig(ctx context.Context) (*store.FleetConfig, error) {
 	fc, err := store.Get(ctx, p.cfg.Fleet, store.FleetConfigKey())
 	if errors.Is(err, store.ErrNotFound) {
-		return &store.FleetConfig{Name: "cfg"}, nil
+		return &store.FleetConfig{Name: store.ID("cfg")}, nil
 	}
 	return fc, err
 }
 
 func classIDs(fc *store.FleetConfig) []string {
-	ids := make([]string, 0, len(fc.Classes))
-	for _, c := range fc.Classes {
+	ids := make([]string, 0, len(fc.Classes.Value()))
+	for _, c := range fc.Classes.Value() {
 		ids = append(ids, c.ID)
 	}
 	slices.Sort(ids)
@@ -286,16 +284,16 @@ func classIDs(fc *store.FleetConfig) []string {
 // loop runs one Worker over the classes of fc until ctx ends, the worker is revoked, or the
 // published classes change while it is idle (the Worker reads a fixed class set).
 func (p *Process) loop(ctx context.Context, id *Identity, fc *store.FleetConfig) error {
-	pr := p.cfg.Params(fc.Params)
+	pr := p.cfg.Params(fc.Params.Value())
 	wc := Config{Fleet: p.cfg.Fleet, ID: id.ID(), Profile: id.Profile, Slots: p.cfg.Slots, SigKey: id.SigningKey(),
 		PollInterval: pr.PollInterval, Heartbeat: pr.Heartbeat, LeaseTTL: pr.LeaseTTL, Skew: pr.Skew,
 		Seed: uint64(time.Now().UnixNano()), Now: p.cfg.Now, Exec: p.exec}
-	for _, k := range fc.Keys {
+	for _, k := range fc.Keys.Value() {
 		if len(k.Pub) == ed25519.PublicKeySize {
 			wc.Keys = append(wc.Keys, ed25519.PublicKey(k.Pub))
 		}
 	}
-	for _, c := range fc.Classes {
+	for _, c := range fc.Classes.Value() {
 		wc.Classes = append(wc.Classes, store.Class{Platform: c.Platform, Caps: c.Caps, Labels: c.Labels})
 	}
 	w, err := New(wc)
@@ -434,12 +432,9 @@ type jobLogOutput struct {
 func (o *jobLogOutput) Line(pkg string, stream int32, text string) { o.jl.Line(pkg, stream, text) }
 
 func (o *jobLogOutput) EndPackage(pkg string, e PackageEnd) {
-	o.jl.EndPackage(pkg, &logstore.PackageRun{
-		BuildID: lake.NewString(o.build), Project: lake.NewString(o.project), Package: lake.NewString(pkg),
-		Drv: lake.NewString(e.Drv), Worker: lake.NewString(o.worker), Status: lake.NewString(e.Status),
-		Start: lake.NewInt(e.Start.UnixNano()), End: lake.NewInt(e.End.UnixNano()),
-		DurationMs: lake.NewInt(e.End.Sub(e.Start).Milliseconds()), Lines: lake.NewInt(e.Lines),
-	})
+	run := logstore.NewPackageRun(logstore.RunInfo{BuildID: o.build, Project: o.project, Package: pkg, Drv: e.Drv,
+		Worker: o.worker, Status: e.Status, Start: e.Start, End: e.End, Lines: e.Lines})
+	o.jl.EndPackage(pkg, &run)
 }
 
 // tail keeps the last max bytes written to it.

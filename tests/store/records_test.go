@@ -52,38 +52,38 @@ func TestRSTORE103RecordRules(t *testing.T) {
 	defer cancel()
 
 	t.Run("create", func(t *testing.T) {
-		if err := store.Create(ctx, b, &rec{ID: "c1", N: 1, Wid: "w1"}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("c1"), N: store.Set(1), Wid: store.Set("w1")}); err != nil {
 			t.Fatalf("Create: %v", err)
 		}
-		if err := store.Create(ctx, b, &rec{ID: "c1", N: 2, Wid: "w2"}); !errors.Is(err, store.ErrExists) {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("c1"), N: store.Set(2), Wid: store.Set("w2")}); !errors.Is(err, store.ErrExists) {
 			t.Errorf("second Create = %v, want ErrExists", err)
 		}
-		got, err := store.Get(ctx, b, &rec{ID: "c1"})
-		if err != nil || got.N != 1 || got.Wid != "w1" || got.ETag == "" {
+		got, err := store.Get(ctx, b, &rec{ID: store.ID("c1")})
+		if err != nil || got.N.Value() != 1 || got.Wid.Value() != "w1" || store.ETagOf(got.ETag) == "" {
 			t.Errorf("Get = %+v, %v; the loser must not overwrite and the winner carries an ETag", got, err)
 		}
-		if _, err := store.Get(ctx, b, &rec{ID: "missing"}); !errors.Is(err, store.ErrNotFound) {
+		if _, err := store.Get(ctx, b, &rec{ID: store.ID("missing")}); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("Get of a missing record = %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("cas win", func(t *testing.T) {
 		be.Proxy.Reset()
-		got, err := store.CAS(ctx, b, &rec{ID: "w"}, func(cur *rec) (*rec, error) {
+		got, err := store.CAS(ctx, b, &rec{ID: store.ID("w")}, func(cur *rec) (*rec, error) {
 			if cur != nil {
 				t.Errorf("CAS on an absent record passed %+v, want nil", cur)
 			}
-			return &rec{ID: "w", N: 1}, nil
+			return &rec{ID: store.ID("w"), N: store.Set(1)}, nil
 		})
-		if err != nil || got.N != 1 {
+		if err != nil || got.N.Value() != 1 {
 			t.Fatalf("CAS create = %+v, %v", got, err)
 		}
-		got, err = store.CAS(ctx, b, &rec{ID: "w"}, func(cur *rec) (*rec, error) {
+		got, err = store.CAS(ctx, b, &rec{ID: store.ID("w")}, func(cur *rec) (*rec, error) {
 			n := *cur
-			n.N++
+			n.N = store.Set(n.N.Value() + 1)
 			return &n, nil
 		})
-		if err != nil || got.N != 2 {
+		if err != nil || got.N.Value() != 2 {
 			t.Fatalf("CAS update = %+v, %v", got, err)
 		}
 		// One read and one conditional write each: 2 GET-class + 2 PUT in total, no LIST.
@@ -96,17 +96,17 @@ func TestRSTORE103RecordRules(t *testing.T) {
 		}
 		// ErrNoChange ends the CAS without a write.
 		be.Proxy.Reset()
-		if _, err := store.CAS(ctx, b, &rec{ID: "w"}, func(*rec) (*rec, error) { return nil, store.ErrNoChange }); err != nil && !errors.Is(err, store.ErrNoChange) {
+		if _, err := store.CAS(ctx, b, &rec{ID: store.ID("w")}, func(*rec) (*rec, error) { return nil, store.ErrNoChange }); err != nil && !errors.Is(err, store.ErrNoChange) {
 			t.Errorf("CAS with ErrNoChange = %v", err)
 		}
 		if put := env.Ops(be.Proxy.Counts(), bucket, s3count.OpPut); put != 0 {
 			t.Errorf("ErrNoChange wrote %d times", put)
 		}
 		// fn returning nil, nil deletes the record.
-		if _, err := store.CAS(ctx, b, &rec{ID: "w"}, func(*rec) (*rec, error) { return nil, nil }); err != nil {
+		if _, err := store.CAS(ctx, b, &rec{ID: store.ID("w")}, func(*rec) (*rec, error) { return nil, nil }); err != nil {
 			t.Errorf("CAS delete: %v", err)
 		}
-		if _, err := store.Get(ctx, b, &rec{ID: "w"}); !errors.Is(err, store.ErrNotFound) {
+		if _, err := store.Get(ctx, b, &rec{ID: store.ID("w")}); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("Get after CAS delete = %v, want ErrNotFound", err)
 		}
 	})
@@ -121,13 +121,13 @@ func TestRSTORE103RecordRules(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := store.CAS(ctx, b, &rec{ID: "race"}, func(cur *rec) (*rec, error) {
+				_, err := store.CAS(ctx, b, &rec{ID: store.ID("race")}, func(cur *rec) (*rec, error) {
 					calls.Add(1)
-					n := rec{ID: "race"}
+					n := rec{ID: store.ID("race")}
 					if cur != nil {
 						n = *cur
 					}
-					n.N++
+					n.N = store.Set(n.N.Value() + 1)
 					return &n, nil
 				})
 				errs <- err
@@ -140,22 +140,22 @@ func TestRSTORE103RecordRules(t *testing.T) {
 				t.Errorf("CAS under contention: %v", err)
 			}
 		}
-		got, err := store.Get(ctx, b, &rec{ID: "race"})
-		if err != nil || got.N != workers {
+		got, err := store.Get(ctx, b, &rec{ID: store.ID("race")})
+		if err != nil || got.N.Value() != workers {
 			t.Errorf("after %d racing increments N = %+v, %v; a lost update happened", workers, got, err)
 		}
 		if calls.Load() < workers {
 			t.Errorf("fn ran %d times for %d writers", calls.Load(), workers)
 		}
 		// A stale write is a conflict: Delete with an outdated ETag.
-		old, _ := store.Get(ctx, b, &rec{ID: "race"})
-		if _, err := store.CAS(ctx, b, &rec{ID: "race"}, func(cur *rec) (*rec, error) { n := *cur; n.N++; return &n, nil }); err != nil {
+		old, _ := store.Get(ctx, b, &rec{ID: store.ID("race")})
+		if _, err := store.CAS(ctx, b, &rec{ID: store.ID("race")}, func(cur *rec) (*rec, error) { n := *cur; n.N = store.Set(n.N.Value() + 1); return &n, nil }); err != nil {
 			t.Fatal(err)
 		}
 		if err := store.Delete(ctx, b, old); !errors.Is(err, store.ErrConflict) {
 			t.Errorf("Delete with a stale ETag = %v, want ErrConflict", err)
 		}
-		cur, _ := store.Get(ctx, b, &rec{ID: "race"})
+		cur, _ := store.Get(ctx, b, &rec{ID: store.ID("race")})
 		if err := store.Delete(ctx, b, cur); err != nil {
 			t.Errorf("Delete with the current ETag: %v", err)
 		}
@@ -168,41 +168,41 @@ func TestRSTORE103RecordRules(t *testing.T) {
 		// Create: the server applied the write, the response is lost. dynamitedb reports
 		// ErrAlreadyExists; store must re-read, see its own write id and report success.
 		be.Proxy.SetScript(lostPut(bucket))
-		if err := store.Create(ctx, b, &rec{ID: "lost-c", N: 1, Wid: "me", Ep: 1}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-c"), N: store.Set(1), Wid: store.Set("me"), Ep: store.Set(1)}); err != nil {
 			t.Errorf("Create with a lost response = %v, want success (the stored value carries our write id)", err)
 		}
 		be.Proxy.SetScript(s3count.Script{})
-		if got, err := store.Get(ctx, b, &rec{ID: "lost-c"}); err != nil || got.Wid != "me" {
+		if got, err := store.Get(ctx, b, &rec{ID: store.ID("lost-c")}); err != nil || got.Wid.Value() != "me" {
 			t.Errorf("stored value after lost Create = %+v, %v", got, err)
 		}
 		// Create by somebody else with another write id is a real conflict, never success.
-		if err := store.Create(ctx, b, &rec{ID: "lost-c", N: 1, Wid: "other", Ep: 1}); !errors.Is(err, store.ErrExists) {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-c"), N: store.Set(1), Wid: store.Set("other"), Ep: store.Set(1)}); !errors.Is(err, store.ErrExists) {
 			t.Errorf("Create of an existing record with another write id = %v, want ErrExists", err)
 		}
 
 		// CAS: the PUT is applied, the response lost. The increment must be applied once.
-		if err := store.Create(ctx, b, &rec{ID: "lost-u", N: 10}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-u"), N: store.Set(10)}); err != nil {
 			t.Fatal(err)
 		}
 		be.Proxy.SetScript(lostPut(bucket))
-		got, err := store.CAS(ctx, b, &rec{ID: "lost-u"}, func(cur *rec) (*rec, error) {
+		got, err := store.CAS(ctx, b, &rec{ID: store.ID("lost-u")}, func(cur *rec) (*rec, error) {
 			n := *cur
-			n.N++
-			n.Wid = "me"
-			n.Ep = 7
+			n.N = store.Set(n.N.Value() + 1)
+			n.Wid = store.Set("me")
+			n.Ep = store.Set(7)
 			return &n, nil
 		})
 		be.Proxy.SetScript(s3count.Script{})
-		if err != nil || got == nil || got.N != 11 {
+		if err != nil || got == nil || got.N.Value() != 11 {
 			t.Errorf("CAS with a lost response = %+v, %v; want success with N=11", got, err)
 		}
-		if st, err := store.Get(ctx, b, &rec{ID: "lost-u"}); err != nil || st.N != 11 {
+		if st, err := store.Get(ctx, b, &rec{ID: store.ID("lost-u")}); err != nil || st.N.Value() != 11 {
 			t.Errorf("stored N = %+v, %v; the lost-response retry applied the increment twice or not at all", st, err)
 		}
 	})
 
 	t.Run("stored cbor", func(t *testing.T) {
-		if err := store.Create(ctx, b, &rec{ID: "cbor", N: 5, Wid: "w"}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("cbor"), N: store.Set(5), Wid: store.Set("w")}); err != nil {
 			t.Fatal(err)
 		}
 		st, body := rawGet(t, be, bucket, "trec/cbor")
@@ -219,15 +219,15 @@ func TestRSTORE103RecordRules(t *testing.T) {
 				t.Errorf("stored value contains the Go field name %q", long)
 			}
 		}
-		if err := store.Create(ctx, b, &rec{ID: "cbor-min"}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("cbor-min")}); err != nil {
 			t.Fatal(err)
 		}
 		_, small := rawGet(t, be, bucket, "trec/cbor-min")
 		if len(small) >= len(body) {
 			t.Errorf("an all-zero record (%d bytes) is not smaller than a filled one (%d): omitempty is not applied", len(small), len(body))
 		}
-		got, err := store.Get(ctx, b, &rec{ID: "cbor"})
-		if err != nil || got.N != 5 || got.Wid != "w" {
+		got, err := store.Get(ctx, b, &rec{ID: store.ID("cbor")})
+		if err != nil || got.N.Value() != 5 || got.Wid.Value() != "w" {
 			t.Errorf("decode = %+v, %v", got, err)
 		}
 	})
@@ -239,7 +239,7 @@ func TestRSTORE103RecordRules(t *testing.T) {
 		defer be.Proxy.SetScript(s3count.Script{})
 		cctx, ccancel := context.WithTimeout(ctx, 300*time.Millisecond)
 		defer ccancel()
-		_, err := store.Get(cctx, b, &rec{ID: "c1"})
+		_, err := store.Get(cctx, b, &rec{ID: store.ID("c1")})
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("Get on a slow backend with a 300 ms deadline = %v, want context.DeadlineExceeded", err)
 		}

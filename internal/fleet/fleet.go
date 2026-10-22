@@ -329,12 +329,12 @@ func HeartbeatMessage(wid string, at time.Time, jobs []store.HeldJobEpoch) []byt
 
 // SignHeartbeat signs a heartbeat record in place.
 func SignHeartbeat(key ed25519.PrivateKey, hb *store.Heartbeat) {
-	hb.Sig = ed25519.Sign(key, HeartbeatMessage(hb.Wid, hb.At, hb.Jobs))
+	hb.Sig = store.Set(ed25519.Sign(key, HeartbeatMessage(hb.Wid.Value(), hb.At.Value(), hb.Jobs.Value())))
 }
 
 // VerifyHeartbeat checks a heartbeat record against the worker's signing key.
 func VerifyHeartbeat(pub ed25519.PublicKey, hb *store.Heartbeat) bool {
-	return len(pub) == ed25519.PublicKeySize && ed25519.Verify(pub, HeartbeatMessage(hb.Wid, hb.At, hb.Jobs), hb.Sig)
+	return len(pub) == ed25519.PublicKeySize && ed25519.Verify(pub, HeartbeatMessage(hb.Wid.Value(), hb.At.Value(), hb.Jobs.Value()), hb.Sig.Value())
 }
 
 // SignSpec is JobRecord.ss: Ed25519("bob-jobspec-v1"‖0‖LV(sp)).

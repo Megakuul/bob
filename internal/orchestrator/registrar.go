@@ -112,7 +112,7 @@ func (r *Registrar) Pass(ctx context.Context) (RegPass, error) {
 		if err != nil {
 			return res, err
 		}
-		approved, reason, err := r.consider(ctx, slot.Wid)
+		approved, reason, err := r.consider(ctx, slot.Wid.Value())
 		if err != nil {
 			return res, err
 		}
@@ -121,7 +121,7 @@ func (r *Registrar) Pass(ctx context.Context) (RegPass, error) {
 		}
 		if reason != "" {
 			msg := "worker registration rejected: " + reason
-			slog.Warn(msg, "wid", slot.Wid, "orchestrator", r.cfg.Name)
+			slog.Warn(msg, "wid", slot.Wid.Value(), "orchestrator", r.cfg.Name)
 			res.Rejected = append(res.Rejected, msg)
 		}
 		done++
@@ -136,28 +136,28 @@ func (r *Registrar) Pass(ctx context.Context) (RegPass, error) {
 
 // cursor is ctl/registrar.cu: the last registration slot every registrar has handled.
 func (r *Registrar) cursor(ctx context.Context) (uint64, error) {
-	l, err := store.Get(ctx, r.cfg.Fleet, &store.ControllerLease{Name: "registrar"})
+	l, err := store.Get(ctx, r.cfg.Fleet, &store.ControllerLease{Name: store.ID("registrar")})
 	if errors.Is(err, store.ErrNotFound) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
 	}
-	n, _ := strconv.ParseUint(string(l.Cursor), 10, 64)
+	n, _ := strconv.ParseUint(string(l.Cursor.Value()), 10, 64)
 	return n, nil
 }
 
 // saveCursor raises ctl/registrar.cu (monotonic CAS; the lease fields are kept).
 func (r *Registrar) saveCursor(ctx context.Context, n uint64) error {
-	_, err := store.CAS(ctx, r.cfg.Fleet, &store.ControllerLease{Name: "registrar"}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
-		next := store.ControllerLease{Name: "registrar"}
+	_, err := store.CAS(ctx, r.cfg.Fleet, &store.ControllerLease{Name: store.ID("registrar")}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+		next := store.ControllerLease{Name: store.ID("registrar")}
 		if cur != nil {
-			if old, _ := strconv.ParseUint(string(cur.Cursor), 10, 64); old >= n {
+			if old, _ := strconv.ParseUint(string(cur.Cursor.Value()), 10, 64); old >= n {
 				return nil, store.ErrNoChange
 			}
 			next = *cur
 		}
-		next.Cursor = []byte(strconv.FormatUint(n, 10))
+		next.Cursor = store.Set([]byte(strconv.FormatUint(n, 10)))
 		return &next, nil
 	})
 	return err
@@ -169,7 +169,7 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 	if _, err := store.Segment(wid); err != nil {
 		return false, "invalid worker id", nil
 	}
-	reg, err := store.Get(ctx, r.cfg.Fleet, &store.WorkerReg{Wid: wid})
+	reg, err := store.Get(ctx, r.cfg.Fleet, &store.WorkerReg{Wid: store.ID(wid)})
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return false, "registration record missing", nil
@@ -180,13 +180,13 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 		return false, "", err
 	}
 	now := r.cfg.Now()
-	body, verr := fleet.ValidateReg(wid, reg.Body, reg.Sig, now, r.cfg.RegWindow)
+	body, verr := fleet.ValidateReg(wid, reg.Body.Value(), reg.Sig.Value(), now, r.cfg.RegWindow)
 	if verr != nil {
 		return false, verr.Error(), nil
 	}
 	suite := fleet.Suite(body.Suite)
-	rec := &store.WorkerRecord{Wid: wid, State: "active", Gen: 0, Serial: 1, SigPub: body.SigPub, Suite: suite.String(),
-		KEMPub: body.KEMPub, Platform: body.Platform, Caps: body.Caps, Labels: body.Labels}
+	rec := &store.WorkerRecord{Wid: store.ID(wid), State: store.Set("active"), Gen: store.Set(0), Serial: store.Set(1), SigPub: store.Set(body.SigPub), Suite: store.Set(suite.String()),
+		KEMPub: store.Set(body.KEMPub), Platform: store.Set(body.Platform), Caps: store.Set(body.Caps), Labels: store.Set(body.Labels)}
 	if err := r.issue(rec, now); err != nil {
 		return false, "", err
 	}
@@ -205,27 +205,27 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 
 // issue signs a token for rec's current gen and serial and seals it into rec.
 func (r *Registrar) issue(rec *store.WorkerRecord, now time.Time) error {
-	suite, err := fleet.ParseSuite(rec.Suite)
+	suite, err := fleet.ParseSuite(rec.Suite.Value())
 	if err != nil {
 		return err
 	}
 	exp := now.Add(r.cfg.TokenTTL)
-	tok, err := fleet.SignToken(r.cfg.Key, fleet.Claims{V: 1, Aud: fleet.Audience, Kid: r.cfg.Kid, Wid: rec.Wid,
-		Gen: rec.Gen, Serial: rec.Serial, Iat: now.Unix(), Exp: exp.Unix(), Cnf: fleet.Cnf(rec.SigPub)})
+	tok, err := fleet.SignToken(r.cfg.Key, fleet.Claims{V: 1, Aud: fleet.Audience, Kid: r.cfg.Kid, Wid: rec.Wid.Value(),
+		Gen: rec.Gen.Value(), Serial: rec.Serial.Value(), Iat: now.Unix(), Exp: exp.Unix(), Cnf: fleet.Cnf(rec.SigPub.Value())})
 	if err != nil {
 		return err
 	}
-	sealed, err := fleet.SealToken(suite, rec.KEMPub, rec.Wid, rec.Gen, rec.Serial, fleet.TokenEnvelope{Token: tok, Exp: exp.Unix()})
+	sealed, err := fleet.SealToken(suite, rec.KEMPub.Value(), rec.Wid.Value(), rec.Gen.Value(), rec.Serial.Value(), fleet.TokenEnvelope{Token: tok, Exp: exp.Unix()})
 	if err != nil {
 		return err
 	}
-	rec.Sealed, rec.TokenExp = sealed, time.Unix(exp.Unix(), 0).UTC()
+	rec.Sealed, rec.TokenExp = store.Set(sealed), store.Set(time.Unix(exp.Unix(), 0).UTC())
 	return nil
 }
 
 func (r *Registrar) remember(rec *store.WorkerRecord, now time.Time) {
 	r.mu.Lock()
-	r.recs[rec.Wid] = cachedRecord{rec: rec, at: now}
+	r.recs[rec.Wid.Value()] = cachedRecord{rec: rec, at: now}
 	r.mu.Unlock()
 }
 
@@ -237,7 +237,7 @@ func (r *Registrar) record(ctx context.Context, wid string, now time.Time) (*sto
 	if ok && now.Sub(c.at) < recordCache && !now.Before(c.at) {
 		return c.rec, nil
 	}
-	rec, err := store.Get(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: wid})
+	rec, err := store.Get(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
 	if err != nil {
 		return nil, err
 	}
@@ -279,13 +279,13 @@ func (r *Registrar) Authenticate(ctx context.Context, authorization, pop, method
 	if err != nil {
 		return "", err
 	}
-	if rec.State == "revoked" || rec.State == "gone" || rec.Gen != c.Gen {
+	if rec.State.Value() == "revoked" || rec.State.Value() == "gone" || rec.Gen.Value() != c.Gen {
 		return "", unauth("worker revoked")
 	}
-	if c.Serial < rec.Serial-1 {
-		return "", unauth("superseded serial %d (current %d)", c.Serial, rec.Serial)
+	if c.Serial < rec.Serial.Value()-1 {
+		return "", unauth("superseded serial %d (current %d)", c.Serial, rec.Serial.Value())
 	}
-	if string(c.Cnf) != string(fleet.Cnf(rec.SigPub)) {
+	if string(c.Cnf) != string(fleet.Cnf(rec.SigPub.Value())) {
 		return "", unauth("worker token invalid")
 	}
 	ts, nonce, psig, err := fleet.ParsePoP(pop)
@@ -295,7 +295,7 @@ func (r *Registrar) Authenticate(ctx context.Context, authorization, pop, method
 	if d := now.Sub(time.Unix(ts, 0)); d > fleet.MaxPoPSkew || d < -fleet.MaxPoPSkew {
 		return "", unauth("proof of possession invalid")
 	}
-	if !ed25519.Verify(rec.SigPub, fleet.PoPMessage(method, path, ts, nonce, raw), psig) {
+	if !ed25519.Verify(rec.SigPub.Value(), fleet.PoPMessage(method, path, ts, nonce, raw), psig) {
 		return "", unauth("proof of possession invalid")
 	}
 	key := base64.RawURLEncoding.EncodeToString(psig)
@@ -346,31 +346,31 @@ var errNotActive = errors.New("worker is not active (revoked)")
 // and the worker's signed heartbeat is fresh (a dead worker's token just expires).
 func (r *Registrar) rotate(ctx context.Context, wid string, force bool) (bool, error) {
 	now := r.cfg.Now()
-	rec, err := store.Get(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: wid})
+	rec, err := store.Get(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
 	if err != nil {
 		return false, err
 	}
-	if rec.State != "active" {
+	if rec.State.Value() != "active" {
 		return false, nil
 	}
 	if !force {
-		if rec.TokenExp.Sub(now) >= r.cfg.TokenTTL/2 || !r.alive(ctx, rec, now) {
+		if rec.TokenExp.Value().Sub(now) >= r.cfg.TokenTTL/2 || !r.alive(ctx, rec, now) {
 			return false, nil
 		}
 	}
-	serial := rec.Serial
-	next, err := store.CAS(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: wid}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
-		if cur == nil || cur.State != "active" || cur.Serial != serial {
+	serial := rec.Serial.Value()
+	next, err := store.CAS(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
+		if cur == nil || cur.State.Value() != "active" || cur.Serial.Value() != serial {
 			return nil, store.ErrNoChange
 		}
 		n := *cur
-		n.Serial++
+		n.Serial = store.Set(n.Serial.Value() + 1)
 		if err := r.issue(&n, now); err != nil {
 			return nil, err
 		}
 		return &n, nil
 	})
-	if err != nil || next == nil || next.Serial == serial {
+	if err != nil || next == nil || next.Serial.Value() == serial {
 		return false, err
 	}
 	r.remember(next, now)
@@ -380,23 +380,23 @@ func (r *Registrar) rotate(ctx context.Context, wid string, force bool) (bool, e
 // alive reports a fresh heartbeat signed by the worker's registered key.
 func (r *Registrar) alive(ctx context.Context, rec *store.WorkerRecord, now time.Time) bool {
 	hb, err := store.Get(ctx, r.cfg.Fleet, &store.Heartbeat{Wid: rec.Wid})
-	if err != nil || now.Sub(hb.At) >= 2*r.cfg.Heartbeat {
+	if err != nil || now.Sub(hb.At.Value()) >= 2*r.cfg.Heartbeat {
 		return false
 	}
-	return fleet.VerifyHeartbeat(rec.SigPub, hb)
+	return fleet.VerifyHeartbeat(rec.SigPub.Value(), hb)
 }
 
 // Revoke revokes a worker: generation + 1, sealed token cleared.
 func (r *Registrar) Revoke(ctx context.Context, wid, reason string) error {
-	next, err := store.CAS(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: wid}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
+	next, err := store.CAS(ctx, r.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
-		if cur.State == "revoked" {
+		if cur.State.Value() == "revoked" {
 			return nil, store.ErrNoChange
 		}
 		n := *cur
-		n.State, n.Gen, n.Sealed, n.TokenExp = "revoked", cur.Gen+1, nil, time.Time{}
+		n.State, n.Gen, n.Sealed, n.TokenExp = store.Set("revoked"), store.Set(cur.Gen.Value()+1), store.Set(nil), store.Set(time.Time{})
 		return &n, nil
 	})
 	if err != nil {

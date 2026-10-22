@@ -35,39 +35,39 @@ func EnsureKeys(ctx context.Context, control, fleet *store.Bucket, now time.Time
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, fmt.Errorf("fleet/cfg: %w", err)
 	}
-	if cfg == nil || !hasValid(cfg.Keys, now) || cfg.Params.PollInterval == 0 {
+	if cfg == nil || !hasValid(cfg.Keys.Value(), now) || cfg.Params.Value().PollInterval == 0 {
 		var fresh *orchestrator.OrchKeyRecord
-		if cfg == nil || !hasValid(cfg.Keys, now) {
+		if cfg == nil || !hasValid(cfg.Keys.Value(), now) {
 			pub, priv, err := ed25519.GenerateKey(rand.Reader)
 			if err != nil {
 				return nil, err
 			}
-			fresh = &orchestrator.OrchKeyRecord{Kid: kidOf(pub), Seed: priv.Seed(), Created: now.UTC(), NotAfter: now.Add(orchestrator.KeyLifetime).UTC()}
+			fresh = &orchestrator.OrchKeyRecord{Kid: store.ID(kidOf(pub)), Seed: store.Set(priv.Seed()), Created: store.Set(now.UTC()), NotAfter: store.Set(now.Add(orchestrator.KeyLifetime).UTC())}
 			// The seed first: a published key whose seed is missing could never sign.
 			if err := store.Create(ctx, control, fresh); err != nil {
-				return nil, fmt.Errorf("okey/%s: %w", fresh.Kid, err)
+				return nil, fmt.Errorf("okey/%s: %w", fresh.Kid.Value(), err)
 			}
 		}
 		cfg, err = store.CAS(ctx, fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
-			next := store.FleetConfig{Name: "cfg"}
+			next := store.FleetConfig{Name: store.ID("cfg")}
 			if cur != nil {
 				next = *cur
-				next.Keys = slices.Clone(cur.Keys)
+				next.Keys = store.Set(slices.Clone(cur.Keys.Value()))
 			}
 			changed := false
-			if fresh != nil && !hasValid(next.Keys, now) {
-				pub := ed25519.NewKeyFromSeed(fresh.Seed).Public().(ed25519.PublicKey)
-				next.Keys = append(next.Keys, store.FleetKey{Kid: fresh.Kid, Pub: pub, NotAfter: fresh.NotAfter})
+			if fresh != nil && !hasValid(next.Keys.Value(), now) {
+				pub := ed25519.NewKeyFromSeed(fresh.Seed.Value()).Public().(ed25519.PublicKey)
+				next.Keys = store.Set(append(next.Keys.Value(), store.FleetKey{Kid: fresh.Kid.Value(), Pub: pub, NotAfter: fresh.NotAfter.Value()}))
 				changed = true
 			}
-			if next.Params.PollInterval == 0 {
-				next.Params = params
+			if next.Params.Value().PollInterval == 0 {
+				next.Params = store.Set(params)
 				changed = true
 			}
 			if !changed {
 				return nil, store.ErrNoChange
 			}
-			next.Gen++
+			next.Gen = store.Set(next.Gen.Value() + 1)
 			return &next, nil
 		})
 		if err != nil {
@@ -107,13 +107,13 @@ func keysOf(ctx context.Context, control *store.Bucket, cfg *store.FleetConfig, 
 	before := func(a, b *store.FleetKey) bool {
 		return a.NotAfter.Before(b.NotAfter) || a.NotAfter.Equal(b.NotAfter) && a.Kid < b.Kid
 	}
-	for i, k := range cfg.Keys {
+	for i, k := range cfg.Keys.Value() {
 		if len(k.Pub) != ed25519.PublicKeySize {
 			continue
 		}
 		ks.Verify[k.Kid] = ed25519.PublicKey(k.Pub)
 		ks.Pubs = append(ks.Pubs, ed25519.PublicKey(k.Pub))
-		k := &cfg.Keys[i]
+		k := &cfg.Keys.Value()[i]
 		if !k.NotAfter.After(now) {
 			continue
 		}
@@ -130,14 +130,14 @@ func keysOf(ctx context.Context, control *store.Bucket, cfg *store.FleetConfig, 
 	if pick == nil {
 		return nil, errors.New("fleet/cfg holds no valid orchestrator key")
 	}
-	rec, err := store.Get(ctx, control, &orchestrator.OrchKeyRecord{Kid: pick.Kid})
+	rec, err := store.Get(ctx, control, &orchestrator.OrchKeyRecord{Kid: store.ID(pick.Kid)})
 	if err != nil {
 		return nil, fmt.Errorf("okey/%s: %w", pick.Kid, err)
 	}
-	if len(rec.Seed) != ed25519.SeedSize {
+	if len(rec.Seed.Value()) != ed25519.SeedSize {
 		return nil, fmt.Errorf("okey/%s: invalid seed", pick.Kid)
 	}
-	key := ed25519.NewKeyFromSeed(rec.Seed)
+	key := ed25519.NewKeyFromSeed(rec.Seed.Value())
 	if !bytes.Equal(key.Public().(ed25519.PublicKey), pick.Pub) {
 		return nil, fmt.Errorf("okey/%s does not match the published key", pick.Kid)
 	}

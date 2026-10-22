@@ -212,14 +212,14 @@ func (p *Promoter) Promote(ctx context.Context, id string) error {
 	if _, err := store.Segment(id); err != nil {
 		return nil
 	}
-	rec, err := store.Get(ctx, p.c.Fleet, &store.JobRecord{ID: id})
+	rec, err := store.Get(ctx, p.c.Fleet, &store.JobRecord{ID: store.ID(id)})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if rec.State != jobSucceded || rec.Promotion != Pending {
+	if rec.State.Value() != jobSucceded || rec.Promotion.Value() != Pending {
 		return nil
 	}
 	return p.promote(ctx, rec)
@@ -229,11 +229,11 @@ func (p *Promoter) workerKey(ctx context.Context, wid string) ed25519.PublicKey 
 	if _, err := store.Segment(wid); err != nil {
 		return nil
 	}
-	w, err := store.Get(ctx, p.c.Fleet, &store.WorkerRecord{Wid: wid})
-	if err != nil || len(w.SigPub) != ed25519.PublicKeySize {
+	w, err := store.Get(ctx, p.c.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
+	if err != nil || len(w.SigPub.Value()) != ed25519.PublicKeySize {
 		return nil
 	}
-	return w.SigPub
+	return w.SigPub.Value()
 }
 
 func (p *Promoter) specKeys(ctx context.Context) []ed25519.PublicKey {
@@ -242,7 +242,7 @@ func (p *Promoter) specKeys(ctx context.Context) []ed25519.PublicKey {
 		return nil
 	}
 	var out []ed25519.PublicKey
-	for _, k := range fc.Keys {
+	for _, k := range fc.Keys.Value() {
 		out = append(out, k.Pub)
 	}
 	return out
@@ -251,25 +251,25 @@ func (p *Promoter) specKeys(ctx context.Context) []ed25519.PublicKey {
 // job checks the record's signatures (a worker can overwrite job records, ADR 0013 T10) and
 // the staging key of its result. ok is false for a record that is not (yet) trustworthy.
 func (p *Promoter) job(ctx context.Context, rec *store.JobRecord, log *slog.Logger) (j *Job, compSHA, bad string, ok bool) {
-	spec, ok := fleet.DecodeSpec(rec.Spec)
-	if !ok || !fleet.VerifySpec(p.specKeys(ctx), rec.Spec, rec.SpecSig) {
+	spec, ok := fleet.DecodeSpec(rec.Spec.Value())
+	if !ok || !fleet.VerifySpec(p.specKeys(ctx), rec.Spec.Value(), rec.SpecSig.Value()) {
 		log.Warn("security: job spec not signed by an orchestrator; not promoted")
 		return nil, "", "", false
 	}
-	if !fleet.VerifyResult(p.workerKey(ctx, rec.Owner), rec.ID, rec.Epoch, rec.Result, rec.ResultSig) {
+	if !fleet.VerifyResult(p.workerKey(ctx, rec.Owner.Value()), rec.ID.Value(), rec.Epoch.Value(), rec.Result.Value(), rec.ResultSig.Value()) {
 		log.Warn("security: job result not signed by its owner; not promoted")
 		return nil, "", "", false
 	}
-	res, ok := fleet.DecodeResult(rec.Result)
+	res, ok := fleet.DecodeResult(rec.Result.Value())
 	if !ok || res.Status != "ok" {
 		return nil, "", "", false
 	}
 	parts := strings.Split(res.Complete, "/")
-	if len(parts) != 5 || parts[0] != "staging" || parts[1] != spec.BuildID || parts[2] != rec.ID ||
+	if len(parts) != 5 || parts[0] != "staging" || parts[1] != spec.BuildID || parts[2] != rec.ID.Value() ||
 		!segmentRE.MatchString(parts[1]) || !attemptRE.MatchString(parts[3]) || parts[4] != "COMPLETE.json" {
 		return nil, "", fmt.Sprintf("result names %.200q, not a staging key of this job", res.Complete), true
 	}
-	return &Job{ID: rec.ID, Build: spec.BuildID, Project: spec.Project, Worker: rec.Owner,
+	return &Job{ID: rec.ID.Value(), Build: spec.BuildID, Project: spec.Project, Worker: rec.Owner.Value(),
 		Staging: strings.Join(parts[:4], "/") + "/"}, res.CompSHA, "", true
 }
 
@@ -281,8 +281,14 @@ func (p *Promoter) lock(jobID string) *store.Lease {
 
 // promoLock is the record shape of plock/<job>, to delete it once the job is promoted.
 type promoLock struct {
-	Job  string `pk:"plock" cbor:"-"`
-	ETag string `etag:"true" cbor:"-"`
+	Job  store.KeyField  `pk:"plock" cbor:"-"`
+	ETag store.ETagField `etag:"true" cbor:"-"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *promoLock) Draft() *promoLock {
+	return &promoLock{Job: r.Job,
+		ETag: r.ETag}
 }
 
 // acquire waits until this orchestrator holds the job lock, renewing it in the background
@@ -340,7 +346,7 @@ func (o *outcome) add(f func(*outcome)) {
 }
 
 func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
-	log := p.c.Log.With("job", rec.ID, "worker", rec.Owner, "orchestrator", p.c.Name)
+	log := p.c.Log.With("job", rec.ID.Value(), "worker", rec.Owner.Value(), "orchestrator", p.c.Name)
 	j, compSHA, bad, ok := p.job(ctx, rec, log)
 	if !ok {
 		return nil
@@ -391,8 +397,8 @@ func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
 	if err != nil {
 		return err
 	}
-	if cur.Promotion != Pending {
-		if cur.Promotion == Done {
+	if cur.Promotion.Value() != Pending {
+		if cur.Promotion.Value() == Done {
 			p.confirm(ctx, j, paths, log)
 		}
 		return nil
@@ -412,7 +418,7 @@ func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
 	case out.failed != nil:
 		return p.fail(ctx, rec, log, out.failed.Error())
 	case len(out.unknownRefs) > 0:
-		if p.c.Now().Sub(rec.Changed) < unknownRefGrace {
+		if p.c.Now().Sub(rec.Changed.Value()) < unknownRefGrace {
 			log.Info("job promotion waits for references that are not served yet", "refs", strings.Join(out.unknownRefs, " "))
 			return nil
 		}
@@ -450,7 +456,7 @@ func (p *Promoter) unlock(ctx context.Context, l *store.Lease) {
 	if err := l.Release(ctx); err != nil {
 		return
 	}
-	if rec, err := store.Get(ctx, p.c.Control, &promoLock{Job: strings.TrimPrefix(l.Key, "plock/")}); err == nil {
+	if rec, err := store.Get(ctx, p.c.Control, &promoLock{Job: store.ID(strings.TrimPrefix(l.Key, "plock/"))}); err == nil {
 		_ = store.Delete(ctx, p.c.Control, rec)
 	}
 }
@@ -464,18 +470,18 @@ func (p *Promoter) fail(ctx context.Context, rec *store.JobRecord, log *slog.Log
 // finish CASes the verdict into the job record (only the attempt that was promoted).
 func (p *Promoter) finish(ctx context.Context, rec *store.JobRecord, verdict string, nonRepro []string) error {
 	_, err := store.CAS(ctx, p.c.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
-		if cur == nil || cur.State != jobSucceded || cur.Epoch != rec.Epoch || cur.Owner != rec.Owner || cur.Promotion != Pending {
+		if cur == nil || cur.State.Value() != jobSucceded || cur.Epoch.Value() != rec.Epoch.Value() || cur.Owner.Value() != rec.Owner.Value() || cur.Promotion.Value() != Pending {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Promotion = verdict
-		next.NonReproducible = slices.Clone(cur.NonReproducible)
+		next.Promotion = store.Set(verdict)
+		next.NonReproducible = store.Set(slices.Clone(cur.NonReproducible.Value()))
 		for _, p := range nonRepro {
-			if !slices.Contains(next.NonReproducible, p) {
-				next.NonReproducible = append(next.NonReproducible, p)
+			if !slices.Contains(next.NonReproducible.Value(), p) {
+				next.NonReproducible = store.Set(append(next.NonReproducible.Value(), p))
 			}
 		}
-		slices.Sort(next.NonReproducible)
+		slices.Sort(next.NonReproducible.Value())
 		return &next, nil
 	})
 	return err

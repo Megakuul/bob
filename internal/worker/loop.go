@@ -413,7 +413,7 @@ func (w *Worker) poll(ctx context.Context, class string) error {
 	if err != nil {
 		return err
 	}
-	if slot.Taken != "" {
+	if slot.Taken.Value() != "" {
 		// Wake-fed workers fall behind; the head hint skips what others found closed.
 		if h, err := q.Head(ctx); err == nil && h > c+1 {
 			c, slot = h, nil
@@ -422,8 +422,8 @@ func (w *Worker) poll(ctx context.Context, class string) error {
 	// Backlog: try one random slot in (cursor, tail) before the cursor (spread, no herd).
 	if tail, err := q.Tail(ctx); err == nil && tail > c+spreadMin {
 		r := c + 1 + w.rng.Uint64N(tail-c-1)
-		if s, err := q.Read(ctx, r); err == nil && s.Taken == "" {
-			w.claim(ctx, class, r, s.Job, true)
+		if s, err := q.Read(ctx, r); err == nil && s.Taken.Value() == "" {
+			w.claim(ctx, class, r, s.Job.Value(), true)
 		}
 	}
 	start := c
@@ -438,8 +438,8 @@ func (w *Worker) poll(ctx context.Context, class string) error {
 				return err
 			}
 		}
-		if slot.Taken == "" {
-			w.claim(ctx, class, c, slot.Job, true)
+		if slot.Taken.Value() == "" {
+			w.claim(ctx, class, c, slot.Job.Value(), true)
 		}
 		c++
 		slot = nil
@@ -471,24 +471,24 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 
 	now := w.now()
 	verdict := ""
-	rec, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: jobID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	rec, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(jobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		switch {
 		case cur == nil:
 			verdict = "orphan"
 			return nil, store.ErrNoChange
-		case cur.State != "queued":
+		case cur.State.Value() != "queued":
 			verdict = "stale"
 			return nil, store.ErrNoChange
-		case !fleet.VerifySpec(keys, cur.Spec, cur.SpecSig):
+		case !fleet.VerifySpec(keys, cur.Spec.Value(), cur.SpecSig.Value()):
 			verdict = "bad-spec"
 			return nil, store.ErrNoChange
 		}
-		if spec, ok := fleet.DecodeSpec(cur.Spec); ok && spec.Class != "" && spec.Class != class {
+		if spec, ok := fleet.DecodeSpec(cur.Spec.Value()); ok && spec.Class != "" && spec.Class != class {
 			verdict = "stale" // a slot in the wrong queue never makes a worker run a job of another class
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.State, next.Owner, next.Epoch, next.Attempt, next.Claimed = "claimed", w.cfg.ID, cur.Epoch+1, cur.Attempt+1, now
+		next.State, next.Owner, next.Epoch, next.Attempt, next.Claimed = store.Set("claimed"), store.Set(w.cfg.ID), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(now)
 		verdict = "claimed"
 		return &next, nil
 	})
@@ -501,13 +501,13 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 	}
 	switch verdict {
 	case "claimed":
-		j := &job{claim: Claim{JobID: jobID, Epoch: rec.Epoch, Attempt: rec.Attempt, Spec: rec.Spec}, class: class, viaPoll: viaPoll,
+		j := &job{claim: Claim{JobID: jobID, Epoch: rec.Epoch.Value(), Attempt: rec.Attempt.Value(), Spec: rec.Spec.Value()}, class: class, viaPoll: viaPoll,
 			check: make(chan struct{}, 1)}
 		w.mu.Lock()
 		w.claiming--
 		w.running[jobID] = j
 		w.mu.Unlock()
-		w.emit(Event{Kind: "claimed", JobID: jobID, Epoch: rec.Epoch})
+		w.emit(Event{Kind: "claimed", JobID: jobID, Epoch: rec.Epoch.Value()})
 		j.seq = seq
 		w.start(ctx, j)
 		return
@@ -529,14 +529,14 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 // written on an open slot.
 func (w *Worker) mark(ctx context.Context, class string, seq uint64, jobID, tk string) {
 	_, err := store.CAS(ctx, w.cfg.Fleet, store.QueueSlotKey(class, seq), func(cur *store.QueueSlot) (*store.QueueSlot, error) {
-		if cur == nil || cur.Job != jobID || cur.Taken == tk {
+		if cur == nil || cur.Job.Value() != jobID || cur.Taken.Value() == tk {
 			return nil, store.ErrNoChange
 		}
-		if cur.Taken != "" && !(cur.Taken == "stale" && tk == w.cfg.ID) {
+		if cur.Taken.Value() != "" && !(cur.Taken.Value() == "stale" && tk == w.cfg.ID) {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Taken = tk
+		next.Taken = store.Set(tk)
 		return &next, nil
 	})
 	if err != nil && ctx.Err() == nil {
@@ -568,9 +568,9 @@ func (w *Worker) start(ctx context.Context, j *job) {
 // It reports false (lease lost) when the guard fails.
 func (w *Worker) update(ctx context.Context, j *job, fn func(cur, next *store.JobRecord) bool) (bool, error) {
 	held := false
-	_, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: j.claim.JobID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	_, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(j.claim.JobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		held = false
-		if cur == nil || cur.Owner != w.cfg.ID || cur.Epoch != j.claim.Epoch {
+		if cur == nil || cur.Owner.Value() != w.cfg.ID || cur.Epoch.Value() != j.claim.Epoch {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
@@ -588,18 +588,18 @@ func (w *Worker) runJob(ctx, jctx context.Context, j *job) {
 	lost := func() { w.emit(Event{Kind: "lease-lost", JobID: id, Epoch: ep, Err: ErrLeaseLost}) }
 	pub := w.cfg.SigKey.Public().(ed25519.PublicKey)
 	ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
-		switch cur.State {
+		switch cur.State.Value() {
 		case "claimed":
 		case "succeeded", "failed":
 			// A result in this worker's name that it did not sign is forged (ADR 0013 T10).
-			if fleet.VerifyResult(pub, id, ep, cur.Result, cur.ResultSig) {
+			if fleet.VerifyResult(pub, id, ep, cur.Result.Value(), cur.ResultSig.Value()) {
 				return false
 			}
-			next.Result, next.ResultSig = nil, nil
+			next.Result, next.ResultSig = store.Set(nil), store.Set(nil)
 		default:
 			return false
 		}
-		next.State, next.Changed = "running", w.now()
+		next.State, next.Changed = store.Set("running"), store.Set(w.now())
 		return true
 	})
 	if err != nil || !ok {
@@ -632,15 +632,15 @@ watch:
 		if leaseLost || cancelled || !w.active() {
 			continue
 		}
-		rec, err := store.Get(ctx, w.cfg.Fleet, &store.JobRecord{ID: id})
+		rec, err := store.Get(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(id)})
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			leaseLost = true
 		case err != nil:
 			continue
-		case rec.Owner != w.cfg.ID || rec.Epoch != ep:
+		case rec.Owner.Value() != w.cfg.ID || rec.Epoch.Value() != ep:
 			leaseLost = true
-		case rec.Cancel || rec.State == "cancelled":
+		case rec.Cancel.Value() || rec.State.Value() == "cancelled":
 			cancelled = true
 		default:
 			continue
@@ -655,10 +655,10 @@ watch:
 		lost()
 	case cancelled:
 		if ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
-			if cur.State != "claimed" && cur.State != "running" {
+			if cur.State.Value() != "claimed" && cur.State.Value() != "running" {
 				return false
 			}
-			next.State, next.Changed = "cancelled", w.now()
+			next.State, next.Changed = store.Set("cancelled"), store.Set(w.now())
 			return true
 		}); err == nil && ok {
 			w.emit(Event{Kind: "cancelled", JobID: id, Epoch: ep})
@@ -694,18 +694,18 @@ func (w *Worker) finish(ctx context.Context, j *job, out Outcome, lost func()) {
 	}
 	pub := w.cfg.SigKey.Public().(ed25519.PublicKey)
 	ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
-		switch cur.State {
+		switch cur.State.Value() {
 		case "claimed", "running":
 		case "succeeded", "failed":
 			// A result this worker did not sign was forged by another fleet writer
 			// (ADR 0013 T10); the owner's own result replaces it.
-			if fleet.VerifyResult(pub, id, ep, cur.Result, cur.ResultSig) {
+			if fleet.VerifyResult(pub, id, ep, cur.Result.Value(), cur.ResultSig.Value()) {
 				return false
 			}
 		default:
 			return false
 		}
-		next.State, next.Result, next.ResultSig, next.Changed = state, rs, fleet.SignResult(w.cfg.SigKey, id, ep, rs), now
+		next.State, next.Result, next.ResultSig, next.Changed = store.Set(state), store.Set(rs), store.Set(fleet.SignResult(w.cfg.SigKey, id, ep, rs)), store.Set(now)
 		return true
 	})
 	switch {
@@ -771,7 +771,7 @@ func (w *Worker) refresh(ctx context.Context) error {
 			return
 		}
 		keys := append([]ed25519.PublicKey(nil), w.cfg.Keys...)
-		for _, k := range fc.Keys {
+		for _, k := range fc.Keys.Value() {
 			if len(k.Pub) == ed25519.PublicKeySize {
 				keys = append(keys, ed25519.PublicKey(k.Pub))
 			}
@@ -781,8 +781,8 @@ func (w *Worker) refresh(ctx context.Context) error {
 		w.mu.Unlock()
 	}
 	readRec := func() {
-		rec, _, err := store.GetCached(ctx, w.cfg.Fleet, &recCache, &store.WorkerRecord{Wid: w.cfg.ID})
-		if err != nil || rec.State != "revoked" {
+		rec, _, err := store.GetCached(ctx, w.cfg.Fleet, &recCache, &store.WorkerRecord{Wid: store.ID(w.cfg.ID)})
+		if err != nil || rec.State.Value() != "revoked" {
 			return
 		}
 		slog.Error("worker: revoked, exiting", "worker", w.cfg.ID)

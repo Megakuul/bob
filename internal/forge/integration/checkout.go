@@ -68,7 +68,7 @@ func (m *Minter) MintForJob(ctx context.Context, jobID, repo string, expires tim
 		ttl = orchestrator.CheckoutTTL
 	}
 	co, err := a.IssueCheckout(ctx, forge.CheckoutRequest{JobID: jobID, TTL: ttl,
-		Repo: forge.Repo{Forge: forge.Kind(rec.Kind), ID: rid, FullName: link.FullName, CloneURL: link.CloneURL}})
+		Repo: forge.Repo{Forge: forge.Kind(rec.Kind.Value()), ID: rid, FullName: link.FullName.Value(), CloneURL: link.CloneURL.Value()}})
 	m.Registry.Report(ctx, forgeID, err)
 	if err != nil {
 		return "", orchestrator.Checkout{}, err

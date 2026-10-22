@@ -67,7 +67,7 @@ func TestRLOG102ForgedChunks(t *testing.T) {
 		}
 		for _, j := range js {
 			if j.State == "JOB_STATE_RUNNING" && j.Kind != "JOB_KIND_EVAL" {
-				if victim, err = store.Get(ctx, fleet, &store.JobRecord{ID: j.ID}); err != nil {
+				if victim, err = store.Get(ctx, fleet, &store.JobRecord{ID: store.ID(j.ID)}); err != nil {
 					return err.Error()
 				}
 				return ""
@@ -93,18 +93,18 @@ func TestRLOG102ForgedChunks(t *testing.T) {
 	defer s.Close()
 	sub := "orchestrator-0.000000000000000000000000"
 	chunk := func(epoch int64, lines []*workerv1.LiveLine) *workerv1.LiveChunk {
-		return &workerv1.LiveChunk{SubscriptionId: sub, JobId: victim.ID, Epoch: epoch, Lines: lines}
+		return &workerv1.LiveChunk{SubscriptionId: sub, JobId: victim.ID.Value(), Epoch: epoch, Lines: lines}
 	}
 	cases := []struct {
 		name string
 		c    *workerv1.LiveChunk
 	}{
-		{"cross-job, current epoch", chunk(victim.Epoch, forgedLines(label, 1, 50, 0))},
-		{"stale epoch", chunk(victim.Epoch-1, forgedLines(label, 1, 50, 0))},
-		{"future epoch", chunk(victim.Epoch+1, forgedLines(label, 1, 50, 0))},
-		{"5,001 lines", chunk(victim.Epoch, forgedLines(label, 1, 5001, 0))},
-		{"line over 4 KiB", chunk(victim.Epoch, forgedLines(label, 1, 1, 5000))},
-		{"restart forging attempt 2", &workerv1.LiveChunk{SubscriptionId: sub, JobId: victim.ID, Epoch: victim.Epoch,
+		{"cross-job, current epoch", chunk(victim.Epoch.Value(), forgedLines(label, 1, 50, 0))},
+		{"stale epoch", chunk(victim.Epoch.Value()-1, forgedLines(label, 1, 50, 0))},
+		{"future epoch", chunk(victim.Epoch.Value()+1, forgedLines(label, 1, 50, 0))},
+		{"5,001 lines", chunk(victim.Epoch.Value(), forgedLines(label, 1, 5001, 0))},
+		{"line over 4 KiB", chunk(victim.Epoch.Value(), forgedLines(label, 1, 1, 5000))},
+		{"restart forging attempt 2", &workerv1.LiveChunk{SubscriptionId: sub, JobId: victim.ID.Value(), Epoch: victim.Epoch.Value(),
 			Restarts: []*workerv1.LiveRestart{{Package: label, Attempt: 2, FromSeq: 1}}}},
 	}
 	for _, c := range cases {
@@ -113,7 +113,7 @@ func TestRLOG102ForgedChunks(t *testing.T) {
 			break
 		}
 	}
-	flood := chunk(victim.Epoch, forgedLines(label, 1, 900, 4000)) // ~3.6 MiB each
+	flood := chunk(victim.Epoch.Value(), forgedLines(label, 1, 900, 4000)) // ~3.6 MiB each
 	for range 10 {
 		if err := s.SendChunk(flood); err != nil {
 			break
@@ -128,8 +128,8 @@ watch:
 			if !ok {
 				break watch
 			}
-			if ls := m.GetLiveSubscribe(); ls != nil && ls.GetJobId() == victim.ID {
-				t.Errorf("the hostile worker was subscribed to job %s, which %s holds", victim.ID, victim.Owner)
+			if ls := m.GetLiveSubscribe(); ls != nil && ls.GetJobId() == victim.ID.Value() {
+				t.Errorf("the hostile worker was subscribed to job %s, which %s holds", victim.ID.Value(), victim.Owner.Value())
 			}
 		case <-deadline:
 			break watch

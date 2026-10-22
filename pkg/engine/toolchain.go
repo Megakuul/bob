@@ -146,8 +146,10 @@ func CrossRefused(n *ir.Node) error {
 		return nil
 	}
 	// SPEC R-PLAT-005 text: "<label>: OCaml packages cannot be cross-compiled yet (requested
-	// <p> on a <host> host)"; §02.3 has no code for it yet, 1010 is the nearest (I-M7b NEEDS).
-	e := diag.New(1010, "label", n.Label, "system", p.NixSystem())
+	// <p> on a <host> host)", exit 2; §02.3 has no code for it yet, so it is the usage error 6
+	// ("<label> does not support <p> (it allows: <host>)") with the SPEC text as cause
+	// (I-M7b NEEDS).
+	e := diag.New(6, "label", n.Label, "platform", string(p), "platforms", string(HostPlatform()))
 	e.Cause = fmt.Sprintf("%s packages cannot be cross-compiled yet (requested %s on a %s host)", name, p, HostPlatform())
 	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
 	return e

@@ -39,30 +39,50 @@ const (
 // control bucket; SPEC wants it sealed with an orchestrator data key that is not defined yet
 // (D-IB4-6), so it is stored as generated until that key exists.
 type HookRecord struct {
-	ID   string `pk:"nhook" cbor:"-"`
-	ETag string `etag:"true" cbor:"-"`
+	ID   store.KeyField  `pk:"nhook" cbor:"-"`
+	ETag store.ETagField `etag:"true" cbor:"-"`
 
-	URL        string    `cbor:"u,omitempty"`
-	Secret     string    `cbor:"s,omitempty"`
-	Events     []string  `cbor:"e,omitempty"`
-	Projects   []string  `cbor:"p,omitempty"` // empty = all
-	Enabled    bool      `cbor:"on,omitempty"`
-	LastResult string    `cbor:"lr,omitempty"`
-	Created    time.Time `cbor:"c,omitzero"`
+	URL        store.DataField[string]    `cbor:"u,omitempty"`
+	Secret     store.DataField[string]    `cbor:"s,omitempty"`
+	Events     store.DataField[[]string]  `cbor:"e,omitempty"`
+	Projects   store.DataField[[]string]  `cbor:"p,omitempty"` // empty = all
+	Enabled    store.DataField[bool]      `cbor:"on,omitempty"`
+	LastResult store.DataField[string]    `cbor:"lr,omitempty"`
+	Created    store.DataField[time.Time] `cbor:"c,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *HookRecord) Draft() *HookRecord {
+	return &HookRecord{ID: r.ID,
+		ETag:       r.ETag,
+		URL:        store.Carry(r.URL),
+		Secret:     store.Carry(r.Secret),
+		Events:     store.Carry(r.Events),
+		Projects:   store.Carry(r.Projects),
+		Enabled:    store.Carry(r.Enabled),
+		LastResult: store.Carry(r.LastResult),
+		Created:    store.Carry(r.Created)}
 }
 
 // HookKey is the key model of nhook/<id>.
-func HookKey(id string) *HookRecord { return &HookRecord{ID: id} }
+func HookKey(id string) *HookRecord { return &HookRecord{ID: store.ID(id)} }
 
 // HookIndex is nhooks/all (≤ MaxHooks ids).
 type HookIndex struct {
-	Name string   `pk:"nhooks" cbor:"-"`
-	ETag string   `etag:"true" cbor:"-"`
-	IDs  []string `cbor:"ids,omitempty"`
+	Name store.KeyField            `pk:"nhooks" cbor:"-"`
+	ETag store.ETagField           `etag:"true" cbor:"-"`
+	IDs  store.DataField[[]string] `cbor:"ids,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *HookIndex) Draft() *HookIndex {
+	return &HookIndex{Name: r.Name,
+		ETag: r.ETag,
+		IDs:  store.Carry(r.IDs)}
 }
 
 // HookIndexKey is the key model of nhooks/all.
-func HookIndexKey() *HookIndex { return &HookIndex{Name: "all"} }
+func HookIndexKey() *HookIndex { return &HookIndex{Name: store.ID("all")} }
 
 // MaxHooks bounds the receivers (ListNotifyWebhooks: ≤ 50).
 const MaxHooks = 50
@@ -152,7 +172,7 @@ func (n *Notifier) ReleasePublished(ctx context.Context, project string, release
 }
 
 func (h *HookRecord) wants(event, project string) bool {
-	return h.Enabled && slices.Contains(h.Events, event) && (len(h.Projects) == 0 || slices.Contains(h.Projects, project))
+	return h.Enabled.Value() && slices.Contains(h.Events.Value(), event) && (len(h.Projects.Value()) == 0 || slices.Contains(h.Projects.Value(), project))
 }
 
 // Publish queues body for every enabled receiver of event and project, then wakes the
@@ -169,7 +189,7 @@ func (n *Notifier) Publish(ctx context.Context, event, project string, body []by
 		return err
 	}
 	var errs []error
-	for _, id := range idx.IDs {
+	for _, id := range idx.IDs.Value() {
 		h, _, err := store.GetCached(ctx, n.Control, &n.hooks, HookKey(id))
 		if errors.Is(err, store.ErrNotFound) {
 			continue
@@ -252,7 +272,7 @@ func (n *Notifier) attempt(ctx context.Context, did string, p Pending, now time.
 	if err != nil {
 		return err
 	}
-	if !h.Enabled {
+	if !h.Enabled.Value() {
 		return n.outbox.Remove(ctx, did)
 	}
 	code, sendErr := n.send(ctx, h, did, p)
@@ -271,7 +291,7 @@ func (n *Notifier) attempt(ctx context.Context, did string, p Pending, now time.
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		cur.LastResult = result
+		cur.LastResult = store.Set(result)
 		return cur, nil
 	}); err != nil {
 		errs = append(errs, err)
@@ -284,12 +304,12 @@ func (n *Notifier) attempt(ctx context.Context, did string, p Pending, now time.
 
 // send POSTs the delivery; only a 2xx answer is a success.
 func (n *Notifier) send(ctx context.Context, h *HookRecord, did string, p Pending) (int, error) {
-	if u, err := url.Parse(h.URL); err != nil || u.Scheme != "https" || u.Host == "" {
+	if u, err := url.Parse(h.URL.Value()); err != nil || u.Scheme != "https" || u.Host == "" {
 		return 0, errors.New("receiver URL is not https")
 	}
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.URL, bytes.NewReader(p.Body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.URL.Value(), bytes.NewReader(p.Body))
 	if err != nil {
 		return 0, err
 	}
@@ -297,7 +317,7 @@ func (n *Notifier) send(ctx context.Context, h *HookRecord, did string, p Pendin
 	req.Header.Set("User-Agent", "bob")
 	req.Header.Set("Bob-Event", p.Event)
 	req.Header.Set("Bob-Delivery", did)
-	req.Header.Set("Bob-Signature", Sign(h.Secret, n.Now(), p.Body))
+	req.Header.Set("Bob-Signature", Sign(h.Secret.Value(), n.Now(), p.Body))
 	resp, err := n.HTTP.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("POST failed: %w", err)

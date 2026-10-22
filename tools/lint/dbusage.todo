@@ -8,4 +8,3 @@
 # No internal/store line is needed; if I-B15 adds one, it must remove it again.
 #
 # Found by I-G1 outside internal/store (owner: worker/logstore unit; remove when the worker stops importing lake):
-import internal/worker/process.go internal/worker builds lake.NewString/NewInt rows directly; the lake schema belongs to internal/logstore

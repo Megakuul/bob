@@ -113,8 +113,8 @@ func main() {
 			}
 		})
 	}
-	for range 15 {
-		fill(ctx, w, next, 20, 50) // 20 new small shards
+	for range 6 {
+		fill(ctx, w, next, 8, 50) // 8 new small shards
 		next += 1000
 		c, err := lake.NewFromClient(ctx, env.Client(nil), name)
 		if err != nil {
@@ -126,7 +126,7 @@ func main() {
 	}
 	stop.Store(true)
 	wg.Wait()
-	fmt.Printf("B: fresh Bucket per query during 15 compactions: %d queries, %d failed\n", queries.Load(), failures.Load())
+	fmt.Printf("B: fresh Bucket per query during 6 compactions: %d queries, %d failed\n", queries.Load(), failures.Load())
 	if failures.Load() > 0 {
 		reproduced = true
 	}

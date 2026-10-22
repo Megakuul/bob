@@ -269,8 +269,8 @@ func (id *Identity) consent(w http.ResponseWriter, r *http.Request) {
 	}
 	code := newToken("")
 	rec := store.OAuthCodeKey(code.reveal())
-	rec.User, rec.Client, rec.Redirect, rec.Challenge = uid, clientID, req.redirect, req.challenge
-	rec.UserAgent, rec.Expires = truncate(r.UserAgent(), 200), id.now().Add(codeTTL)
+	rec.User, rec.Client, rec.Redirect, rec.Challenge = store.Set(uid), store.Set(clientID), store.Set(req.redirect), store.Set(req.challenge)
+	rec.UserAgent, rec.Expires = store.Set(truncate(r.UserAgent(), 200)), store.Set(id.now().Add(codeTTL))
 	if err := store.Create(r.Context(), id.control, rec); err != nil {
 		id.httpFail(w, r, err)
 		return
@@ -344,11 +344,11 @@ func (id *Identity) tokenFromCode(w http.ResponseWriter, r *http.Request, f url.
 		invalid()
 		return
 	}
-	if !id.now().Before(rec.Expires) || rec.Client != clientID || rec.Redirect != f.Get("redirect_uri") || !pkceOK(f.Get("code_verifier"), rec.Challenge) {
+	if !id.now().Before(rec.Expires.Value()) || rec.Client.Value() != clientID || rec.Redirect.Value() != f.Get("redirect_uri") || !pkceOK(f.Get("code_verifier"), rec.Challenge.Value()) {
 		invalid()
 		return
 	}
-	id.issueCLI(w, r, rec.User, rec.UserAgent)
+	id.issueCLI(w, r, rec.User.Value(), rec.UserAgent.Value())
 }
 
 // issueCLI starts a CLI session for uid and answers the token response of §6.3.2.
@@ -445,18 +445,18 @@ func (id *Identity) deviceCode(w http.ResponseWriter, r *http.Request) {
 	now := id.now()
 	dev := newToken("")
 	rec := store.DeviceCodeKey(dev.reveal())
-	rec.State, rec.Client, rec.Interval = "pending", clientID, deviceInterval
-	rec.UserAgent, rec.Expires = truncate(r.UserAgent(), 200), now.Add(deviceTTL)
+	rec.State, rec.Client, rec.Interval = store.Set("pending"), store.Set(clientID), store.Set(deviceInterval)
+	rec.UserAgent, rec.Expires = store.Set(truncate(r.UserAgent(), 200)), store.Set(now.Add(deviceTTL))
 	var userCode string
 	for range 5 {
 		userCode = newUserCode()
 		u := store.DeviceUserKey(userCode)
-		u.Hash, u.Expires = rec.Hash, rec.Expires
+		u.Hash, u.Expires = store.Set(rec.Hash.Value()), store.Set(rec.Expires.Value())
 		err := store.Create(ctx, id.control, u)
 		if errors.Is(err, store.ErrExists) {
 			// A user code still in use (or left behind): take it over only when expired.
 			old, gerr := store.Get(ctx, id.control, u)
-			if gerr == nil && !now.Before(old.Expires) {
+			if gerr == nil && !now.Before(old.Expires.Value()) {
 				if store.Delete(ctx, id.control, old) == nil && store.Create(ctx, id.control, u) == nil {
 					err = nil
 				}
@@ -475,7 +475,7 @@ func (id *Identity) deviceCode(w http.ResponseWriter, r *http.Request) {
 		id.httpFail(w, r, errors.New("no free device user code"))
 		return
 	}
-	rec.UserCode = userCode
+	rec.UserCode = store.Set(userCode)
 	if err := store.Create(ctx, id.control, rec); err != nil {
 		id.httpFail(w, r, err)
 		return
@@ -503,27 +503,27 @@ func (id *Identity) tokenFromDevice(w http.ResponseWriter, r *http.Request, f ur
 	_, err := store.CAS(ctx, id.control, store.DeviceCodeKey(dev), func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
 		uid, ua = "", ""
 		switch {
-		case cur == nil || cur.Client != clientID || cur.State == "used":
+		case cur == nil || cur.Client.Value() != clientID || cur.State.Value() == "used":
 			answer = "invalid_grant"
 			return nil, store.ErrNoChange
-		case !now.Before(cur.Expires):
+		case !now.Before(cur.Expires.Value()):
 			answer = "expired_token"
 			return nil, store.ErrNoChange
 		}
-		interval := time.Duration(max(cur.Interval, deviceInterval)) * time.Second
-		tooFast := !cur.LastPoll.IsZero() && now.Sub(cur.LastPoll) < interval
-		cur.LastPoll = now
+		interval := time.Duration(max(cur.Interval.Value(), deviceInterval)) * time.Second
+		tooFast := !cur.LastPoll.Value().IsZero() && now.Sub(cur.LastPoll.Value()) < interval
+		cur.LastPoll = store.Set(now)
 		switch {
 		case tooFast:
-			cur.Interval = max(cur.Interval, deviceInterval) + slowDownStep
+			cur.Interval = store.Set(max(cur.Interval.Value(), deviceInterval) + slowDownStep)
 			answer = "slow_down"
-		case cur.State == "pending":
+		case cur.State.Value() == "pending":
 			answer = "authorization_pending"
-		case cur.State == "denied":
+		case cur.State.Value() == "denied":
 			answer = "access_denied"
-		case cur.State == "approved":
-			answer, uid, ua = "", cur.User, cur.UserAgent
-			cur.State = "used"
+		case cur.State.Value() == "approved":
+			answer, uid, ua = "", cur.User.Value(), cur.UserAgent.Value()
+			cur.State = store.Set("used")
 		default:
 			answer = "invalid_grant"
 		}
@@ -580,7 +580,7 @@ func (id *Identity) deviceApprove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := id.now()
 	du, err := store.Get(ctx, id.control, store.DeviceUserKey(code))
-	if errors.Is(err, store.ErrNotFound) || err == nil && !now.Before(du.Expires) {
+	if errors.Is(err, store.ErrNotFound) || err == nil && !now.Before(du.Expires.Value()) {
 		plainError(w, "unknown or expired code", http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -588,19 +588,19 @@ func (id *Identity) deviceApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var msg string
-	_, err = store.CAS(ctx, id.control, &store.DeviceCodeRecord{Hash: du.Hash}, func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
+	_, err = store.CAS(ctx, id.control, &store.DeviceCodeRecord{Hash: store.ID(du.Hash.Value())}, func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
 		switch {
-		case cur == nil || !now.Before(cur.Expires) || cur.UserCode != code:
+		case cur == nil || !now.Before(cur.Expires.Value()) || cur.UserCode.Value() != code:
 			msg = "unknown or expired code"
 			return nil, store.ErrNoChange
-		case cur.State != "pending":
+		case cur.State.Value() != "pending":
 			msg = "this code was already answered"
 			return nil, store.ErrNoChange
 		}
 		msg = ""
-		cur.State, cur.User = "denied", uid
+		cur.State, cur.User = store.Set("denied"), store.Set(uid)
 		if allow {
-			cur.State = "approved"
+			cur.State = store.Set("approved")
 		}
 		return cur, nil
 	})
@@ -638,20 +638,20 @@ func (id *Identity) revoke(w http.ResponseWriter, r *http.Request) {
 	case tok.hasPrefix(PrefixRefresh):
 		key := store.SessionKey(tok.reveal())
 		s, err := store.Get(ctx, id.control, key)
-		if err == nil && s.Kind == "cli" {
-			if _, err := id.revokeSessions(ctx, s.User, func(ref store.SessionRef) bool { return ref.Hash != key.Hash }); err != nil {
+		if err == nil && s.Kind.Value() == "cli" {
+			if _, err := id.revokeSessions(ctx, s.User.Value(), func(ref store.SessionRef) bool { return ref.Hash != key.Hash.Value() }); err != nil {
 				id.httpFail(w, r, err)
 				return
 			}
-			id.deleteSession(ctx, key.Hash)
+			id.deleteSession(ctx, key.Hash.Value())
 		} else if err != nil && !errors.Is(err, store.ErrNotFound) {
 			id.httpFail(w, r, err)
 			return
 		}
 	case tok.hasPrefix(PrefixAccess) || tok.hasPrefix(PrefixDownload):
 		key := store.TokenKey(tok.reveal())
-		if rec, err := store.Get(ctx, id.control, key); err == nil && rec.Kind != "sa" {
-			id.deleteToken(ctx, key.Hash)
+		if rec, err := store.Get(ctx, id.control, key); err == nil && rec.Kind.Value() != "sa" {
+			id.deleteToken(ctx, key.Hash.Value())
 		} else if err != nil && !errors.Is(err, store.ErrNotFound) {
 			id.httpFail(w, r, err)
 			return

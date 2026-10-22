@@ -21,7 +21,7 @@ const (
 
 // Pipelines reads the pipelines cache of a project (nil when nothing was evaluated yet).
 func (p *Projects) Pipelines(ctx context.Context, project string) (*PipelinesRecord, error) {
-	rec, _, err := store.GetCached(ctx, p.cfg.Control, &p.ppl, &PipelinesRecord{Project: project})
+	rec, _, err := store.GetCached(ctx, p.cfg.Control, &p.ppl, &PipelinesRecord{Project: store.ID(project)})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, nil
 	}
@@ -37,26 +37,26 @@ func clip(s string) string {
 
 func sourceSHA(rec *store.BuildRecord) string {
 	switch {
-	case rec.Commit != "":
-		return rec.Commit
-	case rec.Source.SHA != "":
-		return rec.Source.SHA
+	case rec.Commit.Value() != "":
+		return rec.Commit.Value()
+	case rec.Source.Value().SHA != "":
+		return rec.Source.Value().SHA
 	}
-	return rec.Source.Upload
+	return rec.Source.Value().Upload
 }
 
 // onDefault reports whether build rec ran on the project's default branch.
 func (p *Projects) onDefault(ctx context.Context, rec *store.BuildRecord) bool {
 	def := "main"
-	if pr, err := p.Get(ctx, rec.Project); err == nil && pr.DefaultBranch != "" {
-		def = pr.DefaultBranch
+	if pr, err := p.Get(ctx, rec.Project.Value()); err == nil && pr.DefaultBranch.Value() != "" {
+		def = pr.DefaultBranch.Value()
 	}
-	ref := rec.Trigger.Ref
+	ref := rec.Trigger.Value().Ref
 	if ref == "" {
-		ref = rec.Source.Ref
+		ref = rec.Source.Value().Ref
 	}
-	if ref == "" && rec.Branch != "" {
-		ref = "refs/heads/" + rec.Branch
+	if ref == "" && rec.Branch.Value() != "" {
+		ref = "refs/heads/" + rec.Branch.Value()
 	}
 	return ref == "refs/heads/"+def
 }
@@ -82,19 +82,19 @@ func (p *Projects) Evaluated(ctx context.Context, rec *store.BuildRecord, r *job
 		}
 		defs = append(defs, d)
 	}
-	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: rec.Project}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
-		next := PipelinesRecord{Project: rec.Project}
+	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
+		next := PipelinesRecord{Project: store.ID(rec.Project.Value())}
 		if cur != nil {
 			next = *cur
-			next.Last = maps.Clone(cur.Last)
+			next.Last = store.Set(maps.Clone(cur.Last.Value()))
 		}
 		changed := false
-		if cur == nil || def && (!cur.Default || rec.Number >= cur.N) || !def && !cur.Default && rec.Number >= cur.N {
-			next.SHA, next.Build, next.N, next.Default, next.At, next.Defs = sourceSHA(rec), rec.ID, rec.Number, def, p.now(), defs
+		if cur == nil || def && (!cur.Default.Value() || rec.Number.Value() >= cur.N.Value()) || !def && !cur.Default.Value() && rec.Number.Value() >= cur.N.Value() {
+			next.SHA, next.Build, next.N, next.Default, next.At, next.Defs = store.Set(sourceSHA(rec)), store.Set(rec.ID.Value()), store.Set(rec.Number.Value()), store.Set(def), store.Set(p.now()), store.Set(defs)
 			changed = true
 		}
 		for _, name := range r.Matched {
-			changed = setLast(&next, name, LastRun{Build: rec.ID, N: rec.Number, State: "running"}) || changed
+			changed = setLast(&next, name, LastRun{Build: rec.ID.Value(), N: rec.Number.Value(), State: "running"}) || changed
 		}
 		if !changed {
 			return nil, store.ErrNoChange
@@ -106,18 +106,18 @@ func (p *Projects) Evaluated(ctx context.Context, rec *store.BuildRecord, r *job
 
 // Finished records the final state of every pipeline run of a terminal build.
 func (p *Projects) Finished(ctx context.Context, rec *store.BuildRecord) error {
-	if len(rec.Pipelines) == 0 {
+	if len(rec.Pipelines.Value()) == 0 {
 		return nil
 	}
-	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: rec.Project}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
-		next := PipelinesRecord{Project: rec.Project}
+	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
+		next := PipelinesRecord{Project: store.ID(rec.Project.Value())}
 		if cur != nil {
 			next = *cur
-			next.Last = maps.Clone(cur.Last)
+			next.Last = store.Set(maps.Clone(cur.Last.Value()))
 		}
 		changed := false
-		for _, run := range rec.Pipelines {
-			changed = setLast(&next, run.Name, LastRun{Build: rec.ID, N: rec.Number, State: run.State}) || changed
+		for _, run := range rec.Pipelines.Value() {
+			changed = setLast(&next, run.Name, LastRun{Build: rec.ID.Value(), N: rec.Number.Value(), State: run.State}) || changed
 		}
 		if !changed {
 			return nil, store.ErrNoChange
@@ -133,21 +133,21 @@ func setLast(r *PipelinesRecord, name string, run LastRun) bool {
 		return false
 	}
 	name = clip(name)
-	old, ok := r.Last[name]
+	old, ok := r.Last.Value()[name]
 	if ok && (old.N > run.N || old == run) {
 		return false
 	}
-	if !ok && len(r.Last) >= maxPipelines {
+	if !ok && len(r.Last.Value()) >= maxPipelines {
 		// drop the pipeline whose last build is the oldest
-		oldest := slices.MinFunc(slices.Collect(maps.Keys(r.Last)), func(a, b string) int {
-			return cmp.Compare(r.Last[a].N, r.Last[b].N)
+		oldest := slices.MinFunc(slices.Collect(maps.Keys(r.Last.Value())), func(a, b string) int {
+			return cmp.Compare(r.Last.Value()[a].N, r.Last.Value()[b].N)
 		})
-		delete(r.Last, oldest)
+		delete(r.Last.Value(), oldest)
 	}
-	if r.Last == nil {
-		r.Last = map[string]LastRun{}
+	if r.Last.Value() == nil {
+		r.Last = store.Set(map[string]LastRun{})
 	}
-	r.Last[name] = run
+	r.Last.Value()[name] = run
 	return true
 }
 

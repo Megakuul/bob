@@ -139,8 +139,14 @@ func TerminalBuild(state string) bool {
 // buildNodes is the key model of bnodes/<buildID> (only deleted here; the build controller
 // owns its fields).
 type buildNodes struct {
-	ID   string `pk:"bnodes" cbor:"-"`
-	ETag string `etag:"true" cbor:"-"`
+	ID   store.KeyField  `pk:"bnodes" cbor:"-"`
+	ETag store.ETagField `etag:"true" cbor:"-"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *buildNodes) Draft() *buildNodes {
+	return &buildNodes{ID: r.ID,
+		ETag: r.ETag}
 }
 
 // builds deletes terminal builds older than cutoff, oldest page first: bnodes, then the build
@@ -213,7 +219,7 @@ func (x *Retention) builds(ctx context.Context, cutoff time.Time, st *retentionS
 // dropBuild deletes bnodes/<id> and build/<id> when the build is terminal and older than
 // cutoff. gone is true when the record no longer exists.
 func (x *Retention) dropBuild(ctx context.Context, id string, cutoff time.Time) (gone bool, err error) {
-	rec, err := store.Get(ctx, x.Control, &store.BuildRecord{ID: id})
+	rec, err := store.Get(ctx, x.Control, &store.BuildRecord{ID: store.ID(id)})
 	if errors.Is(err, store.ErrNotFound) {
 		return true, nil
 	}
@@ -223,10 +229,10 @@ func (x *Retention) dropBuild(ctx context.Context, id string, cutoff time.Time) 
 	if !expired(rec, cutoff) {
 		return false, nil
 	}
-	if _, err := store.CAS(ctx, x.Control, &buildNodes{ID: id}, func(*buildNodes) (*buildNodes, error) { return nil, nil }); err != nil {
+	if _, err := store.CAS(ctx, x.Control, &buildNodes{ID: store.ID(id)}, func(*buildNodes) (*buildNodes, error) { return nil, nil }); err != nil {
 		return false, err
 	}
-	left, err := store.CAS(ctx, x.Control, &store.BuildRecord{ID: id}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
+	left, err := store.CAS(ctx, x.Control, &store.BuildRecord{ID: store.ID(id)}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
 		if cur != nil && !expired(cur, cutoff) {
 			return nil, store.ErrNoChange
 		}
@@ -236,12 +242,12 @@ func (x *Retention) dropBuild(ctx context.Context, id string, cutoff time.Time) 
 }
 
 func expired(b *store.BuildRecord, cutoff time.Time) bool {
-	if !TerminalBuild(b.State) {
+	if !TerminalBuild(b.State.Value()) {
 		return false
 	}
-	t := b.Finished
+	t := b.Finished.Value()
 	if t.IsZero() {
-		t = b.Created
+		t = b.Created.Value()
 	}
 	return t.Before(cutoff)
 }
@@ -260,7 +266,7 @@ func (x *Retention) queues(ctx context.Context, st *retentionState) (int, error)
 	}
 	n := 0
 	var errs []error
-	for _, c := range fc.Classes {
+	for _, c := range fc.Classes.Value() {
 		head, err := store.Queue(x.Fleet, c.ID).Head(ctx)
 		if err != nil {
 			errs = append(errs, err)
@@ -285,20 +291,20 @@ func (x *Retention) queues(ctx context.Context, st *retentionState) (int, error)
 
 // registrations deletes wrs/reg slots below the registrar cursor − 1000.
 func (x *Retention) registrations(ctx context.Context, st *retentionState) (int, error) {
-	l, err := store.Get(ctx, x.Fleet, &store.ControllerLease{Name: CtlRegistrar})
+	l, err := store.Get(ctx, x.Fleet, &store.ControllerLease{Name: store.ID(CtlRegistrar)})
 	if errors.Is(err, store.ErrNotFound) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
 	}
-	cur, _ := strconv.ParseUint(string(l.Cursor), 10, 64)
+	cur, _ := strconv.ParseUint(string(l.Cursor.Value()), 10, 64)
 	if cur <= slotKeep+1 {
 		return 0, nil
 	}
 	k, next, err := deleteSlots(ctx, max(st.Reg, 1), cur-slotKeep, func(seq uint64) error {
 		s, _ := store.Seq20(seq)
-		_, err := store.CAS(ctx, x.Fleet, &store.RegSlot{Log: "reg", Seq: s}, func(*store.RegSlot) (*store.RegSlot, error) { return nil, nil })
+		_, err := store.CAS(ctx, x.Fleet, &store.RegSlot{Log: store.ID("reg"), Seq: store.ID(s)}, func(*store.RegSlot) (*store.RegSlot, error) { return nil, nil })
 		return err
 	})
 	st.Reg = next

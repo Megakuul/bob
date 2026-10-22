@@ -50,10 +50,10 @@ func buildParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 		cfg.Finished = func(ctx context.Context, rec *store.BuildRecord) {
 			pb, err := b.ToProto(ctx, rec)
 			if err == nil {
-				err = fw.Notifier.BuildFinished(ctx, rec.Project, pb)
+				err = fw.Notifier.BuildFinished(ctx, rec.Project.Value(), pb)
 			}
 			if err != nil {
-				env.Log.Warn("builds: build.finished notification", "build", rec.ID, "err", err.Error())
+				env.Log.Warn("builds: build.finished notification", "build", rec.ID.Value(), "err", err.Error())
 			}
 		}
 	}

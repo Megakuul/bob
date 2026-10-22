@@ -3935,8 +3935,8 @@ type TestOpts struct {
 // Test declares the tests of a local crate. Units //<dir>:<crate>_test and
 // //<dir>:<crate>_test_<file stem>.
 //
-//	var CoreTest = bob.Define(func(p *bob.P) *rust.Test { return rust.Test(p, rust.TestOpts{Crate: Core(p)}) })
-func Test(p *bob.P, o TestOpts) *Test
+//	var CoreTest = bob.Define(func(p *bob.P) *rust.TestSet { return rust.Test(p, rust.TestOpts{Crate: Core(p)}) })
+func Test(p *bob.P, o TestOpts) *TestSet // TestSet: Go cannot name a type and a func alike (A122)
 ```
 
 Features also come from the variant (`bob.Variant.Features`, §04) and are added on top of
@@ -4193,9 +4193,9 @@ type AppOpts struct {
 // App is a Node/Bun program: bin/<Name> wrapper calling the runtime by store path.
 //
 //	var Server = bob.Define(func(p *bob.P) *npm.App {
-//		return npm.App(p, npm.AppOpts{Entry: "src/server.ts", Deps: []npm.Dependency{npm.Dep("fastify", "^5")}})
+//		return npm.NewApp(p, npm.AppOpts{Entry: "src/server.ts", Deps: []npm.Dependency{npm.Dep("fastify", "^5")}})
 //	})
-func App(p *bob.P, o AppOpts) *App
+func NewApp(p *bob.P, o AppOpts) *App // NewApp: Go cannot name a type and a func alike (A35)
 
 // ViteOpts configures Vite.
 type ViteOpts struct {
@@ -4233,8 +4233,8 @@ type TestOpts struct {
 
 // Test runs vitest (`--reporter=json`) or `node --test --test-reporter=tap` in a derivation.
 //
-//	var WebTest = bob.Define(func(p *bob.P) *npm.Test { return npm.Test(p, npm.TestOpts{Of: Web(p)}) })
-func Test(p *bob.P, o TestOpts) *Test
+//	var WebTest = bob.Define(func(p *bob.P) *npm.Test { return npm.NewTest(p, npm.TestOpts{Of: Web(p)}) })
+func NewTest(p *bob.P, o TestOpts) *Test
 ```
 
 Each Library/App/Site is an **importer** (one generated `package.json`, `tsconfig.json`,
@@ -6925,9 +6925,10 @@ Orchestrator signing keys: the seeds are in control `okey/<kid>`, the public key
 - **Acceptance:**
   - `GetCheckoutCredential` with a job the caller does not own, or a stale epoch →
     `permission_denied: worker holds no lease on job <id>`.
-  - Live Forgejo: worker A with the lease gets a credential that clones repo R and gets 403 on
+  - Live Forgejo: worker A with the lease gets a credential that clones repo R and is denied on
     repo R2 the bot can read (the forge decides the status for a repository outside the token's
-    scope; Forgejo answers 403, measured in S16); after the job ends, the token returns 401 within 30 s.
+    scope: 403 or 404, never 2xx; S16 measured 403, the harness's Forgejo answers 404; amended
+    2026-10-22, A104); after the job ends, the token returns 401 within 30 s.
   - Orchestrator killed between mint and revoke: the `forge-sweeper` (60 s, over `ftok/*`)
     revokes the token within 60 s + skew after the job is terminal; a token without a record is
     removed by the Forgejo name-timestamp sweep (§06 §6.9.6).

@@ -207,7 +207,7 @@ var errInvalidToken = api.Unauthenticated("invalid or revoked credential")
 // tokenPrincipal validates a bob_at_/bob_dt_/bob_sa_ token.
 func (id *Identity) tokenPrincipal(ctx context.Context, tok Secret) (*api.Principal, error) {
 	key := store.TokenKey(tok.reveal())
-	rec, err := load(ctx, id.control, &id.tokens, key.Hash, key)
+	rec, err := load(ctx, id.control, &id.tokens, key.Hash.Value(), key)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return nil, errInvalidToken
@@ -215,22 +215,22 @@ func (id *Identity) tokenPrincipal(ctx context.Context, tok Secret) (*api.Princi
 		return nil, storageError(err)
 	}
 	now := id.now()
-	if !rec.Expires.IsZero() && !now.Before(rec.Expires) {
+	if !rec.Expires.Value().IsZero() && !now.Before(rec.Expires.Value()) {
 		return nil, api.Unauthenticated("token expired")
 	}
 	var p *api.Principal
-	kind, owner, _ := strings.Cut(rec.Owner, ":")
+	kind, owner, _ := strings.Cut(rec.Owner.Value(), ":")
 	switch kind {
 	case "user":
 		u, err := id.user(ctx, owner)
-		if errors.Is(err, store.ErrNotFound) || err == nil && u.Disabled {
+		if errors.Is(err, store.ErrNotFound) || err == nil && u.Disabled.Value() {
 			return nil, errInvalidToken
 		} else if err != nil {
 			return nil, storageError(err)
 		}
-		if rec.Session != "" {
-			s, err := load(ctx, id.control, &id.sessions, rec.Session, &store.SessionRecord{Hash: rec.Session})
-			if errors.Is(err, store.ErrNotFound) || err == nil && (s.User != owner || !sessionAlive(s, now)) {
+		if rec.Session.Value() != "" {
+			s, err := load(ctx, id.control, &id.sessions, rec.Session.Value(), &store.SessionRecord{Hash: store.ID(rec.Session.Value())})
+			if errors.Is(err, store.ErrNotFound) || err == nil && (s.User.Value() != owner || !sessionAlive(s, now)) {
 				return nil, errInvalidToken
 			} else if err != nil {
 				return nil, storageError(err)
@@ -239,35 +239,35 @@ func (id *Identity) tokenPrincipal(ctx context.Context, tok Secret) (*api.Princi
 		p = userPrincipal(u)
 	case "sa":
 		sa, err := id.serviceAccount(ctx, owner)
-		if errors.Is(err, store.ErrNotFound) || err == nil && sa.Disabled {
+		if errors.Is(err, store.ErrNotFound) || err == nil && sa.Disabled.Value() {
 			return nil, errInvalidToken
 		} else if err != nil {
 			return nil, storageError(err)
 		}
 		// The SA record's list is the truth: a token whose record survived a revocation (the
 		// delete failed) is still refused.
-		if !slices.ContainsFunc(sa.Tokens, func(t store.SATokenEntry) bool { return t.ID == rec.TokenID && t.Hash == rec.Hash }) {
+		if !slices.ContainsFunc(sa.Tokens.Value(), func(t store.SATokenEntry) bool { return t.ID == rec.TokenID.Value() && t.Hash == rec.Hash.Value() }) {
 			return nil, errInvalidToken
 		}
 		p = saPrincipal(sa)
-		id.touchSAToken(ctx, sa, rec.TokenID, now)
+		id.touchSAToken(ctx, sa, rec.TokenID.Value(), now)
 	default:
 		return nil, errInvalidToken
 	}
-	p.Scope = rec.Scope
-	p.Expires = rec.Expires
+	p.Scope = rec.Scope.Value()
+	p.Expires = rec.Expires.Value()
 	return p, nil
 }
 
 func sessionAlive(s *store.SessionRecord, now time.Time) bool {
-	return now.Before(s.IdleUntil) && now.Before(s.MaxUntil)
+	return now.Before(s.IdleUntil.Value()) && now.Before(s.MaxUntil.Value())
 }
 
 // sessionPrincipal validates a session token of kind ("browser": bob_st_, "cli": bob_rt_) and
 // extends its idle timer.
 func (id *Identity) sessionPrincipal(ctx context.Context, tok Secret, kind string) (*api.Principal, *store.SessionRecord, error) {
 	key := store.SessionKey(tok.reveal())
-	s, err := load(ctx, id.control, &id.sessions, key.Hash, key)
+	s, err := load(ctx, id.control, &id.sessions, key.Hash.Value(), key)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return nil, nil, errInvalidToken
@@ -275,14 +275,14 @@ func (id *Identity) sessionPrincipal(ctx context.Context, tok Secret, kind strin
 		return nil, nil, storageError(err)
 	}
 	now := id.now()
-	if s.Kind != kind {
+	if s.Kind.Value() != kind {
 		return nil, nil, errInvalidToken
 	}
 	if !sessionAlive(s, now) {
 		return nil, nil, api.Unauthenticated("session expired")
 	}
-	u, err := id.user(ctx, s.User)
-	if errors.Is(err, store.ErrNotFound) || err == nil && u.Disabled {
+	u, err := id.user(ctx, s.User.Value())
+	if errors.Is(err, store.ErrNotFound) || err == nil && u.Disabled.Value() {
 		return nil, nil, errInvalidToken
 	} else if err != nil {
 		return nil, nil, storageError(err)
@@ -293,7 +293,7 @@ func (id *Identity) sessionPrincipal(ctx context.Context, tok Secret, kind strin
 	if kind == "cli" {
 		p.Scope = "api"
 	}
-	p.Expires = s.IdleUntil
+	p.Expires = s.IdleUntil.Value()
 	return p, s, nil
 }
 
@@ -303,19 +303,19 @@ const touchEvery = 5 * time.Minute
 // touchSession extends the idle timer (CAS, at most every 5 min). A failed write only means
 // the timer is extended at the next use.
 func (id *Identity) touchSession(ctx context.Context, s *store.SessionRecord, now time.Time) *store.SessionRecord {
-	if now.Sub(s.LastUsed) < touchEvery {
+	if now.Sub(s.LastUsed.Value()) < touchEvery {
 		return s
 	}
 	idle := browserIdle
-	if s.Kind == "cli" {
+	if s.Kind.Value() == "cli" {
 		idle = cliIdle
 	}
 	next, err := store.CAS(ctx, id.control, &store.SessionRecord{Hash: s.Hash}, func(cur *store.SessionRecord) (*store.SessionRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		cur.LastUsed = now
-		cur.IdleUntil = minTime(now.Add(idle), cur.MaxUntil)
+		cur.LastUsed = store.Set(now)
+		cur.IdleUntil = store.Set(minTime(now.Add(idle), cur.MaxUntil.Value()))
 		return cur, nil
 	})
 	if err != nil || next == nil {
@@ -324,7 +324,7 @@ func (id *Identity) touchSession(ctx context.Context, s *store.SessionRecord, no
 		}
 		return s
 	}
-	id.sessions.put(s.Hash, next)
+	id.sessions.put(s.Hash.Value(), next)
 	return next
 }
 
@@ -332,29 +332,29 @@ func (id *Identity) touchSession(ctx context.Context, s *store.SessionRecord, no
 // and day).
 func (id *Identity) touchSAToken(ctx context.Context, sa *store.ServiceAccountRecord, tokenID string, now time.Time) {
 	day := now.UTC().Truncate(24 * time.Hour)
-	for _, t := range sa.Tokens {
+	for _, t := range sa.Tokens.Value() {
 		if t.ID == tokenID && !t.LastUsed.Before(day) {
 			return
 		}
 	}
-	next, err := store.CAS(ctx, id.control, store.ServiceAccountKey(sa.ID), func(cur *store.ServiceAccountRecord) (*store.ServiceAccountRecord, error) {
+	next, err := store.CAS(ctx, id.control, store.ServiceAccountKey(sa.ID.Value()), func(cur *store.ServiceAccountRecord) (*store.ServiceAccountRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		for i := range cur.Tokens {
-			if cur.Tokens[i].ID == tokenID && cur.Tokens[i].LastUsed.Before(day) {
-				cur.Tokens[i].LastUsed = day
+		for i := range cur.Tokens.Value() {
+			if cur.Tokens.Value()[i].ID == tokenID && cur.Tokens.Value()[i].LastUsed.Before(day) {
+				cur.Tokens.Value()[i].LastUsed = day
 				return cur, nil
 			}
 		}
 		return nil, store.ErrNoChange
 	})
 	if err != nil {
-		id.log.Warn("service account token last-used day not recorded", "sa", sa.ID, "err", err.Error())
+		id.log.Warn("service account token last-used day not recorded", "sa", sa.ID.Value(), "err", err.Error())
 		return
 	}
 	if next != nil {
-		id.sas.put(sa.ID, next)
+		id.sas.put(sa.ID.Value(), next)
 	}
 }
 
@@ -374,18 +374,18 @@ func bindingsOf(ro []store.RoleBindingEntry) []api.Binding {
 }
 
 func userPrincipal(u *store.UserRecord) *api.Principal {
-	name := u.DisplayName
+	name := u.DisplayName.Value()
 	if name == "" {
-		name = u.Login
+		name = u.Login.Value()
 	}
 	return &api.Principal{
-		ID: "user:" + u.ID, DisplayName: name, Login: u.Login,
-		Bindings: bindingsOf(u.Bindings), MustChangePassword: u.MustChange,
+		ID: "user:" + u.ID.Value(), DisplayName: name, Login: u.Login.Value(),
+		Bindings: bindingsOf(u.Bindings.Value()), MustChangePassword: u.MustChange.Value(),
 	}
 }
 
 func saPrincipal(sa *store.ServiceAccountRecord) *api.Principal {
-	return &api.Principal{ID: "sa:" + sa.ID, DisplayName: sa.ID, Bindings: bindingsOf(sa.Bindings)}
+	return &api.Principal{ID: "sa:" + sa.ID.Value(), DisplayName: sa.ID.Value(), Bindings: bindingsOf(sa.Bindings.Value())}
 }
 
 // HTTPPrincipal authenticates a download request (/nix/*, /oci/token, /r/*, SPEC §6.2): HTTP

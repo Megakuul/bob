@@ -76,17 +76,17 @@ func TestRSTORE005PrimitivesReturnErrPanic(t *testing.T) {
 		t.Errorf("Create with a nil model: %v, want ErrPanic", err)
 	}
 
-	seed := &rec{ID: "p1", N: 1}
+	seed := &rec{ID: store.ID("p1"), N: store.Set(1)}
 	if err := store.Create(ctx, b, seed); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	be.Proxy.SetScript(s3count.Script{Seed: 5, Faults: []s3count.Fault{{Kind: s3count.FaultStripETag, Op: s3count.OpGet, Bucket: be.Last}}})
-	if _, err := store.Get(ctx, b, &rec{ID: "p1"}); !errors.Is(err, store.ErrPanic) {
+	if _, err := store.Get(ctx, b, &rec{ID: store.ID("p1")}); !errors.Is(err, store.ErrPanic) {
 		t.Errorf("Get from a backend without ETag header: %v, want ErrPanic", err)
 	}
 	be.Proxy.SetScript(s3count.Script{})
-	got, err := store.Get(ctx, b, &rec{ID: "p1"})
-	if err != nil || got.N != 1 || got.ETag == "" {
+	got, err := store.Get(ctx, b, &rec{ID: store.ID("p1")})
+	if err != nil || got.N.Value() != 1 || store.ETagOf(got.ETag) == "" {
 		t.Errorf("Get after the panic = %+v, %v; the bucket must stay usable and carry the ETag", got, err)
 	}
 }

@@ -41,11 +41,11 @@ func (id *Identity) adminAdd(ctx context.Context, principal string) error {
 		if cur == nil {
 			cur = store.AdminIndexKey()
 		}
-		if slices.Contains(cur.Principals, principal) {
+		if slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
-		cur.Principals = append(cur.Principals, principal)
-		slices.Sort(cur.Principals)
+		cur.Principals = store.Set(append(cur.Principals.Value(), principal))
+		slices.Sort(cur.Principals.Value())
 		return cur, nil
 	})
 	return storageError(err)
@@ -56,13 +56,13 @@ func (id *Identity) adminAdd(ctx context.Context, principal string) error {
 // fails), so concurrent removals on several orchestrators leave at least one admin.
 func (id *Identity) adminRemove(ctx context.Context, principal string) error {
 	_, err := store.CAS(ctx, id.control, store.AdminIndexKey(), func(cur *store.AdminIndex) (*store.AdminIndex, error) {
-		if cur == nil || !slices.Contains(cur.Principals, principal) {
+		if cur == nil || !slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.Principals) <= 1 {
+		if len(cur.Principals.Value()) <= 1 {
 			return nil, errLastAdmin
 		}
-		cur.Principals = slices.DeleteFunc(cur.Principals, func(p string) bool { return p == principal })
+		cur.Principals = store.Set(slices.DeleteFunc(cur.Principals.Value(), func(p string) bool { return p == principal }))
 		return cur, nil
 	})
 	if errors.Is(err, errLastAdmin) {
@@ -78,10 +78,10 @@ func (id *Identity) addMember(ctx context.Context, role, principal string) {
 		if cur == nil {
 			cur = store.RoleMembersKey(role)
 		}
-		if slices.Contains(cur.Principals, principal) {
+		if slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
-		cur.Principals = append(cur.Principals, principal)
+		cur.Principals = store.Set(append(cur.Principals.Value(), principal))
 		return cur, nil
 	})
 	if err != nil {
@@ -95,10 +95,10 @@ func (id *Identity) removeMember(ctx context.Context, role, principal string, re
 		return
 	}
 	_, err := store.CAS(ctx, id.control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
-		if cur == nil || !slices.Contains(cur.Principals, principal) {
+		if cur == nil || !slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
-		cur.Principals = slices.DeleteFunc(cur.Principals, func(p string) bool { return p == principal })
+		cur.Principals = store.Set(slices.DeleteFunc(cur.Principals.Value(), func(p string) bool { return p == principal }))
 		return cur, nil
 	})
 	if err != nil {
@@ -116,7 +116,7 @@ func (id *Identity) Role(ctx context.Context, roleID string) ([]store.Permission
 	if err != nil {
 		return nil, err
 	}
-	return r.Permissions, nil
+	return r.Permissions.Value(), nil
 }
 
 func (id *Identity) role(ctx context.Context, roleID string) (*store.RoleRecord, error) {
@@ -134,8 +134,8 @@ func adminRoleMsg() *accessv1.Role {
 }
 
 func roleMsg(r *store.RoleRecord) *accessv1.Role {
-	m := &accessv1.Role{Id: r.ID, Description: r.Description, Etag: r.ETag}
-	for _, p := range r.Permissions {
+	m := &accessv1.Role{Id: r.ID.Value(), Description: r.Description.Value(), Etag: store.ETagOf(r.ETag)}
+	for _, p := range r.Permissions.Value() {
 		m.Permissions = append(m.Permissions, &accessv1.Permission{Method: p.Method, Project: p.Project})
 	}
 	return m
@@ -171,26 +171,26 @@ func (s roleService) CreateRole(ctx context.Context, req *connect.Request[access
 		return nil, err
 	}
 	r := store.RoleKey(in.GetId())
-	r.Description, r.Permissions, r.Created = in.GetDescription(), perms, s.id.now()
+	r.Description, r.Permissions, r.Created = store.Set(in.GetDescription()), store.Set(perms), store.Set(s.id.now())
 	if _, err := store.CAS(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
 		if cur == nil {
 			cur = store.RolesIndexKey()
 		}
-		if slices.Contains(cur.IDs, r.ID) {
+		if slices.Contains(cur.IDs.Value(), r.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs) >= maxRoles {
+		if len(cur.IDs.Value()) >= maxRoles {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d roles", maxRoles))
 		}
-		cur.IDs = append(cur.IDs, r.ID)
-		slices.Sort(cur.IDs)
+		cur.IDs = store.Set(append(cur.IDs.Value(), r.ID.Value()))
+		slices.Sort(cur.IDs.Value())
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)
 	}
 	if err := store.Create(ctx, s.id.control, r); err != nil {
 		if errors.Is(err, store.ErrExists) {
-			return nil, api.AlreadyExists(fmt.Sprintf("role %s already exists", r.ID))
+			return nil, api.AlreadyExists(fmt.Sprintf("role %s already exists", r.ID.Value()))
 		}
 		return nil, storageError(err)
 	}
@@ -225,7 +225,7 @@ func (s roleService) ListRoles(ctx context.Context, req *connect.Request[accessv
 		return nil, storageError(err)
 	}
 	if idx != nil {
-		ids = append(ids, idx.IDs...)
+		ids = append(ids, idx.IDs.Value()...)
 	}
 	out := &accessv1.ListRolesResponse{}
 	q := req.Msg.GetQuery()
@@ -282,7 +282,7 @@ func (s roleService) UpdateRole(ctx context.Context, req *connect.Request[access
 		}
 		var added []store.Permission
 		for _, p := range perms {
-			if !slices.Contains(cur.Permissions, p) {
+			if !slices.Contains(cur.Permissions.Value(), p) {
 				added = append(added, p)
 			}
 		}
@@ -294,15 +294,15 @@ func (s roleService) UpdateRole(ctx context.Context, req *connect.Request[access
 		if cur == nil {
 			return nil, api.NotFound("role")
 		}
-		if err := checkETag("role.etag", in.GetEtag(), cur.ETag); err != nil {
+		if err := checkETag("role.etag", in.GetEtag(), store.ETagOf(cur.ETag)); err != nil {
 			return nil, err
 		}
 		for _, p := range paths {
 			switch p {
 			case "description":
-				cur.Description = in.GetDescription()
+				cur.Description = store.Set(in.GetDescription())
 			case "permissions":
-				cur.Permissions = perms
+				cur.Permissions = store.Set(perms)
 			}
 		}
 		return cur, nil
@@ -325,11 +325,11 @@ func (s roleService) DeleteRole(ctx context.Context, req *connect.Request[access
 	} else if err != nil {
 		return nil, storageError(err)
 	}
-	if e := req.Msg.GetEtag(); e != "" && e != r.ETag {
+	if e := req.Msg.GetEtag(); e != "" && e != store.ETagOf(r.ETag) {
 		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 	}
 	if mem, err := store.Get(ctx, s.id.control, store.RoleMembersKey(rid)); err == nil {
-		for _, p := range mem.Principals {
+		for _, p := range mem.Principals.Value() {
 			ro, err := s.id.bindingsOfPrincipal(ctx, p)
 			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				return nil, storageError(err)
@@ -345,10 +345,10 @@ func (s roleService) DeleteRole(ctx context.Context, req *connect.Request[access
 		return nil, storageError(err)
 	}
 	if _, err := store.CAS(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
-		if cur == nil || !slices.Contains(cur.IDs, rid) {
+		if cur == nil || !slices.Contains(cur.IDs.Value(), rid) {
 			return nil, store.ErrNoChange
 		}
-		cur.IDs = slices.DeleteFunc(cur.IDs, func(x string) bool { return x == rid })
+		cur.IDs = store.Set(slices.DeleteFunc(cur.IDs.Value(), func(x string) bool { return x == rid }))
 		return cur, nil
 	}); err != nil {
 		s.id.log.Warn("roles index not updated", "role", rid, "err", err.Error())
@@ -372,7 +372,7 @@ func (id *Identity) bindingsOfPrincipal(ctx context.Context, principal string) (
 		if err != nil {
 			return nil, err
 		}
-		return u.Bindings, nil
+		return u.Bindings.Value(), nil
 	case "sa":
 		if !saRE.MatchString(pid) {
 			return nil, store.ErrNotFound
@@ -381,7 +381,7 @@ func (id *Identity) bindingsOfPrincipal(ctx context.Context, principal string) (
 		if err != nil {
 			return nil, err
 		}
-		return sa.Bindings, nil
+		return sa.Bindings.Value(), nil
 	}
 	return nil, store.ErrNotFound
 }
@@ -403,7 +403,7 @@ func (id *Identity) updateBindings(ctx context.Context, principal string, fn fun
 		} else if err != nil {
 			return nil, nil, storageError(err)
 		}
-		before, disabled = u.Bindings, u.Disabled
+		before, disabled = u.Bindings.Value(), u.Disabled.Value()
 	case "sa":
 		if !saRE.MatchString(pid) {
 			return nil, nil, api.NotFound("principal")
@@ -414,7 +414,7 @@ func (id *Identity) updateBindings(ctx context.Context, principal string, fn fun
 		} else if err != nil {
 			return nil, nil, storageError(err)
 		}
-		before, disabled = sa.Bindings, sa.Disabled
+		before, disabled = sa.Bindings.Value(), sa.Disabled.Value()
 	default:
 		return nil, nil, api.InvalidArgument("principalId", `a principal is "user:<id>" or "sa:<id>"`)
 	}
@@ -448,11 +448,11 @@ func (id *Identity) updateBindings(ctx context.Context, principal string, fn fun
 			if cur == nil {
 				return nil, api.NotFound("principal")
 			}
-			ro, err := apply(cur.Bindings)
+			ro, err := apply(cur.Bindings.Value())
 			if err != nil {
 				return nil, err
 			}
-			cur.Bindings = ro
+			cur.Bindings = store.Set(ro)
 			return cur, nil
 		})
 		if err == nil {
@@ -464,11 +464,11 @@ func (id *Identity) updateBindings(ctx context.Context, principal string, fn fun
 			if cur == nil {
 				return nil, api.NotFound("principal")
 			}
-			ro, err := apply(cur.Bindings)
+			ro, err := apply(cur.Bindings.Value())
 			if err != nil {
 				return nil, err
 			}
-			cur.Bindings = ro
+			cur.Bindings = store.Set(ro)
 			return cur, nil
 		})
 		if err == nil {
@@ -596,7 +596,7 @@ func (s roleService) ListRoleBindings(ctx context.Context, req *connect.Request[
 		if m.GetRole() != "" {
 			roles = []string{m.GetRole()}
 		} else if idx, err := store.Get(ctx, s.id.control, store.RolesIndexKey()); err == nil {
-			roles = append(roles, idx.IDs...)
+			roles = append(roles, idx.IDs.Value()...)
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return nil, storageError(err)
 		}
@@ -610,7 +610,7 @@ func (s roleService) ListRoleBindings(ctx context.Context, req *connect.Request[
 			} else if err != nil {
 				return nil, storageError(err)
 			}
-			for _, p := range mem.Principals {
+			for _, p := range mem.Principals.Value() {
 				if !slices.Contains(principals, p) {
 					principals = append(principals, p)
 				}

@@ -20,23 +20,43 @@ import (
 // `set/<name>`; one document holds every setting so that the API's etag covers them all).
 // Zero fields mean the default.
 type SettingsRecord struct {
-	Name string `pk:"set" cbor:"-"` // "server"
-	ETag string `etag:"true" cbor:"-"`
+	Name store.KeyField  `pk:"set" cbor:"-"` // "server"
+	ETag store.ETagField `etag:"true" cbor:"-"`
 
-	ServerName   string `cbor:"sn,omitempty"`
-	BaseURL      string `cbor:"bu,omitempty"`
-	LogsDays     int32  `cbor:"rl,omitempty"`
-	AnalyticsDay int32  `cbor:"ra,omitempty"`
-	BuildsDays   int32  `cbor:"rb,omitempty"`
-	CacheDays    int32  `cbor:"rc,omitempty"`
-	StagingDays  int32  `cbor:"rs,omitempty"`
-	CLIIdleDays  int32  `cbor:"ci,omitempty"`
-	CLIMaxDays   int32  `cbor:"cm,omitempty"`
-	BrowserIdleH int32  `cbor:"bi,omitempty"`
-	BrowserMaxD  int32  `cbor:"bm,omitempty"`
-	SATokenMaxD  int32  `cbor:"sm,omitempty"`
-	LiveLogOff   bool   `cbor:"lo,omitempty"`
-	MaxDownloads int32  `cbor:"md,omitempty"`
+	ServerName   store.DataField[string] `cbor:"sn,omitempty"`
+	BaseURL      store.DataField[string] `cbor:"bu,omitempty"`
+	LogsDays     store.DataField[int32]  `cbor:"rl,omitempty"`
+	AnalyticsDay store.DataField[int32]  `cbor:"ra,omitempty"`
+	BuildsDays   store.DataField[int32]  `cbor:"rb,omitempty"`
+	CacheDays    store.DataField[int32]  `cbor:"rc,omitempty"`
+	StagingDays  store.DataField[int32]  `cbor:"rs,omitempty"`
+	CLIIdleDays  store.DataField[int32]  `cbor:"ci,omitempty"`
+	CLIMaxDays   store.DataField[int32]  `cbor:"cm,omitempty"`
+	BrowserIdleH store.DataField[int32]  `cbor:"bi,omitempty"`
+	BrowserMaxD  store.DataField[int32]  `cbor:"bm,omitempty"`
+	SATokenMaxD  store.DataField[int32]  `cbor:"sm,omitempty"`
+	LiveLogOff   store.DataField[bool]   `cbor:"lo,omitempty"`
+	MaxDownloads store.DataField[int32]  `cbor:"md,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *SettingsRecord) Draft() *SettingsRecord {
+	return &SettingsRecord{Name: r.Name,
+		ETag:         r.ETag,
+		ServerName:   store.Carry(r.ServerName),
+		BaseURL:      store.Carry(r.BaseURL),
+		LogsDays:     store.Carry(r.LogsDays),
+		AnalyticsDay: store.Carry(r.AnalyticsDay),
+		BuildsDays:   store.Carry(r.BuildsDays),
+		CacheDays:    store.Carry(r.CacheDays),
+		StagingDays:  store.Carry(r.StagingDays),
+		CLIIdleDays:  store.Carry(r.CLIIdleDays),
+		CLIMaxDays:   store.Carry(r.CLIMaxDays),
+		BrowserIdleH: store.Carry(r.BrowserIdleH),
+		BrowserMaxD:  store.Carry(r.BrowserMaxD),
+		SATokenMaxD:  store.Carry(r.SATokenMaxD),
+		LiveLogOff:   store.Carry(r.LiveLogOff),
+		MaxDownloads: store.Carry(r.MaxDownloads)}
 }
 
 // Defaults of SPEC §6.5.13.
@@ -80,9 +100,9 @@ func pick(v, def int32) int32 {
 
 // read returns set/server (zero record when absent).
 func (s *Settings) read(ctx context.Context) (*SettingsRecord, error) {
-	rec, _, err := store.GetCached(ctx, s.Control, &s.cache, &SettingsRecord{Name: "server"})
+	rec, _, err := store.GetCached(ctx, s.Control, &s.cache, &SettingsRecord{Name: store.ID("server")})
 	if errors.Is(err, store.ErrNotFound) {
-		return &SettingsRecord{Name: "server"}, nil
+		return &SettingsRecord{Name: store.ID("server")}, nil
 	}
 	return rec, err
 }
@@ -93,29 +113,29 @@ func (s *Settings) CacheDays(ctx context.Context) int32 {
 	if err != nil {
 		return defaultCacheDays
 	}
-	return pick(rec.CacheDays, defaultCacheDays)
+	return pick(rec.CacheDays.Value(), defaultCacheDays)
 }
 
 func (s *Settings) message(r *SettingsRecord) *settingsv1.Settings {
-	name := r.ServerName
+	name := r.ServerName.Value()
 	if name == "" {
 		name = s.ServerName
 	}
 	if name == "" {
 		name = defaultServerName
 	}
-	base := r.BaseURL
+	base := r.BaseURL.Value()
 	if base == "" {
 		base = s.BaseURL
 	}
 	return &settingsv1.Settings{ServerName: name, BaseUrl: base,
-		Retention: &settingsv1.Retention{LogsDays: pick(r.LogsDays, defaultLogsDays), AnalyticsDays: pick(r.AnalyticsDay, defaultAnalytics),
-			BuildsDays: pick(r.BuildsDays, defaultBuildsDays), CacheUnreferencedDays: pick(r.CacheDays, defaultCacheDays),
-			StagingDays: pick(r.StagingDays, defaultStagingDays)},
-		Sessions: &settingsv1.SessionPolicy{CliIdleDays: pick(r.CLIIdleDays, defaultCLIIdle), CliMaxDays: pick(r.CLIMaxDays, defaultCLIMax),
-			BrowserIdleHours: pick(r.BrowserIdleH, defaultBrowserIdle), BrowserMaxDays: pick(r.BrowserMaxD, defaultBrowserMax),
-			SaTokenMaxDays: pick(r.SATokenMaxD, defaultSATokenMax)},
-		LiveLogEnabled: !r.LiveLogOff, MaxParallelDownloads: pick(r.MaxDownloads, defaultMaxDownloads), Etag: r.ETag}
+		Retention: &settingsv1.Retention{LogsDays: pick(r.LogsDays.Value(), defaultLogsDays), AnalyticsDays: pick(r.AnalyticsDay.Value(), defaultAnalytics),
+			BuildsDays: pick(r.BuildsDays.Value(), defaultBuildsDays), CacheUnreferencedDays: pick(r.CacheDays.Value(), defaultCacheDays),
+			StagingDays: pick(r.StagingDays.Value(), defaultStagingDays)},
+		Sessions: &settingsv1.SessionPolicy{CliIdleDays: pick(r.CLIIdleDays.Value(), defaultCLIIdle), CliMaxDays: pick(r.CLIMaxDays.Value(), defaultCLIMax),
+			BrowserIdleHours: pick(r.BrowserIdleH.Value(), defaultBrowserIdle), BrowserMaxDays: pick(r.BrowserMaxD.Value(), defaultBrowserMax),
+			SaTokenMaxDays: pick(r.SATokenMaxD.Value(), defaultSATokenMax)},
+		LiveLogEnabled: !r.LiveLogOff.Value(), MaxParallelDownloads: pick(r.MaxDownloads.Value(), defaultMaxDownloads), Etag: store.ETagOf(r.ETag)}
 }
 
 // GetSettings implements SettingsService.
@@ -192,36 +212,36 @@ func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[sett
 		return nil, err
 	}
 	etag := in.GetEtag()
-	rec, err := store.CAS(ctx, s.Control, &SettingsRecord{Name: "server"}, func(cur *SettingsRecord) (*SettingsRecord, error) {
-		next := SettingsRecord{Name: "server"}
+	rec, err := store.CAS(ctx, s.Control, &SettingsRecord{Name: store.ID("server")}, func(cur *SettingsRecord) (*SettingsRecord, error) {
+		next := SettingsRecord{Name: store.ID("server")}
 		if cur != nil {
 			next = *cur
 		}
-		if etag != "" && etag != next.ETag {
+		if etag != "" && etag != store.ETagOf(next.ETag) {
 			return nil, api.Aborted("the settings were changed by someone else (etag mismatch); reload and retry")
 		}
 		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
 			switch p {
 			case "server_name", "serverName":
-				next.ServerName = in.GetServerName()
+				next.ServerName = store.Set(in.GetServerName())
 			case "base_url", "baseUrl":
-				next.BaseURL = strings.TrimRight(in.GetBaseUrl(), "/")
+				next.BaseURL = store.Set(strings.TrimRight(in.GetBaseUrl(), "/"))
 			case "retention":
-				next.LogsDays, next.AnalyticsDay, next.BuildsDays = r.GetLogsDays(), r.GetAnalyticsDays(), r.GetBuildsDays()
-				next.CacheDays, next.StagingDays = r.GetCacheUnreferencedDays(), r.GetStagingDays()
+				next.LogsDays, next.AnalyticsDay, next.BuildsDays = store.Set(r.GetLogsDays()), store.Set(r.GetAnalyticsDays()), store.Set(r.GetBuildsDays())
+				next.CacheDays, next.StagingDays = store.Set(r.GetCacheUnreferencedDays()), store.Set(r.GetStagingDays())
 			case "sessions":
-				next.CLIIdleDays, next.CLIMaxDays, next.BrowserIdleH = ss.GetCliIdleDays(), ss.GetCliMaxDays(), ss.GetBrowserIdleHours()
-				next.BrowserMaxD, next.SATokenMaxD = ss.GetBrowserMaxDays(), ss.GetSaTokenMaxDays()
+				next.CLIIdleDays, next.CLIMaxDays, next.BrowserIdleH = store.Set(ss.GetCliIdleDays()), store.Set(ss.GetCliMaxDays()), store.Set(ss.GetBrowserIdleHours())
+				next.BrowserMaxD, next.SATokenMaxD = store.Set(ss.GetBrowserMaxDays()), store.Set(ss.GetSaTokenMaxDays())
 			case "live_log_enabled", "liveLogEnabled":
-				next.LiveLogOff = !in.GetLiveLogEnabled()
+				next.LiveLogOff = store.Set(!in.GetLiveLogEnabled())
 			case "max_parallel_downloads", "maxParallelDownloads":
-				next.MaxDownloads = in.GetMaxParallelDownloads()
+				next.MaxDownloads = store.Set(in.GetMaxParallelDownloads())
 			}
 		}
-		if pick(next.CLIIdleDays, defaultCLIIdle) > pick(next.CLIMaxDays, defaultCLIMax) {
+		if pick(next.CLIIdleDays.Value(), defaultCLIIdle) > pick(next.CLIMaxDays.Value(), defaultCLIMax) {
 			return nil, api.InvalidArgument("settings.sessions.cliIdleDays", "cli_idle_days must not exceed cli_max_days")
 		}
-		if pick(next.BrowserIdleH, defaultBrowserIdle) > 24*pick(next.BrowserMaxD, defaultBrowserMax) {
+		if pick(next.BrowserIdleH.Value(), defaultBrowserIdle) > 24*pick(next.BrowserMaxD.Value(), defaultBrowserMax) {
 			return nil, api.InvalidArgument("settings.sessions.browserIdleHours", "browser_idle_hours must not exceed browser_max_days")
 		}
 		if cur != nil && next == *cur {
@@ -236,7 +256,7 @@ func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[sett
 		return nil, err
 	}
 	if rec == nil {
-		rec = &SettingsRecord{Name: "server"}
+		rec = &SettingsRecord{Name: store.ID("server")}
 	}
 	return connect.NewResponse(&settingsv1.UpdateSettingsResponse{Settings: s.message(rec)}), nil
 }

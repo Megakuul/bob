@@ -224,14 +224,14 @@ func (b *Builds) workerKey(wid string) ed25519.PublicKey {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rec, err := store.Get(ctx, b.cfg.Jobs, &store.WorkerRecord{Wid: wid})
-	if err != nil || len(rec.SigPub) != ed25519.PublicKeySize {
+	rec, err := store.Get(ctx, b.cfg.Jobs, &store.WorkerRecord{Wid: store.ID(wid)})
+	if err != nil || len(rec.SigPub.Value()) != ed25519.PublicKeySize {
 		return nil
 	}
 	b.mu.Lock()
-	b.keys[wid] = ed25519.PublicKey(rec.SigPub)
+	b.keys[wid] = ed25519.PublicKey(rec.SigPub.Value())
 	b.mu.Unlock()
-	return rec.SigPub
+	return rec.SigPub.Value()
 }
 
 // buildPages returns the (cached) bpage index of a project.
@@ -409,7 +409,7 @@ func selectionOfRequest(r *Request) jobspec.Selection {
 
 // SelectionOf is what build rec runs.
 func SelectionOf(rec *store.BuildRecord) jobspec.Selection {
-	return selection(rec.Pipeline, rec.Targets, refOf(rec.Trigger, rec.Source, rec.Branch), rec.Test, rec.Variants, rec.Source.Upload)
+	return selection(rec.Pipeline.Value(), rec.Targets.Value(), refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()), rec.Test.Value(), rec.Variants.Value(), rec.Source.Value().Upload)
 }
 
 // Create creates a build in state pending (SPEC §05.6.2 trigger): CAS pctr.b+1 → n, then the
@@ -437,26 +437,26 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	} else if proj.Repo == "" && r.Source.Upload == "" && b.cfg.Projects != (AnyProject{}) {
 		return nil, invalid("source", "project %s has no linked repository; upload a source snapshot", r.Project)
 	}
-	running, _, err := store.GetCached(ctx, b.cfg.Control, &b.running, &store.RunningBuilds{Name: "running"})
+	running, _, err := store.GetCached(ctx, b.cfg.Control, &b.running, &store.RunningBuilds{Name: store.ID("running")})
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
-	if running != nil && len(running.Builds) >= MaxRunningBuilds {
+	if running != nil && len(running.Builds.Value()) >= MaxRunningBuilds {
 		return nil, fmt.Errorf("%w: %d running builds (the limit of bidx/running)", ErrLimit, MaxRunningBuilds)
 	}
 	now := b.now()
-	ctr, err := store.CAS(ctx, b.cfg.Control, &store.ProjectCounters{Project: r.Project}, func(cur *store.ProjectCounters) (*store.ProjectCounters, error) {
-		next := store.ProjectCounters{Project: r.Project}
+	ctr, err := store.CAS(ctx, b.cfg.Control, &store.ProjectCounters{Project: store.ID(r.Project)}, func(cur *store.ProjectCounters) (*store.ProjectCounters, error) {
+		next := store.ProjectCounters{Project: store.ID(r.Project)}
 		if cur != nil {
 			next = *cur
 		}
-		next.Builds++
+		next.Builds = store.Set(next.Builds.Value() + 1)
 		return &next, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("pctr/%s: %w", r.Project, err)
 	}
-	n := ctr.Builds
+	n := ctr.Builds.Value()
 	id := r.ID
 	if id == "" {
 		if id, err = NewBuildID(now); err != nil {
@@ -472,12 +472,12 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	if attempt <= 0 {
 		attempt = 1
 	}
-	rec := &store.BuildRecord{ID: id, Project: r.Project, Number: n, State: StatePending, Trigger: r.Trigger,
-		Branch: r.Branch, Commit: commit, Author: r.Author, Created: now, Platforms: r.Platforms,
-		RetryOf: r.RetryOf, RerunOf: r.RerunOf, Source: r.Source, Targets: r.Targets, Variants: r.Variants,
-		LogPartition: lg, Attempt: attempt, Pipeline: strings.Join(r.Pipelines, ","), Test: r.Test, Reason: r.Reason}
-	if len(rec.Platforms) == 0 {
-		rec.Platforms = []string{b.cfg.DefaultPlatform}
+	rec := &store.BuildRecord{ID: store.ID(id), Project: store.Set(r.Project), Number: store.Set(n), State: store.Set(StatePending), Trigger: store.Set(r.Trigger),
+		Branch: store.Set(r.Branch), Commit: store.Set(commit), Author: store.Set(r.Author), Created: store.Set(now), Platforms: store.Set(r.Platforms),
+		RetryOf: store.Set(r.RetryOf), RerunOf: store.Set(r.RerunOf), Source: store.Set(r.Source), Targets: store.Set(r.Targets), Variants: store.Set(r.Variants),
+		LogPartition: store.Set(lg), Attempt: store.Set(attempt), Pipeline: store.Set(strings.Join(r.Pipelines, ",")), Test: store.Set(r.Test), Reason: store.Set(r.Reason)}
+	if len(rec.Platforms.Value()) == 0 {
+		rec.Platforms = store.Set([]string{b.cfg.DefaultPlatform})
 	}
 	// intent first: index entries before the record (R-SRV-101)
 	if err := b.setRunning(ctx, rec); err != nil {
@@ -486,7 +486,7 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	if err := b.buildPages(r.Project).Set(ctx, n-1, entryOf(rec)); err != nil {
 		return nil, fmt.Errorf("bpage: %w", err)
 	}
-	if ref := refOf(rec.Trigger, rec.Source, rec.Branch); ref != "" {
+	if ref := refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()); ref != "" {
 		if err := b.addBranchEntry(ctx, r.Project, ref, n); err != nil {
 			return nil, err
 		}
@@ -514,21 +514,21 @@ func (b *Builds) checkUpload(ctx context.Context, project, sha string) error {
 // setRunning adds rec to bidx/running (every non-terminal build is listed there, decision
 // D-IB11-1; the started time is set when its first job is claimed).
 func (b *Builds) setRunning(ctx context.Context, rec *store.BuildRecord) error {
-	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: "running"}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
-		next := store.RunningBuilds{Name: "running", Builds: map[string]store.RunningBuild{}}
+	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
+		next := store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{})}
 		if cur != nil {
-			for k, v := range cur.Builds {
-				next.Builds[k] = v
+			for k, v := range cur.Builds.Value() {
+				next.Builds.Value()[k] = v
 			}
 		}
-		e := store.RunningBuild{Project: rec.Project, N: rec.Number, Started: rec.Started}
-		if old, ok := next.Builds[rec.ID]; ok && old == e {
+		e := store.RunningBuild{Project: rec.Project.Value(), N: rec.Number.Value(), Started: rec.Started.Value()}
+		if old, ok := next.Builds.Value()[rec.ID.Value()]; ok && old == e {
 			return nil, store.ErrNoChange
 		}
-		if _, ok := next.Builds[rec.ID]; !ok && len(next.Builds) >= MaxRunningBuilds {
+		if _, ok := next.Builds.Value()[rec.ID.Value()]; !ok && len(next.Builds.Value()) >= MaxRunningBuilds {
 			return nil, fmt.Errorf("%w: %d running builds (the limit of bidx/running)", ErrLimit, MaxRunningBuilds)
 		}
-		next.Builds[rec.ID] = e
+		next.Builds.Value()[rec.ID.Value()] = e
 		return &next, nil
 	})
 	if err != nil {
@@ -539,17 +539,17 @@ func (b *Builds) setRunning(ctx context.Context, rec *store.BuildRecord) error {
 
 // dropRunning removes a build from bidx/running.
 func (b *Builds) dropRunning(ctx context.Context, id string) error {
-	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: "running"}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
+	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		if _, ok := cur.Builds[id]; !ok {
+		if _, ok := cur.Builds.Value()[id]; !ok {
 			return nil, store.ErrNoChange
 		}
-		next := store.RunningBuilds{Name: "running", Builds: map[string]store.RunningBuild{}}
-		for k, v := range cur.Builds {
+		next := store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{})}
+		for k, v := range cur.Builds.Value() {
 			if k != id {
-				next.Builds[k] = v
+				next.Builds.Value()[k] = v
 			}
 		}
 		return &next, nil
@@ -559,17 +559,17 @@ func (b *Builds) dropRunning(ctx context.Context, id string) error {
 
 // addFailed appends a build to the bidx/failed ring (last 200).
 func (b *Builds) addFailed(ctx context.Context, rec *store.BuildRecord) error {
-	_, err := store.CAS(ctx, b.cfg.Control, &store.FailedBuilds{Name: "failed"}, func(cur *store.FailedBuilds) (*store.FailedBuilds, error) {
-		next := store.FailedBuilds{Name: "failed"}
+	_, err := store.CAS(ctx, b.cfg.Control, &store.FailedBuilds{Name: store.ID("failed")}, func(cur *store.FailedBuilds) (*store.FailedBuilds, error) {
+		next := store.FailedBuilds{Name: store.ID("failed")}
 		if cur != nil {
-			if slices.ContainsFunc(cur.Builds, func(f store.FailedBuild) bool { return f.Build == rec.ID }) {
+			if slices.ContainsFunc(cur.Builds.Value(), func(f store.FailedBuild) bool { return f.Build == rec.ID.Value() }) {
 				return nil, store.ErrNoChange
 			}
-			next.Builds = slices.Clone(cur.Builds)
+			next.Builds = store.Set(slices.Clone(cur.Builds.Value()))
 		}
-		next.Builds = append(next.Builds, store.FailedBuild{Build: rec.ID, Project: rec.Project, N: rec.Number, Finished: rec.Finished})
-		if len(next.Builds) > 200 {
-			next.Builds = next.Builds[len(next.Builds)-200:]
+		next.Builds = store.Set(append(next.Builds.Value(), store.FailedBuild{Build: rec.ID.Value(), Project: rec.Project.Value(), N: rec.Number.Value(), Finished: rec.Finished.Value()}))
+		if len(next.Builds.Value()) > 200 {
+			next.Builds = store.Set(next.Builds.Value()[len(next.Builds.Value())-200:])
 		}
 		return &next, nil
 	})
@@ -587,7 +587,7 @@ func (b *Builds) addBranchEntry(ctx context.Context, project, ref string, n uint
 		if cur != nil {
 			next = *cur
 		}
-		next.Count++
+		next.Count = store.Set(next.Count.Value() + 1)
 		return &next, nil
 	})
 	if err != nil {
@@ -597,7 +597,7 @@ func (b *Builds) addBranchEntry(ctx context.Context, project, ref string, n uint
 	if err != nil {
 		return err
 	}
-	if err := idx.Set(ctx, ctr.Count-1, n); err != nil {
+	if err := idx.Set(ctx, ctr.Count.Value()-1, n); err != nil {
 		return fmt.Errorf("bbr: %w", err)
 	}
 	return nil
@@ -605,30 +605,30 @@ func (b *Builds) addBranchEntry(ctx context.Context, project, ref string, n uint
 
 // entryOf is the bpage entry of a build.
 func entryOf(rec *store.BuildRecord) store.BuildEntry {
-	e := store.BuildEntry{N: rec.Number, Build: rec.ID, State: rec.State, Branch: rec.Branch,
-		Commit: rec.Commit, Trigger: rec.Trigger.Kind, Created: rec.Created}
+	e := store.BuildEntry{N: rec.Number.Value(), Build: rec.ID.Value(), State: rec.State.Value(), Branch: rec.Branch.Value(),
+		Commit: rec.Commit.Value(), Trigger: rec.Trigger.Value().Kind, Created: rec.Created.Value()}
 	if len(e.Commit) > 12 {
 		e.Commit = e.Commit[:12]
 	}
-	if !rec.Finished.IsZero() && !rec.Started.IsZero() {
-		e.Duration = rec.Finished.Sub(rec.Started)
+	if !rec.Finished.Value().IsZero() && !rec.Started.Value().IsZero() {
+		e.Duration = rec.Finished.Value().Sub(rec.Started.Value())
 	}
 	return e
 }
 
 // syncEntry rewrites the bpage entry of rec when its state or duration changed.
 func (b *Builds) syncEntry(ctx context.Context, rec *store.BuildRecord) error {
-	idx := b.buildPages(rec.Project)
+	idx := b.buildPages(rec.Project.Value())
 	want := entryOf(rec)
-	page, err := idx.Page(ctx, idx.LastPage(rec.Number))
+	page, err := idx.Page(ctx, idx.LastPage(rec.Number.Value()))
 	if err == nil {
-		if cur := page[(rec.Number-1)%uint64(idx.P)]; cur == want {
+		if cur := page[(rec.Number.Value()-1)%uint64(idx.P)]; cur == want {
 			return nil
 		}
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
-	return idx.Set(ctx, rec.Number-1, want)
+	return idx.Set(ctx, rec.Number.Value()-1, want)
 }
 
 // Get reads a build record (GET, the source of truth).
@@ -636,7 +636,7 @@ func (b *Builds) Get(ctx context.Context, id string) (*store.BuildRecord, error)
 	if !validBuildID(id) {
 		return nil, store.ErrNotFound
 	}
-	return store.Get(ctx, b.cfg.Control, &store.BuildRecord{ID: id})
+	return store.Get(ctx, b.cfg.Control, &store.BuildRecord{ID: store.ID(id)})
 }
 
 // ByNumber returns the id of build n of a project ("" when unknown or tombstoned).
@@ -661,24 +661,24 @@ func (b *Builds) ByNumber(ctx context.Context, project string, n uint64) (string
 
 // update CASes build/<id> with fn; fn returning store.ErrNoChange skips the write.
 func (b *Builds) update(ctx context.Context, id string, fn func(cur *store.BuildRecord) error) (*store.BuildRecord, error) {
-	return store.CAS(ctx, b.cfg.Control, &store.BuildRecord{ID: id}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
+	return store.CAS(ctx, b.cfg.Control, &store.BuildRecord{ID: store.ID(id)}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
 		next := *cur
-		next.Jobs = slices.Clone(cur.Jobs)
-		next.Pipelines = slices.Clone(cur.Pipelines)
-		next.Errors = slices.Clone(cur.Errors)
-		if cur.NonReproducible != nil {
-			next.NonReproducible = make(map[string][]string, len(cur.NonReproducible))
-			for k, v := range cur.NonReproducible {
-				next.NonReproducible[k] = v
+		next.Jobs = store.Set(slices.Clone(cur.Jobs.Value()))
+		next.Pipelines = store.Set(slices.Clone(cur.Pipelines.Value()))
+		next.Errors = store.Set(slices.Clone(cur.Errors.Value()))
+		if cur.NonReproducible.Value() != nil {
+			next.NonReproducible = store.Set(make(map[string][]string, len(cur.NonReproducible.Value())))
+			for k, v := range cur.NonReproducible.Value() {
+				next.NonReproducible.Value()[k] = v
 			}
 		}
-		if cur.Reported != nil {
-			next.Reported = make(map[string]string, len(cur.Reported))
-			for k, v := range cur.Reported {
-				next.Reported[k] = v
+		if cur.Reported.Value() != nil {
+			next.Reported = store.Set(make(map[string]string, len(cur.Reported.Value())))
+			for k, v := range cur.Reported.Value() {
+				next.Reported.Value()[k] = v
 			}
 		}
 		if err := fn(&next); err != nil {
@@ -701,13 +701,13 @@ func (b *Builds) Cancel(ctx context.Context, id, by string) (*store.BuildRecord,
 func (b *Builds) stop(ctx context.Context, id, state string, sp uint64) (*store.BuildRecord, error) {
 	now := b.now()
 	rec, err := b.update(ctx, id, func(cur *store.BuildRecord) error {
-		if Terminal(cur.State) {
+		if Terminal(cur.State.Value()) {
 			return ErrFinished
 		}
-		cur.State, cur.Finished, cur.SupersededBy = state, now, sp
-		for i := range cur.Pipelines {
-			if !Terminal(cur.Pipelines[i].State) {
-				cur.Pipelines[i].State = state
+		cur.State, cur.Finished, cur.SupersededBy = store.Set(state), store.Set(now), store.Set(sp)
+		for i := range cur.Pipelines.Value() {
+			if !Terminal(cur.Pipelines.Value()[i].State) {
+				cur.Pipelines.Value()[i].State = state
 			}
 		}
 		return nil
@@ -727,7 +727,7 @@ func (b *Builds) stop(ctx context.Context, id, state string, sp uint64) (*store.
 // cancelJobs requests cancellation of every non-terminal job of rec (queued: at once;
 // claimed/running: cx plus CancelJob over Attach).
 func (b *Builds) cancelJobs(ctx context.Context, rec *store.BuildRecord) {
-	for _, j := range rec.Jobs {
+	for _, j := range rec.Jobs.Value() {
 		if orchestrator.Terminal(j.State) {
 			continue
 		}
@@ -748,22 +748,22 @@ func (b *Builds) Retry(ctx context.Context, id, by string) (*store.BuildRecord, 
 	if err != nil {
 		return nil, err
 	}
-	switch old.State {
+	switch old.State.Value() {
 	case StateFailed, StateCancelled, StateSuperseded:
 	default:
-		return nil, fmt.Errorf("%w: only failed, cancelled or superseded builds can be retried (build is %s)", ErrState, old.State)
+		return nil, fmt.Errorf("%w: only failed, cancelled or superseded builds can be retried (build is %s)", ErrState, old.State.Value())
 	}
 	r := again(old, TriggerRetry, by)
-	r.RetryOf, r.Attempt = old.Number, max(old.Attempt, 1)+1
-	if old.Evaluated && len(old.Pipelines) > 0 {
+	r.RetryOf, r.Attempt = old.Number.Value(), max(old.Attempt.Value(), 1)+1
+	if old.Evaluated.Value() && len(old.Pipelines.Value()) > 0 {
 		r.Pipelines = nil
-		for _, p := range old.Pipelines {
+		for _, p := range old.Pipelines.Value() {
 			if p.State != StateSucceeded {
 				r.Pipelines = append(r.Pipelines, p.Name)
 			}
 		}
 		if len(r.Pipelines) == 0 {
-			r.Pipelines = pipelineNames(old.Pipelines)
+			r.Pipelines = pipelineNames(old.Pipelines.Value())
 		}
 	}
 	return b.Create(ctx, r)
@@ -778,24 +778,24 @@ func (b *Builds) Rerun(ctx context.Context, id, by string) (*store.BuildRecord, 
 	if err != nil {
 		return nil, err
 	}
-	if !Terminal(old.State) {
-		return nil, fmt.Errorf("%w: only finished builds can be re-run (build is %s)", ErrState, old.State)
+	if !Terminal(old.State.Value()) {
+		return nil, fmt.Errorf("%w: only finished builds can be re-run (build is %s)", ErrState, old.State.Value())
 	}
 	r := again(old, TriggerRerun, by)
-	r.RerunOf = old.Number
+	r.RerunOf = old.Number.Value()
 	return b.Create(ctx, r)
 }
 
 // again is a request repeating old: same source, ref, platforms, variants and selection.
 func again(old *store.BuildRecord, kind, by string) Request {
-	r := Request{Project: old.Project, Source: old.Source, Branch: old.Branch, Commit: old.Commit, Author: old.Author,
-		Targets: old.Targets, Platforms: slices.Clone(old.Platforms), Variants: old.Variants, Test: old.Test}
-	r.Trigger = store.BuildTrigger{Kind: kind, By: by, Ref: refOf(old.Trigger, old.Source, old.Branch),
-		PR: old.Trigger.PR, Fork: old.Trigger.Fork}
-	if old.Pipeline != "" {
-		r.Pipelines = strings.Split(old.Pipeline, ",")
-	} else if old.Evaluated && len(old.Targets) == 0 && len(old.Pipelines) > 0 {
-		r.Pipelines = pipelineNames(old.Pipelines)
+	r := Request{Project: old.Project.Value(), Source: old.Source.Value(), Branch: old.Branch.Value(), Commit: old.Commit.Value(), Author: old.Author.Value(),
+		Targets: old.Targets.Value(), Platforms: slices.Clone(old.Platforms.Value()), Variants: old.Variants.Value(), Test: old.Test.Value()}
+	r.Trigger = store.BuildTrigger{Kind: kind, By: by, Ref: refOf(old.Trigger.Value(), old.Source.Value(), old.Branch.Value()),
+		PR: old.Trigger.Value().PR, Fork: old.Trigger.Value().Fork}
+	if old.Pipeline.Value() != "" {
+		r.Pipelines = strings.Split(old.Pipeline.Value(), ",")
+	} else if old.Evaluated.Value() && len(old.Targets.Value()) == 0 && len(old.Pipelines.Value()) > 0 {
+		r.Pipelines = pipelineNames(old.Pipelines.Value())
 	}
 	return r
 }
@@ -810,11 +810,11 @@ func pipelineNames(ps []store.PipelineRun) []string {
 
 // ended runs the Finished hook for a build that just became terminal.
 func (b *Builds) ended(ctx context.Context, rec *store.BuildRecord) {
-	if b.cfg.Finished == nil || rec == nil || !Terminal(rec.State) {
+	if b.cfg.Finished == nil || rec == nil || !Terminal(rec.State.Value()) {
 		return
 	}
 	if err := safeCall(func() { b.cfg.Finished(ctx, rec) }); err != nil {
-		b.cfg.Log.Warn("build: finished hook", "build", rec.ID, "err", err.Error())
+		b.cfg.Log.Warn("build: finished hook", "build", rec.ID.Value(), "err", err.Error())
 	}
 }
 

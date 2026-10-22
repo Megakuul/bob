@@ -105,3 +105,10 @@ the end), budgets, completion goldens candidates.
    materialised files as Files, npm.Vite's dev server as Servers (DevServerSpec: Name
    "<dir>-vite", Cmd ["vite","--config",".bob/vite.bob.config.mjs"], Ready "http", Port).
    R-DEV-010 clangd/rust-analyzer/typescript and R-DEV-002 (M9.6) depend on it.
+5. **eval (pkg/engine/eval/scan.go), blocking R-DEV-003's nested-project case and every
+   nested bob repo**: the scan must stop at a directory with its own bob.lock (a nested root,
+   §1.2). Today it stops only at a go.mod without bob's header; since bob now writes a
+   bob-headed go.mod into every bob repo root (requires github.com/megakuul/bob), a nested
+   project's go.mod no longer stops the parent's scan, and the parent fails with "bob.Repo is
+   allowed only in the root bob.go --> sub/bob.go:9" (reproduced: acme-like repo + nested
+   sub/ with bob.lock, `bob allow` in sub (= bob gen there), then any evaluation of the parent).

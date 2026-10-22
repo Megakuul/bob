@@ -142,13 +142,13 @@ func TestIntakeAndService(t *testing.T) {
 
 	// link repository 1 (alice/demo) to project acme, as ProjectService does after LookupRepo
 	if _, err := store.CAS(ctx, control, ForgeKey("fjx"), func(cur *ForgeRecord) (*ForgeRecord, error) {
-		cur.Repos = map[string]string{"1": "acme"}
+		cur.Repos = store.Set(map[string]string{"1": "acme"})
 		return cur, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	link := RepoLinkKey("fjx", 1)
-	link.Project, link.FullName, link.CloneURL = "acme", "alice/demo", "https://forgejo.test/alice/demo.git"
+	link.Project, link.FullName, link.CloneURL = store.Set("acme"), store.Set("alice/demo"), store.Set("https://forgejo.test/alice/demo.git")
 	if err := store.Create(ctx, control, link); err != nil {
 		t.Fatal(err)
 	}

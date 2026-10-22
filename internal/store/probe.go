@@ -1,11 +1,13 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -67,28 +69,28 @@ func probe(ctx context.Context, b *Bucket) (err error) {
 	}()
 
 	// 1. PUT If-None-Match: * twice -> the second is 412.
-	_, err = b.putOnce(ctx, x, []byte("1"), ifAbsent, "")
+	err = b.rawPut(ctx, x, []byte("1"), "*", "")
 	if s3client.Status(err) == 403 {
 		return errProbeDenied
 	}
 	if err != nil {
 		return fail("conditional create", err)
 	}
-	switch _, err = b.putOnce(ctx, x, []byte("2"), ifAbsent, ""); {
+	switch err = b.rawPut(ctx, x, []byte("2"), "*", ""); {
 	case err == nil:
 		return no("conditional create (If-None-Match) is ignored")
 	case !errors.Is(err, errPrecondition):
 		return fail("second conditional create", err)
 	}
 	// 2. PUT If-Match: <stale> -> 412.
-	switch _, err = b.putOnce(ctx, x, []byte("3"), ifMatch, staleETag); {
+	switch err = b.rawPut(ctx, x, []byte("3"), "", staleETag); {
 	case err == nil:
 		return no("conditional overwrite (If-Match) is ignored")
 	case !errors.Is(err, errPrecondition):
 		return fail("stale conditional overwrite", err)
 	}
 	// 7. every GET returns an ETag; 3. GET If-None-Match: <current ETag> -> 304.
-	o, _, err := b.getOnce(ctx, x, "")
+	o, _, err := b.rawGet(ctx, x, "")
 	switch {
 	case errors.Is(err, errNoETag):
 		return no("GET returns no ETag header")
@@ -97,35 +99,101 @@ func probe(ctx context.Context, b *Bucket) (err error) {
 	case string(o.body) != "1":
 		return no("a conditional write that failed changed the object")
 	}
-	switch _, nm, err := b.getOnce(ctx, x, o.etag); {
+	switch _, nm, err := b.rawGet(ctx, x, o.etag); {
 	case err != nil:
 		return fail("conditional read", err)
 	case !nm:
 		return no("conditional GET (If-None-Match) is ignored")
 	}
 	// 4. GET of a missing key -> 404 NoSuchKey.
-	switch _, _, err := b.getOnce(ctx, dir+"missing", ""); {
+	switch _, _, err := b.rawGet(ctx, dir+"missing", ""); {
 	case err == nil:
 		return no("a missing key is readable")
 	case !errors.Is(err, ErrNotFound):
 		return no("a missing key does not return 404 NoSuchKey")
 	}
 	// 5. DELETE If-Match: <stale> -> 412.
-	switch err = b.del(ctx, x, staleETag); {
+	switch err = b.rawDelete(ctx, x, staleETag); {
 	case err == nil:
 		return no("conditional delete (If-Match) is ignored")
 	case !errors.Is(err, errPrecondition):
 		return fail("stale conditional delete", err)
 	}
 	// 6. GET of <dir>/ after deleting <dir>/x -> 404.
-	if err = b.del(ctx, x, o.etag); err != nil {
+	if err = b.rawDelete(ctx, x, o.etag); err != nil {
 		return fail("delete", err)
 	}
-	switch _, _, err := b.getOnce(ctx, dir, ""); {
+	switch _, _, err := b.rawGet(ctx, dir, ""); {
 	case err == nil:
 		return no("an emptied directory reads as an object")
 	case !errors.Is(err, ErrNotFound):
 		return fail("read of the emptied directory", err)
 	}
 	return nil
+}
+
+// The probe checks the backend itself, so it sends raw requests instead of going through
+// dynamitedb.
+
+// errPrecondition is a 412 (or AWS's 409 for racing conditional writes).
+var errPrecondition = errors.New("precondition failed")
+
+// rawObject is one object read by the probe.
+type rawObject struct {
+	body []byte
+	etag string
+}
+
+func (b *Bucket) rawPut(ctx context.Context, key string, body []byte, ifNoneMatch, ifMatch string) error {
+	in := &s3.PutObjectInput{Bucket: aws.String(b.name), Key: aws.String(key),
+		Body: bytes.NewReader(body), ContentLength: aws.Int64(int64(len(body)))}
+	if ifNoneMatch != "" {
+		in.IfNoneMatch = aws.String(ifNoneMatch)
+	}
+	if ifMatch != "" {
+		in.IfMatch = aws.String(ifMatch)
+	}
+	_, err := b.s3.PutObject(ctx, in)
+	if st := s3client.Status(err); st == 412 || st == 409 {
+		return errPrecondition
+	}
+	return err
+}
+
+// rawGet reads key; with ifNoneMatch set, an unchanged object returns notModified=true.
+func (b *Bucket) rawGet(ctx context.Context, key, ifNoneMatch string) (rawObject, bool, error) {
+	in := &s3.GetObjectInput{Bucket: aws.String(b.name), Key: aws.String(key)}
+	if ifNoneMatch != "" {
+		in.IfNoneMatch = aws.String(ifNoneMatch)
+	}
+	resp, err := b.s3.GetObject(ctx, in)
+	if err != nil {
+		switch s3client.Status(err) {
+		case 304:
+			return rawObject{}, true, nil
+		case 404:
+			return rawObject{}, false, ErrNotFound
+		}
+		return rawObject{}, false, err
+	}
+	defer resp.Body.Close()
+	if resp.ETag == nil || *resp.ETag == "" {
+		return rawObject{}, false, errNoETag
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return rawObject{}, false, err
+	}
+	return rawObject{body: body, etag: *resp.ETag}, false, nil
+}
+
+func (b *Bucket) rawDelete(ctx context.Context, key, ifMatch string) error {
+	_, err := b.s3.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(b.name), Key: aws.String(key), IfMatch: aws.String(ifMatch)})
+	switch st := s3client.Status(err); {
+	case st == 412 || st == 409:
+		return errPrecondition
+	case st == 404:
+		return ErrNotFound
+	}
+	return err
 }

@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/smithy-go"
 	"github.com/megakuul/lake"
 )
 
@@ -106,9 +104,11 @@ func PartitionEnd(name string) (end time.Time, ok bool) {
 
 // PrefixClient returns a client whose base endpoint is <endpoint>/<bucket>, so that lake's
 // "bucket" argument becomes a key prefix inside the analytics bucket (path-style addressing,
-// SPEC §05.10.1, verified V3/V4). The client keeps base's credentials, region and HTTP client;
-// wrap, when not nil, replaces its HTTP client (the shard cache).
-func PrefixClient(base *s3.Client, bucket string, wrap func(s3.HTTPClient) s3.HTTPClient) (*s3.Client, error) {
+// SPEC §05.10.1): one lake catalog per partition. lake has no key-prefix option, and the plain
+// lake.NewFromClient(ctx, client, "<analytics>/<partition>") fails (SignatureDoesNotMatch):
+// plan/progress/I-B16-repro/partition-prefix. The client keeps base's credentials, region and
+// HTTP client.
+func PrefixClient(base *s3.Client, bucket string) (*s3.Client, error) {
 	o := base.Options()
 	if o.BaseEndpoint == nil || *o.BaseEndpoint == "" {
 		return nil, errors.New("logstore: the S3 client has no base endpoint")
@@ -123,9 +123,6 @@ func PrefixClient(base *s3.Client, bucket string, wrap func(s3.HTTPClient) s3.HT
 	return s3.New(o, func(so *s3.Options) {
 		so.BaseEndpoint = &ep
 		so.UsePathStyle = true
-		if wrap != nil {
-			so.HTTPClient = wrap(so.HTTPClient)
-		}
 	}), nil
 }
 
@@ -147,19 +144,6 @@ func guard[T any](fn func() (T, error)) (v T, err error) {
 	}()
 	return fn()
 }
-
-// isNoSuchKey reports a missing object: a shard compacted away under a reader's cached
-// catalog (lake bug L4).
-func isNoSuchKey(err error) bool {
-	if _, ok := errors.AsType[*types.NoSuchKey](err); ok {
-		return true
-	}
-	var ae smithy.APIError
-	return errors.As(err, &ae) && ae.ErrorCode() == "NoSuchKey"
-}
-
-// isLockFailure reports lake's optimistic-lock failure: the commit did not land.
-func isLockFailure(err error) bool { return errors.Is(err, lake.ErrOptimisticLock) }
 
 // noTable reports a query on a partition without the table yet (nothing committed).
 func noTable(err error) bool {

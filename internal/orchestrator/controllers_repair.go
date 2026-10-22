@@ -110,7 +110,7 @@ func (x *IndexRepair) jobs(ctx context.Context, now time.Time) (int, error) {
 		if !old(e.Created, now) {
 			continue
 		}
-		_, err := store.Get(ctx, x.Fleet, &store.JobRecord{ID: id})
+		_, err := store.Get(ctx, x.Fleet, &store.JobRecord{ID: store.ID(id)})
 		if !errors.Is(err, store.ErrNotFound) {
 			if err != nil {
 				errs = append(errs, err)
@@ -153,7 +153,7 @@ func (x *IndexRepair) builds(ctx context.Context, now time.Time) (int, error) {
 				if e.Build == "" || e.State == BuildEntryTombstone || !old(e.Created, now) {
 					continue
 				}
-				_, err := store.Get(ctx, x.Control, &store.BuildRecord{ID: e.Build})
+				_, err := store.Get(ctx, x.Control, &store.BuildRecord{ID: store.ID(e.Build)})
 				if !errors.Is(err, store.ErrNotFound) {
 					if err != nil {
 						errs = append(errs, err)
@@ -186,7 +186,7 @@ func (x *IndexRepair) principalBinds(ctx context.Context, principal, role string
 		if err != nil {
 			return false, false, err
 		}
-		bs = u.Bindings
+		bs = u.Bindings.Value()
 	case "sa":
 		sa, err := store.Get(ctx, x.Control, store.ServiceAccountKey(id))
 		if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrKeySegment) {
@@ -195,7 +195,7 @@ func (x *IndexRepair) principalBinds(ctx context.Context, principal, role string
 		if err != nil {
 			return false, false, err
 		}
-		bs = sa.Bindings
+		bs = sa.Bindings.Value()
 	default:
 		return false, false, nil
 	}
@@ -211,7 +211,7 @@ func (x *IndexRepair) members(ctx context.Context, now time.Time, st *repairStat
 		return 0, 0, fmt.Errorf("index-repair roles: %w", err)
 	}
 	if ri != nil {
-		roles = append(roles, ri.IDs...)
+		roles = append(roles, ri.IDs.Value()...)
 	}
 	seen := map[string]bool{}
 	var errs []error
@@ -224,7 +224,7 @@ func (x *IndexRepair) members(ctx context.Context, now time.Time, st *repairStat
 			errs = append(errs, err)
 			continue
 		}
-		for _, p := range mem.Principals {
+		for _, p := range mem.Principals.Value() {
 			binds, _, err := x.principalBinds(ctx, p, role)
 			if err != nil {
 				errs = append(errs, err)
@@ -272,11 +272,11 @@ func (x *IndexRepair) dropMember(ctx context.Context, role, principal string) er
 		return err
 	}
 	_, err = store.CAS(ctx, x.Control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
-		if cur == nil || !slices.Contains(cur.Principals, principal) {
+		if cur == nil || !slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Principals = slices.DeleteFunc(slices.Clone(cur.Principals), func(p string) bool { return p == principal })
+		next.Principals = store.Set(slices.DeleteFunc(slices.Clone(cur.Principals.Value()), func(p string) bool { return p == principal }))
 		return &next, nil
 	})
 	return err
@@ -316,7 +316,7 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 				errs = append(errs, err)
 				continue
 			}
-			collect("user:"+u.ID, u.Bindings)
+			collect("user:"+u.ID.Value(), u.Bindings.Value())
 		}
 	}
 	sas, err := store.Get(ctx, x.Control, store.SAIndexKey())
@@ -324,7 +324,7 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 		errs = append(errs, err)
 	}
 	if sas != nil {
-		for _, id := range sas.IDs {
+		for _, id := range sas.IDs.Value() {
 			sa, err := store.Get(ctx, x.Control, store.ServiceAccountKey(id))
 			if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrKeySegment) {
 				continue
@@ -333,7 +333,7 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 				errs = append(errs, err)
 				continue
 			}
-			collect("sa:"+sa.ID, sa.Bindings)
+			collect("sa:"+sa.ID.Value(), sa.Bindings.Value())
 		}
 	}
 	added := 0
@@ -345,7 +345,7 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 				*next = *cur
 			}
 			n = 0
-			members := slices.Clone(next.Principals)
+			members := slices.Clone(next.Principals.Value())
 			for _, p := range ps {
 				if !slices.Contains(members, p) {
 					members = append(members, p)
@@ -355,7 +355,7 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 			if n == 0 {
 				return nil, store.ErrNoChange
 			}
-			next.Principals = members
+			next.Principals = store.Set(members)
 			return next, nil
 		})
 		if err != nil {

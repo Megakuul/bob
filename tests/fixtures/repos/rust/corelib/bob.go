@@ -17,4 +17,4 @@ var Lib = bob.Define(func(p *bob.P) *rust.Lib {
 })
 
 // Test runs the unit tests and tests/*.rs (units //corelib:corelib_test, //corelib:corelib_test_num).
-var Test = bob.Define(func(p *bob.P) *rust.Test { return rust.Test(p, rust.TestOpts{Crate: Lib(p)}) })
+var Test = bob.Define(func(p *bob.P) *rust.TestSet { return rust.Test(p, rust.TestOpts{Crate: Lib(p)}) })

@@ -180,19 +180,19 @@ func (s *Service) ListBuilds(ctx context.Context, req *connect.Request[buildv1.L
 		return nil, err
 	}
 	match := func(rec *store.BuildRecord) bool {
-		if len(m.GetStates()) > 0 && !slices.Contains(m.GetStates(), protoState(rec.State)) {
+		if len(m.GetStates()) > 0 && !slices.Contains(m.GetStates(), protoState(rec.State.Value())) {
 			return false
 		}
-		if m.GetTriggerKind() != buildv1.TriggerKind_TRIGGER_KIND_UNSPECIFIED && protoTrigger(rec.Trigger.Kind) != m.GetTriggerKind() {
+		if m.GetTriggerKind() != buildv1.TriggerKind_TRIGGER_KIND_UNSPECIFIED && protoTrigger(rec.Trigger.Value().Kind) != m.GetTriggerKind() {
 			return false
 		}
-		if m.GetPipeline() != "" && !slices.ContainsFunc(rec.Pipelines, func(p store.PipelineRun) bool { return p.Name == m.GetPipeline() }) {
+		if m.GetPipeline() != "" && !slices.ContainsFunc(rec.Pipelines.Value(), func(p store.PipelineRun) bool { return p.Name == m.GetPipeline() }) {
 			return false
 		}
-		if t := m.GetCreatedAfter(); t != nil && !rec.Created.After(t.AsTime()) {
+		if t := m.GetCreatedAfter(); t != nil && !rec.Created.Value().After(t.AsTime()) {
 			return false
 		}
-		return m.GetRef() == "" || refOf(rec.Trigger, rec.Source, rec.Branch) == m.GetRef()
+		return m.GetRef() == "" || refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()) == m.GetRef()
 	}
 	if m.GetProjectId() == "" {
 		return s.listActive(ctx, m, size, match)
@@ -246,15 +246,15 @@ func (s *Service) ListBuilds(ctx context.Context, req *connect.Request[buildv1.L
 // numbers are the build numbers of a project (or of one ref of it), newest first.
 func (s *Service) numbers(ctx context.Context, project, ref string) ([]uint64, error) {
 	if ref == "" {
-		ctr, err := store.Get(ctx, s.B.cfg.Control, &store.ProjectCounters{Project: project})
+		ctr, err := store.Get(ctx, s.B.cfg.Control, &store.ProjectCounters{Project: store.ID(project)})
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, nil
 		}
 		if err != nil {
 			return nil, err
 		}
-		out := make([]uint64, 0, ctr.Builds)
-		for n := ctr.Builds; n > 0; n-- {
+		out := make([]uint64, 0, ctr.Builds.Value())
+		for n := ctr.Builds.Value(); n > 0; n-- {
 			out = append(out, n)
 		}
 		return out, nil
@@ -275,7 +275,7 @@ func (s *Service) numbers(ctx context.Context, project, ref string) ([]uint64, e
 		return nil, err
 	}
 	var out []uint64
-	for k := int64(idx.LastPage(ctr.Count)); k >= 0; k-- {
+	for k := int64(idx.LastPage(ctr.Count.Value())); k >= 0; k-- {
 		page, err := idx.Page(ctx, uint64(k))
 		if errors.Is(err, store.ErrNotFound) {
 			continue
@@ -295,21 +295,21 @@ func (s *Service) numbers(ctx context.Context, project, ref string) ([]uint64, e
 // listActive lists the active (and recently failed) builds of every project in scope.
 func (s *Service) listActive(ctx context.Context, m *buildv1.ListBuildsRequest, size int, match func(*store.BuildRecord) bool) (*connect.Response[buildv1.ListBuildsResponse], error) {
 	ids := map[string]bool{}
-	running, _, err := store.GetCached(ctx, s.B.cfg.Control, &s.B.running, &store.RunningBuilds{Name: "running"})
+	running, _, err := store.GetCached(ctx, s.B.cfg.Control, &s.B.running, &store.RunningBuilds{Name: store.ID("running")})
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
 	if running != nil {
-		for id := range running.Builds {
+		for id := range running.Builds.Value() {
 			ids[id] = true
 		}
 	}
-	failed, err := store.Get(ctx, s.B.cfg.Control, &store.FailedBuilds{Name: "failed"})
+	failed, err := store.Get(ctx, s.B.cfg.Control, &store.FailedBuilds{Name: store.ID("failed")})
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
 	if failed != nil {
-		for _, f := range failed.Builds {
+		for _, f := range failed.Builds.Value() {
 			ids[f.Build] = true
 		}
 	}
@@ -331,7 +331,7 @@ func (s *Service) listActive(ctx context.Context, m *buildv1.ListBuildsRequest, 
 		if err != nil {
 			return nil, err
 		}
-		if ok, err := s.allowed(ctx, rec.Project); err != nil || !ok || !match(rec) {
+		if ok, err := s.allowed(ctx, rec.Project.Value()); err != nil || !ok || !match(rec) {
 			if err != nil {
 				return nil, err
 			}
@@ -365,11 +365,11 @@ func (s *Service) GetBuildGraph(ctx context.Context, req *connect.Request[buildv
 	if err != nil {
 		return nil, apiError(err, "build")
 	}
-	nodes, err := s.B.Nodes(ctx, rec.ID)
+	nodes, err := s.B.Nodes(ctx, rec.ID.Value())
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&buildv1.GetBuildGraphResponse{Nodes: protoNodes(nodes), Complete: rec.Evaluated}), nil
+	return connect.NewResponse(&buildv1.GetBuildGraphResponse{Nodes: protoNodes(nodes), Complete: rec.Evaluated.Value()}), nil
 }
 
 // WatchBuild implements BuildService: the build first, then every change (conditional GET
@@ -385,7 +385,7 @@ func (s *Service) WatchBuild(ctx context.Context, req *connect.Request[buildv1.W
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
-		rec, changed, err := store.GetCached(ctx, s.B.cfg.Control, &cache, &store.BuildRecord{ID: req.Msg.GetId()})
+		rec, changed, err := store.GetCached(ctx, s.B.cfg.Control, &cache, &store.BuildRecord{ID: store.ID(req.Msg.GetId())})
 		if err != nil {
 			return apiError(err, "build")
 		}
@@ -395,7 +395,7 @@ func (s *Service) WatchBuild(ctx context.Context, req *connect.Request[buildv1.W
 				return err
 			}
 			msg := &buildv1.WatchBuildResponse{Build: b}
-			nodes, err := s.B.Nodes(ctx, rec.ID)
+			nodes, err := s.B.Nodes(ctx, rec.ID.Value())
 			if err != nil {
 				return err
 			}
@@ -410,7 +410,7 @@ func (s *Service) WatchBuild(ctx context.Context, req *connect.Request[buildv1.W
 			if err := stream.Send(msg); err != nil {
 				return err
 			}
-			if Terminal(rec.State) {
+			if Terminal(rec.State.Value()) {
 				return nil
 			}
 		}
@@ -433,7 +433,7 @@ func (s *Service) GetJob(ctx context.Context, req *connect.Request[buildv1.GetJo
 	if err != nil {
 		return nil, apiError(err, "job")
 	}
-	for _, row := range rec.Jobs {
+	for _, row := range rec.Jobs.Value() {
 		if row.ID == id {
 			j, err := s.B.job(ctx, rec, row)
 			if err != nil {
@@ -456,18 +456,18 @@ func (s *Service) ListJobs(ctx context.Context, req *connect.Request[buildv1.Lis
 	if err != nil {
 		return nil, apiError(err, "build")
 	}
-	scope := "jobs/" + rec.ID
+	scope := "jobs/" + rec.ID.Value()
 	pos, err := api.DecodePageToken(scope, m.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
 	out := &buildv1.ListJobsResponse{}
-	for i := int(pos); i < len(rec.Jobs); i++ {
+	for i := int(pos); i < len(rec.Jobs.Value()); i++ {
 		if len(out.Jobs) == size {
 			out.NextPageToken = api.EncodePageToken(scope, uint64(i))
 			break
 		}
-		j, err := s.B.job(ctx, rec, rec.Jobs[i])
+		j, err := s.B.job(ctx, rec, rec.Jobs.Value()[i])
 		if err != nil {
 			return nil, err
 		}
@@ -478,28 +478,28 @@ func (s *Service) ListJobs(ctx context.Context, req *connect.Request[buildv1.Lis
 
 // job is the Job message of a row: from the live job record while it exists.
 func (b *Builds) job(ctx context.Context, rec *store.BuildRecord, row store.BuildJob) (*buildv1.Job, error) {
-	j := &buildv1.Job{Id: row.ID, BuildId: rec.ID, Kind: protoJobKind(row.Kind), State: protoJobState(row.State),
+	j := &buildv1.Job{Id: row.ID, BuildId: rec.ID.Value(), Kind: protoJobKind(row.Kind), State: protoJobState(row.State),
 		Platform: platformOf(row.Class), WorkerId: row.Worker, Attempt: int32(row.Attempts), Epoch: row.Epoch,
-		CreatedAt: ts(rec.Created), Promotion: row.Promotion, NonReproducible: rec.NonReproducible[row.ID]}
+		CreatedAt: ts(rec.Created.Value()), Promotion: row.Promotion, NonReproducible: rec.NonReproducible.Value()[row.ID]}
 	if orchestrator.Terminal(row.State) {
 		return j, nil
 	}
-	live, err := store.Get(ctx, b.cfg.Jobs, &store.JobRecord{ID: row.ID})
+	live, err := store.Get(ctx, b.cfg.Jobs, &store.JobRecord{ID: store.ID(row.ID)})
 	if errors.Is(err, store.ErrNotFound) {
 		return j, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	j.State, j.WorkerId, j.Attempt, j.Epoch = protoJobState(live.State), live.Owner, int32(live.Attempt), live.Epoch
-	j.Promotion, j.NonReproducible = live.Promotion, live.NonReproducible
-	j.ClaimedAt = ts(live.Claimed)
-	if spec, ok := fleet.DecodeSpec(live.Spec); ok {
+	j.State, j.WorkerId, j.Attempt, j.Epoch = protoJobState(live.State.Value()), live.Owner.Value(), int32(live.Attempt.Value()), live.Epoch.Value()
+	j.Promotion, j.NonReproducible = live.Promotion.Value(), live.NonReproducible.Value()
+	j.ClaimedAt = ts(live.Claimed.Value())
+	if spec, ok := fleet.DecodeSpec(live.Spec.Value()); ok {
 		j.CreatedAt = ts(time.Unix(spec.Created, 0))
 	}
-	if orchestrator.Terminal(live.State) {
-		j.FinishedAt = ts(live.Changed)
-		if res, ok := fleet.DecodeResult(live.Result); ok && res.Error != "" {
+	if orchestrator.Terminal(live.State.Value()) {
+		j.FinishedAt = ts(live.Changed.Value())
+		if res, ok := fleet.DecodeResult(live.Result.Value()); ok && res.Error != "" {
 			j.Error = &buildv1.ErrorSummary{Code: codeRE.FindString(res.Error), Message: firstLine(res.Error)}
 		}
 	}
@@ -558,8 +558,8 @@ func protoNodes(bn *BuildNodes) []*buildv1.PackageNode {
 	if bn == nil {
 		return nil
 	}
-	out := make([]*buildv1.PackageNode, len(bn.Nodes))
-	for i, n := range bn.Nodes {
+	out := make([]*buildv1.PackageNode, len(bn.Nodes.Value()))
+	for i, n := range bn.Nodes.Value() {
 		pn := &buildv1.PackageNode{Package: &commonv1.PackageRef{Label: n.Label, Platform: n.Platform},
 			State: protoPackageState(n.Status), JobId: n.Job, Outputs: n.Outputs}
 		for _, d := range n.Deps {
@@ -584,17 +584,17 @@ func protoError(e store.BuildError) *buildv1.ErrorSummary {
 // ToProto is the Build message of rec. Build numbers it refers to (retry_of, rerun_of,
 // superseded_by) are turned into build ids through bpage.
 func (b *Builds) ToProto(ctx context.Context, rec *store.BuildRecord) (*buildv1.Build, error) {
-	idOf := func(n uint64) (string, error) { return b.ByNumber(ctx, rec.Project, n) }
-	tr := &buildv1.Trigger{Kind: protoTrigger(rec.Trigger.Kind), Ref: refOf(rec.Trigger, rec.Source, rec.Branch),
-		PullRequest: rec.Trigger.PR, FromFork: rec.Trigger.Fork, Sender: rec.Trigger.Sender, DeliveryId: rec.Trigger.Event}
-	if rec.Trigger.By != "" {
-		tr.Principal = &commonv1.Principal{Id: rec.Trigger.By}
+	idOf := func(n uint64) (string, error) { return b.ByNumber(ctx, rec.Project.Value(), n) }
+	tr := &buildv1.Trigger{Kind: protoTrigger(rec.Trigger.Value().Kind), Ref: refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()),
+		PullRequest: rec.Trigger.Value().PR, FromFork: rec.Trigger.Value().Fork, Sender: rec.Trigger.Value().Sender, DeliveryId: rec.Trigger.Value().Event}
+	if rec.Trigger.Value().By != "" {
+		tr.Principal = &commonv1.Principal{Id: rec.Trigger.Value().By}
 	}
 	var err error
 	for _, x := range []struct {
 		n   uint64
 		dst *string
-	}{{rec.RetryOf, &tr.RetryOf}, {rec.RerunOf, &tr.RerunOf}, {rec.SupersededBy, &tr.SupersededBy}} {
+	}{{rec.RetryOf.Value(), &tr.RetryOf}, {rec.RerunOf.Value(), &tr.RerunOf}, {rec.SupersededBy.Value(), &tr.SupersededBy}} {
 		if x.n == 0 {
 			continue
 		}
@@ -602,28 +602,28 @@ func (b *Builds) ToProto(ctx context.Context, rec *store.BuildRecord) (*buildv1.
 			return nil, err
 		}
 	}
-	out := &buildv1.Build{Id: rec.ID, ProjectId: rec.Project, Number: int64(rec.Number), State: protoState(rec.State),
-		Trigger: tr, Targets: rec.Targets, Platforms: rec.Platforms, Variants: rec.Variants,
-		Attempt: int32(max(rec.Attempt, 1)), CreatedAt: ts(rec.Created), StartedAt: ts(rec.Started),
-		FinishedAt: ts(rec.Finished), WebUrl: b.WebURL(rec), Etag: rec.ETag}
-	if rec.Source.Upload != "" {
-		out.Source = &buildv1.Source{Kind: &buildv1.Source_UploadSha256{UploadSha256: rec.Source.Upload}}
+	out := &buildv1.Build{Id: rec.ID.Value(), ProjectId: rec.Project.Value(), Number: int64(rec.Number.Value()), State: protoState(rec.State.Value()),
+		Trigger: tr, Targets: rec.Targets.Value(), Platforms: rec.Platforms.Value(), Variants: rec.Variants.Value(),
+		Attempt: int32(max(rec.Attempt.Value(), 1)), CreatedAt: ts(rec.Created.Value()), StartedAt: ts(rec.Started.Value()),
+		FinishedAt: ts(rec.Finished.Value()), WebUrl: b.WebURL(rec), Etag: store.ETagOf(rec.ETag)}
+	if rec.Source.Value().Upload != "" {
+		out.Source = &buildv1.Source{Kind: &buildv1.Source_UploadSha256{UploadSha256: rec.Source.Value().Upload}}
 	} else {
-		sha := rec.Source.SHA
+		sha := rec.Source.Value().SHA
 		if sha == "" {
-			sha = rec.Commit
+			sha = rec.Commit.Value()
 		}
-		out.Source = &buildv1.Source{Kind: &buildv1.Source_Git{Git: &buildv1.GitSource{Ref: rec.Source.Ref, Sha: sha, FetchRef: rec.Source.FetchRef}}}
+		out.Source = &buildv1.Source{Kind: &buildv1.Source_Git{Git: &buildv1.GitSource{Ref: rec.Source.Value().Ref, Sha: sha, FetchRef: rec.Source.Value().FetchRef}}}
 	}
-	if !Terminal(rec.State) {
-		out.Phase = buildv1.BuildPhase(buildv1.BuildPhase_value["BUILD_PHASE_"+strings.ToUpper(rec.Phase)])
+	if !Terminal(rec.State.Value()) {
+		out.Phase = buildv1.BuildPhase(buildv1.BuildPhase_value["BUILD_PHASE_"+strings.ToUpper(rec.Phase.Value())])
 	}
-	for _, p := range rec.Pipelines {
+	for _, p := range rec.Pipelines.Value() {
 		out.Pipelines = append(out.Pipelines, &buildv1.PipelineRun{Name: p.Name, State: protoState(p.State), ReleaseId: p.Release})
 	}
-	c := rec.Counts
-	if !Terminal(rec.State) {
-		for _, j := range rec.Jobs {
+	c := rec.Counts.Value()
+	if !Terminal(rec.State.Value()) {
+		for _, j := range rec.Jobs.Value() {
 			switch j.State {
 			case orchestrator.StateQueued:
 				c.Queued++
@@ -635,7 +635,7 @@ func (b *Builds) ToProto(ctx context.Context, rec *store.BuildRecord) (*buildv1.
 	out.Counts = &buildv1.PackageCounts{Total: int32(c.Total), Cached: int32(c.Cached), Built: int32(c.Built),
 		Running: int32(c.Running), Queued: int32(c.Queued), Failed: int32(c.Failed), Skipped: int32(c.Skipped),
 		Cancelled: int32(c.Cancelled)}
-	for _, e := range rec.Errors {
+	for _, e := range rec.Errors.Value() {
 		out.Errors = append(out.Errors, protoError(e))
 	}
 	return out, nil
@@ -652,8 +652,8 @@ func (b *Builds) JobProject(ctx context.Context, jobID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !slices.ContainsFunc(rec.Jobs, func(j store.BuildJob) bool { return j.ID == jobID }) {
+	if !slices.ContainsFunc(rec.Jobs.Value(), func(j store.BuildJob) bool { return j.ID == jobID }) {
 		return "", fmt.Errorf("job %s: %w", jobID, store.ErrNotFound)
 	}
-	return rec.Project, nil
+	return rec.Project.Value(), nil
 }

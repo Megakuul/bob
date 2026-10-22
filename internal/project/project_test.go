@@ -64,7 +64,7 @@ func (l *links) UnlinkRepo(_ context.Context, _ string, id int64) error {
 func (l *links) Record(_ context.Context, id string) (*integration.ForgeRecord, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return &integration.ForgeRecord{ID: id, Health: l.health}, nil
+	return &integration.ForgeRecord{ID: store.ID(id), Health: store.Set(l.health)}, nil
 }
 
 func code(err error) connect.Code {
@@ -235,17 +235,17 @@ func TestProjects(t *testing.T) {
 	// pipelines cache: a default-branch evaluation, then a branch one (ignored), then the end
 	rep := &jobspec.Report{Pipelines: []jobspec.Pipeline{{Name: "ci", Triggers: []string{"push trunk"}, Concurrency: "queue"},
 		{Name: "release", Triggers: []string{"tag v*"}, Releases: []string{"api"}}}, Matched: []string{"ci"}}
-	b1 := &store.BuildRecord{ID: "01aaaaaaaaaaaaaaaaaaaaaaa1", Project: "acme", Number: 1, Branch: "trunk", Commit: "c1",
-		Trigger: store.BuildTrigger{Ref: "refs/heads/trunk"}}
+	b1 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa1"), Project: store.Set("acme"), Number: store.Set(1), Branch: store.Set("trunk"), Commit: store.Set("c1"),
+		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/trunk"})}
 	if err := p.Evaluated(ctx, b1, rep); err != nil {
 		t.Fatal(err)
 	}
-	b2 := &store.BuildRecord{ID: "01aaaaaaaaaaaaaaaaaaaaaaa2", Project: "acme", Number: 2, Branch: "feature", Commit: "c2",
-		Trigger: store.BuildTrigger{Ref: "refs/heads/feature"}}
+	b2 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa2"), Project: store.Set("acme"), Number: store.Set(2), Branch: store.Set("feature"), Commit: store.Set("c2"),
+		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/feature"})}
 	if err := p.Evaluated(ctx, b2, &jobspec.Report{Pipelines: []jobspec.Pipeline{{Name: "other"}}}); err != nil {
 		t.Fatal(err)
 	}
-	b1.State, b1.Pipelines = buildctl.StateSucceeded, []store.PipelineRun{{Name: "ci", State: buildctl.StateSucceeded}}
+	b1.State, b1.Pipelines = store.Set(buildctl.StateSucceeded), store.Set([]store.PipelineRun{{Name: "ci", State: buildctl.StateSucceeded}})
 	if err := p.Finished(ctx, b1); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m := pl.Msg; m.GetEvaluatedSha() != "c1" || len(m.GetPipelines()) != 2 || m.GetPipelines()[0].GetLastBuildId() != b1.ID ||
+	if m := pl.Msg; m.GetEvaluatedSha() != "c1" || len(m.GetPipelines()) != 2 || m.GetPipelines()[0].GetLastBuildId() != b1.ID.Value() ||
 		m.GetPipelines()[0].GetLastState() != "BUILD_STATE_SUCCEEDED" || m.GetPipelines()[0].GetConcurrency() != projectv1.Concurrency_CONCURRENCY_QUEUE ||
 		!m.GetPipelines()[1].GetReleases() || m.GetPipelines()[1].GetTriggers()[0] != "tag v*" {
 		t.Errorf("ListPipelines = %v", m)
@@ -268,16 +268,16 @@ func TestProjects(t *testing.T) {
 	l.health = 0
 
 	// delete: refused while a build runs, then unlinks and disappears
-	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: "running"}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
-		return &store.RunningBuilds{Name: "running", Builds: map[string]store.RunningBuild{"b": {Project: "acme", N: 3}}}, nil
+	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
+		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{"b": {Project: "acme", N: 3}})}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.DeleteProject(ctx, req(&projectv1.DeleteProjectRequest{Id: "acme"})); code(err) != connect.CodeFailedPrecondition {
 		t.Errorf("DeleteProject with a running build: %v", err)
 	}
-	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: "running"}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
-		return &store.RunningBuilds{Name: "running", Builds: map[string]store.RunningBuild{}}, nil
+	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
+		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{})}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -305,8 +305,8 @@ func TestProjects(t *testing.T) {
 	if err := idx.Set(ctx, n, project.Entry{ID: "ghost", Pending: true, At: clock}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CAS(ctx, control, &project.IndexCounter{Name: "all"}, func(c *project.IndexCounter) (*project.IndexCounter, error) {
-		return &project.IndexCounter{Name: "all", Count: c.Count + 1}, nil
+	if _, err := store.CAS(ctx, control, &project.IndexCounter{Name: store.ID("all")}, func(c *project.IndexCounter) (*project.IndexCounter, error) {
+		return &project.IndexCounter{Name: store.ID("all"), Count: store.Set(c.Count.Value() + 1)}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Set(ctx, web.Slot-1, project.Entry{ID: "web", Pending: true, At: clock}); err != nil {
+	if err := idx.Set(ctx, web.Slot.Value()-1, project.Entry{ID: "web", Pending: true, At: clock}); err != nil {
 		t.Fatal(err)
 	}
 	if ids, _ := list(&projectv1.ListProjectsRequest{}); len(ids) != 2 { // p1, acme2 (web hidden, ghost hidden)

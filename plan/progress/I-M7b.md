@@ -38,8 +38,20 @@ Not pkg/rust, pkg/npm.
   sha256=fde5eea7a256ddf8 zstd=12->21" (External zstd via make cross, openssl/zlib from
   legacyPackages.x86_64-linux). Cold cross build 4m41s at load ~30 [8c/15G shared].
 
+- Verified (scratch repo /var/tmp/i-m7b/go = go fixture without api/proto/rcore + capp, a cgo
+  module linking //native/foo): `bob build --platform linux-amd64` → capp (cgo, dynamic, cross
+  glibc interpreter) prints "capp linux/amd64 checksum=306254" under qemu-x86_64; stamp (pure,
+  x/sync) static x86-64. `bob test --platform linux-amd64 --json //capp/... //lib/...`: 3 units
+  pass with "runner":"qemu-x86_64" (lib/fastadd runs its amd64 assembly). `@linux-amd64+race`
+  and `+asan`: status skipped, reason "not run: needs a native linux-amd64 machine", exit 0;
+  --require-all-tests exit 1.
+- R-PLAT-001 (tests/platforms): exit 2 and no nix dir for @linux-riscv64; host arch refused
+  under `setarch linux32` (armv8l), exit 2. Still red on text: CLI renders "error[BOB-E-…]"
+  blocks instead of "✗ …" (NEEDS 5) and code 1 has no "(known: …)" (NEEDS 1).
+
 ## next
-- go fixture cross build; cc cross test under qemu; budgets/closures (M7.6).
+- Go variants (race/asan/debug native and cross) build+run; cc cross test; CrossLibs note;
+  closure measurements (M7.6).
 
 ## DECISIONS
 - D-M7b-1: engine toolchain code lives in package engine (pkg/engine/toolchain.go), not a new
@@ -58,8 +70,10 @@ Not pkg/rust, pkg/npm.
   dep by the same Lib from the cross set ((*nixpkgs.Package).CrossSet); natively it changes
   nothing.
 - D-M7b-6: R-PLAT-007 needs no code for its messages in §02.3; uses BOB-E-1021 (label
-  "nixpkgs", reason = SPEC text, hint in Cause); OCaml cross refusal uses 1010 with the SPEC
-  text in Cause (exit 3, SPEC says 2). See NEEDS 1.
+  "nixpkgs", reason = SPEC text, hint in Cause); OCaml cross refusal uses usage code 6
+  ("<label> does not support <p> (it allows: <host>)", exit 2) with the SPEC text in Cause.
+  Unknown --platform/@platform: code 1 (kind platform, hint naming the known ones), checked in
+  the CLI before the store opens. See NEEDS 1.
 - D-M7b-7: race and asan force cgo on (cmd/go: both require cgo); CGoOff + race/asan →
   BOB-E-1020; race+asan together → 1020.
 - D-M7b-8: cross `go list -asan` (std) runs with a CC shim script that strips the triple prefix
@@ -77,6 +91,8 @@ Not pkg/rust, pkg/npm.
    (rust-std-<triple> from legacyPackages.<target>.rustc.unwrapped), linker <triple>-cc, host
    units with RustFor(host, host); qemu-user dep for cross rust tests (p.Toolchain().Emulator).
 4. OCaml unit: nothing (engine refuses cross OCaml nodes before planning).
+5. CLI owner (pkg/cli output.go diagnose): usage errors print "error[BOB-E-0001]: …" blocks;
+   tests/platforms R-PLAT-001/005/007 want the "✗ <message>" form of §02.5 (same as I-M7a NEEDS 4).
 
 ## TEST PROBLEM
 1. tests/platforms/platform_test.go restrictedAppGo calls `cc.Binary(p, …)` returning

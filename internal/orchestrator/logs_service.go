@@ -18,27 +18,27 @@ import (
 // record (fleet). A job record that is gone was finalised: terminal.
 func BuildJobs(control, fleet *store.Bucket) logstore.JobsFunc {
 	return func(ctx context.Context, buildID string) ([]logstore.JobState, bool, error) {
-		b, err := store.Get(ctx, control, &store.BuildRecord{ID: buildID})
+		b, err := store.Get(ctx, control, &store.BuildRecord{ID: store.ID(buildID)})
 		if err != nil {
 			return nil, false, err
 		}
-		out := make([]logstore.JobState, 0, len(b.Jobs))
-		for _, bj := range b.Jobs {
+		out := make([]logstore.JobState, 0, len(b.Jobs.Value()))
+		for _, bj := range b.Jobs.Value() {
 			js := logstore.JobState{ID: bj.ID, Owner: bj.Worker, Epoch: bj.Epoch, Terminal: terminalJob(bj.State)}
 			if !js.Terminal {
-				rec, err := store.Get(ctx, fleet, &store.JobRecord{ID: bj.ID})
+				rec, err := store.Get(ctx, fleet, &store.JobRecord{ID: store.ID(bj.ID)})
 				switch {
 				case errors.Is(err, store.ErrNotFound):
 					js.Terminal = true
 				case err != nil:
 					return nil, false, err
 				default:
-					js.Owner, js.Epoch, js.Terminal = rec.Owner, rec.Epoch, terminalJob(rec.State)
+					js.Owner, js.Epoch, js.Terminal = rec.Owner.Value(), rec.Epoch.Value(), terminalJob(rec.State.Value())
 				}
 			}
 			out = append(out, js)
 		}
-		return out, terminalBuild(b.State), nil
+		return out, terminalBuild(b.State.Value()), nil
 	}
 }
 

@@ -60,12 +60,12 @@ func (s authService) GetServerInfo(ctx context.Context, _ *connect.Request[authv
 		s.id.log.Warn("login options without OIDC providers", "err", err.Error())
 	}
 	for _, p := range provs {
-		name := p.DisplayName
+		name := p.DisplayName.Value()
 		if name == "" {
-			name = p.ID
+			name = p.ID.Value()
 		}
 		out.LoginOptions = append(out.LoginOptions, &authv1.LoginOption{
-			ProviderId: p.ID, DisplayName: name, StartUrl: "/auth/oidc/start?provider=" + url.QueryEscape(p.ID),
+			ProviderId: p.ID.Value(), DisplayName: name, StartUrl: "/auth/oidc/start?provider=" + url.QueryEscape(p.ID.Value()),
 		})
 	}
 	return connect.NewResponse(out), nil
@@ -127,23 +127,23 @@ func (s authService) LoginPassword(ctx context.Context, req *connect.Request[aut
 	}
 	phc := ""
 	if u != nil {
-		phc = u.PasswordHash
+		phc = u.PasswordHash.Value()
 	}
 	ok, err := s.id.hasher.verify(ctx, phc, pw)
 	if err != nil && !errors.Is(err, errBadHash) {
 		return nil, err
 	}
-	if !ok || u == nil || u.Disabled || len(pw.reveal()) > maxPassword {
+	if !ok || u == nil || u.Disabled.Value() || len(pw.reveal()) > maxPassword {
 		s.id.throttle.fail(login, ip, s.id.now())
 		return nil, errBadLogin
 	}
-	iss, err := s.id.createSession(ctx, u.ID, "browser", req.Header().Get("User-Agent"))
+	iss, err := s.id.createSession(ctx, u.ID.Value(), "browser", req.Header().Get("User-Agent"))
 	if err != nil {
 		return nil, err
 	}
 	res := connect.NewResponse(&authv1.LoginPasswordResponse{
-		Principal:          &commonv1.Principal{Id: "user:" + u.ID, DisplayName: userPrincipal(u).DisplayName},
-		MustChangePassword: u.MustChange,
+		Principal:          &commonv1.Principal{Id: "user:" + u.ID.Value(), DisplayName: userPrincipal(u).DisplayName},
+		MustChangePassword: u.MustChange.Value(),
 	})
 	res.Header().Add("Set-Cookie", sessionCookie(iss.session, browserMax))
 	return res, nil
@@ -154,14 +154,14 @@ func (s authService) LoginPassword(ctx context.Context, req *connect.Request[aut
 func (id *Identity) callerSession(ctx context.Context, h http.Header) string {
 	if scheme, tok, ok := strings.Cut(h.Get("Authorization"), " "); ok && strings.EqualFold(scheme, "Bearer") {
 		key := store.TokenKey(tok)
-		rec, err := load(ctx, id.control, &id.tokens, key.Hash, key)
+		rec, err := load(ctx, id.control, &id.tokens, key.Hash.Value(), key)
 		if err != nil {
 			return ""
 		}
-		return rec.Session
+		return rec.Session.Value()
 	}
 	if ck, err := (&http.Request{Header: h}).Cookie(CookieName); err == nil && ck.Value != "" {
-		return store.SessionKey(ck.Value).Hash
+		return store.SessionKey(ck.Value).Hash.Value()
 	}
 	return ""
 }
@@ -210,19 +210,19 @@ func (s authService) ChangePassword(ctx context.Context, req *connect.Request[au
 	if err != nil {
 		return nil, err
 	}
-	if u.Source != sourceLocal {
+	if u.Source.Value() != sourceLocal {
 		return nil, api.FailedPrecondition("an OIDC user has no password")
 	}
 	ip := clientIP(req.Peer().Addr)
-	if err := s.id.throttle.check(u.Login, ip, s.id.now()); err != nil {
+	if err := s.id.throttle.check(u.Login.Value(), ip, s.id.now()); err != nil {
 		return nil, err
 	}
-	ok, err := s.id.hasher.verify(ctx, u.PasswordHash, Secret(req.Msg.GetOldPassword()))
+	ok, err := s.id.hasher.verify(ctx, u.PasswordHash.Value(), Secret(req.Msg.GetOldPassword()))
 	if err != nil && !errors.Is(err, errBadHash) {
 		return nil, err
 	}
 	if !ok {
-		s.id.throttle.fail(u.Login, ip, s.id.now())
+		s.id.throttle.fail(u.Login.Value(), ip, s.id.now())
 		return nil, api.InvalidArgument("oldPassword", "the current password is wrong")
 	}
 	if err := s.id.setPassword(ctx, uid, newPW, false); err != nil {
@@ -252,10 +252,10 @@ func (s authService) ListMySessions(ctx context.Context, req *connect.Request[au
 	out := &authv1.ListMySessionsResponse{}
 	for _, x := range ss {
 		out.Sessions = append(out.Sessions, &authv1.Session{
-			Id: x.ID, Kind: x.Kind, UserAgent: x.UserAgent,
-			CreatedAt:  timestamppb.New(x.Created),
-			LastUsedAt: timestamppb.New(x.LastUsed.UTC().Truncate(24 * time.Hour)),
-			Current:    x.Hash == cur,
+			Id: x.ID.Value(), Kind: x.Kind.Value(), UserAgent: x.UserAgent.Value(),
+			CreatedAt:  timestamppb.New(x.Created.Value()),
+			LastUsedAt: timestamppb.New(x.LastUsed.Value().UTC().Truncate(24 * time.Hour)),
+			Current:    x.Hash.Value() == cur,
 		})
 	}
 	return connect.NewResponse(out), nil

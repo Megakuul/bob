@@ -92,13 +92,18 @@ func TestRPLAT004HostBuildsTargetCompiles(t *testing.T) {
 			t.Errorf("%s: %v", e.Name(), err)
 			continue
 		}
+		// Only bob-generated derivations (built by bob-builder) are host-only: target libraries
+		// come from the target system's nixpkgs (ADR 0009, R-FW-032) and carry its system.
+		if !strings.HasSuffix(d.Builder, "/bin/bob-builder") {
+			continue
+		}
 		n++
 		if d.System != host && d.System != "builtin" {
 			t.Errorf("derivation %s has system %q, want the host system %q", e.Name(), d.System, host)
 		}
 	}
 	if n == 0 {
-		t.Errorf("no derivation in the store")
+		t.Errorf("no bob-generated derivation in the store")
 	}
 	// No emulated builder: the guest binary is not runnable natively, only through qemu-user.
 	if r := harness.RunPath(t, bin, harness.Spec{}); r.Exit != -1 && !strings.Contains(r.Stderr, "exec format error") {

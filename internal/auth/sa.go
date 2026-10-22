@@ -25,9 +25,9 @@ const (
 )
 
 func saMsg(sa *store.ServiceAccountRecord) *accessv1.ServiceAccount {
-	m := &accessv1.ServiceAccount{Id: sa.ID, Description: sa.Description, Disabled: sa.Disabled, Etag: sa.ETag}
-	if !sa.Created.IsZero() {
-		m.CreatedAt = timestamppb.New(sa.Created)
+	m := &accessv1.ServiceAccount{Id: sa.ID.Value(), Description: sa.Description.Value(), Disabled: sa.Disabled.Value(), Etag: store.ETagOf(sa.ETag)}
+	if !sa.Created.Value().IsZero() {
+		m.CreatedAt = timestamppb.New(sa.Created.Value())
 	}
 	return m
 }
@@ -78,26 +78,26 @@ func (s saService) CreateServiceAccount(ctx context.Context, req *connect.Reques
 		return nil, api.InvalidArgument("serviceAccount.description", "description too long")
 	}
 	sa := store.ServiceAccountKey(in.GetId())
-	sa.Description, sa.Disabled, sa.Created = in.GetDescription(), in.GetDisabled(), s.id.now()
+	sa.Description, sa.Disabled, sa.Created = store.Set(in.GetDescription()), store.Set(in.GetDisabled()), store.Set(s.id.now())
 	if _, err := store.CAS(ctx, s.id.control, store.SAIndexKey(), func(cur *store.SAIndex) (*store.SAIndex, error) {
 		if cur == nil {
 			cur = store.SAIndexKey()
 		}
-		if slices.Contains(cur.IDs, sa.ID) {
+		if slices.Contains(cur.IDs.Value(), sa.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs) >= maxSAs {
+		if len(cur.IDs.Value()) >= maxSAs {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d service accounts", maxSAs))
 		}
-		cur.IDs = append(cur.IDs, sa.ID)
-		slices.Sort(cur.IDs)
+		cur.IDs = store.Set(append(cur.IDs.Value(), sa.ID.Value()))
+		slices.Sort(cur.IDs.Value())
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)
 	}
 	if err := store.Create(ctx, s.id.control, sa); err != nil {
 		if errors.Is(err, store.ErrExists) {
-			return nil, api.AlreadyExists(fmt.Sprintf("service account %s already exists", sa.ID))
+			return nil, api.AlreadyExists(fmt.Sprintf("service account %s already exists", sa.ID.Value()))
 		}
 		return nil, storageError(err)
 	}
@@ -128,15 +128,15 @@ func (s saService) ListServiceAccounts(ctx context.Context, req *connect.Request
 		return nil, storageError(err)
 	}
 	out := &accessv1.ListServiceAccountsResponse{}
-	for ; pos < uint64(len(idx.IDs)); pos++ {
+	for ; pos < uint64(len(idx.IDs.Value())); pos++ {
 		if len(out.ServiceAccounts) == size {
 			out.NextPageToken = api.EncodePageToken("serviceaccounts", pos)
 			break
 		}
-		if q := req.Msg.GetQuery(); q != "" && !strings.HasPrefix(idx.IDs[pos], q) {
+		if q := req.Msg.GetQuery(); q != "" && !strings.HasPrefix(idx.IDs.Value()[pos], q) {
 			continue
 		}
-		sa, err := store.Get(ctx, s.id.control, store.ServiceAccountKey(idx.IDs[pos]))
+		sa, err := store.Get(ctx, s.id.control, store.ServiceAccountKey(idx.IDs.Value()[pos]))
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		} else if err != nil {
@@ -156,7 +156,7 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	if err := checkETag("serviceAccount.etag", in.GetEtag(), cur.ETag); err != nil {
+	if err := checkETag("serviceAccount.etag", in.GetEtag(), store.ETagOf(cur.ETag)); err != nil {
 		return nil, err
 	}
 	setDisabled, setDesc := false, false
@@ -167,28 +167,28 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 	if len(in.GetDescription()) > 500 {
 		return nil, api.InvalidArgument("serviceAccount.description", "description too long")
 	}
-	principal := "sa:" + cur.ID
-	disabled := cur.Disabled
+	principal := "sa:" + cur.ID.Value()
+	disabled := cur.Disabled.Value()
 	if setDisabled {
 		disabled = in.GetDisabled()
 	}
-	wasAdmin, willAdmin := isAdmin(cur.Bindings, cur.Disabled), isAdmin(cur.Bindings, disabled)
+	wasAdmin, willAdmin := isAdmin(cur.Bindings.Value(), cur.Disabled.Value()), isAdmin(cur.Bindings.Value(), disabled)
 	if wasAdmin && !willAdmin {
 		if err := s.id.adminRemove(ctx, principal); err != nil {
 			return nil, err
 		}
 	}
-	next, err := store.CAS(ctx, s.id.control, store.ServiceAccountKey(cur.ID), func(sa *store.ServiceAccountRecord) (*store.ServiceAccountRecord, error) {
+	next, err := store.CAS(ctx, s.id.control, store.ServiceAccountKey(cur.ID.Value()), func(sa *store.ServiceAccountRecord) (*store.ServiceAccountRecord, error) {
 		if sa == nil {
 			return nil, api.NotFound("service account")
 		}
-		if in.GetEtag() != "" && sa.ETag != in.GetEtag() {
+		if in.GetEtag() != "" && store.ETagOf(sa.ETag) != in.GetEtag() {
 			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 		}
 		if setDesc {
-			sa.Description = in.GetDescription()
+			sa.Description = store.Set(in.GetDescription())
 		}
-		sa.Disabled = disabled
+		sa.Disabled = store.Set(disabled)
 		return sa, nil
 	})
 	if err != nil {
@@ -197,7 +197,7 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 		}
 		return nil, storageError(err)
 	}
-	s.id.sas.put(next.ID, next)
+	s.id.sas.put(next.ID.Value(), next)
 	if !wasAdmin && willAdmin {
 		if err := s.id.adminAdd(ctx, principal); err != nil {
 			return nil, err
@@ -211,11 +211,11 @@ func (s saService) DeleteServiceAccount(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	if e := req.Msg.GetEtag(); e != "" && e != cur.ETag {
+	if e := req.Msg.GetEtag(); e != "" && e != store.ETagOf(cur.ETag) {
 		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 	}
-	principal := "sa:" + cur.ID
-	admin := isAdmin(cur.Bindings, cur.Disabled)
+	principal := "sa:" + cur.ID.Value()
+	admin := isAdmin(cur.Bindings.Value(), cur.Disabled.Value())
 	if admin {
 		if err := s.id.adminRemove(ctx, principal); err != nil {
 			return nil, err
@@ -230,21 +230,21 @@ func (s saService) DeleteServiceAccount(ctx context.Context, req *connect.Reques
 		}
 		return nil, storageError(err)
 	}
-	s.id.sas.drop(cur.ID)
-	for _, t := range cur.Tokens {
+	s.id.sas.drop(cur.ID.Value())
+	for _, t := range cur.Tokens.Value() {
 		s.id.deleteToken(ctx, t.Hash)
 	}
-	for _, b := range cur.Bindings {
+	for _, b := range cur.Bindings.Value() {
 		s.id.removeMember(ctx, b.Role, principal, nil)
 	}
 	if _, err := store.CAS(ctx, s.id.control, store.SAIndexKey(), func(idx *store.SAIndex) (*store.SAIndex, error) {
-		if idx == nil || !slices.Contains(idx.IDs, cur.ID) {
+		if idx == nil || !slices.Contains(idx.IDs.Value(), cur.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		idx.IDs = slices.DeleteFunc(idx.IDs, func(x string) bool { return x == cur.ID })
+		idx.IDs = store.Set(slices.DeleteFunc(idx.IDs.Value(), func(x string) bool { return x == cur.ID.Value() }))
 		return idx, nil
 	}); err != nil {
-		s.id.log.Warn("service account index not updated", "sa", cur.ID, "err", err.Error())
+		s.id.log.Warn("service account index not updated", "sa", cur.ID.Value(), "err", err.Error())
 	}
 	return connect.NewResponse(&accessv1.DeleteServiceAccountResponse{}), nil
 }
@@ -285,17 +285,17 @@ func (s saService) CreateServiceAccountToken(ctx context.Context, req *connect.R
 	}
 	secret := newToken(PrefixSA)
 	rec := store.TokenKey(secret.reveal())
-	entry := store.SATokenEntry{ID: "t" + randomString(crockford, 12), Name: name, Scope: scope, Hash: rec.Hash, Expires: expires, Created: now}
-	rec.Owner, rec.Kind, rec.Scope, rec.TokenID = "sa:"+m.GetServiceAccountId(), "sa", scope, entry.ID
-	rec.Expires, rec.Created = expires, now
+	entry := store.SATokenEntry{ID: "t" + randomString(crockford, 12), Name: name, Scope: scope, Hash: rec.Hash.Value(), Expires: expires, Created: now}
+	rec.Owner, rec.Kind, rec.Scope, rec.TokenID = store.Set("sa:"+m.GetServiceAccountId()), store.Set("sa"), store.Set(scope), store.Set(entry.ID)
+	rec.Expires, rec.Created = store.Set(expires), store.Set(now)
 	// The SA record lists the token first: a token record without its list entry would be a
 	// credential nobody can see or revoke.
 	next, err := store.CAS(ctx, s.id.control, store.ServiceAccountKey(m.GetServiceAccountId()), func(sa *store.ServiceAccountRecord) (*store.ServiceAccountRecord, error) {
 		if sa == nil {
 			return nil, api.NotFound("service account")
 		}
-		live := sa.Tokens[:0:0]
-		for _, t := range sa.Tokens {
+		live := sa.Tokens.Value()[:0:0]
+		for _, t := range sa.Tokens.Value() {
 			if t.Expires.IsZero() || now.Before(t.Expires) {
 				live = append(live, t)
 			}
@@ -303,17 +303,17 @@ func (s saService) CreateServiceAccountToken(ctx context.Context, req *connect.R
 		if len(live) >= maxSATokens {
 			return nil, api.FailedPrecondition(fmt.Sprintf("a service account has at most %d tokens", maxSATokens))
 		}
-		sa.Tokens = append(sa.Tokens, entry)
+		sa.Tokens = store.Set(append(sa.Tokens.Value(), entry))
 		return sa, nil
 	})
 	if err != nil {
 		return nil, storageError(err)
 	}
-	s.id.sas.put(next.ID, next)
+	s.id.sas.put(next.ID.Value(), next)
 	if err := store.Create(ctx, s.id.control, rec); err != nil {
 		return nil, storageError(err)
 	}
-	s.id.tokens.drop(rec.Hash)
+	s.id.tokens.drop(rec.Hash.Value())
 	return connect.NewResponse(&accessv1.CreateServiceAccountTokenResponse{Token: saTokenMsg(entry), Secret: secret.reveal()}), nil
 }
 
@@ -323,7 +323,7 @@ func (s saService) ListServiceAccountTokens(ctx context.Context, req *connect.Re
 		return nil, err
 	}
 	out := &accessv1.ListServiceAccountTokensResponse{}
-	for _, t := range sa.Tokens {
+	for _, t := range sa.Tokens.Value() {
 		out.Tokens = append(out.Tokens, saTokenMsg(t))
 	}
 	return connect.NewResponse(out), nil
@@ -341,18 +341,18 @@ func (s saService) RevokeServiceAccountToken(ctx context.Context, req *connect.R
 		if sa == nil {
 			return nil, api.NotFound("service account")
 		}
-		i := slices.IndexFunc(sa.Tokens, func(t store.SATokenEntry) bool { return t.ID == m.GetTokenId() })
+		i := slices.IndexFunc(sa.Tokens.Value(), func(t store.SATokenEntry) bool { return t.ID == m.GetTokenId() })
 		if i < 0 {
 			return nil, api.NotFound("token")
 		}
-		hash = sa.Tokens[i].Hash
-		sa.Tokens = slices.Delete(sa.Tokens, i, i+1)
+		hash = sa.Tokens.Value()[i].Hash
+		sa.Tokens = store.Set(slices.Delete(sa.Tokens.Value(), i, i+1))
 		return sa, nil
 	})
 	if err != nil {
 		return nil, storageError(err)
 	}
-	s.id.sas.put(next.ID, next)
+	s.id.sas.put(next.ID.Value(), next)
 	s.id.deleteToken(ctx, hash)
 	return connect.NewResponse(&accessv1.RevokeServiceAccountTokenResponse{}), nil
 }

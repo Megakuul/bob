@@ -116,13 +116,13 @@ func (a *Analytics) GetOverview(ctx context.Context, _ *connect.Request[analytic
 		return nil, err
 	}
 	out := &analyticsv1.GetOverviewResponse{}
-	running, _, err := store.GetCached(ctx, a.Control, &a.running, &store.RunningBuilds{Name: "running"})
+	running, _, err := store.GetCached(ctx, a.Control, &a.running, &store.RunningBuilds{Name: store.ID("running")})
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
 	if running != nil {
-		ids := make([]string, 0, len(running.Builds))
-		for id, e := range running.Builds {
+		ids := make([]string, 0, len(running.Builds.Value()))
+		for id, e := range running.Builds.Value() {
 			if allowed(e.Project) {
 				ids = append(ids, id)
 			}
@@ -140,7 +140,7 @@ func (a *Analytics) GetOverview(ctx context.Context, _ *connect.Request[analytic
 			if err != nil {
 				return nil, err
 			}
-			if buildctl.Terminal(rec.State) {
+			if buildctl.Terminal(rec.State.Value()) {
 				continue // finished, not yet settled out of bidx/running
 			}
 			b, err := a.Builds.ToProto(ctx, rec)
@@ -161,7 +161,7 @@ func (a *Analytics) GetOverview(ctx context.Context, _ *connect.Request[analytic
 
 // failures returns up to limit builds of the bidx/failed ring, newest first.
 func (a *Analytics) failures(ctx context.Context, projectID string, limit int, allowed func(string) bool) ([]*buildv1.Build, error) {
-	ring, _, err := store.GetCached(ctx, a.Control, &a.failed, &store.FailedBuilds{Name: "failed"})
+	ring, _, err := store.GetCached(ctx, a.Control, &a.failed, &store.FailedBuilds{Name: store.ID("failed")})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, nil
 	}
@@ -169,8 +169,8 @@ func (a *Analytics) failures(ctx context.Context, projectID string, limit int, a
 		return nil, err
 	}
 	var out []*buildv1.Build
-	for i := len(ring.Builds) - 1; i >= 0 && len(out) < limit; i-- {
-		f := ring.Builds[i]
+	for i := len(ring.Builds.Value()) - 1; i >= 0 && len(out) < limit; i-- {
+		f := ring.Builds.Value()[i]
 		if projectID != "" && f.Project != projectID || !allowed(f.Project) {
 			continue
 		}
@@ -222,7 +222,7 @@ func (a *Analytics) fleet(ctx context.Context) ([]*analyticsv1.PlatformFleet, in
 	}
 	var depth int32
 	if cfg != nil {
-		for _, c := range cfg.Classes {
+		for _, c := range cfg.Classes.Value() {
 			d, err := a.depth(ctx, c.ID)
 			if err != nil {
 				return nil, 0, err
@@ -350,7 +350,7 @@ func (a *Analytics) BuildHistory(ctx context.Context, req *connect.Request[analy
 	}
 	now := a.now()
 	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -(n - 1))
-	ctr, _, err := store.GetCached(ctx, a.Control, &a.ctrs, &store.ProjectCounters{Project: m.GetProjectId()})
+	ctr, _, err := store.GetCached(ctx, a.Control, &a.ctrs, &store.ProjectCounters{Project: store.ID(m.GetProjectId())})
 	if errors.Is(err, store.ErrNotFound) {
 		return connect.NewResponse(&analyticsv1.BuildHistoryResponse{}), nil
 	}
@@ -361,7 +361,7 @@ func (a *Analytics) BuildHistory(ctx context.Context, req *connect.Request[analy
 	stats := map[string]*dayStats{}
 	checks := 0
 	done := false
-	for k, read := int64(pages.LastPage(ctr.Builds)), 0; k >= 0 && read < maxHistoryPages && !done; k, read = k-1, read+1 {
+	for k, read := int64(pages.LastPage(ctr.Builds.Value())), 0; k >= 0 && read < maxHistoryPages && !done; k, read = k-1, read+1 {
 		page, err := pages.Page(ctx, uint64(k))
 		if errors.Is(err, store.ErrNotFound) {
 			continue
@@ -394,7 +394,7 @@ func (a *Analytics) BuildHistory(ctx context.Context, req *connect.Request[analy
 				if err != nil {
 					return nil, err
 				}
-				if !slices.ContainsFunc(rec.Pipelines, func(p store.PipelineRun) bool { return p.Name == m.GetPipeline() }) {
+				if !slices.ContainsFunc(rec.Pipelines.Value(), func(p store.PipelineRun) bool { return p.Name == m.GetPipeline() }) {
 					continue
 				}
 			}

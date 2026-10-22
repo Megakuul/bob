@@ -59,7 +59,7 @@ func run(t *testing.T, c *orchestrator.Controller) (stop func()) {
 func handoverAfterCrash(t *testing.T, b buckets) {
 	ctx := context.Background()
 	const iv, skew = 2 * time.Second, 500 * time.Millisecond
-	dead := &store.ControllerLease{Name: "t-crash", Owner: "dead", Epoch: 7, Expires: time.Now().Add(orchestrator.LeaseTTLFactor * iv)}
+	dead := &store.ControllerLease{Name: store.ID("t-crash"), Owner: store.Set("dead"), Epoch: store.Set(7), Expires: store.Set(time.Now().Add(orchestrator.LeaseTTLFactor * iv))}
 	if err := store.Create(ctx, b.fleet, dead); err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +73,8 @@ func handoverAfterCrash(t *testing.T, b buckets) {
 	if d := time.Since(t0); n.Load() == 0 || d > 3*iv {
 		t.Fatalf("takeover after %v (passes %d), want within 3 x interval = %v", d, n.Load(), 3*iv)
 	}
-	l, err := store.Get(ctx, b.fleet, &store.ControllerLease{Name: "t-crash"})
-	if err != nil || l.Owner != "live" || l.Epoch != 8 {
+	l, err := store.Get(ctx, b.fleet, &store.ControllerLease{Name: store.ID("t-crash")})
+	if err != nil || l.Owner.Value() != "live" || l.Epoch.Value() != 8 {
 		t.Fatalf("lease after takeover = %+v (%v), want owner live epoch 8", l, err)
 	}
 }
@@ -188,14 +188,14 @@ func membership(t *testing.T, b buckets) {
 	// a dead member: entry plus a stale record
 	if _, err := store.CAS(ctx, b.fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := *cur
-		next.Members = append(slices.Clone(cur.Members),
+		next.Members = store.Set(append(slices.Clone(cur.Members.Value()),
 			store.FleetMember{Orch: "dead", Endpoint: "http://127.0.0.1:2", Since: now.Add(-time.Hour)},
-			store.FleetMember{Orch: "young", Endpoint: "http://127.0.0.1:3", Since: now})
+			store.FleetMember{Orch: "young", Endpoint: "http://127.0.0.1:3", Since: now}))
 		return &next, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.PutOwned(ctx, b.fleet, &store.OrchRecord{ID: "dead", Heartbeat: now.Add(-31 * time.Second)}); err != nil {
+	if err := store.PutOwned(ctx, b.fleet, &store.OrchRecord{ID: store.ID("dead"), Heartbeat: store.Set(now.Add(-31 * time.Second))}); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := m.List(ctx)
@@ -210,24 +210,24 @@ func membership(t *testing.T, b buckets) {
 		t.Fatal(err)
 	}
 	var ids []string
-	for _, x := range fc.Members {
+	for _, x := range fc.Members.Value() {
 		ids = append(ids, x.Orch)
 	}
 	slices.Sort(ids)
 	if !slices.Equal(ids, []string{"o1", "young"}) {
 		t.Errorf("members after prune = %v, want o1 and young (joined, record not yet written)", ids)
 	}
-	if _, err := store.Get(ctx, b.fleet, &store.OrchRecord{ID: "dead"}); !errors.Is(err, store.ErrNotFound) {
+	if _, err := store.Get(ctx, b.fleet, &store.OrchRecord{ID: store.ID("dead")}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("orch/dead after prune: %v, want deleted", err)
 	}
 	if err := m.Prune(ctx, &orchestrator.Run{Now: now.Add(31 * time.Second)}); err != nil {
 		t.Fatal(err)
 	}
-	if fc, _ = store.Get(ctx, b.fleet, store.FleetConfigKey()); len(fc.Members) != 1 {
-		t.Errorf("members = %+v, want only o1 once young never wrote a record within 30 s", fc.Members)
+	if fc, _ = store.Get(ctx, b.fleet, store.FleetConfigKey()); len(fc.Members.Value()) != 1 {
+		t.Errorf("members = %+v, want only o1 once young never wrote a record within 30 s", fc.Members.Value())
 	}
 	// leader_of: a lease held by o1
-	if err := store.PutOwned(ctx, b.fleet, &store.ControllerLease{Name: orchestrator.CtlRetention, Owner: "o1", Epoch: 1, Expires: time.Now().Add(time.Minute)}); err != nil {
+	if err := store.PutOwned(ctx, b.fleet, &store.ControllerLease{Name: store.ID(orchestrator.CtlRetention), Owner: store.Set("o1"), Epoch: store.Set(1), Expires: store.Set(time.Now().Add(time.Minute))}); err != nil {
 		t.Fatal(err)
 	}
 	if l, err := m.List(ctx); err != nil || len(l) != 1 || !slices.Contains(l[0].LeaderOf, orchestrator.CtlRetention) {
@@ -235,8 +235,8 @@ func membership(t *testing.T, b buckets) {
 	}
 	stop()
 	fc, _ = store.Get(ctx, b.fleet, store.FleetConfigKey())
-	if fc != nil && len(fc.Members) != 0 {
-		t.Errorf("members after a graceful stop = %+v, want none", fc.Members)
+	if fc != nil && len(fc.Members.Value()) != 0 {
+		t.Errorf("members after a graceful stop = %+v, want none", fc.Members.Value())
 	}
 }
 
@@ -256,7 +256,7 @@ func indexRepair(t *testing.T, b buckets) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.Create(ctx, b.fleet, &store.JobRecord{ID: "jlive", State: "queued"}); err != nil {
+	if err := store.Create(ctx, b.fleet, &store.JobRecord{ID: store.ID("jlive"), State: store.Set("queued")}); err != nil {
 		t.Fatal(err)
 	}
 	// bpage: one entry with its record, one dangling old, one dangling young
@@ -266,7 +266,7 @@ func indexRepair(t *testing.T, b buckets) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.Create(ctx, b.control, &store.BuildRecord{ID: "blive", Project: "p1", State: "running"}); err != nil {
+	if err := store.Create(ctx, b.control, &store.BuildRecord{ID: store.ID("blive"), Project: store.Set("p1"), State: store.Set("running")}); err != nil {
 		t.Fatal(err)
 	}
 	// rmem: u1 bound (listed), u2 listed without binding, u3 bound but not listed
@@ -282,10 +282,10 @@ func indexRepair(t *testing.T, b buckets) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.Create(ctx, b.control, &store.IDList{Name: "all", IDs: []string{"dev"}}); err != nil {
+	if err := store.Create(ctx, b.control, &store.IDList{Name: store.ID("all"), IDs: store.Set([]string{"dev"})}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Create(ctx, b.control, &store.RoleMembers{Role: "dev", Principals: []string{"user:u1", "user:u2"}}); err != nil {
+	if err := store.Create(ctx, b.control, &store.RoleMembers{Role: store.ID("dev"), Principals: store.Set([]string{"user:u1", "user:u2"})}); err != nil {
 		t.Fatal(err)
 	}
 	x := &orchestrator.IndexRepair{Control: b.control, Fleet: b.fleet, JobShards: 4,
@@ -313,8 +313,8 @@ func indexRepair(t *testing.T, b buckets) {
 		t.Errorf("bpage after repair = %+v", pg[:3])
 	}
 	mem, _ := store.Get(ctx, b.control, store.RoleMembersKey("dev"))
-	if !slices.Contains(mem.Principals, "user:u3") || !slices.Contains(mem.Principals, "user:u2") {
-		t.Errorf("rmem/dev after the first pass = %v, want u3 added and u2 kept (seen once)", mem.Principals)
+	if !slices.Contains(mem.Principals.Value(), "user:u3") || !slices.Contains(mem.Principals.Value(), "user:u2") {
+		t.Errorf("rmem/dev after the first pass = %v, want u3 added and u2 kept (seen once)", mem.Principals.Value())
 	}
 	// 6 minutes later the dangling member is removed
 	r.Now = now.Add(6 * time.Minute)
@@ -323,8 +323,8 @@ func indexRepair(t *testing.T, b buckets) {
 		t.Fatal(err)
 	}
 	mem, _ = store.Get(ctx, b.control, store.RoleMembersKey("dev"))
-	if res.MembersRemoved != 1 || slices.Contains(mem.Principals, "user:u2") || !slices.Contains(mem.Principals, "user:u1") {
-		t.Errorf("second pass = %+v, rmem/dev %v; want u2 removed", res, mem.Principals)
+	if res.MembersRemoved != 1 || slices.Contains(mem.Principals.Value(), "user:u2") || !slices.Contains(mem.Principals.Value(), "user:u1") {
+		t.Errorf("second pass = %+v, rmem/dev %v; want u2 removed", res, mem.Principals.Value())
 	}
 }
 
@@ -342,16 +342,16 @@ func retention(t *testing.T, b buckets) {
 		if err := pages.Set(ctx, uint64(i), store.BuildEntry{N: uint64(i + 1), Build: x.id, State: x.state, Created: x.created}); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.Create(ctx, b.control, &store.BuildRecord{ID: x.id, Project: "p2", State: x.state, Created: x.created}); err != nil {
+		if err := store.Create(ctx, b.control, &store.BuildRecord{ID: store.ID(x.id), Project: store.Set("p2"), State: store.Set(x.state), Created: store.Set(x.created)}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	type nodes struct {
-		ID   string `pk:"bnodes" cbor:"-"`
-		ETag string `etag:"true" cbor:"-"`
-		N    int    `cbor:"n"`
+		ID   store.KeyField       `pk:"bnodes" cbor:"-"`
+		ETag store.ETagField      `etag:"true" cbor:"-"`
+		N    store.DataField[int] `cbor:"n"`
 	}
-	if err := store.Create(ctx, b.control, &nodes{ID: "old1", N: 3}); err != nil {
+	if err := store.Create(ctx, b.control, &nodes{ID: store.ID("old1"), N: store.Set(3)}); err != nil {
 		t.Fatal(err)
 	}
 	// queue slots: 5 slots, head 1006 → all below head − 1000
@@ -360,14 +360,14 @@ func retention(t *testing.T, b buckets) {
 		if cur != nil {
 			*next = *cur
 		}
-		next.Classes = append(next.Classes, store.FleetClass{ID: "c1"})
+		next.Classes = store.Set(append(next.Classes.Value(), store.FleetClass{ID: "c1"}))
 		return next, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	q := store.Queue(b.fleet, "c1")
 	for range 5 {
-		if _, err := q.Append(ctx, &store.QueueSlot{Job: "j"}); err != nil {
+		if _, err := q.Append(ctx, &store.QueueSlot{Job: store.Set("j")}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -376,11 +376,11 @@ func retention(t *testing.T, b buckets) {
 	}
 	reg := store.RegLog(b.fleet)
 	for range 3 {
-		if _, err := reg.Append(ctx, &store.RegSlot{Wid: "w"}); err != nil {
+		if _, err := reg.Append(ctx, &store.RegSlot{Wid: store.Set("w")}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := store.PutOwned(ctx, b.fleet, &store.ControllerLease{Name: orchestrator.CtlRegistrar, Cursor: []byte("1003")}); err != nil {
+	if err := store.PutOwned(ctx, b.fleet, &store.ControllerLease{Name: store.ID(orchestrator.CtlRegistrar), Cursor: store.Set([]byte("1003"))}); err != nil {
 		t.Fatal(err)
 	}
 	var dropped []string
@@ -399,12 +399,12 @@ func retention(t *testing.T, b buckets) {
 		t.Errorf("retention = %+v, want 2 builds, 5 queue slots, 2 registration slots", res)
 	}
 	for _, x := range builds {
-		_, err := store.Get(ctx, b.control, &store.BuildRecord{ID: x.id})
+		_, err := store.Get(ctx, b.control, &store.BuildRecord{ID: store.ID(x.id)})
 		if gone := errors.Is(err, store.ErrNotFound); gone != (x.id == "old1" || x.id == "old3") {
 			t.Errorf("build %s gone = %v (%v)", x.id, gone, err)
 		}
 	}
-	if _, err := store.Get(ctx, b.control, &nodes{ID: "old1"}); !errors.Is(err, store.ErrNotFound) {
+	if _, err := store.Get(ctx, b.control, &nodes{ID: store.ID("old1")}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("bnodes/old1: %v, want deleted with its build", err)
 	}
 	pg, _ := pages.Page(ctx, 0)
@@ -430,6 +430,13 @@ func retention(t *testing.T, b buckets) {
 	}
 }
 
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *nodes) Draft() *nodes {
+	return &nodes{ID: r.ID,
+		ETag: r.ETag,
+		N:    store.Carry(r.N)}
+}
+
 func keys(t *testing.T, b buckets) {
 	ctx := context.Background()
 	k := &orchestrator.Keys{Control: b.control, Fleet: b.fleet}
@@ -437,7 +444,7 @@ func keys(t *testing.T, b buckets) {
 	// a pass that crashed after creating okey/k000001: the next pass publishes that key
 	seed := make([]byte, ed25519.SeedSize)
 	seed[0] = 7
-	if err := store.Create(ctx, b.control, &orchestrator.OrchKeyRecord{Kid: "k000001", Seed: seed, Created: now, NotAfter: now.Add(orchestrator.KeyLifetime)}); err != nil {
+	if err := store.Create(ctx, b.control, &orchestrator.OrchKeyRecord{Kid: store.ID("k000001"), Seed: store.Set(seed), Created: store.Set(now), NotAfter: store.Set(now.Add(orchestrator.KeyLifetime))}); err != nil {
 		t.Fatal(err)
 	}
 	ks, err := k.Rotate(ctx, now)
@@ -447,7 +454,7 @@ func keys(t *testing.T, b buckets) {
 	if again, err := k.Rotate(ctx, now); err != nil || len(again) != 1 {
 		t.Fatalf("second rotate = %+v (%v), want the same single key", again, err)
 	}
-	if _, err := store.Get(ctx, b.control, &orchestrator.OrchKeyRecord{Kid: ks[0].Kid}); err != nil {
+	if _, err := store.Get(ctx, b.control, &orchestrator.OrchKeyRecord{Kid: store.ID(ks[0].Kid)}); err != nil {
 		t.Fatalf("okey/%s: %v", ks[0].Kid, err)
 	}
 	// 84 days later the next key is created; 91 days later the first is retired

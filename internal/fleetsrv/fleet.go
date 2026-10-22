@@ -97,14 +97,14 @@ func (f *Fleet) workerKey(wid string) ed25519.PublicKey {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rec, err := store.Get(ctx, f.cfg.Fleet, &store.WorkerRecord{Wid: wid})
-	if err != nil || len(rec.SigPub) != ed25519.PublicKeySize {
+	rec, err := store.Get(ctx, f.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
+	if err != nil || len(rec.SigPub.Value()) != ed25519.PublicKeySize {
 		return nil
 	}
 	f.mu.Lock()
-	f.sigKeys[wid] = ed25519.PublicKey(rec.SigPub)
+	f.sigKeys[wid] = ed25519.PublicKey(rec.SigPub.Value())
 	f.mu.Unlock()
-	return rec.SigPub
+	return rec.SigPub.Value()
 }
 
 // Enqueue enqueues job j on class's queue and wakes one idle attached worker (R-FLEET-012);
@@ -128,18 +128,18 @@ func (f *Fleet) AddClass(ctx context.Context, c store.Class) (string, error) {
 		if cur == nil {
 			return nil, errors.New("fleet/cfg is missing")
 		}
-		for _, have := range cur.Classes {
+		for _, have := range cur.Classes.Value() {
 			if have.ID == id {
 				return nil, store.ErrNoChange
 			}
 		}
-		if len(cur.Classes) >= 256 {
+		if len(cur.Classes.Value()) >= 256 {
 			return nil, fmt.Errorf("fleet/cfg already holds 256 scheduling classes (the limit)")
 		}
 		next := *cur
-		next.Classes = append(append([]store.FleetClass(nil), cur.Classes...),
-			store.FleetClass{ID: id, Platform: c.Platform, Caps: c.Caps, Labels: c.Labels})
-		next.Gen++
+		next.Classes = store.Set(append(append([]store.FleetClass(nil), cur.Classes.Value()...),
+			store.FleetClass{ID: id, Platform: c.Platform, Caps: c.Caps, Labels: c.Labels}))
+		next.Gen = store.Set(next.Gen.Value() + 1)
 		return &next, nil
 	})
 	return id, err
@@ -152,7 +152,7 @@ func (f *Fleet) addClass(ctx context.Context, class string) error {
 	if err != nil {
 		return fmt.Errorf("fleet/cfg: %w", err)
 	}
-	for _, c := range cfg.Classes {
+	for _, c := range cfg.Classes.Value() {
 		if c.ID == class {
 			return nil
 		}

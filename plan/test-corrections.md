@@ -41,7 +41,7 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    (REVOKED, see A75b: the layering test forbids it.)
 
 ## Wave 2 (pending owner OK: the permission system blocked these edits)
-9. A83 `tests/eco/ocaml/corpus_test.go` opam oracle (evidence plan/progress/I-R-opam.md):
+9. APPLIED 2026-10-22 I-TC (A112). A83 `tests/eco/ocaml/corpus_test.go` opam oracle (evidence plan/progress/I-R-opam.md):
    (a) `installLine` regexp `\binstall\s+(\S+)\s+(\S+)` also matches opam's header `=== install N
    packages`; anchor it: `(?m)^\s*\S\s+install\s+(\S+)\s+(\S+)`;
    (b) `solve` does not pin the toolchain, so opam upgrades dune to 3.24.2 in 18 of 20 graphs while
@@ -50,12 +50,12 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    (c) add `--assume-depexts` to the dry-run (opam stops at the system-package prompt for conf-gmp:
    cohttp, dream).
    Without these the required 14/20 equality cannot hold for any resolver.
-10. A86 `tests/eco/npm/resolve_test.go` `npmResolution` reads only `dependencies` and
+10. APPLIED 2026-10-22 I-TC (A113). A86 `tests/eco/npm/resolve_test.go` `npmResolution` reads only `dependencies` and
    `optionalDependencies` of an importer's npm lock entry, but SPEC 03.4.2 puts Dev() dependencies
    and peers in `deps`: read `devDependencies` and `peerDependencies` too (8 of 10 graphs report
    false "edge bob has and npm lacks" otherwise; with them there are zero differences; evidence
    plan/progress/I-R-npm.md).
-11. A87 `tests/ui` harness does not follow `proto/` and the `/api/` mount of SPEC 6.2 (evidence
+11. APPLIED 2026-10-22 I-TC (A114), (7) goldens stay with the owner. A87 `tests/ui` harness does not follow `proto/` and the `/api/` mount of SPEC 6.2 (evidence
    plan/progress/I-UI.md TEST PROBLEM 1-7; a verification copy that fixes only these mismatches
    passes everything: out/uicheck, gitignored): (1) `tests/ui/seed.json` does not decode against the
    proto (20 of 23 responses); replacement ready at out/uicheck/seed.json; (2) the mock must answer
@@ -65,13 +65,13 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
-18. A108 (evidence plan/progress/I-M7a.md TEST PROBLEM): five fixtures (cc/app, cc/libs/mathx,
+18. APPLIED earlier by I-P1 (verified 2026-10-22 I-TC, A121). A108 (evidence plan/progress/I-M7a.md TEST PROBLEM): five fixtures (cc/app, cc/libs/mathx,
    cpp-lib, rust/cmain, polyglot/libs/foo) call `cc.Binary(p, ...)` / `cc.Test(p, ...)`: rename the
    calls to `cc.NewBinary` / `cc.NewTest` (Go cannot have a function and a type named alike;
    the types stay `cc.Binary` / `cc.Test`); the tests/eco/cc server uses plain http without pin for
    `bob lock` (BOB-E-3002): bobtest builds allow http to loopback (A108), no test change needed
    once the fetcher honours that (implementation task of unit I-P1).
-17. A104 forge test defects (evidence plan/progress/I-B10.md, problems 1-6): (1) `adapters_test.go`
+17. APPLIED 2026-10-22 I-TC (A120). A104 forge test defects (evidence plan/progress/I-B10.md, problems 1-6): (1) `adapters_test.go`
    looks up GitHub fixtures as `"push.branch.json"` but `forgefix.Load` names them without `.json`
    (every GitHub row and TestFixturesRefused stop there); (2) the "github push" row's fixture has
    `created: true` but the expected result says false; (3) the Forgejo seed must make bobbot a
@@ -82,18 +82,18 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    G3 must accept a forge-decided denial (403 or 404, never 2xx) since the forge chooses the
    status; (6) GitLab rejects the test's 34-byte signing key (422): use 32 bytes like the spike and
    the recorded fixture.
-16. A102 `TestRGO004aToolchainPerModule` (evidence plan/progress/I-M5a.md): `tools/cmd/stamp`
+16. APPLIED 2026-10-22 I-TC (A119). A102 `TestRGO004aToolchainPerModule` (evidence plan/progress/I-M5a.md): `tools/cmd/stamp`
    (Go 1.26) imports packages of `lib` (Go 1.25); Go refuses to compile against an archive built by
    another toolchain (go1.26.9 rejects a go1.25.10 archive), so lib's packages MUST be compiled
    again with 1.26 inside stamp's closure, which the test flags. The test must allow a package of
    another module to be compiled with the importing closure's toolchain (and its own module's
    -lang), as SPEC R-GO-004a "toolchain per module" implies, while still asserting that each
    module's own binaries use that module's toolchain.
-15. A101 `tests/cache/big_slow_test.go` `assertNoDanglingReferences` requires a bob narinfo for every
+15. APPLIED 2026-10-22 I-TC (A118). A101 `tests/cache/big_slow_test.go` `assertNoDanglingReferences` requires a bob narinfo for every
    reference, but references to skipped cache.nixos.org paths (R-REG-005) have none by design:
    restrict the check to references that are not skipped nixpkgs paths (or to a fixture whose
    closure has no nixpkgs references). Evidence plan/progress/I-B9.md.
-14. A97 (evidence plan/progress/I-B2.md TEST PROBLEM): (a) `TestRFLEET003Reslot`: `newLab` builds the
+14. APPLIED 2026-10-22 I-TC (A117; (b) gains differ > 25 %, acceptance restated). A97 (evidence plan/progress/I-B2.md TEST PROBLEM): (a) `TestRFLEET003Reslot`: `newLab` builds the
    Queue without a clock, so Enqueue stamps wall-clock time while the reconciler runs on the test's
    fixed clock; add `Now: l.clk.Now` in `newLab` (the optional `Queue.Now` exists); (b)
    `TestRFLEET005Planner` "within 25 % of the S14 model" rows compare absolute times of the SPEC
@@ -103,13 +103,13 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    decision against the simulation (gain within 25 %), not absolute makespans; if the gains also
    differ by more than 25 %, the acceptance sentence must be restated to "decisions equal"
    (coordinator verifies with the formula before editing).
-13. A95 (evidence plan/progress/I-M4d.md TEST PROBLEM 3, 4): (a) `TestRFW051ToyEcosystem` leak-checks
+13. APPLIED 2026-10-22 I-TC (A116). A95 (evidence plan/progress/I-M4d.md TEST PROBLEM 3, 4): (a) `TestRFW051ToyEcosystem` leak-checks
    the `--print-paths` output whose `paths[]` must hold store paths (tests/cli already excludes
    `paths`): exclude `paths` there too; (b) `tests/cli/events_test.go` `knownEvents()` must list the
    stage events (namespace, scan, ir, lock, index, sources, plan, fetch, drv.imported, run.start,
    package.finish, run.finish ...) that SPEC R-FW-049 and 02.4 name and that
    schema/events-v1.json now accepts.
-12. A88 (evidence plan/progress/I-B3.md): (a) the R-API-001 generated-trees subtest runs `go tool
+12. APPLIED 2026-10-22 I-TC (A115). A88 (evidence plan/progress/I-B3.md): (a) the R-API-001 generated-trees subtest runs `go tool
    buf` outside the module (needs the module dir / GOWORK); (b) `srvtest.Call` posts without the
    `/api/` prefix of SPEC 6.2; (c) `srvtest` reports a "not implemented" answer from `bob login` as
    a real failure instead of red; (e) `tests/store/env/api.go` RPC posts to `<api_url>/<method>`
@@ -117,3 +117,41 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    fails on it; by hand with /api/ 20 workers were ACTIVE in 1.97-2.19 s, budget 5 s); (d) `tests/harness` leaves a 53 MB `bob-harness-bin-*` directory
    per test process in /tmp (580 across the agents, /tmp hit 100 % twice): the harness must remove
    it (TestMain cleanup or a shared cache dir keyed by source hash).
+19. APPLIED earlier (verified 2026-10-22 I-TC, A121): `tests/platforms/platform_test.go`
+   restrictedAppGo calls `cc.NewBinary` (evidence plan/progress/I-M7b.md, I-P1.md TEST PROBLEM 1).
+
+## Wave 3 (applied 2026-10-22 by I-TC under the owner's approval of A111)
+Notes on wave 2: item 11 kept the SPEC 6.10.3 image ref in the build-page artifacts check (the
+image is derivable from RegistryService ListTags tag `b-<build>`; the seed's repository is
+`api-server`), and the release page checks the install line `bob install api/api@1.4.2` in
+the DOM (new Page.Text: derived text is in no single API response) while its seeded id is
+the version; the seeded release points at the seeded build (the mock answers GetBuild with
+one build only). Item 12 also fixed `tests/devenv` rpc/buildState and srvtest FollowLog
+(same missing /api/); 12(d): the harness keeps its binaries under $TMPDIR/bob-harness-bin/run-*
+with a pid file and removes the directories of exited test processes. Item 13 also added the
+stage events to tests/errors' event set (I-M4e TEST PROBLEM 3). Item 14(b): formula gains vs
+simulation: go200 24.9 s vs 13.6 s, rust129 107.0 vs 109.6, wide2000 323.4 vs 207.0, so SPEC
+R-FLEET-005's closeness line is restated as "decisions equal" (spec/05 and SPEC.md) and the
+test compares the planner's decision with the rule applied to the S14 times. Items 16 and 17(5)
+amended SPEC R-GO-004a / R-FLEET-006 text accordingly.
+20. APPLIED 2026-10-22 I-TC (A122). I-M8a TEST PROBLEM 1: fixtures rust/corelib and
+   polyglot/crates/rcore declare `*rust.TestSet` (func `rust.Test` returns it; Go cannot name a
+   type and a func alike); SPEC 03.3.1 updated.
+21. APPLIED 2026-10-22 I-TC (A123). npm: fixtures npm/native, npm/ts-lib, codegen/web and
+   tests/eco/npm (build_test, repos_test, graphs_test) call `npm.NewApp` / `npm.NewTest`
+   (A35, pkg/npm API; evidence: I-M9a private fixture copy /var/tmp/i-m9a/fx2); SPEC 03.4 updated.
+22. APPLIED 2026-10-22 I-TC (A124). I-M8a TEST PROBLEM 5: `serverenv.NixTool` returned the first
+   printed output on a cold cache (rustc's -man); it now returns the out link, like the warm path.
+23. APPLIED 2026-10-22 I-TC (A125). I-M7b TEST PROBLEM 2: TestRPLAT004 checks the host system on
+   bob-generated derivations (builder bob-builder) only, as SPEC R-PLAT-004 says; nixpkgs target
+   libraries carry the target system (ADR 0009, R-FW-032).
+24. APPLIED 2026-10-22 I-TC (A126). I-M7b TEST PROBLEM 3: tests/core TestRFW038 / TestRFW033 /
+   R-FW-032 lookups use the §03.1.3 cc names (`cc-foo-<platform>-address`, `cc-mathx`,
+   `cc-pack`) per ruling G14 (A54).
+
+Not applied (need an owner/SPEC decision, not a test defect): I-M5b 1 (go fixture's
+cross-module import vs `go list -m all`), I-C1 2 (remote builds without a project), I-M8a 4
+(`rust_1_94` not in the pin: SPEC R-RS-004a [open] second toolchain), I-M8a 2 and the npm/ocaml
+fixtures' root package names (pkg/engine/eval expectedPkg uses the module path's last element
+for the root, SPEC R2 says the directory name: implementation vs SPEC, owner), ocaml fixture
+`ocaml.Test` func+type clash (I-M11a in progress; SPEC 03.5 has the same clash).

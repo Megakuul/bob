@@ -197,17 +197,17 @@ func (c *Controller) acquire(ctx context.Context, now time.Time) error {
 		return nil
 	}
 	var other *store.ControllerLease
-	got, err := store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: c.ID}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+	got, err := store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
 		other = nil
-		next := &store.ControllerLease{Name: c.ID, Owner: c.Owner, Epoch: 1, Expires: now.Add(c.ttl())}
+		next := &store.ControllerLease{Name: store.ID(c.ID), Owner: store.Set(c.Owner), Epoch: store.Set(1), Expires: store.Set(now.Add(c.ttl()))}
 		switch {
 		case cur == nil:
-		case cur.Owner == c.Owner && !cur.Expires.Add(c.Skew).Before(now):
-			next.Epoch, next.Cursor = cur.Epoch, cur.Cursor
-		case cur.Owner == "" || cur.Expires.Add(c.Skew).Before(now):
+		case cur.Owner.Value() == c.Owner && !cur.Expires.Value().Add(c.Skew).Before(now):
+			next.Epoch, next.Cursor = store.Set(cur.Epoch.Value()), store.Set(cur.Cursor.Value())
+		case cur.Owner.Value() == "" || cur.Expires.Value().Add(c.Skew).Before(now):
 			// A lapsed lease is taken over with a new epoch, even by its last owner: another
 			// orchestrator may have acted meanwhile (D-IB1-5).
-			next.Epoch, next.Cursor = cur.Epoch+1, cur.Cursor
+			next.Epoch, next.Cursor = store.Set(cur.Epoch.Value()+1), store.Set(cur.Cursor.Value())
 		default:
 			other = cur
 			return nil, store.ErrNoChange
@@ -218,23 +218,23 @@ func (c *Controller) acquire(ctx context.Context, now time.Time) error {
 		c.held = false
 		return err
 	}
-	if other != nil || got == nil || got.Owner != c.Owner {
+	if other != nil || got == nil || got.Owner.Value() != c.Owner {
 		c.held = false
 		if other != nil {
-			c.expires = other.Expires
+			c.expires = other.Expires.Value()
 		}
 		return nil
 	}
-	if !c.held || got.Epoch != c.epoch {
-		c.log().Info("controller leadership acquired", "controller", c.ID, "epoch", got.Epoch, "orchestrator", c.Owner)
+	if !c.held || got.Epoch.Value() != c.epoch {
+		c.log().Info("controller leadership acquired", "controller", c.ID, "epoch", got.Epoch.Value(), "orchestrator", c.Owner)
 		if c.Persist {
-			d := decodeCursor(got.Cursor)
+			d := decodeCursor(got.Cursor.Value())
 			c.last, c.state = d.Last, d.State
 		} else {
 			c.last, c.state = time.Time{}, nil
 		}
 	}
-	c.held, c.epoch, c.expires, c.renewed = true, got.Epoch, got.Expires, now
+	c.held, c.epoch, c.expires, c.renewed = true, got.Epoch.Value(), got.Expires.Value(), now
 	return nil
 }
 
@@ -261,12 +261,12 @@ func (c *Controller) pass(ctx context.Context, now time.Time) {
 		return
 	}
 	epoch := c.epoch
-	_, err = store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: c.ID}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
-		if cur == nil || cur.Owner != c.Owner || cur.Epoch != epoch {
+	_, err = store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+		if cur == nil || cur.Owner.Value() != c.Owner || cur.Epoch.Value() != epoch {
 			return nil, errLeaseLost // another leader took over: its state wins
 		}
 		next := *cur
-		next.Cursor = body
+		next.Cursor = store.Set(body)
 		return &next, nil
 	})
 	if errors.Is(err, errLeaseLost) {
@@ -287,12 +287,12 @@ func (c *Controller) release() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	now := c.now()
-	_, err := store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: c.ID}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
-		if cur == nil || cur.Owner != c.Owner || cur.Epoch != c.epoch {
+	_, err := store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+		if cur == nil || cur.Owner.Value() != c.Owner || cur.Epoch.Value() != c.epoch {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Expires = now.Add(-c.Skew - time.Second)
+		next.Expires = store.Set(now.Add(-c.Skew - time.Second))
 		return &next, nil
 	})
 	if err != nil {
@@ -316,15 +316,15 @@ func guard(fn func() error) (err error) {
 func Leaders(ctx context.Context, fleet *store.Bucket, cache *store.Cache[store.ControllerLease], now time.Time) (map[string][]string, error) {
 	out := map[string][]string{}
 	for _, name := range ControllerNames() {
-		l, _, err := store.GetCached(ctx, fleet, cache, &store.ControllerLease{Name: name})
+		l, _, err := store.GetCached(ctx, fleet, cache, &store.ControllerLease{Name: store.ID(name)})
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		if l.Owner != "" && now.Before(l.Expires) {
-			out[l.Owner] = append(out[l.Owner], name)
+		if l.Owner.Value() != "" && now.Before(l.Expires.Value()) {
+			out[l.Owner.Value()] = append(out[l.Owner.Value()], name)
 		}
 	}
 	return out, nil

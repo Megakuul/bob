@@ -148,7 +148,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		return res, err
 	}
 
-	targets := r.targetLabels(g, p, res.Requested)
+	targets := r.withoutSkipped(r.targetLabels(g, p, res.Requested))
 	rep, err := r.realise(ctx, st, g, p, srcPaths, targets, units, cached)
 	if err != nil {
 		return res, err
@@ -173,6 +173,24 @@ func (r *runner) skipForeign(g *ir.Graph, p *planner, units []testrun.Unit) []te
 		keep = append(keep, u)
 	}
 	return keep
+}
+
+// withoutSkipped removes the labels of skipped units from labels: nothing is realised for them.
+func (r *runner) withoutSkipped(labels []string) []string {
+	if len(r.skipped) == 0 {
+		return labels
+	}
+	skip := map[string]bool{}
+	for _, t := range r.skipped {
+		skip[t.Label] = true
+	}
+	var out []string
+	for _, l := range labels {
+		if !skip[l] {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // skippedResults emits the test.result events of the skipped units.

@@ -193,7 +193,7 @@ func (r *Reconciler) readJobs(ctx context.Context, ids []string) map[string]*sto
 	for range min(readParallel, len(ids)) {
 		done = append(done, safe.Go(func() error {
 			for id := range next {
-				rec, _, err := store.GetCached(ctx, r.Fleet, &r.jobs, &store.JobRecord{ID: id})
+				rec, _, err := store.GetCached(ctx, r.Fleet, &r.jobs, &store.JobRecord{ID: store.ID(id)})
 				if err != nil {
 					if !errors.Is(err, store.ErrNotFound) && ctx.Err() == nil {
 						slog.Warn("job-reconciler: job unreadable this pass", "job", id, "err", err)
@@ -218,14 +218,14 @@ func (r *Reconciler) readJobs(ctx context.Context, ids []string) map[string]*sto
 }
 
 func (r *Reconciler) job(ctx context.Context, rec *store.JobRecord, aj store.ActiveJob, res *PassResult) error {
-	id := rec.ID
+	id := rec.ID.Value()
 	now := r.now()
-	if rec.State != StateClaimed && rec.State != StateRunning {
+	if rec.State.Value() != StateClaimed && rec.State.Value() != StateRunning {
 		delete(r.held, id)
 	}
-	switch rec.State {
+	switch rec.State.Value() {
 	case StateQueued:
-		if !rec.Queued.IsZero() && rec.Queued.Add(r.ReslotAge).Before(now) {
+		if !rec.Queued.Value().IsZero() && rec.Queued.Value().Add(r.ReslotAge).Before(now) {
 			won, err := r.reslot(ctx, rec, aj.Class, now)
 			if won {
 				res.Reslotted++
@@ -254,8 +254,8 @@ func (r *Reconciler) job(ctx context.Context, rec *store.JobRecord, aj store.Act
 		}
 		// A succeeded job waits for its promotion verdict (pm): finalising deletes the record the
 		// promotion controller works from (I-B9/I-B11).
-		pending := rec.State == StateSucceeded && rec.Promotion == ""
-		if r.Queue != nil && !pending && !rec.Changed.IsZero() && rec.Changed.Add(after).Before(now) {
+		pending := rec.State.Value() == StateSucceeded && rec.Promotion.Value() == ""
+		if r.Queue != nil && !pending && !rec.Changed.Value().IsZero() && rec.Changed.Value().Add(after).Before(now) {
 			ok, err := r.Queue.Finalise(ctx, id)
 			if ok {
 				res.Finalised++
@@ -271,26 +271,26 @@ func (r *Reconciler) job(ctx context.Context, rec *store.JobRecord, aj store.Act
 // stored one, so "alive" from the cache is final; "expired" is confirmed by a fresh read.
 func (r *Reconciler) leaseExpired(ctx context.Context, rec *store.JobRecord, now time.Time) bool {
 	if r.deadByCache(rec, now) {
-		hb, err := store.Get(ctx, r.Fleet, &store.Heartbeat{Wid: rec.Owner})
+		hb, err := store.Get(ctx, r.Fleet, &store.Heartbeat{Wid: store.ID(rec.Owner.Value())})
 		if errors.Is(err, store.ErrNotFound) {
 			return true
 		}
 		if err != nil {
 			return false
 		}
-		if r.dead(hb.At, now) {
+		if r.dead(hb.At.Value(), now) {
 			return true
 		}
 		// A fresh heartbeat counts only when it is signed by the registered key (when known).
-		if w := r.worker(ctx, rec.Owner, now); w.sigPub != nil && !fleet.VerifyHeartbeat(w.sigPub, hb) {
+		if w := r.worker(ctx, rec.Owner.Value(), now); w.sigPub != nil && !fleet.VerifyHeartbeat(w.sigPub, hb) {
 			return true
 		}
-		if hb.At.After(r.beats[rec.Owner]) {
-			r.beats[rec.Owner] = hb.At
+		if hb.At.Value().After(r.beats[rec.Owner.Value()]) {
+			r.beats[rec.Owner.Value()] = hb.At.Value()
 		}
 		return false
 	}
-	w := r.worker(ctx, rec.Owner, now)
+	w := r.worker(ctx, rec.Owner.Value(), now)
 	return w.state == "revoked" || w.state == "gone"
 }
 
@@ -298,7 +298,7 @@ func (r *Reconciler) dead(t, now time.Time) bool { return t.Add(r.LeaseTTL + r.S
 
 // deadByCache: neither the claim nor the newest heartbeat seen keeps the lease alive.
 func (r *Reconciler) deadByCache(rec *store.JobRecord, now time.Time) bool {
-	return r.dead(rec.Claimed, now) && r.dead(r.beats[rec.Owner], now)
+	return r.dead(rec.Claimed.Value(), now) && r.dead(r.beats[rec.Owner.Value()], now)
 }
 
 // worker returns what Pass knows of the owner's record, re-read every workerCheck.
@@ -308,8 +308,8 @@ func (r *Reconciler) worker(ctx context.Context, wid string, now time.Time) work
 		return w
 	}
 	w = workerSeen{at: now}
-	if rec, err := store.Get(ctx, r.Fleet, &store.WorkerRecord{Wid: wid}); err == nil {
-		w.state, w.sigPub = rec.State, rec.SigPub
+	if rec, err := store.Get(ctx, r.Fleet, &store.WorkerRecord{Wid: store.ID(wid)}); err == nil {
+		w.state, w.sigPub = rec.State.Value(), rec.SigPub.Value()
 	}
 	r.workers[wid] = w
 	return w
@@ -321,25 +321,25 @@ func (r *Reconciler) requeue(ctx context.Context, rec *store.JobRecord, class st
 	var queued bool
 	_, err = store.CAS(ctx, r.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		won = false
-		if cur == nil || (cur.State != StateClaimed && cur.State != StateRunning) || cur.Owner != rec.Owner || cur.Epoch != rec.Epoch {
+		if cur == nil || (cur.State.Value() != StateClaimed && cur.State.Value() != StateRunning) || cur.Owner.Value() != rec.Owner.Value() || cur.Epoch.Value() != rec.Epoch.Value() {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Owner, next.Changed = "", now
-		if cur.Cancel {
-			next.State = StateCancelled
+		next.Owner, next.Changed = store.Set(""), store.Set(now)
+		if cur.Cancel.Value() {
+			next.State = store.Set(StateCancelled)
 		} else {
-			next.State, next.Queued = StateQueued, now
+			next.State, next.Queued = store.Set(StateQueued), store.Set(now)
 		}
-		won, queued = true, !cur.Cancel
+		won, queued = true, !cur.Cancel.Value()
 		return &next, nil
 	})
 	if err != nil || !won {
 		return false, err
 	}
-	slog.Info("job requeued: lease expired", "job", rec.ID, "worker", rec.Owner, "epoch", rec.Epoch, "orchestrator", r.Name)
+	slog.Info("job requeued: lease expired", "job", rec.ID.Value(), "worker", rec.Owner.Value(), "epoch", rec.Epoch.Value(), "orchestrator", r.Name)
 	if queued {
-		_, err = store.Queue(r.Fleet, class).Append(ctx, &store.QueueSlot{Job: rec.ID, At: now})
+		_, err = store.Queue(r.Fleet, class).Append(ctx, &store.QueueSlot{Job: store.Set(rec.ID.Value()), At: store.Set(now)})
 	}
 	return true, err
 }
@@ -349,17 +349,17 @@ func (r *Reconciler) requeue(ctx context.Context, rec *store.JobRecord, class st
 func (r *Reconciler) reslot(ctx context.Context, rec *store.JobRecord, class string, now time.Time) (won bool, err error) {
 	_, err = store.CAS(ctx, r.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		won = false
-		if cur == nil || cur.State != StateQueued || !cur.Queued.Equal(rec.Queued) {
+		if cur == nil || cur.State.Value() != StateQueued || !cur.Queued.Value().Equal(rec.Queued.Value()) {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Queued = now
+		next.Queued = store.Set(now)
 		won = true
 		return &next, nil
 	})
 	if err != nil || !won {
 		return false, err
 	}
-	_, err = store.Queue(r.Fleet, class).Append(ctx, &store.QueueSlot{Job: rec.ID, At: now})
+	_, err = store.Queue(r.Fleet, class).Append(ctx, &store.QueueSlot{Job: store.Set(rec.ID.Value()), At: store.Set(now)})
 	return true, err
 }

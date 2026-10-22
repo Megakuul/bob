@@ -46,13 +46,13 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 	if err != nil {
 		return Linked{}, err
 	}
-	if p, ok := rec.Repos[strconv.FormatInt(repo.ID, 10)]; ok && p != project {
+	if p, ok := rec.Repos.Value()[strconv.FormatInt(repo.ID, 10)]; ok && p != project {
 		if _, err := store.Get(ctx, r.Control, RepoLinkKey(forgeID, repo.ID)); err == nil {
 			return Linked{}, fmt.Errorf("%w (project %s)", ErrLinked, p)
 		}
 	}
 	var hookErr error
-	if err := a.EnsureWebhook(ctx, repo, HookURL(baseURL, forgeID), forge.NewSecret(rec.Secret)); err != nil && !errors.Is(err, forge.ErrUnsupported) {
+	if err := a.EnsureWebhook(ctx, repo, HookURL(baseURL, forgeID), forge.NewSecret(rec.Secret.Value())); err != nil && !errors.Is(err, forge.ErrUnsupported) {
 		hookErr = err
 		r.log().Warn("forge: webhook not ensured; the repository is linked but pushes trigger nothing", "integration", forgeID,
 			"repository", repo.FullName, "err", err)
@@ -62,28 +62,28 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 		if cur == nil {
 			return nil, ErrUnknown
 		}
-		if cur.Repos[rid] == project {
+		if cur.Repos.Value()[rid] == project {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.Repos) >= MaxLinkedRepos {
-			return nil, fmt.Errorf("forge: integration %s links %d repositories already", forgeID, len(cur.Repos))
+		if len(cur.Repos.Value()) >= MaxLinkedRepos {
+			return nil, fmt.Errorf("forge: integration %s links %d repositories already", forgeID, len(cur.Repos.Value()))
 		}
-		if cur.Repos == nil {
-			cur.Repos = map[string]string{}
+		if cur.Repos.Value() == nil {
+			cur.Repos = store.Set(map[string]string{})
 		}
-		if _, taken := cur.Repos[rid]; !taken {
-			cur.Repos[rid] = project
+		if _, taken := cur.Repos.Value()[rid]; !taken {
+			cur.Repos.Value()[rid] = project
 		}
 		return cur, nil
 	}); err != nil {
 		return Linked{}, err
 	}
 	link := RepoLinkKey(forgeID, repo.ID)
-	link.Project, link.FullName, link.CloneURL, link.Created = project, repo.FullName, repo.CloneURL, r.now().UTC()
+	link.Project, link.FullName, link.CloneURL, link.Created = store.Set(project), store.Set(repo.FullName), store.Set(repo.CloneURL), store.Set(r.now().UTC())
 	err = store.Create(ctx, r.Control, link)
 	if errors.Is(err, store.ErrExists) {
 		cur, gerr := store.Get(ctx, r.Control, RepoLinkKey(forgeID, repo.ID))
-		if gerr == nil && cur.Project == project {
+		if gerr == nil && cur.Project.Value() == project {
 			return Linked{Repo: repo, HookErr: hookErr}, nil
 		}
 		return Linked{}, ErrLinked
@@ -93,10 +93,10 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 	}
 	// The Repos entry may still name a stale project of a crashed link; make it this one.
 	_, err = store.CAS(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
-		if cur == nil || cur.Repos[rid] == project {
+		if cur == nil || cur.Repos.Value()[rid] == project {
 			return nil, store.ErrNoChange
 		}
-		cur.Repos[rid] = project
+		cur.Repos.Value()[rid] = project
 		return cur, nil
 	})
 	return Linked{Repo: repo, HookErr: hookErr}, err
@@ -120,10 +120,10 @@ func (r *Registry) UnlinkRepo(ctx context.Context, forgeID string, repoID int64)
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		if _, ok := cur.Repos[rid]; !ok {
+		if _, ok := cur.Repos.Value()[rid]; !ok {
 			return nil, store.ErrNoChange
 		}
-		delete(cur.Repos, rid)
+		delete(cur.Repos.Value(), rid)
 		return cur, nil
 	})
 	return err
@@ -150,7 +150,7 @@ func (r *Registry) SetStatus(ctx context.Context, forgeID string, repoID int64, 
 	if err != nil {
 		return err
 	}
-	err = a.SetStatus(ctx, forge.Repo{Forge: forge.Kind(rec.Kind), ID: repoID, FullName: link.FullName, CloneURL: link.CloneURL}, s)
+	err = a.SetStatus(ctx, forge.Repo{Forge: forge.Kind(rec.Kind.Value()), ID: repoID, FullName: link.FullName.Value(), CloneURL: link.CloneURL.Value()}, s)
 	r.Report(ctx, forgeID, err)
 	return err
 }

@@ -124,29 +124,29 @@ func (s *FleetService) worker(ctx context.Context, wid string) (*fleetv1.Worker,
 	if _, err := store.Segment(wid); err != nil {
 		return nil, api.NotFound("worker")
 	}
-	rec, err := store.Get(ctx, s.F.cfg.Fleet, &store.WorkerRecord{Wid: wid})
+	rec, err := store.Get(ctx, s.F.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, api.NotFound("worker")
 	}
 	if err != nil {
 		return nil, err
 	}
-	e := store.WorkerIndexEntry{Platform: rec.Platform, State: rec.State}
-	hb, err := store.Get(ctx, s.F.cfg.Fleet, &store.Heartbeat{Wid: wid})
-	if err == nil && fleet.VerifyHeartbeat(rec.SigPub, hb) {
-		e.Heartbeat = hb.At
+	e := store.WorkerIndexEntry{Platform: rec.Platform.Value(), State: rec.State.Value()}
+	hb, err := store.Get(ctx, s.F.cfg.Fleet, &store.Heartbeat{Wid: store.ID(wid)})
+	if err == nil && fleet.VerifyHeartbeat(rec.SigPub.Value(), hb) {
+		e.Heartbeat = hb.At.Value()
 	}
 	w := s.summary(wid, e)
-	w.Capabilities = rec.Caps
-	if len(rec.Labels) > 0 {
+	w.Capabilities = rec.Caps.Value()
+	if len(rec.Labels.Value()) > 0 {
 		w.Labels = map[string]string{}
-		for _, l := range rec.Labels {
+		for _, l := range rec.Labels.Value() {
 			k, v, _ := strings.Cut(l, "=")
 			w.Labels[k] = v
 		}
 	}
 	if hb != nil {
-		for _, j := range hb.Jobs {
+		for _, j := range hb.Jobs.Value() {
 			w.JobIds = append(w.JobIds, j.Job)
 		}
 	}
@@ -167,18 +167,18 @@ func (s *FleetService) setState(ctx context.Context, wid, to string, from ...str
 	if _, err := store.Segment(wid); err != nil {
 		return api.NotFound("worker")
 	}
-	_, err := store.CAS(ctx, s.F.cfg.Fleet, &store.WorkerRecord{Wid: wid}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
+	_, err := store.CAS(ctx, s.F.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
-		if cur.State == to {
+		if cur.State.Value() == to {
 			return nil, store.ErrNoChange
 		}
-		if !slices.Contains(from, cur.State) {
-			return nil, api.FailedPrecondition("worker " + wid + " is " + cur.State)
+		if !slices.Contains(from, cur.State.Value()) {
+			return nil, api.FailedPrecondition("worker " + wid + " is " + cur.State.Value())
 		}
 		n := *cur
-		n.State = to
+		n.State = store.Set(to)
 		return &n, nil
 	})
 	if errors.Is(err, store.ErrNotFound) {
@@ -286,15 +286,15 @@ func (w *WorkerControl) checkout(ctx context.Context, wid, jobID string, epoch i
 		}
 		return nil, err
 	}
-	rec, err := store.Get(ctx, w.F.cfg.Fleet, &store.WorkerRecord{Wid: wid})
+	rec, err := store.Get(ctx, w.F.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
 	if err != nil {
 		return nil, err
 	}
-	suite, err := fleet.ParseSuite(rec.Suite)
+	suite, err := fleet.ParseSuite(rec.Suite.Value())
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := fleet.SealCheckout(suite, rec.KEMPub, wid, jobID, epoch, fleet.CheckoutPlain{
+	sealed, err := fleet.SealCheckout(suite, rec.KEMPub.Value(), wid, jobID, epoch, fleet.CheckoutPlain{
 		CloneURL: co.CloneURL, Username: co.Username, Token: co.Token, Expires: co.Expires.Unix()})
 	if err != nil {
 		return nil, err
@@ -321,7 +321,7 @@ func (w *WorkerControl) Attach(ctx context.Context, st *connect.BidiStream[worke
 	cfg, _ := store.Get(ctx, w.F.cfg.Fleet, store.FleetConfigKey())
 	gen := int64(0)
 	if cfg != nil {
-		gen = cfg.Gen
+		gen = cfg.Gen.Value()
 	}
 	conn := w.F.Hub.Attach(wid)
 	defer conn.Detach()

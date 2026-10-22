@@ -14,9 +14,16 @@ import (
 // state is its package status. (The S14 bitmaps of split builds are not needed while every
 // build runs closure jobs, decision D-IB11-2.)
 type BuildNodes struct {
-	ID    string `pk:"bnodes" cbor:"-"`
-	ETag  string `etag:"true" cbor:"-"`
-	Nodes []Node `cbor:"n,omitempty"`
+	ID    store.KeyField          `pk:"bnodes" cbor:"-"`
+	ETag  store.ETagField         `etag:"true" cbor:"-"`
+	Nodes store.DataField[[]Node] `cbor:"n,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *BuildNodes) Draft() *BuildNodes {
+	return &BuildNodes{ID: r.ID,
+		ETag:  r.ETag,
+		Nodes: store.Carry(r.Nodes)}
 }
 
 // Node is one package of a build graph.
@@ -36,12 +43,12 @@ func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job str
 	bn, err := store.CAS(ctx, b.cfg.Control, &BuildNodes{ID: rec.ID}, func(cur *BuildNodes) (*BuildNodes, error) {
 		next := &BuildNodes{ID: rec.ID}
 		if cur != nil {
-			if slices.ContainsFunc(cur.Nodes, func(n Node) bool { return n.Job == job }) {
+			if slices.ContainsFunc(cur.Nodes.Value(), func(n Node) bool { return n.Job == job }) {
 				return nil, store.ErrNoChange
 			}
-			next.Nodes = slices.Clone(cur.Nodes)
+			next.Nodes = store.Set(slices.Clone(cur.Nodes.Value()))
 		}
-		base := len(next.Nodes)
+		base := len(next.Nodes.Value())
 		if base+len(r.Packages) > jobspec.MaxReportPackages {
 			return nil, store.ErrNoChange // the graph view is capped; counts come from what is kept
 		}
@@ -53,7 +60,7 @@ func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job str
 			if p.Error != nil {
 				n.Error = &store.BuildError{Code: p.Error.Code, Message: p.Error.Message, Label: p.Error.Label, Hint: p.Error.Hint}
 			}
-			next.Nodes = append(next.Nodes, n)
+			next.Nodes = store.Set(append(next.Nodes.Value(), n))
 		}
 		return next, nil
 	})
@@ -63,12 +70,12 @@ func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job str
 	if bn == nil {
 		return rec, nil
 	}
-	c := countsOf(bn.Nodes)
-	return b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
-		if cur.Counts == c {
+	c := countsOf(bn.Nodes.Value())
+	return b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
+		if cur.Counts.Value() == c {
 			return store.ErrNoChange
 		}
-		cur.Counts = c
+		cur.Counts = store.Set(c)
 		return nil
 	})
 }
@@ -96,7 +103,7 @@ func countsOf(nodes []Node) store.PackageCounts {
 
 // Nodes reads bnodes/<build> (nil before any evaluation report).
 func (b *Builds) Nodes(ctx context.Context, id string) (*BuildNodes, error) {
-	n, err := store.Get(ctx, b.cfg.Control, &BuildNodes{ID: id})
+	n, err := store.Get(ctx, b.cfg.Control, &BuildNodes{ID: store.ID(id)})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, nil
 	}
