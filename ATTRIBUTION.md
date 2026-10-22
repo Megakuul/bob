@@ -25,6 +25,7 @@ above and to the release notes.
 | Item | Licence | Use | Decision |
 |---|---|---|---|
 | squashfs-tools `mksquashfs` (nixpkgs) | GPL-2.0-or-later | Build tool inside the bundle derivation; not linked into or shipped with bob or its bundles | A16 |
+| qemu-user, binutils, strace, fish, skopeo, crane, mesa (lavapipe), chromium, opam, bun, rustc/cargo, gopls, clangd, rust-analyzer, typescript (nixpkgs, `tools/pins.json`) | GPL/LGPL/MPL/Apache/MIT mix, per package | Test-harness tools run as separate processes by the acceptance tests; never linked into, embedded in or shipped with bob | W2 |
 
 The AppImage runtime is bob's own static Go code, so no libfuse is shipped (A15).
 

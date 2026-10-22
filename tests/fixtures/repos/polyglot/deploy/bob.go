@@ -26,6 +26,14 @@ var Tar = bob.Define(func(p *bob.P) *tarball.Tarball {
 	return tarball.New(p, "api-tar", tarball.TarballOpts{Program: polyglot.API(p), Kind: tarball.Closure})
 })
 
+// Polyglot is the release the registry tests publish (label //deploy:polyglot): the OCI image of
+// the api, versioned by the tag.
+var Polyglot = bob.Define(func(p *bob.P) *release.Release {
+	return release.New(p, "polyglot", release.ReleaseOpts{
+		Images: []*oci.Image{Image(p)},
+	})
+})
+
 // Release is the api release (label //deploy:api).
 var Release = bob.Define(func(p *bob.P) *release.Release {
 	return release.New(p, "api", release.ReleaseOpts{

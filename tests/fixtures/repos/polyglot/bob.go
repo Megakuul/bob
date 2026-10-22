@@ -19,6 +19,11 @@ var _ = bob.Repo(bob.RepoOpts{
 	},
 })
 
+// The release pipeline runs on a tag push matching v* (concurrency Queue) and publishes
+// //deploy:polyglot. SPEC §06 does not define the fields of bob.PipelineOpts, so the pipeline is
+// registered by name only.
+var _ = bob.Pipeline("release", bob.PipelineOpts{})
+
 // Module is the Go module example.com/polyglot (label //:module).
 var Module = bob.Define(func(p *bob.P) *golang.Module {
 	return golang.NewModule(p, golang.ModuleOpts{

@@ -31,6 +31,26 @@
     "nodejs": "nodejs_24",
     "ruby": "ruby_3_4",
     "remarshal": "remarshal",
-    "openssl-bin": "openssl.bin"
+    "openssl-bin": "openssl.bin",
+    "crane": "crane",
+    "skopeo": "skopeo",
+    "squashfs-tools": "squashfsTools",
+    "qemu-user": "qemu-user",
+    "mesa": "mesa",
+    "vulkan-tools": "vulkan-tools",
+    "rustc": "rustc",
+    "cargo": "cargo",
+    "gopls": "gopls",
+    "clangd": "clang-tools",
+    "rust-analyzer": "rust-analyzer",
+    "binutils": "binutils",
+    "typescript": "typescript",
+    "opam": "opam",
+    "bun": "bun",
+    "zsh": "zsh",
+    "fish": "fish",
+    "strace": "strace",
+    "bashInteractive": "bashInteractive",
+    "chromium": "chromium"
   }
 }
