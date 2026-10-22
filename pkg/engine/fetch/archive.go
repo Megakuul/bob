@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -77,13 +78,18 @@ func (e *unpackErr) Error() string { return e.path + ": " + e.reason }
 // archive leaves no files behind, and the second pass extracts.
 func unpack(ctx context.Context, file, root string, strip int, label, url string) error {
 	for _, extract := range []bool{false, true} {
-		u := &unpacker{ctx: ctx, root: root, strip: strip, extract: extract, kinds: map[string]int{}, files: map[string]fileMeta{}}
+		u := &unpacker{ctx: ctx, root: root, strip: strip, extract: extract, kinds: map[string]int{},
+			files: map[string]fileMeta{}, links: map[string]string{}}
 		if extract {
 			if err := os.MkdirAll(root, 0o755); err != nil {
 				return fmt.Errorf("fetch %s: %w", label, err)
 			}
 		}
-		if err := walkArchive(file, u.add); err != nil {
+		err := walkArchive(file, u.add)
+		if err == nil && !extract {
+			err = u.checkLinks()
+		}
+		if err != nil {
 			var ue *unpackErr
 			var we *writeErr
 			if errors.As(err, &ue) {
@@ -234,6 +240,7 @@ type unpacker struct {
 	total   int64
 	kinds   map[string]int      // relative path → kind of what is there (hard links count as files)
 	files   map[string]fileMeta // relative path of a file → its mode and size
+	links   map[string]string   // relative path of a symlink → its target
 }
 
 type fileMeta struct {
@@ -330,6 +337,7 @@ func (u *unpacker) add(e entry) error {
 			return &unpackErr{path: e.name, reason: "symlink pointing outside the archive"}
 		}
 		u.kinds[rel] = kindSymlink
+		u.links[rel] = e.link
 		if u.extract {
 			if err := u.parents(rel); err != nil {
 				return wrote(err)
@@ -399,6 +407,68 @@ func (u *unpacker) file(name, rel string, exec bool, open func() (io.Reader, err
 		return err
 	}
 	return out.Close()
+}
+
+// checkLinks refuses the archive when any of its symlinks resolves outside the root. It runs
+// after the whole archive was seen, because a link may go through links listed after it.
+func (u *unpacker) checkLinks() error {
+	names := make([]string, 0, len(u.links))
+	for rel := range u.links {
+		names = append(names, rel)
+	}
+	sort.Strings(names)
+	for _, rel := range names {
+		if !linkInside(u.links, rel) {
+			return &unpackErr{path: rel, reason: "symlink pointing outside the archive"}
+		}
+	}
+	return nil
+}
+
+// maxLinkHops bounds the symlinks followed while resolving one target (as Linux's 40).
+const maxLinkHops = 40
+
+// linkInside reports whether the symlink rel of links (relative path → target) resolves inside
+// the root. The target is walked component by component from the link's directory and every
+// component that is itself a symlink of the tree is substituted, so a chain such as
+// "x -> d/up/../outside" with "d/up -> .." is caught: a lexical check of the target alone is not
+// enough. The walk fails as soon as it leaves the root at any step, on an absolute target, and
+// after maxLinkHops substitutions (loops).
+func linkInside(links map[string]string, rel string) bool {
+	var cur []string
+	if d := path.Dir(rel); d != "." {
+		cur = strings.Split(d, "/")
+	}
+	if t := links[rel]; t == "" || strings.HasPrefix(t, "/") {
+		return false
+	}
+	todo := strings.Split(links[rel], "/")
+	hops := 0
+	for len(todo) > 0 {
+		c := todo[0]
+		todo = todo[1:]
+		switch c {
+		case "", ".":
+			continue
+		case "..":
+			if len(cur) == 0 {
+				return false
+			}
+			cur = cur[:len(cur)-1]
+			continue
+		}
+		next := append(cur[:len(cur):len(cur)], c)
+		t, ok := links[strings.Join(next, "/")]
+		if !ok {
+			cur = next
+			continue
+		}
+		if hops++; hops > maxLinkHops || t == "" || strings.HasPrefix(t, "/") {
+			return false
+		}
+		todo = append(strings.Split(t, "/"), todo...)
+	}
+	return true
 }
 
 func (u *unpacker) abs(rel string) string { return filepath.Join(u.root, filepath.FromSlash(rel)) }

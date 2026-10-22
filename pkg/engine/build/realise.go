@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/pkg/engine/build/testrun"
+	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/store"
 	"github.com/megakuul/bob/pkg/engine/translate"
@@ -164,6 +167,13 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 	for k := range c.Users {
 		sort.Strings(c.Users[k])
 	}
+	direct := make([]string, 0, len(c.Nixpkgs))
+	for d := range c.Nixpkgs {
+		direct = append(direct, d)
+	}
+	sort.Strings(direct)
+	home := p.st.Home()
+	c.ChainOf = func(target string) []string { return chainOf(home, direct, target) }
 	return c
 }
 
@@ -410,4 +420,46 @@ func fromTranslate(e translate.Event) Event {
 	return Event{Event: e.Event, Label: e.Label, Action: e.Action, Cache: e.Cache, Name: e.Name,
 		Reason: e.Reason, Line: e.Line, Status: string(e.Status), Error: e.Error, Hint: e.Hint,
 		Requested: e.Requested, ExitCode: e.ExitCode, Counts: e.Counts, Drift: e.Drift}
+}
+
+// maxChainDrvs bounds the walk of chainOf through nixpkgs' input derivations.
+const maxChainDrvs = 20000
+
+// chainOf returns the shortest path from a direct nixpkgs input of a bob package down to the
+// failing derivation target (S15 §5.7), walking the .drv files of the store breadth first.
+func chainOf(home string, direct []string, target string) []string {
+	parent := map[string]string{}
+	queue := []string{}
+	for _, d := range direct {
+		if _, seen := parent[d]; !seen {
+			parent[d] = ""
+			queue = append(queue, d)
+		}
+	}
+	for len(queue) > 0 && len(parent) <= maxChainDrvs {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur == target {
+			var chain []string
+			for p := cur; p != ""; p = parent[p] {
+				chain = append([]string{p}, chain...)
+			}
+			return chain
+		}
+		b, err := os.ReadFile(filepath.Join(home, cur))
+		if err != nil {
+			continue
+		}
+		d, err := drv.Parse(b)
+		if err != nil {
+			continue
+		}
+		for _, in := range d.InputDrvs {
+			if _, seen := parent[in.Path]; !seen {
+				parent[in.Path] = cur
+				queue = append(queue, in.Path)
+			}
+		}
+	}
+	return nil
 }

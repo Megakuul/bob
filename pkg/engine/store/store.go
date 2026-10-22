@@ -334,15 +334,61 @@ func isStorePath(p string) bool {
 const nixBase32Alphabet = "0123456789abcdfghijklmnpqrsvwxyz"
 
 // Import imports items in one `nix-store --import` stream (export format v1, no signatures).
+// The stream is written straight into nix-store's stdin, so items with WriteNAR are never held
+// in memory (F5); a busy-database retry writes the stream again.
 func (s *Store) Import(ctx context.Context, items []ExportItem) error {
 	if len(items) == 0 {
 		return nil
 	}
-	var buf bytes.Buffer
-	if err := WriteExport(&buf, items); err != nil {
-		return err
+	var werr error
+	var wait func()
+	in := func() io.Reader {
+		if wait != nil {
+			wait()
+		}
+		r, cancel, w := exportPipe(items)
+		wait = func() { cancel(); werr = w() }
+		return r
 	}
-	stream := buf.Bytes()
-	_, err := s.runStore(ctx, func() io.Reader { return bytes.NewReader(stream) }, "nix-store", "--import")
+	_, err := s.runStore(ctx, in, "nix-store", "--import")
+	if wait != nil {
+		wait()
+	}
+	if werr != nil {
+		// The stream failed on bob's side (a tree changed or became unreadable): that is the
+		// cause, not nix-store's complaint about the truncated input.
+		return werr
+	}
 	return err
 }
+
+// exportPipe starts writing the export stream of items into a pipe. cancel unblocks the writer
+// when the reader stops early (nix-store exited); wait waits for the writer and returns its
+// error (nil when it was only cancelled after the reader stopped).
+func exportPipe(items []ExportItem) (r io.Reader, cancel func(), wait func() error) {
+	pr, pw := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		defer func() {
+			if v := recover(); v != nil {
+				err = fmt.Errorf("store: export: panic: %v", v)
+			}
+			pw.CloseWithError(err)
+			done <- err
+		}()
+		err = WriteExport(pw, items)
+	}()
+	cancel = func() { pr.CloseWithError(errStreamDone) }
+	wait = func() error {
+		err := <-done
+		if errors.Is(err, errStreamDone) {
+			return nil
+		}
+		return err
+	}
+	return pr, cancel, wait
+}
+
+// errStreamDone is the error the export writer sees after the reader stopped.
+var errStreamDone = errors.New("store: import stream closed")

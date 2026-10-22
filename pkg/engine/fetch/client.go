@@ -56,7 +56,35 @@ func newClient(p Policy) *client {
 		// policy dials directly.
 		tr.Proxy = http.ProxyFromEnvironment
 	}
-	return &client{http: &http.Client{Transport: tr}}
+	return &client{http: &http.Client{Transport: tr, CheckRedirect: checkRedirect}}
+}
+
+// maxRedirects caps one download's redirect chain.
+const maxRedirects = 10
+
+// pinnedKey marks a request context whose download has a pinned hash (plain http allowed).
+type pinnedKey struct{}
+
+// errRedirect marks a refused redirect (never retried).
+var errRedirect = errors.New("redirect refused")
+
+// checkRedirect applies the scheme rule of R-NIX-014 to every redirect target, not only to the
+// requested URLs: without a pinned hash a redirect from https to plain http (or any other
+// scheme) would let unauthenticated content be hashed and pinned.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("more than %d redirects: %w", maxRedirects, errRedirect)
+	}
+	switch req.URL.Scheme {
+	case "https":
+		return nil
+	case "http":
+		if pinned, _ := req.Context().Value(pinnedKey{}).(bool); pinned {
+			return nil
+		}
+		return fmt.Errorf("redirect to %s uses plain http and the request has no pinned hash: %w", req.URL.Redacted(), errRedirect)
+	}
+	return fmt.Errorf("redirect to %s is not an https URL: %w", req.URL.Redacted(), errRedirect)
 }
 
 // errDenied marks a connection the egress policy refused (never retried).
@@ -106,6 +134,7 @@ func (c *client) download(ctx context.Context, p *prepared, file, algo string) (
 			return "", nil, diag.New(3002, "label", p.Label, "reason", u+" is not an https URL")
 		}
 	}
+	ctx = context.WithValue(ctx, pinnedKey{}, pinned)
 	var last *attemptError
 	var final error
 	for _, u := range p.URLs {
@@ -166,7 +195,8 @@ func (c *client) get(ctx context.Context, u, file, algo string, maxBytes int64) 
 	req.Header.Set("User-Agent", "bob")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, &attemptError{retry: !errors.Is(err, errDenied), err: fmt.Errorf("%s: %w", u, err)}
+		retry := !errors.Is(err, errDenied) && !errors.Is(err, errRedirect)
+		return nil, &attemptError{retry: retry, err: fmt.Errorf("%s: %w", u, err)}
 	}
 	defer resp.Body.Close()
 	switch {

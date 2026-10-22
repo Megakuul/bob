@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +44,15 @@ func TestFrameworkZip(t *testing.T) {
 	for n := range files {
 		if filepath.Base(filepath.Dir(n)) == "gen" || filepath.Base(filepath.Dir(n)) == "bop" {
 			t.Errorf("framework module contains engine code %s", n)
+		}
+	}
+	// The lock-time resolvers (pkg/npm/resolve, pkg/ocaml/resolve, pkg/rust/resolve) are engine
+	// code too: neither the source tree view nor the embedded zip may hold them.
+	for _, set := range []map[string][]byte{files, got} {
+		for n := range set {
+			if strings.Contains("/"+n, "/resolve/") {
+				t.Errorf("framework module contains the resolver package file %s", n)
+			}
 		}
 	}
 }

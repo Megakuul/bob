@@ -146,6 +146,9 @@ func newNode(p *P, kindName, name string, deps []Package, srcs []Sources, spec a
 	}
 	n.proj = project(k, pk, l, n.deps)
 	n.id = nodeID(l, n.proj)
+	if l.Nix != "" {
+		n.id += nixTokens(kindName, n.nix)
+	}
 
 	if old, ok := ev.nodes[n.id]; ok {
 		switch {
@@ -403,6 +406,33 @@ func nodeID(l Label, pr projection) string {
 	}
 	return l.String() + "@" + strings.Join(append([]string{plat}, toks...), "+")
 }
+
+// nixTokens is the identity suffix of a nixpkgs node (A91): its kind ("tool", "lib", "pkg"),
+// "cross" for the cross package set, and "n-<hash8>" of its options (outputs, modules, allow)
+// when any is set. One attribute used as Tool and Lib, or with different Modules, Outputs or
+// Allow options, is then two nodes rather than a definition error on the native platform,
+// where host and target platforms are equal.
+func nixTokens(kindName string, raw json.RawMessage) string {
+	toks := "+" + strings.TrimPrefix(kindName, "nixpkgs.")
+	var o map[string]json.RawMessage
+	if json.Unmarshal(raw, &o) != nil {
+		return toks
+	}
+	if string(o["set"]) == `"cross"` {
+		toks += "+cross"
+	}
+	delete(o, "attr")
+	delete(o, "set")
+	b, err := json.Marshal(o) // keys sorted; raw values are canonical (encodeSpec)
+	if err != nil || string(b) == nixDefaultOptions {
+		return toks
+	}
+	h := sha256.Sum256(b)
+	return toks + "+n-" + hex.EncodeToString(h[:4])
+}
+
+// nixDefaultOptions is the options part of a nixpkgs "nix" object without options (R-FW-047).
+const nixDefaultOptions = `{"allow":{"insecure":[],"unfree":false},"outputs":[]}`
 
 // configOf is ext.ConfigOf.
 func configOf(n *Node) graph.Config {

@@ -3,20 +3,49 @@ package store
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"io"
 	"sort"
 
 	"github.com/megakuul/bob/pkg/engine/drv"
+	"github.com/megakuul/bob/pkg/engine/nar"
 )
 
 // ExportItem is one path of an export stream: the NAR of the path, its references and deriver.
+// The NAR is either held in memory (NAR) or written on demand by WriteNAR, which keeps large
+// trees out of memory (F5): WriteNAR may be called more than once (an import is retried when
+// the store database is busy) and must write the same bytes every time or fail; an error it
+// returns aborts the stream before the item is complete, so the path is not imported.
 type ExportItem struct {
 	Path       string
 	NAR        []byte
+	WriteNAR   func(io.Writer) error
 	References []string
 	Deriver    string
+}
+
+// TreeItem is the streamed export item of the tree (or single file) at root, restricted to files
+// as in nar.Write. With narSHA256 set, the NAR written is checked against it before the item is
+// completed, so a tree that changed after its store path was computed is refused instead of
+// imported under a wrong path.
+func TreeItem(path, root string, files []string, narSHA256 *[32]byte) ExportItem {
+	return ExportItem{Path: path, WriteNAR: func(w io.Writer) error {
+		var h hash.Hash
+		if narSHA256 != nil {
+			h = sha256.New()
+			w = io.MultiWriter(w, h)
+		}
+		if err := nar.Write(w, root, files); err != nil {
+			return err
+		}
+		if h != nil && !bytes.Equal(h.Sum(nil), narSHA256[:]) {
+			return fmt.Errorf("%s changed while it was imported", root)
+		}
+		return nil
+	}}
 }
 
 // exportMagic follows each NAR in the stream ("NIXE", little-endian).
@@ -51,7 +80,15 @@ func WriteExport(w io.Writer, items []ExportItem) error {
 	e := &enc{w: bw}
 	for _, it := range items {
 		e.num(1)
-		e.raw(it.NAR)
+		if it.WriteNAR != nil && it.NAR == nil {
+			if e.err == nil {
+				if err := it.WriteNAR(bw); err != nil {
+					return fmt.Errorf("store: export %s: %w", it.Path, err)
+				}
+			}
+		} else {
+			e.raw(it.NAR)
+		}
 		e.num(exportMagic)
 		e.str(it.Path)
 		e.num(uint64(len(it.References)))

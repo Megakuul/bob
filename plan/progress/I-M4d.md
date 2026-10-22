@@ -249,3 +249,76 @@ non-diagnostic failures (e.g. `*evalbox.Error`, store damage); `res` is never ni
    protected schema/events-v1.json enumerates only the §02.4 events ("A line with an unknown
    event name is invalid") and tests/cli checkStream validates every line against it. Both
    cannot hold for `bob build --json`; the schema's event enum needs the stage names (owner).
+
+## Coordinator rulings (2026-10-22, after commit) and follow-up work
+Rulings: (1) eval/framework.go writes only the language version (`go 1.26`) in the framework
+go.mod, root go.mod stays; (2) do NEEDS 2, 3, 4, 6, 7; (3) stage events are SPEC: add them to
+schema/events-v1.json; (4) fix tests/core/toyeco/toyeco.go to the demo shape (owner-approved
+evidence-based test correction). R1 (steward review): frameworkFiles skips the lock-time
+resolver packages (`resolve` dirs); test that the zip has none.
+
+Done:
+- (1) framework.go: framework go.mod `go <major.minor>` (langVersion); framework.zip regenerated.
+  TestRunPinnedGo now passes (nixpkgs go 1.26.8 compiles the evaluator); the lock stage records
+  the transient nixpkgs pin used for the evaluator's Go.
+- R1: frameworkFiles skips `resolve` directories; TestFrameworkZip asserts neither the tree view
+  nor the zip holds a resolve package; zip regenerated; eval tests green.
+- NEEDS 2: engine.PlanRequest gains `Resolver drv.Resolver` (the engine's resolver: earlier
+  waves' bob drvs + nixpkgs drvs) and `TestArgs []string` (bob test -- args, CmdTest only).
+- NEEDS 3: eval.Result.Scan (walk + hashes + key); the "scan" stage event carries it and "eval"
+  the rest.
+- NEEDS 4: bob-builder op `check-files {root, paths}` (missing → exit 4 + diag
+  "<label>: step finished but did not create <path>") and exec `timeoutSeconds` (kill, diag
+  "<label> timed out after Ns"); translator: the last builder error diagnostic becomes the cause
+  of 2000 (multi-line: rest → excerpt), the timeout diag → 2007. bob.Run plans both. Embedded
+  builder regenerated (`go generate ./pkg/engine/store`; BuilderVersion stays 1, D-M4c-7).
+  Tests: pkg/builder TestCheckFiles/TestExecTimeout, translate TestBuilderDiagnostics, build
+  TestRunStepsWithNixpkgsTools (missing output, 1 s timeout → 2007).
+- NEEDS 6: store.NixVersion (+ TestNixVersion against `nix --version`).
+- NEEDS 7: translate.Context.ChainOf (optional func, json:"-"), consulted by upstreamFailed and
+  recorded in Chains; build fills it with a breadth-first walk of the store's .drv files from
+  the direct nixpkgs inputs (bounded 20000 drvs). Tests: build TestChainOf, translate TestChainOf.
+- drv.Placeholder(output) (I-M4a NEEDS), verified against `builtins.placeholder "out"`; build
+  uses it instead of its own copy.
+- (3) schema/events-v1.json: event enum + `ev.stage` (namespace … translate: durationMs,
+  optional cached) and `ev.drv.imported` (count); additive diff only.
+- (4) tests/core/toyeco/toyeco.go: Finalize against own drvs + req.Resolver, output path via
+  drv.Placeholder, builder in InputSrcs, store.HostSystem(). The edit was not blocked.
+- Found while running the CLI: evaluation inside bob's namespace (every CLI command after
+  store.Enter) failed with "chown …/eval-seed/…/gocache: invalid argument": evalbox's root path
+  (D-M3b-3) chowns to 65534, which is unmapped in bob's single-uid namespace. evalbox now takes
+  the root path only for root of the initial user namespace (`hostRoot()`: uid 0 and uid_map
+  "0 0 4294967295"); namespace-root takes the unprivileged path (D-M4d-11). Security note for
+  the owner: a bob run by host root then evaluates as the namespace's uid 0 (= host root), not
+  as nobody; for non-root users nothing changes.
+- TestRFW051ToyEcosystem through the CLI now builds both nodes ("built", result.txt right); it
+  fails only on TEST PROBLEM 3.
+
+DECISIONS (new):
+- D-M4d-11: evalbox privileged path only for initial-namespace root (above).
+- D-M4d-12: the nixpkgs pin resolved for the evaluator's Go (no go on PATH, no pin yet) is
+  recorded by the lock stage even when the graph has no nixpkgs nodes (reproducible toolchain).
+
+TEST PROBLEM (new):
+3. tests/core/ir_test.go TestRFW051ToyEcosystem runs noLeak over the whole output of
+   `bob build … --print-paths --json`; package.finish `paths[]` must hold host store paths
+   (<home>/nix/store/…, SPEC §02.6), which leakcheck reports as "store path". tests/cli
+   checkStream deletes `paths` before its leak check for this reason. Fix: the same exclusion in
+   TestRFW051 (or drop --print-paths from noLeak there).
+4. tests/cli/events_test.go knownEvents() (protected) lists only the §02.4 events, so its
+   validateEvent reports the R-FW-049 stage events and drv.imported as "unknown event" although
+   schema/events-v1.json now has them. Fix: add the stage names + drv.imported (fields
+   durationMs "n" / count "n").
+- Observed under host load ~33: pkg/engine/build/testrun TestPostgresServiceInNix timing
+  (4.8 s vs ≤ 3 s); unrelated to these changes (load), passes on a quiet host per I-M4c.
+- tests/core via the CLI (TMPDIR=/var/tmp, host load ~33): TestRFW021SourceErrors now exits 3
+  as required for all three cases, but the srcs message is printed on stdout, not stderr as the
+  test expects (pkg/cli output stream: I-M4e). Each fresh-HOME CLI run rebuilds the evaluator
+  seed (~1-2 min under this load), so whole tests/core runs need -timeout well above 10m.
+- Last CLI attempt at R-FW-023 (16:20): the harness could not build cmd/bob-server
+  (internal/store redeclarations, another unit's work in progress). R-FW-023 missing output and
+  step timeout are verified at engine level (TestRunStepsWithNixpkgsTools).
+- Checks: gofmt clean; go vet, staticcheck, boblint clean for pkg/engine/..., pkg/builder/...,
+  tests/core/toyeco; TestLayering ok; pkg tests green (build, drv, builder, eval, evalbox,
+  translate, engine, store TestNixVersion); tests/sandbox green. `tools/ci -only …` fails only
+  on internal/store (other unit).

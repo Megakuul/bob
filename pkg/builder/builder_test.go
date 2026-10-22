@@ -8,9 +8,11 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/megakuul/bob/pkg/builder/bspec"
 )
@@ -284,5 +286,44 @@ func TestScannerAcrossChunks(t *testing.T) {
 	s.scan([]byte(h[:31] + "_" + h[1:]))
 	if s.found != "" {
 		t.Errorf("found a hash that is not there")
+	}
+}
+
+// check-files: bob.Run's declared outputs; a missing one exits 4 with the bob.Run text as a
+// bob:: diagnostic.
+func TestCheckFiles(t *testing.T) {
+	e := newEnv(t, "out")
+	out := e.outs["out"]
+	code, log := e.run(t, "run", runJobOf(t,
+		st(t, "write", bspec.WriteArgs{Path: out + "/a.txt", Content: "a"}),
+		st(t, "check-files", bspec.CheckFilesArgs{Root: out, Paths: []string{"a.txt"}})))
+	if code != 0 {
+		t.Fatalf("present file: exit %d\n%s", code, log)
+	}
+	e = newEnv(t, "out")
+	out = e.outs["out"]
+	code, log = e.run(t, "run", runJobOf(t,
+		st(t, "mkdir", bspec.MkdirArgs{Path: out}),
+		st(t, "check-files", bspec.CheckFilesArgs{Root: out, Paths: []string{"promised.txt"}})))
+	if code != ExitOutput || !strings.Contains(log, `bob:: {"type":"diag","severity":"error","file":"","line":0,"col":0,"msg":"//t:t: step finished but did not create promised.txt"}`) {
+		t.Errorf("missing file: exit %d\n%s", code, log)
+	}
+	e = newEnv(t, "out")
+	if code, log := e.run(t, "run", runJobOf(t, st(t, "check-files", bspec.CheckFilesArgs{Root: e.outs["out"], Paths: []string{"../x"}}))); code != ExitInvalid {
+		t.Errorf("escaping path: exit %d\n%s", code, log)
+	}
+}
+
+// exec timeoutSeconds stops the program and fails the step with "<label> timed out after Ns".
+func TestExecTimeout(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("no sleep binary")
+	}
+	e := newEnv(t, "out")
+	start := time.Now()
+	code, log := e.run(t, "run", runJobOf(t, st(t, "exec", bspec.ExecArgs{Argv: []string{sleep, "30"}, TimeoutS: 1})))
+	if code != ExitStep || !strings.Contains(log, `"msg":"//t:t timed out after 1s"`) || time.Since(start) > 10*time.Second {
+		t.Errorf("exit %d after %s\n%s", code, time.Since(start), log)
 	}
 }

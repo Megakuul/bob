@@ -12,9 +12,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/builder/bspec"
@@ -49,11 +51,64 @@ func unpackKind(c *Ctx, raw json.RawMessage) error {
 	if err := c.MkdirAll(to); err != nil {
 		return err
 	}
-	u := &unpacker{c: c, root: to, strip: a.Strip, kinds: map[string]entryKind{}}
+	u := &unpacker{c: c, root: to, strip: a.Strip, kinds: map[string]entryKind{}, links: map[string]string{}}
 	if err := u.walk(a.Archive); err != nil {
 		return fmt.Errorf("unpack %s: %w", a.Archive, err)
 	}
+	// Links may go through links listed later, so they are resolved once the archive is
+	// complete; a refusal fails the job and Nix discards the partial output.
+	for _, rel := range slices.Sorted(maps.Keys(u.links)) {
+		if !linkInside(u.links, rel) {
+			return fmt.Errorf("unpack %s: %s: symlink pointing outside the archive", a.Archive, rel)
+		}
+	}
 	return nil
+}
+
+// maxLinkHops bounds the symlinks followed while resolving one target (as Linux's 40).
+const maxLinkHops = 40
+
+// linkInside reports whether the symlink rel of links (relative path → target) resolves inside
+// the root, with the fetcher's rule (R-NIX-016): the target is walked component by component
+// from the link's directory, every component that is itself a symlink of the archive is
+// substituted, and the walk fails as soon as it leaves the root, on an absolute target and
+// after maxLinkHops substitutions. A lexical check alone lets "x -> d/up/../y" with
+// "d/up -> .." climb out.
+func linkInside(links map[string]string, rel string) bool {
+	if t := links[rel]; t == "" || strings.HasPrefix(t, "/") {
+		return false
+	}
+	var cur []string
+	if d := path.Dir(rel); d != "." {
+		cur = strings.Split(d, "/")
+	}
+	todo := strings.Split(links[rel], "/")
+	hops := 0
+	for len(todo) > 0 {
+		c := todo[0]
+		todo = todo[1:]
+		switch c {
+		case "", ".":
+			continue
+		case "..":
+			if len(cur) == 0 {
+				return false
+			}
+			cur = cur[:len(cur)-1]
+			continue
+		}
+		next := append(cur[:len(cur):len(cur)], c)
+		t, ok := links[strings.Join(next, "/")]
+		if !ok {
+			cur = next
+			continue
+		}
+		if hops++; hops > maxLinkHops || t == "" || strings.HasPrefix(t, "/") {
+			return false
+		}
+		todo = append(strings.Split(t, "/"), todo...)
+	}
+	return true
 }
 
 type entryKind int
@@ -71,6 +126,7 @@ type unpacker struct {
 	count int
 	total int64
 	kinds map[string]entryKind // relative path → what the archive put there
+	links map[string]string    // relative path of a symlink → its target
 }
 
 // walk detects the format from the first bytes.
@@ -284,6 +340,7 @@ func (u *unpacker) symlink(name, target string) error {
 		return fmt.Errorf("%s: duplicate entry", name)
 	}
 	u.kinds[rel] = kSymlink
+	u.links[rel] = target
 	return os.Symlink(target, u.abs(rel))
 }
 

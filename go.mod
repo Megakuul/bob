@@ -12,6 +12,12 @@ require (
 )
 
 require (
+	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
+)
+
+require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.17

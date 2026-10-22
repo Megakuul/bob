@@ -140,7 +140,7 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		return nil, err
 	}
 	var stale []error
-	if decl := nixpkgsDecl(g); usesNixpkgs(g) || lf.Nixpkgs.Rev != "" {
+	if decl := nixpkgsDecl(g); usesNixpkgs(g) || lf.Nixpkgs.Rev != "" || r.transientPin.Rev != "" {
 		old := lf.Nixpkgs.Rev != ""
 		isStale, err := nixpkgsStale(lf.Nixpkgs, decl)
 		if err != nil {

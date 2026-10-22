@@ -36,21 +36,25 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		return res, err
 	}
 
-	// scan + eval: eval.Evaluate scans, checks the rules and runs the (cached) evaluator in one
-	// call, so the scan is reported inside the eval duration (see NEEDS in I-M4d).
 	f := fetch.New(st, fetch.Policy{})
-	r.emit(Event{Event: StageScan})
+	// scan + eval: eval.Evaluate scans and evaluates in one call and reports the scan's share.
 	t := time.Now()
 	goRoot, err := r.evalGoRoot(ctx, st, f)
 	if err != nil {
+		r.emit(Event{Event: StageScan})
+		r.emit(Event{Event: StageEval, DurationMs: time.Since(t).Milliseconds()})
 		return res, err
 	}
 	ev, err := eval.Evaluate(ctx, evalRequest(o, goRoot))
-	e := Event{Event: StageEval, DurationMs: time.Since(t).Milliseconds()}
+	total := time.Since(t)
+	scanE, evalE := Event{Event: StageScan}, Event{Event: StageEval, DurationMs: total.Milliseconds()}
 	if ev != nil {
-		e.Cached = ev.Cached
+		scanE.DurationMs = ev.Scan.Milliseconds()
+		evalE.DurationMs = (total - ev.Scan).Milliseconds()
+		evalE.Cached = ev.Cached
 	}
-	r.emit(e)
+	r.emit(scanE)
+	r.emit(evalE)
 	if err != nil {
 		return res, err
 	}
@@ -84,6 +88,9 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 			return err
 		}
 		p = newPlanner(g, st, builder, srcPaths, entries, lf, idx)
+		if o.Command == CmdTest {
+			p.testArgs = o.TestArgs
+		}
 		return p.plan(ctx)
 	}); err != nil {
 		return res, err

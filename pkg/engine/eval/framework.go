@@ -148,7 +148,9 @@ func frameworkFiles(src fs.FS) (map[string][]byte, error) {
 				return err
 			}
 			if d.IsDir() {
-				if p != top && (d.Name() == "gen" || d.Name() == "bop" || d.Name() == "testdata" ||
+				// gen, bop and resolve are engine code (generators, builder ops, lock-time resolvers):
+				// the evaluator never compiles them and bob.go cannot import them (R7).
+				if p != top && (d.Name() == "gen" || d.Name() == "bop" || d.Name() == "resolve" || d.Name() == "testdata" ||
 					strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_")) {
 					return fs.SkipDir
 				}

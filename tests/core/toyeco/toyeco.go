@@ -11,6 +11,7 @@ import (
 	"github.com/megakuul/bob/pkg/builder/bspec"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
+	"github.com/megakuul/bob/pkg/engine/store"
 )
 
 func init() { engine.Register(toy{}) }
@@ -28,11 +29,13 @@ func (toy) Native(context.Context, engine.PlanRequest) ([]engine.GeneratedFile, 
 }
 
 // Plan writes "<label> built" into the output of each node and orders the derivations by the
-// node's deps.
+// node's deps. Derivations are finalised against the engine's resolver (for deps planned in
+// earlier waves) and this call's own derivations.
 func (toy) Plan(_ context.Context, req engine.PlanRequest) (engine.PlanResult, error) {
 	res := engine.PlanResult{Nodes: map[string]engine.Resolved{}}
+	own := resolver{own: map[string]*drv.Derivation{}, rest: req.Resolver}
 	for _, n := range req.Nodes {
-		write, err := json.Marshal(bspec.WriteArgs{Path: "$out/result.txt", Content: n.Label + " built\n"})
+		write, err := json.Marshal(bspec.WriteArgs{Path: drv.Placeholder("out") + "/result.txt", Content: n.Label + " built\n"})
 		if err != nil {
 			return res, err
 		}
@@ -41,10 +44,11 @@ func (toy) Plan(_ context.Context, req engine.PlanRequest) (engine.PlanResult, e
 			return res, err
 		}
 		job := drv.Job{
-			Name:    drv.Name("toy", n.Label),
-			System:  "aarch64-linux",
-			Builder: req.Builder,
-			Spec:    bspec.Job{V: 1, Kind: "run", Label: n.Label, Outputs: []string{"out"}, Args: args},
+			Name:      drv.Name("toy", n.Label),
+			System:    store.HostSystem(),
+			Builder:   req.Builder,
+			InputSrcs: []string{req.Builder},
+			Spec:      bspec.Job{V: 1, Kind: "run", Label: n.Label, Outputs: []string{"out"}, Args: args},
 		}
 		for _, dep := range n.Deps {
 			in, ok := req.Inputs[dep]
@@ -57,12 +61,32 @@ func (toy) Plan(_ context.Context, req engine.PlanRequest) (engine.PlanResult, e
 		if err != nil {
 			return res, err
 		}
+		if err := d.Finalize(own); err != nil {
+			return res, err
+		}
 		path, err := d.Path()
 		if err != nil {
 			return res, err
 		}
+		own.own[path] = d
 		res.Drvs = append(res.Drvs, d)
 		res.Nodes[n.ID] = engine.Resolved{Drv: path, Outputs: map[string]string{"out": d.Outputs[0].Path}}
 	}
 	return res, nil
+}
+
+// resolver resolves this ecosystem's own derivations, everything else through the engine.
+type resolver struct {
+	own  map[string]*drv.Derivation
+	rest drv.Resolver
+}
+
+func (r resolver) Modulo(p string) ([32]byte, error) {
+	if d, ok := r.own[p]; ok {
+		return d.Modulo(r)
+	}
+	if r.rest == nil {
+		return [32]byte{}, fmt.Errorf("toy: unknown derivation %s", p)
+	}
+	return r.rest.Modulo(p)
 }

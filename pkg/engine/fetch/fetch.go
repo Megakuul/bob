@@ -278,6 +278,7 @@ func (f *fetcher) fetch(ctx context.Context, p *prepared) (*fetched, error) {
 	}
 	g.hash = sri{algo: algo, digest: digest}
 	var root string
+	var narSum *[32]byte // the tree's NAR hash, checked again while it is imported
 	if p.Kind == File {
 		root = file
 		if g.path, err = drv.FixedOutputPath(algo, g.hash.hex(), false, p.Name); err != nil {
@@ -292,6 +293,7 @@ func (f *fetcher) fetch(ctx context.Context, p *prepared) (*fetched, error) {
 		if err != nil {
 			return nil, fmt.Errorf("fetch %s: %w", p.Label, err)
 		}
+		narSum = &sum
 		got := sri{algo: "sha256", digest: sum[:]}
 		g.narHash = got.String()
 		if p.narHash != nil && !bytes.Equal(p.narHash.digest, sum[:]) {
@@ -302,7 +304,7 @@ func (f *fetcher) fetch(ctx context.Context, p *prepared) (*fetched, error) {
 		}
 	}
 	if f.st != nil {
-		if err := f.importPath(ctx, g.path, root); err != nil {
+		if err := f.importPath(ctx, g.path, root, narSum); err != nil {
 			return nil, fmt.Errorf("fetch %s: %w", p.Label, err)
 		}
 	}
@@ -310,16 +312,13 @@ func (f *fetcher) fetch(ctx context.Context, p *prepared) (*fetched, error) {
 	return g, nil
 }
 
-// importPath imports the tree or file at root as store path sp (R-NIX-009's import route).
-func (f *fetcher) importPath(ctx context.Context, sp, root string) error {
+// importPath imports the tree or file at root as store path sp (R-NIX-009's import route). The
+// NAR is streamed into the store, never held in memory (F5): archives may be 8 GiB.
+func (f *fetcher) importPath(ctx context.Context, sp, root string, narSum *[32]byte) error {
 	if ok, err := f.valid(ctx, sp); err != nil || ok {
 		return err
 	}
-	var buf bytes.Buffer
-	if err := nar.Write(&buf, root, nil); err != nil {
-		return err
-	}
-	if err := f.st.Import(ctx, []store.ExportItem{{Path: sp, NAR: buf.Bytes()}}); err != nil {
+	if err := f.st.Import(ctx, []store.ExportItem{store.TreeItem(sp, root, nil, narSum)}); err != nil {
 		return fmt.Errorf("import %s: %w", sp, err)
 	}
 	return nil

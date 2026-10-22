@@ -29,15 +29,16 @@ import (
 // planner computes the derivations of a graph: bob's core kinds (bob.run, bob.file,
 // bob.fetch, nixpkgs.*) itself, every other kind through its registered ecosystem.
 type planner struct {
-	g       *ir.Graph
-	st      *store.Store
-	builder string                  // bob-builder store path of the host system
-	system  string                  // host Nix system
-	srcs    map[string]string       // node id → imported source path
-	entries map[string]nixidx.Entry // nixpkgs attr → index entry
-	lockf   *lock.File
-	idx     *nixidx.Index
-	res     *resolver
+	g        *ir.Graph
+	st       *store.Store
+	builder  string                  // bob-builder store path of the host system
+	system   string                  // host Nix system
+	srcs     map[string]string       // node id → imported source path
+	entries  map[string]nixidx.Entry // nixpkgs attr → index entry
+	lockf    *lock.File
+	idx      *nixidx.Index
+	res      *resolver
+	testArgs []string // bob test -- args, passed to the ecosystems
 
 	nodes   map[string]engine.Resolved // node id → planned outputs
 	drvs    []*drv.Derivation          // every bob derivation, in planning order
@@ -130,7 +131,8 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 		}
 	}()
 	res, err := eco.Plan(ctx, engine.PlanRequest{Graph: p.g, Nodes: nodes, Lock: p.lockf.Sections[name],
-		Inputs: p.nodes, Sources: p.srcs, Nixpkgs: p.idx, Builder: p.builder})
+		Inputs: p.nodes, Sources: p.srcs, Nixpkgs: p.idx, Builder: p.builder,
+		Resolver: p.res, TestArgs: p.testArgs})
 	if err != nil {
 		if _, ok := diagErrors(err); ok {
 			return err
@@ -336,7 +338,7 @@ func (p *planner) planRun(n *ir.Node) error {
 		}
 		bins = append(bins, in.add(rv, out)+"/bin")
 	}
-	out := placeholder("out")
+	out := drv.Placeholder("out")
 	env := map[string]string{}
 	for k, v := range s.Env {
 		env[k] = v
@@ -376,7 +378,17 @@ func (p *planner) planRun(n *ir.Node) error {
 	if len(bins) > 0 {
 		exec["path"] = bins
 	}
+	if s.TimeoutS > 0 {
+		exec["timeoutSeconds"] = s.TimeoutS
+	}
 	steps = append(steps, step("exec", exec))
+	if len(s.Outputs) > 0 { // R-FW-023: the declared outputs must exist
+		paths := make([]any, len(s.Outputs))
+		for i, o := range s.Outputs {
+			paths[i] = o
+		}
+		steps = append(steps, step("check-files", map[string]any{"root": out, "paths": paths}))
+	}
 	spec := map[string]any{"v": 1, "kind": "run", "label": n.Label, "outputs": []any{"out"},
 		"args": map[string]any{"steps": steps}, "fixup": emptyFixup()}
 	return p.addJob(n, system, spec, in)
@@ -535,30 +547,6 @@ func (in *inputs) srcList() []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// placeholder is Nix's hash placeholder of output o ("/" + nixbase32(sha256("nix-output:o"))),
-// which Nix replaces by the output path in the structured attributes (D-M4a-3).
-func placeholder(o string) string {
-	h := sha256.Sum256([]byte("nix-output:" + o))
-	return "/" + nixBase32(h[:])
-}
-
-// nixBase32 is Nix's base-32 encoding (alphabet without e, o, u, t; little-endian bits).
-func nixBase32(b []byte) string {
-	const alphabet = "0123456789abcdfghijklmnpqrsvwxyz"
-	n := (len(b)*8 + 4) / 5
-	out := make([]byte, n)
-	for i := n - 1; i >= 0; i-- {
-		bit := i * 5
-		j, k := bit/8, bit%8
-		c := int(b[j]) >> k
-		if j+1 < len(b) {
-			c |= int(b[j+1]) << (8 - k)
-		}
-		out[n-1-i] = alphabet[c&0x1f]
-	}
-	return string(out)
 }
 
 // resolver returns hashDerivationModulo of input derivations: bob's own from memory, nixpkgs'

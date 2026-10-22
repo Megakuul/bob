@@ -65,6 +65,12 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
+13. A95 (evidence plan/progress/I-M4d.md TEST PROBLEM 3, 4): (a) `TestRFW051ToyEcosystem` leak-checks
+   the `--print-paths` output whose `paths[]` must hold store paths (tests/cli already excludes
+   `paths`): exclude `paths` there too; (b) `tests/cli/events_test.go` `knownEvents()` must list the
+   stage events (namespace, scan, ir, lock, index, sources, plan, fetch, drv.imported, run.start,
+   package.finish, run.finish ...) that SPEC R-FW-049 and 02.4 name and that
+   schema/events-v1.json now accepts.
 12. A88 (evidence plan/progress/I-B3.md): (a) the R-API-001 generated-trees subtest runs `go tool
    buf` outside the module (needs the module dir / GOWORK); (b) `srvtest.Call` posts without the
    `/api/` prefix of SPEC 6.2; (c) `srvtest` reports a "not implemented" answer from `bob login` as

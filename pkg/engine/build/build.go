@@ -22,8 +22,8 @@ const (
 	CmdTest  Command = "test"  // realise the test units among the requested packages
 )
 
-// nixVersion is the version of the Nix that scripts/fetch-nix.sh embeds (run.start "nix").
-const nixVersion = "2.34.9"
+// nixVersion is the embedded Nix (run.start "nix").
+const nixVersion = store.NixVersion
 
 // Options is one run of the pipeline (R-FW-049). Zero values are the defaults.
 type Options struct {
@@ -47,7 +47,7 @@ type Options struct {
 	MaxJobs    int   // -j (0 = Nix's default: the number of CPUs)
 	Limits     translate.Limits
 	Rerun      bool     // bob test --rerun
-	TestArgs   []string // bob test -- args (recorded in the unit; see NEEDS)
+	TestArgs   []string // bob test -- args (engine.PlanRequest.TestArgs)
 	PrintPaths bool     // fill Package.HostPaths and package.finish Paths
 	JSONLog    bool     // --json-log: emit log events with build log lines
 	Replay     string   // BOB_TEST_NIX_REPLAY: translate this capture instead of running Nix

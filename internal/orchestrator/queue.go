@@ -3,11 +3,29 @@ package orchestrator
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
+	"fmt"
+	"sync/atomic"
 	"time"
 
+	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/store"
-	"github.com/megakuul/bob/pkg/bob/diag"
 )
+
+// Job states (SPEC §05.6.1).
+const (
+	StateQueued    = "queued"
+	StateClaimed   = "claimed"
+	StateRunning   = "running"
+	StateSucceeded = "succeeded"
+	StateFailed    = "failed"
+	StateCancelled = "cancelled"
+)
+
+// Terminal reports whether a job state is absorbing.
+func Terminal(state string) bool {
+	return state == StateSucceeded || state == StateFailed || state == StateCancelled
+}
 
 // Queue is the orchestrator side of one class queue in the fleet bucket (SPEC §05.6.1).
 type Queue struct {
@@ -23,6 +41,8 @@ type Queue struct {
 	// BetweenWrites is called between the two writes of Enqueue (test hook; may be nil). An
 	// error aborts Enqueue at that point, like a crash of the enqueuer.
 	BetweenWrites func(ctx context.Context) error
+	// Now is the clock of the queue times (qa, ch); nil means time.Now.
+	Now func() time.Time
 }
 
 // Job is one job to enqueue.
@@ -46,10 +66,109 @@ const (
 	SlotFirst
 )
 
+func (q *Queue) now() time.Time {
+	if q.Now != nil {
+		return q.Now().UTC()
+	}
+	return time.Now().UTC()
+}
+
+func (q *Queue) shards() int {
+	if q.Shards > 0 {
+		return q.Shards
+	}
+	return 16
+}
+
+func (q *Queue) active() *store.ShardSet[store.ActiveJob] {
+	return store.ActiveJobs(q.Fleet, q.shards())
+}
+
+// spec returns the canonical JobSpec stored in job/<id>.sp: j.Spec with the queue's fields
+// (job, build, class, repo, prefer) filled in. A Spec that is not a JobSpec (opaque bytes of
+// in-process tests) is replaced by one built from the Job's fields (decision D-IB2-3).
+func (q *Queue) spec(j Job, now time.Time) ([]byte, error) {
+	s, ok := fleet.DecodeSpec(j.Spec)
+	if !ok {
+		s = store.JobSpec{V: 1}
+	}
+	set := func(field *string, v, name string) error {
+		switch {
+		case v == "":
+		case *field == "":
+			*field = v
+		case *field != v:
+			return fmt.Errorf("orchestrator: job %s: spec %s %q differs from %q", j.ID, name, *field, v)
+		}
+		return nil
+	}
+	for _, f := range []struct {
+		field   *string
+		v, name string
+	}{{&s.JobID, j.ID, "job"}, {&s.BuildID, j.Build, "build"}, {&s.Class, q.Class, "class"}, {&s.Repo, j.Repo, "repo"}, {&s.Prefer, j.Prefer, "prefer"}} {
+		if err := set(f.field, f.v, f.name); err != nil {
+			return nil, err
+		}
+	}
+	if s.Created == 0 {
+		s.Created = now.Unix()
+	}
+	b, err := fleet.Encode(s)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > store.MaxJobSpec {
+		return nil, fmt.Errorf("orchestrator: job %s: spec is %d bytes, the limit is %d", j.ID, len(b), store.MaxJobSpec)
+	}
+	return b, nil
+}
+
 // Enqueue is the build controller's enqueue: CAS jact (intent first), create job (signed
 // spec), append slot. It returns the slot number.
 func (q *Queue) Enqueue(ctx context.Context, j Job, o Order) (uint64, error) {
-	return 0, diag.NotImplemented("orchestrator.Queue.Enqueue")
+	if _, err := store.Segment(j.ID); err != nil {
+		return 0, fmt.Errorf("orchestrator: job id %q: %w", j.ID, err)
+	}
+	if len(q.Key) != ed25519.PrivateKeySize {
+		return 0, errors.New("orchestrator: queue has no signing key")
+	}
+	now := q.now()
+	spec, err := q.spec(j, now)
+	if err != nil {
+		return 0, err
+	}
+	if err := q.active().Add(ctx, j.ID, store.ActiveJob{Build: j.Build, Class: q.Class, Created: now}); err != nil {
+		return 0, err
+	}
+	rec := &store.JobRecord{ID: j.ID, Spec: spec, SpecSig: fleet.SignSpec(q.Key, spec), Kid: q.Kid,
+		State: StateQueued, Queued: now, Attempt: j.Attempts}
+	createJob := func() error { return store.Create(ctx, q.Fleet, rec) }
+	appendSlot := func() (uint64, error) {
+		return store.Queue(q.Fleet, q.Class).Append(ctx, &store.QueueSlot{Job: j.ID, At: now})
+	}
+	between := func() error {
+		if q.BetweenWrites == nil {
+			return nil
+		}
+		return q.BetweenWrites(ctx)
+	}
+	if o == SlotFirst {
+		seq, err := appendSlot()
+		if err != nil {
+			return 0, err
+		}
+		if err := between(); err != nil {
+			return seq, err
+		}
+		return seq, createJob()
+	}
+	if err := createJob(); err != nil {
+		return 0, err
+	}
+	if err := between(); err != nil {
+		return 0, err
+	}
+	return appendSlot()
 }
 
 // JobView is a read-only view of job/<id> for observers.
@@ -63,77 +182,165 @@ type JobView struct {
 	Promotion string
 }
 
+func viewOf(r *store.JobRecord) *JobView {
+	v := &JobView{State: r.State, Owner: r.Owner, Epoch: r.Epoch, Attempt: r.Attempt, Cancel: r.Cancel, Promotion: r.Promotion}
+	if res, ok := fleet.DecodeResult(r.Result); ok {
+		v.Result = res.Status
+	}
+	return v
+}
+
+func (q *Queue) record(ctx context.Context, id string) (*store.JobRecord, error) {
+	if _, err := store.Segment(id); err != nil {
+		return nil, fmt.Errorf("orchestrator: job id %q: %w", id, store.ErrNotFound)
+	}
+	return store.Get(ctx, q.Fleet, &store.JobRecord{ID: id})
+}
+
 // Job reads job/<id>. store.ErrNotFound when the record does not exist (never created or finalised).
 func (q *Queue) Job(ctx context.Context, id string) (*JobView, error) {
-	return nil, diag.NotImplemented("orchestrator.Queue.Job")
+	r, err := q.record(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return viewOf(r), nil
 }
 
 // SlotTaken reads the `tk` field of slot seq: a worker id, "stale", "orphan", or "" when open.
 func (q *Queue) SlotTaken(ctx context.Context, seq uint64) (string, error) {
-	return "", diag.NotImplemented("orchestrator.Queue.SlotTaken")
+	s, err := store.Get(ctx, q.Fleet, store.QueueSlotKey(q.Class, seq))
+	if err != nil {
+		return "", err
+	}
+	return s.Taken, nil
 }
 
 // Cancel requests cancellation of a job (queued: cancelled at once; claimed or running: cx).
 func (q *Queue) Cancel(ctx context.Context, id string) error {
-	return diag.NotImplemented("orchestrator.Queue.Cancel")
+	now := q.now()
+	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: id}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		if cur == nil {
+			return nil, store.ErrNotFound
+		}
+		next := *cur
+		switch cur.State {
+		case StateQueued:
+			next.State, next.Changed = StateCancelled, now
+		case StateClaimed, StateRunning:
+			if cur.Cancel {
+				return nil, store.ErrNoChange
+			}
+			next.Cancel = true
+		default:
+			return nil, store.ErrNoChange
+		}
+		return &next, nil
+	})
+	return err
 }
 
-// Reconciler is the job-reconciler controller (SPEC §05.6.1, §05.11).
-type Reconciler struct {
-	Fleet     *store.Bucket
-	Shards    int
-	LeaseTTL  time.Duration // fleet.lease_ttl
-	Skew      time.Duration // fleet.skew
-	ReslotAge time.Duration // fleet.reslot_after
-	Now       func() time.Time
-	Name      string // orchestrator id
-	// UseLease makes Pass run only while this orchestrator holds ctl/job-reconciler.
-	UseLease bool
-}
+// forged is the metric bob_fleet_forged_results_total of this process.
+var forged atomic.Int64
 
-// PassResult counts what one reconcile pass did.
-type PassResult struct {
-	Requeued  int
-	Reslotted int
-	Finalised int
-}
+// ForgedResults is the value of the metric bob_fleet_forged_results_total of this process.
+func ForgedResults() int64 { return forged.Load() }
 
-// Pass runs one reconcile pass: requeue jobs of dead or revoked owners, re-slot stale queued
-// jobs, finalise orphaned terminal jobs.
-func (r *Reconciler) Pass(ctx context.Context) (PassResult, error) {
-	return PassResult{}, diag.NotImplemented("orchestrator.Reconciler.Pass")
-}
+// errJobChanged is returned by Finalise when the record changed between its read and its
+// delete; the caller runs Finalise again.
+var errJobChanged = errors.New("job changed during finalise")
 
 // Finalise is the build controller's finalise step for one terminal job: copy the summary
 // into the build record, delete job/<id> (If-Match), remove it from jact. Result is returned
 // as accepted only when it was signed by the job's owner at the job's epoch.
 func (q *Queue) Finalise(ctx context.Context, id string) (accepted bool, err error) {
-	return false, diag.NotImplemented("orchestrator.Queue.Finalise")
+	rec, err := q.record(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if !Terminal(rec.State) {
+		return false, fmt.Errorf("orchestrator: job %s is %s, not terminal", id, rec.State)
+	}
+	if rec.State != StateCancelled && !q.signedByOwner(rec) {
+		return false, q.dropForged(ctx, rec)
+	}
+	spec, _ := fleet.DecodeSpec(rec.Spec)
+	if q.Control != nil && spec.BuildID != "" {
+		if err := q.summarise(ctx, spec.BuildID, rec); err != nil {
+			return false, err
+		}
+	}
+	_, err = store.CAS(ctx, q.Fleet, &store.JobRecord{ID: id}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		if cur == nil {
+			return nil, store.ErrNoChange
+		}
+		if cur.State != rec.State || cur.Epoch != rec.Epoch || cur.Owner != rec.Owner {
+			return nil, errJobChanged
+		}
+		return nil, nil
+	})
+	if err != nil {
+		return false, err
+	}
+	if err := q.active().Remove(ctx, id); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
-// ForgedResults is the value of the metric bob_fleet_forged_results_total of this process.
-func ForgedResults() int64 { return -1 }
-
-// Wake is the transport of a wake-up to one attached worker (Attach, SPEC §05.7).
-type Wake interface {
-	ID() string
-	FreeSlots() int
-	Wake(class string, slot uint64, job string)
+func (q *Queue) signedByOwner(rec *store.JobRecord) bool {
+	if q.WorkerKey == nil {
+		return false
+	}
+	return fleet.VerifyResult(q.WorkerKey(rec.Owner), rec.ID, rec.Epoch, rec.Result, rec.ResultSig)
 }
 
-// Dispatcher chooses whom to wake after an enqueue (R-FLEET-012).
-type Dispatcher struct {
-	Queue   *Queue
-	Workers []Wake
-	// SecondWakeAfter is the delay before a second worker is woken for a job that is still
-	// queued (2 s).
-	SecondWakeAfter time.Duration
-	Seed            uint64
+// dropForged counts a result that the owner did not sign and puts the job back to the state
+// the owner left it in, so that the owner's own result can still land (R-FLEET-002).
+func (q *Queue) dropForged(ctx context.Context, rec *store.JobRecord) error {
+	forged.Add(1)
+	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		if cur == nil || cur.ETag != rec.ETag {
+			return nil, store.ErrNoChange
+		}
+		next := *cur
+		next.State, next.Result, next.ResultSig = StateRunning, nil, nil
+		if cur.Changed.IsZero() {
+			next.State = StateClaimed
+		}
+		return &next, nil
+	})
+	return err
 }
 
-// Enqueue enqueues j and wakes one idle eligible worker: the Prefer worker first, else the one
-// with the most free slots, ties at random; after SecondWakeAfter it wakes a second one if the
-// job is still queued.
-func (d *Dispatcher) Enqueue(ctx context.Context, j Job) (slot uint64, woken []string, err error) {
-	return 0, nil, diag.NotImplemented("orchestrator.Dispatcher.Enqueue")
+// summarise copies the job's final row into build/<id>.jb (absent build: nothing to do).
+func (q *Queue) summarise(ctx context.Context, buildID string, rec *store.JobRecord) error {
+	_, err := store.CAS(ctx, q.Control, &store.BuildRecord{ID: buildID}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
+		if cur == nil {
+			return nil, store.ErrNoChange
+		}
+		next := *cur
+		row := store.BuildJob{ID: rec.ID, State: rec.State, Attempts: rec.Attempt, Epoch: rec.Epoch, Worker: rec.Owner}
+		if spec, ok := fleet.DecodeSpec(rec.Spec); ok {
+			row.Kind, row.Class = spec.Kind, spec.Class
+		}
+		if !rec.Claimed.IsZero() && !rec.Changed.IsZero() {
+			row.Duration = rec.Changed.Sub(rec.Claimed)
+		}
+		next.Jobs = append([]store.BuildJob(nil), cur.Jobs...)
+		for i := range next.Jobs {
+			if next.Jobs[i].ID == rec.ID {
+				if next.Jobs[i] == row {
+					return nil, store.ErrNoChange
+				}
+				next.Jobs[i] = row
+				return &next, nil
+			}
+		}
+		if len(next.Jobs) >= store.MaxBuildJobs {
+			return nil, fmt.Errorf("orchestrator: build %s has %d jobs, the limit is %d", buildID, len(next.Jobs), store.MaxBuildJobs)
+		}
+		next.Jobs = append(next.Jobs, row)
+		return &next, nil
+	})
+	return err
 }

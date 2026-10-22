@@ -4,10 +4,17 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"fmt"
+	"hash/fnv"
+	"log/slog"
+	"math/rand/v2"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/megakuul/bob/internal/fleet"
+	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
-	"github.com/megakuul/bob/pkg/bob/diag"
 )
 
 // Claim is a job a worker holds.
@@ -56,41 +63,728 @@ type Config struct {
 
 // Event is one thing the worker did with a job.
 type Event struct {
-	Kind  string // "claimed" | "started" | "finished" | "lease-lost" | "stale-spec" | "orphan-slot"
+	Kind  string // "claimed" | "started" | "finished" | "lease-lost" | "stale-spec" | "orphan-slot" | "cancelled"
 	JobID string
 	Epoch int64
 	Err   error // for "lease-lost": wraps ErrLeaseLost
 }
 
-// Worker is an in-process worker: the loop of SPEC §05.7 without the job container.
-type Worker struct{}
-
-// New validates cfg. It performs no I/O.
-func New(cfg Config) (*Worker, error) { return nil, diag.NotImplemented("worker.New") }
-
-// Run polls, claims, executes and heartbeats until ctx ends. It never lists.
-func (w *Worker) Run(ctx context.Context) error { return diag.NotImplemented("worker.Worker.Run") }
-
-// ID is the worker id.
-func (w *Worker) ID() string { return "" }
-
-// FreeSlots is the number of idle slots.
-func (w *Worker) FreeSlots() int { return 0 }
-
-// Wake delivers a wake-up (class, slot, job): the worker GETs exactly that slot and tries to
-// claim it. It never blocks.
-func (w *Worker) Wake(class string, slot uint64, job string) {}
-
-// Pause stops the worker's heartbeat and job watch without ending its process, like SIGSTOP
-// (chaos tests); Resume continues.
-func (w *Worker) Pause() {}
-
-// Resume undoes Pause.
-func (w *Worker) Resume() {}
-
-// Kill ends the worker like SIGKILL: no further S3 request, no cleanup, running jobs abandoned.
-func (w *Worker) Kill() {}
-
 // ErrLeaseLost is returned (wrapped) to a worker that writes after its job was requeued or
 // taken: "fleet: lease lost (job requeued or taken by another worker)".
 var ErrLeaseLost = errors.New("fleet: lease lost (job requeued or taken by another worker)")
+
+// Limits of the loop.
+const (
+	wakeBuffer = 256  // Wake never blocks; a full buffer drops the hint (a lost wake-up costs one poll)
+	maxPending = 64   // wake-ups kept while every slot is busy
+	maxWalk    = 1000 // slots one poll reads at most
+	seenWakes  = 4096 // remembered (class, slot) wake-ups, so duplicates cost nothing
+	spreadMin  = 8    // a backlog shorter than this is walked in order (no random pick)
+)
+
+type wake struct {
+	class string
+	slot  uint64
+	job   string
+}
+
+// Worker is an in-process worker: the loop of SPEC §05.7 without the job container.
+type Worker struct {
+	cfg     Config
+	classes []string // ids of the configured classes the profile satisfies
+
+	wakes chan wake
+	freed chan struct{}
+
+	mu       sync.Mutex
+	keys     []ed25519.PublicKey
+	paused   bool
+	resumed  chan struct{} // closed by Resume
+	running  map[string]*job
+	claiming int
+	killed   chan struct{}
+	killOnce sync.Once
+	cancel   context.CancelFunc
+	revoked  bool
+	jobs     sync.WaitGroup
+	backlog  atomic.Bool // the last finished job came from a poll: poll again at once
+
+	// Owned by the Run goroutine.
+	rng     *rand.Rand
+	cursor  map[string]uint64
+	pending []wake
+	seen    map[wake]bool
+}
+
+type job struct {
+	claim   Claim
+	class   string
+	viaPoll bool
+	seq     uint64 // the slot the job was claimed through
+	cancel  context.CancelFunc
+}
+
+// New validates cfg. It performs no I/O.
+func New(cfg Config) (*Worker, error) {
+	if cfg.Fleet == nil || cfg.Exec == nil {
+		return nil, errors.New("worker: config needs the fleet bucket and Exec")
+	}
+	if _, err := store.Segment(cfg.ID); err != nil {
+		return nil, fmt.Errorf("worker: id %q: %w", cfg.ID, err)
+	}
+	if len(cfg.SigKey) != ed25519.PrivateKeySize {
+		return nil, errors.New("worker: config needs the Ed25519 signing key")
+	}
+	if cfg.Slots <= 0 {
+		cfg.Slots = 1
+	}
+	def := func(d *time.Duration, v time.Duration) {
+		if *d <= 0 {
+			*d = v
+		}
+	}
+	def(&cfg.PollInterval, 30*time.Second)
+	def(&cfg.Heartbeat, 15*time.Second)
+	def(&cfg.ConfigRefresh, 30*time.Second)
+	def(&cfg.RecordRefresh, 60*time.Second)
+	def(&cfg.LeaseTTL, 60*time.Second)
+	def(&cfg.Skew, 5*time.Second)
+	def(&cfg.JobWatch, 30*time.Second)
+	if cfg.Now == nil {
+		cfg.Now = time.Now
+	}
+	w := &Worker{cfg: cfg, wakes: make(chan wake, wakeBuffer), freed: make(chan struct{}, 1),
+		keys: append([]ed25519.PublicKey(nil), cfg.Keys...), running: map[string]*job{}, killed: make(chan struct{}),
+		cursor: map[string]uint64{}, seen: map[wake]bool{}}
+	for _, c := range cfg.Classes {
+		ok, err := store.Satisfies(cfg.Profile, c)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue // never read the slots of a class this worker does not satisfy (R-FLEET-004)
+		}
+		id, err := store.ClassID(c)
+		if err != nil {
+			return nil, err
+		}
+		w.classes = append(w.classes, id)
+	}
+	h := fnv.New64a()
+	h.Write([]byte(cfg.ID))
+	w.rng = rand.New(rand.NewPCG(cfg.Seed, h.Sum64()))
+	return w, nil
+}
+
+// ID is the worker id.
+func (w *Worker) ID() string { return w.cfg.ID }
+
+// FreeSlots is the number of idle slots.
+func (w *Worker) FreeSlots() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.free()
+}
+
+func (w *Worker) free() int { return max(0, w.cfg.Slots-len(w.running)-w.claiming) }
+
+// Wake delivers a wake-up (class, slot, job): the worker GETs exactly that slot and tries to
+// claim it. It never blocks.
+func (w *Worker) Wake(class string, slot uint64, job string) {
+	select {
+	case w.wakes <- wake{class, slot, job}:
+	default:
+	}
+}
+
+// Pause stops the worker's heartbeat and job watch without ending its process, like SIGSTOP
+// (chaos tests); Resume continues.
+func (w *Worker) Pause() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.paused {
+		w.paused, w.resumed = true, make(chan struct{})
+	}
+}
+
+// Resume undoes Pause.
+func (w *Worker) Resume() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.paused {
+		w.paused = false
+		close(w.resumed)
+	}
+}
+
+// Kill ends the worker like SIGKILL: no further S3 request, no cleanup, running jobs abandoned.
+func (w *Worker) Kill() {
+	w.killOnce.Do(func() {
+		w.mu.Lock()
+		close(w.killed)
+		if w.cancel != nil {
+			w.cancel()
+		}
+		w.mu.Unlock()
+	})
+}
+
+// waitResumed blocks while the worker is paused. It reports false when the worker ends.
+func (w *Worker) waitResumed(ctx context.Context) bool {
+	for {
+		w.mu.Lock()
+		paused, ch := w.paused, w.resumed
+		w.mu.Unlock()
+		if !paused {
+			return ctx.Err() == nil
+		}
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return false
+		}
+	}
+}
+
+func (w *Worker) emit(e Event) {
+	if w.cfg.Events != nil {
+		w.cfg.Events(e)
+	}
+}
+
+func (w *Worker) now() time.Time { return w.cfg.Now().UTC() }
+
+// jitter is d ± 20 %.
+func (w *Worker) jitter(d time.Duration) time.Duration {
+	return time.Duration(float64(d) * (0.8 + 0.4*w.rng.Float64()))
+}
+
+// Run polls, claims, executes and heartbeats until ctx ends. It never lists. It returns nil
+// when ctx ends or the worker is killed, and ErrRevoked when its record says revoked.
+func (w *Worker) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	w.mu.Lock()
+	select {
+	case <-w.killed:
+		w.mu.Unlock()
+		return nil
+	default:
+	}
+	w.cancel = cancel
+	w.mu.Unlock()
+
+	bg := []<-chan error{safe.Go(func() error { return w.heartbeats(ctx) }), safe.Go(func() error { return w.refresh(ctx) })}
+	defer func() {
+		cancel()
+		w.jobs.Wait()
+		for _, c := range bg {
+			if err := <-c; err != nil {
+				slog.Error("worker: background loop failed", "worker", w.cfg.ID, "err", err)
+			}
+		}
+	}()
+
+	for _, c := range w.classes {
+		head, err := store.Queue(w.cfg.Fleet, c).Head(ctx)
+		if err != nil && ctx.Err() == nil {
+			slog.Warn("worker: queue head unreadable, starting at slot 1", "class", c, "err", err)
+		}
+		w.cursor[c] = max(head, 1)
+	}
+	// The first poll comes after one interval, like every other: a worker that starts into a
+	// backlog is woken for new jobs and picks up old ones on its schedule.
+	timer := time.NewTimer(w.jitter(w.cfg.PollInterval))
+	defer timer.Stop()
+	for {
+		if !w.waitResumed(ctx) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case wk := <-w.wakes:
+			w.onWake(ctx, wk)
+		case <-w.freed:
+			w.drainPending(ctx)
+			if w.backlog.Swap(false) {
+				w.pollAll(ctx)
+			}
+		case <-timer.C:
+			w.pollAll(ctx)
+			timer.Reset(w.jitter(w.cfg.PollInterval))
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	w.mu.Lock()
+	revoked := w.revoked
+	w.mu.Unlock()
+	if revoked {
+		return fmt.Errorf("worker %s: %w", w.cfg.ID, ErrRevoked)
+	}
+	return nil
+}
+
+func (w *Worker) eligible(class string) bool {
+	for _, c := range w.classes {
+		if c == class {
+			return true
+		}
+	}
+	return false
+}
+
+// onWake handles one wake-up: exactly that slot, nothing else (no herd).
+func (w *Worker) onWake(ctx context.Context, wk wake) {
+	if !w.eligible(wk.class) || wk.slot == 0 || w.seen[wk] {
+		return
+	}
+	if w.FreeSlots() == 0 {
+		for _, p := range w.pending {
+			if p == wk {
+				return
+			}
+		}
+		if len(w.pending) < maxPending {
+			w.pending = append(w.pending, wk)
+		}
+		return
+	}
+	if len(w.seen) >= seenWakes {
+		clear(w.seen)
+	}
+	w.seen[wk] = true
+	w.claim(ctx, wk.class, wk.slot, wk.job, false)
+}
+
+func (w *Worker) drainPending(ctx context.Context) {
+	for len(w.pending) > 0 && w.FreeSlots() > 0 && ctx.Err() == nil {
+		wk := w.pending[0]
+		w.pending = w.pending[1:]
+		w.onWake(ctx, wk)
+	}
+}
+
+func (w *Worker) pollAll(ctx context.Context) {
+	for _, c := range w.classes {
+		if w.FreeSlots() == 0 || ctx.Err() != nil {
+			return
+		}
+		if err := w.poll(ctx, c); err != nil && ctx.Err() == nil {
+			slog.Warn("worker: poll failed", "worker", w.cfg.ID, "class", c, "err", err)
+		}
+	}
+}
+
+// poll is one idle poll of a class queue: GET the slot at the cursor (404: nothing new, 1
+// request). With a backlog it first tries a random slot in [cursor, tail) so that pollers do
+// not all contend for one slot, then walks from the cursor, claiming open slots of queued
+// jobs, and raises the shared head hint over the slots it found closed.
+func (w *Worker) poll(ctx context.Context, class string) error {
+	q := store.Queue(w.cfg.Fleet, class)
+	c := w.cursor[class]
+	slot, err := q.Read(ctx, c)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if slot.Taken != "" {
+		// Wake-fed workers fall behind; the head hint skips what others found closed.
+		if h, err := q.Head(ctx); err == nil && h > c+1 {
+			c, slot = h, nil
+		}
+	}
+	// Backlog: try one random slot in (cursor, tail) before the cursor (spread, no herd).
+	if tail, err := q.Tail(ctx); err == nil && tail > c+spreadMin {
+		r := c + 1 + w.rng.Uint64N(tail-c-1)
+		if s, err := q.Read(ctx, r); err == nil && s.Taken == "" {
+			w.claim(ctx, class, r, s.Job, true)
+		}
+	}
+	start := c
+	for steps := 0; steps < maxWalk && w.FreeSlots() > 0 && ctx.Err() == nil; steps++ {
+		if slot == nil {
+			slot, err = q.Read(ctx, c)
+			if errors.Is(err, store.ErrNotFound) {
+				break
+			}
+			if err != nil {
+				w.cursor[class] = c
+				return err
+			}
+		}
+		if slot.Taken == "" {
+			w.claim(ctx, class, c, slot.Job, true)
+		}
+		c++
+		slot = nil
+	}
+	w.cursor[class] = c
+	if c > start {
+		return q.AdvanceHead(ctx, c)
+	}
+	return nil
+}
+
+// claim tries to take job jobID through slot seq of class (SPEC §05.6.1): CAS the job record
+// (queued → claimed, epoch+1, attempt+1), then mark the slot taken. A missing job marks the
+// slot orphan, a job that is not queued marks it stale, a spec without a valid orchestrator
+// signature is never run and marks it stale.
+func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID string, viaPoll bool) {
+	if jobID == "" || ctx.Err() != nil {
+		return
+	}
+	w.mu.Lock()
+	if w.free() == 0 {
+		w.mu.Unlock()
+		return
+	}
+	w.claiming++
+	keys := w.keys
+	w.mu.Unlock()
+	release := func() { w.mu.Lock(); w.claiming--; w.mu.Unlock() }
+
+	now := w.now()
+	verdict := ""
+	rec, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: jobID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		switch {
+		case cur == nil:
+			verdict = "orphan"
+			return nil, store.ErrNoChange
+		case cur.State != "queued":
+			verdict = "stale"
+			return nil, store.ErrNoChange
+		case !fleet.VerifySpec(keys, cur.Spec, cur.SpecSig):
+			verdict = "bad-spec"
+			return nil, store.ErrNoChange
+		}
+		if spec, ok := fleet.DecodeSpec(cur.Spec); ok && spec.Class != "" && spec.Class != class {
+			verdict = "stale" // a slot in the wrong queue never makes a worker run a job of another class
+			return nil, store.ErrNoChange
+		}
+		next := *cur
+		next.State, next.Owner, next.Epoch, next.Attempt, next.Claimed = "claimed", w.cfg.ID, cur.Epoch+1, cur.Attempt+1, now
+		verdict = "claimed"
+		return &next, nil
+	})
+	if err != nil {
+		release()
+		if ctx.Err() == nil {
+			slog.Debug("worker: claim lost", "job", jobID, "err", err)
+		}
+		return
+	}
+	switch verdict {
+	case "claimed":
+		j := &job{claim: Claim{JobID: jobID, Epoch: rec.Epoch, Attempt: rec.Attempt, Spec: rec.Spec}, class: class, viaPoll: viaPoll}
+		w.mu.Lock()
+		w.claiming--
+		w.running[jobID] = j
+		w.mu.Unlock()
+		w.emit(Event{Kind: "claimed", JobID: jobID, Epoch: rec.Epoch})
+		j.seq = seq
+		w.start(ctx, j)
+		return
+	case "orphan":
+		w.emit(Event{Kind: "orphan-slot", JobID: jobID})
+		w.mark(ctx, class, seq, jobID, "orphan")
+	case "bad-spec":
+		slog.Warn("worker: job spec signature invalid, not run", "job", jobID, "worker", w.cfg.ID)
+		w.emit(Event{Kind: "stale-spec", JobID: jobID})
+		w.mark(ctx, class, seq, jobID, "stale")
+	case "stale":
+		w.mark(ctx, class, seq, jobID, "stale")
+	}
+	release()
+}
+
+// mark sets the slot's taken-by field. The claimer's id may replace "stale" (another worker
+// saw the job already claimed before the claimer wrote the slot); stale and orphan are only
+// written on an open slot.
+func (w *Worker) mark(ctx context.Context, class string, seq uint64, jobID, tk string) {
+	_, err := store.CAS(ctx, w.cfg.Fleet, store.QueueSlotKey(class, seq), func(cur *store.QueueSlot) (*store.QueueSlot, error) {
+		if cur == nil || cur.Job != jobID || cur.Taken == tk {
+			return nil, store.ErrNoChange
+		}
+		if cur.Taken != "" && !(cur.Taken == "stale" && tk == w.cfg.ID) {
+			return nil, store.ErrNoChange
+		}
+		next := *cur
+		next.Taken = tk
+		return &next, nil
+	})
+	if err != nil && ctx.Err() == nil {
+		slog.Debug("worker: slot mark failed", "class", class, "slot", seq, "err", err)
+	}
+}
+
+// start runs the job in its own goroutine.
+func (w *Worker) start(ctx context.Context, j *job) {
+	jctx, cancel := context.WithCancel(ctx)
+	j.cancel = cancel
+	w.jobs.Add(1)
+	safe.Go(func() error {
+		defer w.jobs.Done()
+		defer cancel()
+		w.runJob(ctx, jctx, j)
+		w.mu.Lock()
+		delete(w.running, j.claim.JobID)
+		w.mu.Unlock()
+		select {
+		case w.freed <- struct{}{}:
+		default:
+		}
+		return nil
+	})
+}
+
+// update is a CAS on the held job that only applies while this worker owns it at its epoch.
+// It reports false (lease lost) when the guard fails.
+func (w *Worker) update(ctx context.Context, j *job, fn func(cur, next *store.JobRecord) bool) (bool, error) {
+	held := false
+	_, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: j.claim.JobID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		held = false
+		if cur == nil || cur.Owner != w.cfg.ID || cur.Epoch != j.claim.Epoch {
+			return nil, store.ErrNoChange
+		}
+		next := *cur
+		if !fn(cur, &next) {
+			return nil, store.ErrNoChange
+		}
+		held = true
+		return &next, nil
+	})
+	return held, err
+}
+
+func (w *Worker) runJob(ctx, jctx context.Context, j *job) {
+	id, ep := j.claim.JobID, j.claim.Epoch
+	lost := func() { w.emit(Event{Kind: "lease-lost", JobID: id, Epoch: ep, Err: ErrLeaseLost}) }
+	pub := w.cfg.SigKey.Public().(ed25519.PublicKey)
+	ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
+		switch cur.State {
+		case "claimed":
+		case "succeeded", "failed":
+			// A result in this worker's name that it did not sign is forged (ADR 0013 T10).
+			if fleet.VerifyResult(pub, id, ep, cur.Result, cur.ResultSig) {
+				return false
+			}
+			next.Result, next.ResultSig = nil, nil
+		default:
+			return false
+		}
+		next.State, next.Changed = "running", w.now()
+		return true
+	})
+	if err != nil || !ok {
+		if ctx.Err() == nil {
+			lost()
+		}
+		return
+	}
+	w.emit(Event{Kind: "started", JobID: id, Epoch: ep})
+
+	var out Outcome
+	done := safe.Go(func() error { out = w.cfg.Exec(jctx, j.claim); return nil })
+	// The slot is marked after the run started: it is only a hint for pollers (the job
+	// record already says claimed), so pickup latency does not pay for it.
+	w.mark(ctx, j.class, j.seq, id, w.cfg.ID)
+	var leaseLost, cancelled bool
+	tick := time.NewTicker(w.cfg.JobWatch)
+	defer tick.Stop()
+watch:
+	for {
+		select {
+		case err := <-done:
+			if err != nil {
+				out = Outcome{Status: "infra", Error: "job run crashed"}
+			}
+			break watch
+		case <-tick.C:
+			if leaseLost || cancelled || !w.active() {
+				continue
+			}
+			rec, err := store.Get(ctx, w.cfg.Fleet, &store.JobRecord{ID: id})
+			switch {
+			case errors.Is(err, store.ErrNotFound):
+				leaseLost = true
+			case err != nil:
+				continue
+			case rec.Owner != w.cfg.ID || rec.Epoch != ep:
+				leaseLost = true
+			case rec.Cancel || rec.State == "cancelled":
+				cancelled = true
+			default:
+				continue
+			}
+			j.cancel()
+		}
+	}
+	if !w.waitResumed(ctx) {
+		return // killed or shut down: no cleanup (the lease expires)
+	}
+	switch {
+	case leaseLost:
+		lost()
+	case cancelled:
+		if ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
+			if cur.State != "claimed" && cur.State != "running" {
+				return false
+			}
+			next.State, next.Changed = "cancelled", w.now()
+			return true
+		}); err == nil && ok {
+			w.emit(Event{Kind: "cancelled", JobID: id, Epoch: ep})
+		} else if ctx.Err() == nil {
+			lost()
+		}
+	default:
+		w.finish(ctx, j, out, lost)
+	}
+}
+
+// finish writes the signed result while the lease holds (SPEC §05.6.1 "result").
+func (w *Worker) finish(ctx context.Context, j *job, out Outcome, lost func()) {
+	id, ep := j.claim.JobID, j.claim.Epoch
+	status, state := out.Status, "failed"
+	switch status {
+	case "ok":
+		state = "succeeded"
+	case "failed", "infra":
+	default:
+		status = "infra"
+	}
+	errText := out.Error
+	if len(errText) > 8<<10 {
+		errText = errText[:8<<10]
+	}
+	now := w.now()
+	rs, err := fleet.Encode(store.JobResult{V: 1, Status: status, Error: errText, Finished: now.Unix()})
+	if err != nil {
+		slog.Error("worker: encode result", "job", id, "err", err)
+		return
+	}
+	pub := w.cfg.SigKey.Public().(ed25519.PublicKey)
+	ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
+		switch cur.State {
+		case "claimed", "running":
+		case "succeeded", "failed":
+			// A result this worker did not sign was forged by another fleet writer
+			// (ADR 0013 T10); the owner's own result replaces it.
+			if fleet.VerifyResult(pub, id, ep, cur.Result, cur.ResultSig) {
+				return false
+			}
+		default:
+			return false
+		}
+		next.State, next.Result, next.ResultSig, next.Changed = state, rs, fleet.SignResult(w.cfg.SigKey, id, ep, rs), now
+		return true
+	})
+	switch {
+	case err == nil && ok:
+		w.emit(Event{Kind: "finished", JobID: id, Epoch: ep})
+		if j.viaPoll {
+			w.backlog.Store(true)
+		}
+	case ctx.Err() == nil:
+		lost()
+	}
+}
+
+// active reports that the worker is neither paused nor killed.
+func (w *Worker) active() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	select {
+	case <-w.killed:
+		return false
+	default:
+	}
+	return !w.paused
+}
+
+// heartbeats writes whb/<wid> every Heartbeat (the first one after one interval).
+func (w *Worker) heartbeats(ctx context.Context) error {
+	t := time.NewTicker(w.cfg.Heartbeat)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+		w.mu.Lock()
+		if w.paused {
+			w.mu.Unlock()
+			continue
+		}
+		// The time is read under the lock: after Pause returns no heartbeat carries a later time.
+		at := w.now()
+		free := w.free()
+		held := make([]store.HeldJobEpoch, 0, len(w.running))
+		for _, j := range w.running {
+			held = append(held, store.HeldJobEpoch{Job: j.claim.JobID, Epoch: j.claim.Epoch})
+		}
+		w.mu.Unlock()
+		if err := heartbeat(ctx, w.cfg.Fleet, w.cfg.ID, w.cfg.SigKey, free, held, at); err != nil && ctx.Err() == nil {
+			slog.Warn("worker: heartbeat failed", "worker", w.cfg.ID, "err", err)
+		}
+	}
+}
+
+// refresh re-reads fleet/cfg (orchestrator keys) every ConfigRefresh and worker/<wid> every
+// RecordRefresh (revocation), both with GetCached (1 request when unchanged).
+func (w *Worker) refresh(ctx context.Context) error {
+	var cfgCache store.Cache[store.FleetConfig]
+	var recCache store.Cache[store.WorkerRecord]
+	readCfg := func() {
+		fc, changed, err := store.GetCached(ctx, w.cfg.Fleet, &cfgCache, store.FleetConfigKey())
+		if err != nil || !changed {
+			return
+		}
+		keys := append([]ed25519.PublicKey(nil), w.cfg.Keys...)
+		for _, k := range fc.Keys {
+			if len(k.Pub) == ed25519.PublicKeySize {
+				keys = append(keys, ed25519.PublicKey(k.Pub))
+			}
+		}
+		w.mu.Lock()
+		w.keys = keys
+		w.mu.Unlock()
+	}
+	readRec := func() {
+		rec, _, err := store.GetCached(ctx, w.cfg.Fleet, &recCache, &store.WorkerRecord{Wid: w.cfg.ID})
+		if err != nil || rec.State != "revoked" {
+			return
+		}
+		slog.Error("worker: revoked, exiting", "worker", w.cfg.ID)
+		w.mu.Lock()
+		w.revoked = true
+		if w.cancel != nil {
+			w.cancel()
+		}
+		w.mu.Unlock()
+	}
+	readCfg()
+	readRec()
+	ct, rt := time.NewTicker(w.cfg.ConfigRefresh), time.NewTicker(w.cfg.RecordRefresh)
+	defer ct.Stop()
+	defer rt.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ct.C:
+			if w.active() {
+				readCfg()
+			}
+		case <-rt.C:
+			if w.active() {
+				readRec()
+			}
+		}
+	}
+}

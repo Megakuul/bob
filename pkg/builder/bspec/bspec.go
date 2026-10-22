@@ -75,6 +75,17 @@ type ExecArgs struct {
 	Env  map[string]string `json:"env,omitempty"`
 	Cwd  string            `json:"cwd,omitempty"`
 	Path []string          `json:"path,omitempty"`
+	// TimeoutS stops the program after that many seconds (0 = no limit of its own); the step
+	// then fails with the diagnostic "<label> timed out after <n>s".
+	TimeoutS int64 `json:"timeoutSeconds,omitempty"`
+}
+
+// CheckFilesArgs requires every path of Paths (relative, below Root) to exist: bob.Run's
+// declared outputs. A missing one fails the job (exit 4) with the diagnostic
+// "<label>: step finished but did not create <path>".
+type CheckFilesArgs struct {
+	Root  string   `json:"root"`
+	Paths []string `json:"paths"`
 }
 
 // UnpackArgs is the Args schema of kind "unpack": unpack Archive into To, dropping Strip

@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/megakuul/bob/pkg/builder/bspec"
 )
@@ -117,10 +119,25 @@ func (c *Ctx) parseStep(s bspec.Step) (op, error) {
 			}
 		}
 		o.what, o.do = a.Argv[0], func() error { return c.Exec(a) }
+		if a.TimeoutS < 0 {
+			return o, Invalidf("exec timeout %d is negative", a.TimeoutS)
+		}
 		if a.Cwd != "" {
 			return o, lexical(a.Cwd)
 		}
 		return o, nil
+	case "check-files":
+		var a bspec.CheckFilesArgs
+		if err := decodeStrict(args, &a); err != nil {
+			return o, Invalidf("%v", err)
+		}
+		for _, rel := range a.Paths {
+			if c := filepath.Clean(rel); rel == "" || filepath.IsAbs(rel) || c == ".." || strings.HasPrefix(c, "../") || strings.ContainsRune(rel, 0) {
+				return o, Invalidf("checked path %q is not a relative path inside the root", rel)
+			}
+		}
+		o.what, o.do = a.Root, func() error { return c.checkFiles(a) }
+		return o, lexical(a.Root)
 	case "check-outputs":
 		var a struct{}
 		if err := decodeStrict(args, &a); err != nil {
@@ -186,7 +203,21 @@ func (c *Ctx) Exec(a bspec.ExecArgs) error {
 	env := c.baseEnv(a.Path, tmp)
 	maps.Copy(env, a.Env)
 	cmd := &exec.Cmd{Path: prog, Args: a.Argv, Env: envList(env), Dir: dir, Stdout: c.stdout, Stderr: c.stderr}
+	var timedOut atomic.Bool
+	if a.TimeoutS > 0 {
+		t := time.AfterFunc(time.Duration(a.TimeoutS)*time.Second, func() {
+			timedOut.Store(true)
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		})
+		defer t.Stop()
+	}
 	if err := cmd.Run(); err != nil {
+		if timedOut.Load() {
+			c.Diag("error", "", 0, 0, fmt.Sprintf("%s timed out after %ds", c.Job.Label, a.TimeoutS))
+			return fmt.Errorf("timed out after %ds", a.TimeoutS)
+		}
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			return fmt.Errorf("%s", ee.ProcessState.String())
@@ -218,4 +249,16 @@ func copyTreeKind(c *Ctx, raw json.RawMessage) error {
 	}
 	c.Phase("copy-tree")
 	return c.copyAny(a.From, a.To)
+}
+
+// checkFiles is op check-files: bob.Run's declared outputs must exist after the command.
+func (c *Ctx) checkFiles(a bspec.CheckFilesArgs) error {
+	for _, rel := range a.Paths {
+		if _, err := os.Lstat(filepath.Join(a.Root, rel)); err != nil {
+			msg := fmt.Sprintf("%s: step finished but did not create %s", c.Job.Label, rel)
+			c.Diag("error", "", 0, 0, msg)
+			return &exitError{code: ExitOutput, msg: msg}
+		}
+	}
+	return nil
 }

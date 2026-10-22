@@ -32,7 +32,7 @@ type mountAttr struct {
 // bindSource prepares the source of one bind for stage1; detached trees are appended to files
 // (inherited from fd 3 on, in order).
 func bindSource(host, target string, rw bool, files *[]*os.File) (stageBind, error) {
-	if os.Getuid() != 0 {
+	if !hostRoot() {
 		if _, err := os.Stat(host); err != nil {
 			return stageBind{}, fmt.Errorf("evaluation sandbox: %w", err)
 		}

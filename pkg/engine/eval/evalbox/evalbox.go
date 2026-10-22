@@ -186,7 +186,7 @@ type run struct {
 
 func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 	uid, gid := os.Getuid(), os.Getgid()
-	if uid == 0 {
+	if hostRoot() {
 		// Never run the sandbox as host root: an escape lands as nobody, and RLIMIT_NPROC does
 		// not apply to root.
 		uid, gid = 65534, 65534
@@ -217,7 +217,7 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 		if b.Sandbox == "/work" || strings.HasPrefix(b.Sandbox, "/work/") {
 			return fail(fmt.Errorf("evaluation sandbox: bind target %s is below /work", b.Sandbox))
 		}
-		if b.Writable && os.Getuid() == 0 {
+		if b.Writable && hostRoot() {
 			if err := os.Chown(b.Host, uid, gid); err != nil {
 				return fail(err)
 			}
@@ -237,7 +237,7 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 		rules = append(rules, landlockRule{b.Sandbox, acc})
 	}
 	if s.Seed != "" {
-		if s.SeedRW && os.Getuid() == 0 {
+		if s.SeedRW && hostRoot() {
 			if err := os.Chown(s.Seed, uid, gid); err != nil {
 				return fail(err)
 			}
@@ -252,7 +252,7 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 				if err := os.MkdirAll(s.CacheDir+"/"+d, 0o755); err != nil {
 					return fail(err)
 				}
-				if os.Getuid() == 0 {
+				if hostRoot() {
 					if err := os.Chown(s.CacheDir+"/"+d, uid, gid); err != nil {
 						return fail(err)
 					}
@@ -515,4 +515,20 @@ func (t *tailBuffer) bytes() []byte {
 		return append([]byte(nil), t.buf[len(t.buf)-t.max:]...)
 	}
 	return append([]byte(nil), t.buf...)
+}
+
+// hostRoot reports whether bob runs as root of the initial user namespace. Root inside bob's
+// own namespace (a bob command after store.Enter) has a single mapped uid: it cannot hand
+// files to nobody (65534 is unmapped there, chown fails with EINVAL), so it takes the
+// unprivileged path; its uid 0 is the invoking user's.
+func hostRoot() bool {
+	if os.Getuid() != 0 {
+		return false
+	}
+	b, err := os.ReadFile("/proc/self/uid_map")
+	if err != nil {
+		return false
+	}
+	f := strings.Fields(string(b))
+	return len(f) == 3 && f[0] == "0" && f[1] == "0" && f[2] == "4294967295"
 }

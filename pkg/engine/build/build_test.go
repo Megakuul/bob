@@ -20,18 +20,23 @@ import (
 
 // demo is a test ecosystem (kind demo.thing): one "run" job per node that writes
 // "<label> built" plus its dependencies' results into $out/result.txt.
-// seen keeps the demo derivations so later waves can finalise against them (an ecosystem
-// knows its own derivations; the engine passes only their paths).
-type demo struct {
-	seen modMap
-	home *string // the test's store home: nixpkgs drvs are parsed from it (see NEEDS: PlanRequest.Resolver)
+// seen keeps the demo derivations planned in the same Plan call (the engine's resolver knows
+// only those of earlier waves).
+type demo struct{ seen modMap }
+
+func init() { engine.Register(demo{seen: modMap{}}) }
+
+// chain resolves the demo's own drvs first, everything else through the engine.
+type chain struct {
+	own  modMap
+	rest drv.Resolver
 }
 
-func init() { engine.Register(demo{seen: modMap{}, home: new(string)}) }
-
-// resolver resolves the demo's own drvs and nixpkgs drvs of the store.
-func (e demo) resolver() drv.Resolver {
-	return &resolver{home: *e.home, bob: e.seen, memo: map[string][32]byte{}, learned: map[string]string{}}
+func (c chain) Modulo(p string) ([32]byte, error) {
+	if d, ok := c.own[p]; ok {
+		return d.Modulo(c)
+	}
+	return c.rest.Modulo(p)
 }
 
 func (demo) Name() string { return "demo" }
@@ -51,7 +56,7 @@ func (e demo) Plan(_ context.Context, req engine.PlanRequest) (engine.PlanResult
 			}
 			continue
 		}
-		out := placeholder("out")
+		out := drv.Placeholder("out")
 		steps := []any{step("write", map[string]any{"path": out + "/result.txt", "content": n.Label + " built\n"}),
 			step("write", map[string]any{"path": out + "/spec.json", "content": string(n.Spec)})}
 		job := drv.Job{Name: drv.Name("demo", n.Label), System: store.HostSystem(), Builder: req.Builder,
@@ -71,7 +76,7 @@ func (e demo) Plan(_ context.Context, req engine.PlanRequest) (engine.PlanResult
 		if err != nil {
 			return res, err
 		}
-		if err := d.Finalize(e.resolver()); err != nil {
+		if err := d.Finalize(chain{e.seen, req.Resolver}); err != nil {
 			return res, err
 		}
 		p, err := d.Path()
@@ -104,7 +109,7 @@ func (e demo) planTest(req engine.PlanRequest, n *ir.Node, res *engine.PlanResul
 	if err != nil {
 		return err
 	}
-	if err := d.Finalize(e.resolver()); err != nil {
+	if err := d.Finalize(chain{e.seen, req.Resolver}); err != nil {
 		return err
 	}
 	p, err := d.Path()
@@ -325,6 +330,8 @@ func TestRunStepsWithNixpkgsTools(t *testing.T) {
 package s
 
 import (
+	"time"
+
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/nixpkgs"
 )
@@ -343,6 +350,20 @@ var Second = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "second", bob.RunOpts{
 		Tools: tools(p), Inputs: map[string]bob.Tree{"prev": First(p).File("copy.txt")},
 		Cmd:   []string{"bash", "-c", "tr a-z A-Z < \"$BOB_IN_PREV\" > \"$BOB_OUT/upper.txt\""},
+	})
+})
+
+var Missing = bob.Define(func(p *bob.P) *bob.Step {
+	return bob.Run(p, "missing", bob.RunOpts{
+		Tools: tools(p), Env: map[string]string{"SALT": "` + salt + `"},
+		Cmd:   []string{"bash", "-c", "echo hi > \"$BOB_OUT/other.txt\""}, Outputs: []string{"promised.txt"},
+	})
+})
+
+var Slow = bob.Define(func(p *bob.P) *bob.Step {
+	return bob.Run(p, "slow", bob.RunOpts{
+		Tools: tools(p), Env: map[string]string{"SALT": "` + salt + `"},
+		Cmd:   []string{"sleep", "60"}, Timeout: time.Second,
 	})
 })
 
@@ -388,6 +409,15 @@ var Fails = bob.Define(func(p *bob.P) *bob.Step {
 	t.Logf("failing step:\n%s", describe(res))
 	if res.ExitCode != 1 || len(res.Report.Errors) == 0 || res.Report.Errors[0].Label != "//s:fails" {
 		t.Errorf("failing step: exit %d, errors:\n%s", res.ExitCode, describe(res))
+	}
+	res, _ = runBuild(t, Options{Root: dir, Patterns: []string{"//s:missing"}, Store: st})
+	if res.ExitCode != 1 || len(res.Report.Errors) == 0 || res.Report.Errors[0].Cause != "//s:missing: step finished but did not create promised.txt" {
+		t.Errorf("missing declared output: exit %d, errors:\n%s", res.ExitCode, describe(res))
+	}
+	start := time.Now()
+	res, _ = runBuild(t, Options{Root: dir, Patterns: []string{"//s:slow"}, Store: st})
+	if res.ExitCode != 1 || len(res.Report.Errors) == 0 || res.Report.Errors[0].Code != 2007 || time.Since(start) > 40*time.Second {
+		t.Errorf("step timeout: exit %d after %s, errors:\n%s", res.ExitCode, time.Since(start), describe(res))
 	}
 }
 
@@ -442,9 +472,6 @@ func TestRunTests(t *testing.T) {
 		t.Skip("set BOB_TEST_NIXPKGS=1 (downloads nixpkgs)")
 	}
 	st := testStore(t)
-	if d, ok := engine.Lookup("demo"); ok {
-		*d.(demo).home = st.Home()
-	}
 	salt := fmt.Sprint(time.Now().UnixNano())
 	dir := writeRepo(t, map[string]string{
 		"go.mod":   "module example.com/tt\n\ngo 1.26.0\n",

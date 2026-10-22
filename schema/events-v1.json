@@ -27,7 +27,21 @@
         "remote.submitted",
         "remote.state",
         "result",
-        "run.finish"
+        "run.finish",
+        "namespace",
+        "scan",
+        "eval",
+        "ir",
+        "lock",
+        "index",
+        "sources",
+        "plan",
+        "fetch",
+        "drv",
+        "nix",
+        "validity",
+        "translate",
+        "drv.imported"
       ]
     },
     "time": {
@@ -228,6 +242,50 @@
       },
       "then": {
         "$ref": "#/$defs/ev.run.finish"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "enum": [
+              "namespace",
+              "scan",
+              "eval",
+              "ir",
+              "lock",
+              "index",
+              "sources",
+              "plan",
+              "fetch",
+              "drv",
+              "nix",
+              "validity",
+              "translate"
+            ]
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.stage"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "drv.imported"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.drv.imported"
       }
     }
   ],
@@ -1190,6 +1248,73 @@
         "cancelled",
         "upstream",
         "downloaded"
+      ]
+    },
+    "ev.stage": {
+      "description": "One stage of a build (R-FW-049) with its duration; eval also says whether the evaluator was reused.",
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "enum": [
+            "namespace",
+            "scan",
+            "eval",
+            "ir",
+            "lock",
+            "index",
+            "sources",
+            "plan",
+            "fetch",
+            "drv",
+            "nix",
+            "validity",
+            "translate"
+          ]
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cached": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "durationMs"
+      ]
+    },
+    "ev.drv.imported": {
+      "description": "How many derivations the drv stage imported into the store (R-NIX-007).",
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "drv.imported"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "count"
       ]
     }
   }

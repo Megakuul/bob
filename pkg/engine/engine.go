@@ -46,6 +46,12 @@ type PlanRequest struct {
 	Sources map[string]string   // node id → imported source store path (R-NIX-009)
 	Nixpkgs *nixidx.Index
 	Builder string // bob-builder store path for the host system
+	// Resolver returns hashDerivationModulo of any derivation in Inputs (bob's own, nixpkgs'),
+	// so Plan can Finalize derivations that depend on them.
+	Resolver drv.Resolver
+	// TestArgs are the arguments after `--` of bob test; they become part of every test unit
+	// planned here (so its result is cached per argument set).
+	TestArgs []string
 }
 
 // PlanResult is what Plan returns.

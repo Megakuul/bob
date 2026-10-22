@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/drv"
@@ -54,23 +56,22 @@ func Path(name string, t Tree) (string, error) {
 // order of sources.
 func Import(ctx context.Context, st *store.Store, sources []Source) ([]string, error) {
 	// One pass serialises and hashes each tree; the NARs of small trees are kept for the import
-	// (up to keepBudget bytes in all), larger ones are serialised again only if missing.
+	// (up to keepBudget bytes in all), larger ones are streamed into the store again if missing,
+	// so memory stays bounded whatever the tree size (F5).
 	paths := make([]string, len(sources))
+	sums := make([][32]byte, len(sources))
 	nars := make([][]byte, len(sources))
 	var kept atomic.Int64
 	if err := parallel(ctx, len(sources), func(i int) error {
-		b, err := serialise(sources[i])
+		sum, b, err := serialise(sources[i], &kept)
 		if err != nil {
 			return err
 		}
-		p, err := drv.MakeStorePath("source", sha256.Sum256(b), sources[i].Name)
+		p, err := drv.MakeStorePath("source", sum, sources[i].Name)
 		if err != nil {
 			return fmt.Errorf("srcs: %s: %w", sources[i].Name, err)
 		}
-		paths[i] = p
-		if kept.Add(int64(len(b))) <= keepBudget {
-			nars[i] = b
-		}
+		paths[i], sums[i], nars[i] = p, sum, b
 		return nil
 	}); err != nil {
 		return nil, err
@@ -92,26 +93,17 @@ func Import(ctx context.Context, st *store.Store, sources []Source) ([]string, e
 		return paths, nil
 	}
 	items := make([]store.ExportItem, len(invalid))
-	if err := parallel(ctx, len(invalid), func(k int) error {
-		i, ok := first[invalid[k]]
+	for k, p := range invalid {
+		i, ok := first[p]
 		if !ok {
-			return fmt.Errorf("srcs: the store reported an unknown path %s", invalid[k])
+			return nil, fmt.Errorf("srcs: the store reported an unknown path %s", p)
 		}
-		b := nars[i]
-		if b == nil {
-			var err error
-			if b, err = serialise(sources[i]); err != nil {
-				return err
-			}
-			// The tree may have changed since it was hashed.
-			if p, err := drv.MakeStorePath("source", sha256.Sum256(b), sources[i].Name); err != nil || p != invalid[k] {
-				return fmt.Errorf("srcs: %s changed while it was imported", sources[i].Name)
-			}
+		if nars[i] != nil {
+			items[k] = store.ExportItem{Path: p, NAR: nars[i]}
+			continue
 		}
-		items[k] = store.ExportItem{Path: invalid[k], NAR: b}
-		return nil
-	}); err != nil {
-		return nil, err
+		// The tree may have changed since it was hashed: TreeItem checks the hash again.
+		items[k] = store.TreeItem(p, sources[i].Tree.Root, filesOf(sources[i]), &sums[i])
 	}
 	if err := st.Import(ctx, items); err != nil {
 		return nil, err
@@ -119,20 +111,54 @@ func Import(ctx context.Context, st *store.Store, sources []Source) ([]string, e
 	return paths, nil
 }
 
-// keepBudget bounds the NAR bytes Import holds between hashing and importing.
-const keepBudget = 256 << 20
+// keepBudget bounds the NAR bytes Import holds between hashing and importing; keepMax bounds
+// one kept NAR.
+const (
+	keepBudget = 256 << 20
+	keepMax    = 4 << 20
+)
 
-// serialise returns the NAR of a source tree.
-func serialise(s Source) ([]byte, error) {
-	files := s.Tree.Files
-	if files == nil {
-		files = []string{}
+func filesOf(s Source) []string {
+	if s.Tree.Files == nil {
+		return []string{}
 	}
-	var b bytes.Buffer
-	if err := nar.Write(&b, s.Tree.Root, files); err != nil {
-		return nil, fmt.Errorf("srcs: %s: %w", s.Name, err)
+	return s.Tree.Files
+}
+
+// serialise hashes the NAR of a source tree and returns it too when it is small enough to keep
+// (kept counts the bytes kept by all calls).
+func serialise(s Source, kept *atomic.Int64) ([32]byte, []byte, error) {
+	h := sha256.New()
+	kw := &keepWriter{max: keepMax}
+	if err := nar.Write(io.MultiWriter(h, kw), s.Tree.Root, filesOf(s)); err != nil {
+		return [32]byte{}, nil, fmt.Errorf("srcs: %s: %w", s.Name, err)
 	}
-	return b.Bytes(), nil
+	var sum [32]byte
+	copy(sum[:], h.Sum(nil))
+	b := kw.buf.Bytes()
+	if kw.over || kept.Add(int64(len(b))) > keepBudget {
+		b = nil
+	}
+	return sum, b, nil
+}
+
+// keepWriter keeps what is written until it exceeds max, then drops it.
+type keepWriter struct {
+	buf  bytes.Buffer
+	max  int
+	over bool
+}
+
+func (k *keepWriter) Write(p []byte) (int, error) {
+	if !k.over {
+		if k.buf.Len()+len(p) > k.max {
+			k.over = true
+			k.buf = bytes.Buffer{}
+		} else {
+			k.buf.Write(p)
+		}
+	}
+	return len(p), nil
 }
 
 // parallel runs f(0..n-1) on GOMAXPROCS workers and returns the first error. Panics in f become
@@ -309,12 +335,11 @@ func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]
 				continue
 			}
 			if t&fs.ModeSymlink != 0 {
-				target, err := os.Readlink(filepath.Join(abs, name))
+				inside, err := linkInside(repo, child)
 				if err != nil {
 					return err
 				}
-				resolved := path.Clean(path.Join(rel, filepath.ToSlash(target)))
-				if path.IsAbs(target) || resolved == ".." || strings.HasPrefix(resolved, "../") {
+				if !inside {
 					return diag.New(1025, "variant", "symlink", "file", child)
 				}
 			}
@@ -342,6 +367,67 @@ func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// maxLinkHops bounds the symlinks followed while resolving one link (as Linux's 40).
+const maxLinkHops = 40
+
+// linkInside reports whether the symlink at rel (repo-relative, slash form) resolves inside
+// repo (R-FW-021). The target is walked component by component from the link's directory and
+// every component that is itself a symlink is read and substituted, so "x -> d/up/../y" with
+// "d/up -> .." is caught (a lexical check of the target alone is not enough). The walk fails as
+// soon as it leaves the repository, on an absolute target and after maxLinkHops links. A
+// component that does not exist is taken lexically: nothing can be reached through it.
+func linkInside(repo, rel string) (bool, error) {
+	var cur []string
+	if d := path.Dir(rel); d != "." {
+		cur = strings.Split(d, "/")
+	}
+	target, err := os.Readlink(filepath.Join(repo, filepath.FromSlash(rel)))
+	if err != nil {
+		return false, err
+	}
+	todo := []string{target}
+	for hops := 0; ; hops++ {
+		t := filepath.ToSlash(todo[0])
+		if t == "" || path.IsAbs(t) || hops > maxLinkHops {
+			return false, nil
+		}
+		todo = append(strings.Split(t, "/"), todo[1:]...)
+		next := []string(nil)
+		for next == nil && len(todo) > 0 {
+			c := todo[0]
+			todo = todo[1:]
+			switch c {
+			case "", ".":
+				continue
+			case "..":
+				if len(cur) == 0 {
+					return false, nil
+				}
+				cur = cur[:len(cur)-1]
+				continue
+			}
+			cand := append(cur[:len(cur):len(cur)], c)
+			fi, err := os.Lstat(filepath.Join(repo, filepath.FromSlash(strings.Join(cand, "/"))))
+			if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+				return false, err
+			}
+			if err != nil || fi.Mode()&fs.ModeSymlink == 0 {
+				cur = cand
+				continue
+			}
+			next = cand
+		}
+		if next == nil {
+			return true, nil
+		}
+		link, err := os.Readlink(filepath.Join(repo, filepath.FromSlash(strings.Join(next, "/"))))
+		if err != nil {
+			return false, err
+		}
+		todo = append([]string{link}, todo...)
+	}
 }
 
 func splitNonEmpty(p string) []string {
