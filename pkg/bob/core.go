@@ -1,37 +1,44 @@
 package bob
 
-import "github.com/megakuul/bob/pkg/bob/diag"
-
-// The declarations below are the L0 surface of SPEC §1.4. They are stubs until M3.2: every
-// function that can fail returns diag.NotImplemented, the others return zero values.
+import "reflect"
 
 // P is the configuration a constructor builds for: one platform and one variant.
 // bob creates one P per requested configuration; constructors must not keep it.
-type P struct{ _ [0]func() }
+type P struct {
+	ev       *evaluation
+	platform Platform
+	variant  Variant // normalised
+	id       string  // canonical "<platform>[+token...]"
+	host     *P
+}
 
 // Platform returns the platform packages built with p run on.
-func (p *P) Platform() Platform { return "" }
+func (p *P) Platform() Platform {
+	if p == nil {
+		return ""
+	}
+	return p.platform
+}
 
 // Variant returns the variant of p (profile, sanitisers, features, named variants).
-func (p *P) Variant() Variant { return Variant{} }
+func (p *P) Variant() Variant {
+	if p == nil {
+		return Variant{}.normal()
+	}
+	return p.variant.normal()
+}
 
 // Host returns the configuration for build-time tools of p: the host platform, release
 // profile, no sanitisers, no features. Host().Host() == Host().
-func (p *P) Host() *P { return p }
-
-// Define turns a constructor into a memoised, registered constructor. It must be called in a
-// package-level variable declaration of a bob.go file. The returned function calls fn at most
-// once per P and returns the same value on every later call with that P (R-FW-011).
-// Every value reachable from fn's result that implements Package becomes part of the graph.
-func Define[T any](fn func(p *P) T) func(p *P) T {
-	return func(*P) T {
-		var zero T
-		return zero
+func (p *P) Host() *P {
+	if p == nil || p.ev == nil {
+		return p
 	}
+	if p.host == nil {
+		p.host = p.ev.config(p.ev.hostPlatform, Variant{})
+	}
+	return p.host
 }
-
-// Main is called by the generated evaluator. bob.go files never call it.
-func Main() {}
 
 // Package is a node of the build graph. It is implemented only by types that embed Node,
 // and a Node is created only by ext.New; the unexported method seals the interface.
@@ -44,29 +51,41 @@ type Package interface {
 }
 
 // Node is embedded by every ecosystem package type. Its fields are unexported; ext.New
-// creates it.
-type Node struct {
-	label Label
-	pos   Position
-	outs  []string
-}
+// creates it (through an internal hook in pkg/bob/internal/graph, which avoids an import
+// cycle). A Node is a handle: copies of it refer to the same graph node.
+//
+// Node provides the marker methods of Tree, Tool and Test, so a type that embeds it is any of
+// those; the exported methods (MainProgram, LinkInfo) are what distinguish the kinds.
+type Node struct{ n *node }
 
 // Label returns the package's label.
-func (n *Node) Label() Label { return n.label }
+func (n *Node) Label() Label {
+	if n == nil || n.n == nil {
+		return Label{}
+	}
+	return n.n.label
+}
 
-// DefinedAt returns the position of the outermost constructor call in a bob.go (R-FW-016).
-func (n *Node) DefinedAt() Position { return n.pos }
+// DefinedAt returns the position of the constructor call in a bob.go (R-FW-016).
+func (n *Node) DefinedAt() Position {
+	if n == nil || n.n == nil {
+		return Position{}
+	}
+	return n.n.pos
+}
 
 // Outputs lists the package's store outputs.
 func (n *Node) Outputs() []Output {
-	var out []Output
-	for _, name := range n.outs {
-		out = append(out, Output{Name: name})
+	if n == nil || n.n == nil {
+		return nil
 	}
-	return out
+	return []Output{{Package: n, Name: "out"}}
 }
 
 func (n *Node) bobNode() *Node { return n }
+func (n *Node) tree()          {}
+func (n *Node) tool()          {}
+func (n *Node) test()          {}
 
 // Output names one store output of a package, e.g. the "dev" output of a library.
 type Output struct {
@@ -100,7 +119,8 @@ type Linkable interface {
 }
 
 // LinkInfo is what a Linkable gives its consumers (cgo, Rust Native, OCaml Native, cc Deps).
-// Paths are store paths; they are filled by bob's generators, not by the evaluator.
+// Paths are store paths; they are filled by bob's generators, not by the evaluator
+// (the evaluator only records the Linkable's identity and Modules/Libs choices).
 type LinkInfo struct {
 	IncludeDirs []string   // -I
 	LinkDirs    []string   // -L
@@ -113,29 +133,33 @@ type LinkInfo struct {
 }
 
 // Test is a package whose build runs tests (R-FW-024). Every ecosystem's Test constructor
-// returns one.
+// returns one; running a test is building it.
 type Test interface {
 	Package
 	test()
 }
 
-// Label identifies a package, e.g. //libs/foo:foo (see SPEC §1.3).
-type Label struct {
-	Module, Dir, Name string
-	Nix               string
+// nodeOf returns the graph node behind pkg, or nil for a nil package (also a typed nil
+// pointer) or a Node that was never created.
+func nodeOf(pkg Package) *node {
+	if isNil(pkg) {
+		return nil
+	}
+	n := pkg.bobNode()
+	if n == nil {
+		return nil
+	}
+	return n.n
 }
 
-// ParseLabel parses a label of the grammar of SPEC §1.3.
-func ParseLabel(s string) (Label, error) { return Label{}, diag.NotImplemented("bob.ParseLabel") }
-
-// String returns the canonical form of l.
-func (l Label) String() string { return "" }
-
-// Position is a file and line in a bob.go file, module-relative.
-type Position struct {
-	File string
-	Line int
+// isNil reports whether v is nil or a typed nil (a nil *T stored in an interface).
+func isNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch rv := reflect.ValueOf(v); rv.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Interface, reflect.Chan:
+		return rv.IsNil()
+	}
+	return false
 }
-
-// String returns "libs/foo/bob.go:12".
-func (p Position) String() string { return "" }

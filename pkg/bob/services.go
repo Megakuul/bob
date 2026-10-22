@@ -36,5 +36,33 @@ type ServiceOptions struct {
 	Timeout time.Duration
 }
 
-// ServiceFrom runs a binary built in this repo as a service of a test.
-func ServiceFrom(bin Tool, o ServiceOptions) Service { return nil }
+// service is the Service of ServiceFrom.
+type service struct{ spec ServiceSpec }
+
+func (s *service) serviceSpec() *ServiceSpec { return &s.spec }
+
+// ServiceFrom runs a binary built in this repo as a service of a test. The service is named
+// after the binary's package and runs its main program (an Executable) or bin/<name> with
+// o.Args.
+func ServiceFrom(bin Tool, o ServiceOptions) Service {
+	if isNil(bin) {
+		return &service{}
+	}
+	name := bin.Label().Name
+	prog := "bin/" + name
+	if e, ok := bin.(Executable); ok && e.MainProgram() != "" {
+		prog = e.MainProgram()
+	}
+	timeout := o.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	return &service{spec: ServiceSpec{
+		Name:    name,
+		Start:   append([]string{prog}, o.Args...),
+		Tools:   []Tool{bin},
+		Ready:   o.Ready,
+		Env:     o.Env,
+		Timeout: timeout,
+	}}
+}
