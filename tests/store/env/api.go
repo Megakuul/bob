@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/tests/serverenv/s3count"
-	"github.com/megakuul/bob/tools/devstack/stack"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 )
 
 // Extra is what the server suites need from <dir>/devstack.json beyond stack.Info. tools/devstack

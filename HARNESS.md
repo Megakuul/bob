@@ -717,7 +717,23 @@ It prints one JSON line with URLs, ports, credentials and the state dir, and wri
 `<dir>/devstack.json`. `devstack down` stops everything; `devstack kill <process>` is for manual
 chaos. Agents use it to test the server end-to-end, including `bob login`, `bob build --remote`,
 the UI and the cache, without the owner. All server suites start their stacks through the same
-package (`tools/devstack/stack`).
+package (`tests/serverenv/stack`).
+
+**Contract of the stack** (package `tests/serverenv/stack`; `tools/devstack` is its CLI, the package
+lives in the root module so test packages can import it under `GOWORK=off`):
+- `devstack.json` fields: `api_url`, `api_urls` (all orchestrators), `orchestrators[i].api_url`,
+  `admin_token`, `attach_proxy_url` (control API of the TCP fronts of the orchestrators: block,
+  unblock, redirect, byte and stream counters), `policies_applied`, `worker_access_key`,
+  `worker_secret_key`, `orchestrator_access_key`, `orchestrator_secret_key`.
+- Environment of the server processes: `BOB_LISTEN`, `BOB_ADMIN_TOKEN` (orchestrators);
+  `BOB_ORCHESTRATOR_ADDRS` (workers; the attach proxy fronts, entry i = orchestrator i);
+  `BOB_STORAGE_WORKER_PROBE_CREDENTIAL=<access>:<secret>` (orchestrators; R-SEC-102);
+  `BOB_TEST_CLOCK_OFFSET` (orchestrators, only when a test asks; honoured only by `-tags bobtest`
+  builds); `BOB_WORKER_SLOTS` and other `BOB_*` settings are inherited from the test process.
+- S3 credentials: `deploy/policies/*.json` are applied to RustFS through its admin API. Users
+  `worker-bob` and `orchestrator-bob` hold the worker and orchestrator policies; the bucket policy
+  on `bob-control` denies everyone but `orchestrator-bob`. Workers and orchestrators get their role
+  keys, not the root key; the counting proxy reports the role from the key prefix.
 **[open]** Recommendation: keep this as a harness tool, not a `bob-server dev` product command.
 SPEC has no such command, and adding one is a product change. The R-SEC-101 runbook check
 **(manual)** runs against this stack.

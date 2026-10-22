@@ -15,8 +15,8 @@ import (
 
 	"github.com/megakuul/bob/tests/harness"
 	"github.com/megakuul/bob/tests/parity"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 	"github.com/megakuul/bob/tests/store/env"
-	"github.com/megakuul/bob/tools/devstack/stack"
 )
 
 // iamDoc is the part of an identity or bucket policy document the tests read.

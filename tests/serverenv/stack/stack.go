@@ -13,13 +13,22 @@
 //     duration (may be negative, e.g. "90s") added to the orchestrator's wall clock. It must
 //     be honoured only by servers built with -tags bobtest, which devstack uses when it builds
 //     bob-server itself and ClockOffset is set. A release build ignores the variable.
-//   - S3 credential roles: the counting proxy maps an access key to a role by prefix
-//     (Options.RolePrefixes, default "worker-" -> "worker", "orchestrator-" -> "orchestrator").
-//     Until the shipped policies create per-role keys, all processes use the RustFS root key
-//     and appear under that key.
+//   - BOB_WORKER_SLOTS and the other BOB_* settings of the test process are inherited by every
+//     server process (srvtest.Options.Env sets them with t.Setenv).
+//   - BOB_STORAGE_WORKER_PROBE_CREDENTIAL (orchestrator, R-SEC-102): "<access>:<secret>" of the
+//     worker role, set when the shipped policies are applied and the test did not set it.
+//   - S3 credential roles: the shipped policies (deploy/policies/*.json) are applied to RustFS
+//     with two identities, access keys "worker-bob" (worker policy) and "orchestrator-bob"
+//     (orchestrator policy; the control bucket policy lets only this user in). Orchestrators get
+//     the orchestrator key, workers the worker key; the root key stays with the harness. The
+//     counting proxy maps an access key to a role by prefix (Options.RolePrefixes, default
+//     "worker-" -> "worker", "orchestrator-" -> "orchestrator").
+//     Options.RootCredentials gives every process the root key instead (no policies applied).
 //
 // devstack.json carries, next to the Info fields, attach_proxy_url (control API of the
-// attach proxy, see its package comment) and orchestrators[i].api_url.
+// attach proxy, see its package comment), api_url and api_urls (all orchestrators),
+// orchestrators[i].api_url, policies_applied and the role keys worker_access_key,
+// worker_secret_key, orchestrator_access_key, orchestrator_secret_key.
 //
 // The stack does not start a forge (HARNESS.md §13.2 -forgejo is still to do).
 //
@@ -49,6 +58,7 @@ import (
 	"github.com/megakuul/bob/tests/serverenv/attachproxy"
 	"github.com/megakuul/bob/tests/serverenv/rustfs"
 	"github.com/megakuul/bob/tests/serverenv/s3count"
+	"github.com/megakuul/bob/tests/serverenv/s3sig"
 )
 
 // Options configure Start.
@@ -65,6 +75,8 @@ type Options struct {
 	// RolePrefixes maps S3 access-key prefixes to role names for the counting proxy.
 	// Nil means the default (worker-, orchestrator-).
 	RolePrefixes map[string]string
+	// RootCredentials skips the shipped policies and gives every process the RustFS root key.
+	RootCredentials bool
 }
 
 // Proc is one stack process.
@@ -90,8 +102,14 @@ type Info struct {
 	Buckets        []string `json:"buckets"`
 	AttachProxyURL string   `json:"attach_proxy_url"` // control API of the orchestrator TCP fronts
 	APIURL         string   `json:"api_url"`          // first orchestrator's HTTP listener
+	APIURLs        []string `json:"api_urls"`         // every orchestrator's HTTP listener
+	AttachFronts   []string `json:"attach_fronts"`    // BOB_ORCHESTRATOR_ADDRS of the workers
 	AdminToken     string   `json:"admin_token"`      // bootstrap admin credential for tests
-	PoliciesReady  bool     `json:"policies_applied"` // false until the shipped policies exist (M-server)
+	PoliciesReady  bool     `json:"policies_applied"` // the shipped policies are applied to RustFS
+	WorkerAccess   string   `json:"worker_access_key,omitempty"`
+	WorkerSecret   string   `json:"worker_secret_key,omitempty"`
+	OrchAccess     string   `json:"orchestrator_access_key,omitempty"`
+	OrchSecret     string   `json:"orchestrator_secret_key,omitempty"`
 	Orchestrators  []Proc   `json:"orchestrators"`
 	Workers        []Proc   `json:"workers"`
 	Rustfs         Proc     `json:"rustfs"`
@@ -99,13 +117,14 @@ type Info struct {
 
 // Stack is a running stack.
 type Stack struct {
-	Info      Info
-	fs        *rustfs.Server
-	proxy     *s3count.Server
-	attach    *attachproxy.Proxy
-	attachSrv *http.Server
-	procs     map[string]*serverenv.Process
-	order     []string
+	Info                   Info
+	fs                     *rustfs.Server
+	proxy                  *s3count.Server
+	attach                 *attachproxy.Proxy
+	attachSrv              *http.Server
+	workerCreds, orchCreds s3sig.Creds
+	procs                  map[string]*serverenv.Process
+	order                  []string
 }
 
 // Start brings the stack up. On error everything already started is stopped.
@@ -169,6 +188,19 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 		AdminToken: adminToken,
 		Rustfs:     Proc{Name: "rustfs", Pid: s.fs.Pid(), Log: filepath.Join(s.fs.Dir, "rustfs.log"), Running: true},
 	}
+	worker := s3sig.Creds{AccessKey: s.Info.AccessKey, SecretKey: s.Info.SecretKey, Region: s.Info.Region}
+	orch := worker
+	if !o.RootCredentials {
+		if err := applyPolicies(ctx, s.fs); err != nil {
+			return fail(err)
+		}
+		worker = s3sig.Creds{AccessKey: WorkerAccessKey, SecretKey: WorkerSecretKey, Region: s.Info.Region}
+		orch = s3sig.Creds{AccessKey: OrchestratorAccessKey, SecretKey: OrchestratorSecretKey, Region: s.Info.Region}
+		s.Info.PoliciesReady = true
+		s.Info.WorkerAccess, s.Info.WorkerSecret = worker.AccessKey, worker.SecretKey
+		s.Info.OrchAccess, s.Info.OrchSecret = orch.AccessKey, orch.SecretKey
+	}
+	s.workerCreds, s.orchCreds = worker, orch
 	listens := make([]string, o.Orchestrators)
 	for i := range listens {
 		port, err := serverenv.FreePort()
@@ -191,15 +223,20 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 	for _, a := range s.attach.Addrs() {
 		fronts = append(fronts, "http://"+a)
 	}
+	s.Info.AttachFronts = fronts
 	for i, listen := range listens {
 		if i == 0 {
 			s.Info.APIURL = "http://" + listen
 		}
+		s.Info.APIURLs = append(s.Info.APIURLs, "http://"+listen)
 		env := []string{"BOB_LISTEN=" + listen, "BOB_ADMIN_TOKEN=" + adminToken}
 		if o.ClockOffset != 0 {
 			env = append(env, "BOB_TEST_CLOCK_OFFSET="+o.ClockOffset.String())
 		}
-		p, err := s.spawn(server, "orchestrator", "orchestrator-"+strconv.Itoa(i), dir, env...)
+		if s.Info.PoliciesReady && os.Getenv("BOB_STORAGE_WORKER_PROBE_CREDENTIAL") == "" {
+			env = append(env, "BOB_STORAGE_WORKER_PROBE_CREDENTIAL="+worker.AccessKey+":"+worker.SecretKey)
+		}
+		p, err := s.spawn(server, "orchestrator", "orchestrator-"+strconv.Itoa(i), dir, orch, env...)
 		if err != nil {
 			return fail(err)
 		}
@@ -207,7 +244,7 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 		s.Info.Orchestrators = append(s.Info.Orchestrators, p)
 	}
 	for i := range o.Workers {
-		p, err := s.spawn(server, "worker", "worker-"+strconv.Itoa(i), dir, "BOB_ORCHESTRATOR_ADDRS="+strings.Join(fronts, ","))
+		p, err := s.spawn(server, "worker", "worker-"+strconv.Itoa(i), dir, worker, "BOB_ORCHESTRATOR_ADDRS="+strings.Join(fronts, ","))
 		if err != nil {
 			return fail(err)
 		}
@@ -226,13 +263,13 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 	return s, nil
 }
 
-func (s *Stack) spawn(server, mode, name, dir string, env ...string) (Proc, error) {
+func (s *Stack) spawn(server, mode, name, dir string, creds s3sig.Creds, env ...string) (Proc, error) {
 	cmd := exec.Command(server, mode)
 	cmd.Env = append(os.Environ(),
 		"BOB_STORAGE_ENDPOINT="+s.proxy.URL,
 		"BOB_STORAGE_REGION="+s.fs.Root.Region,
-		"AWS_ACCESS_KEY_ID="+s.fs.Root.AccessKey,
-		"AWS_SECRET_ACCESS_KEY="+s.fs.Root.SecretKey,
+		"AWS_ACCESS_KEY_ID="+creds.AccessKey,
+		"AWS_SECRET_ACCESS_KEY="+creds.SecretKey,
 		"BOB_SERVER_NAME="+name,
 		"BOB_STATE_DIR="+filepath.Join(dir, name),
 	)

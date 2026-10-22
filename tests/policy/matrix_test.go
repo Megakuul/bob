@@ -11,8 +11,8 @@ import (
 	"github.com/megakuul/bob/tests/harness"
 	"github.com/megakuul/bob/tests/parity"
 	"github.com/megakuul/bob/tests/serverenv/s3sig"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 	"github.com/megakuul/bob/tests/store/env"
-	"github.com/megakuul/bob/tools/devstack/stack"
 )
 
 // policyStack is a dev stack with the shipped policies applied: S3 identities for the

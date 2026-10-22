@@ -1,5 +1,5 @@
 // Package srvtest is the shared driver of the server suites (tests/server,
-// tests/chaos, tests/soak): it starts the all-in-one stack (tools/devstack/stack),
+// tests/chaos, tests/soak): it starts the all-in-one stack (tests/serverenv/stack),
 // talks to the orchestrators with the public Connect API (JSON), submits remote
 // builds with the bob CLI and reads the S3 counters of the counting proxy.
 //
@@ -7,12 +7,22 @@
 // bob-server modes are stubs: Start reports it through harness.RedFeature and
 // returns nil, and the caller returns.
 //
-// Contract with tools/devstack (not built yet, listed in the M1.8 report): the
-// devstack.json written by stack.Start carries, next to the fields of stack.Info,
-//   - api_url, admin_token             (top level, as for the cli/devenv suites)
+// Contract with the stack (tests/serverenv/stack, driven by tools/devstack; documented in
+// HARNESS.md §13.2). The devstack.json written by stack.Start carries, next to stack.Info:
+//   - api_url, api_urls, admin_token   (first / all orchestrators, bootstrap admin token)
 //   - orchestrators[i].api_url         (one API endpoint per orchestrator)
 //   - attach_proxy_url                 (TCP front of the orchestrators, one per orchestrator name:
 //     POST /block, /unblock [?orch=i]; GET /bytes; GET /streams; POST /redirect?orch=i&to=j)
+//   - policies_applied, worker_access_key, worker_secret_key, orchestrator_access_key,
+//     orchestrator_secret_key          (shipped S3 policies applied; processes use the role keys)
+//
+// Environment the stack sets on the bob-server processes: BOB_LISTEN and BOB_ADMIN_TOKEN
+// (orchestrators), BOB_ORCHESTRATOR_ADDRS (workers: the attach proxy fronts, never the
+// orchestrators directly), BOB_STORAGE_WORKER_PROBE_CREDENTIAL=<access>:<secret> (orchestrators,
+// unless the test sets it), BOB_TEST_CLOCK_OFFSET (orchestrators, only with
+// stack.Options.ClockOffset, honoured by -tags bobtest builds). Options.Env entries
+// (BOB_FLEET_*, BOB_LOG_*, BOB_WORKER_SLOTS, ...) reach every process through the test
+// environment.
 package srvtest
 
 import (
@@ -38,7 +48,7 @@ import (
 	"github.com/megakuul/bob/tests/harness"
 	"github.com/megakuul/bob/tests/serverenv"
 	"github.com/megakuul/bob/tests/serverenv/s3count"
-	"github.com/megakuul/bob/tools/devstack/stack"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 )
 
 // Options configure Start.
@@ -589,10 +599,19 @@ func (e *Env) Restart(name string) error {
 		return err
 	}
 	cmd := exec.Command(e.server, mode)
+	ak, sk := e.roleKeys(mode)
 	cmd.Env = append(os.Environ(),
 		"BOB_STORAGE_ENDPOINT="+info.S3ProxyURL, "BOB_STORAGE_REGION="+info.Region,
-		"AWS_ACCESS_KEY_ID="+info.AccessKey, "AWS_SECRET_ACCESS_KEY="+info.SecretKey,
+		"AWS_ACCESS_KEY_ID="+ak, "AWS_SECRET_ACCESS_KEY="+sk,
 		"BOB_SERVER_NAME="+name, "BOB_STATE_DIR="+filepath.Join(info.Dir, name))
+	if mode == "orchestrator" {
+		cmd.Env = append(cmd.Env, "BOB_LISTEN="+strings.TrimPrefix(e.orchURL(name), "http://"), "BOB_ADMIN_TOKEN="+e.Token)
+		if info.PoliciesReady && os.Getenv("BOB_STORAGE_WORKER_PROBE_CREDENTIAL") == "" {
+			cmd.Env = append(cmd.Env, "BOB_STORAGE_WORKER_PROBE_CREDENTIAL="+info.WorkerAccess+":"+info.WorkerSecret)
+		}
+	} else if len(info.AttachFronts) > 0 {
+		cmd.Env = append(cmd.Env, "BOB_ORCHESTRATOR_ADDRS="+strings.Join(info.AttachFronts, ","))
+	}
 	p, err := serverenv.StartProcess(cmd, filepath.Join(info.Dir, "logs", name+".log"))
 	if err != nil {
 		return err
@@ -600,6 +619,29 @@ func (e *Env) Restart(name string) error {
 	e.restarted[name] = p
 	e.T.Cleanup(func() { _ = p.Stop(5 * time.Second) })
 	return nil
+}
+
+// roleKeys returns the S3 key pair of a server mode: the role keys when the stack applied the
+// shipped policies, else the root key.
+func (e *Env) roleKeys(mode string) (string, string) {
+	i := e.Stack.Info
+	switch {
+	case !i.PoliciesReady:
+		return i.AccessKey, i.SecretKey
+	case mode == "worker":
+		return i.WorkerAccess, i.WorkerSecret
+	}
+	return i.OrchAccess, i.OrchSecret
+}
+
+// orchURL is the listener of the orchestrator process name.
+func (e *Env) orchURL(name string) string {
+	for _, p := range e.Stack.Info.Orchestrators {
+		if p.Name == name {
+			return p.APIURL
+		}
+	}
+	return ""
 }
 
 // Percentile returns the p-quantile (0..1) of d (nearest rank).
@@ -832,8 +874,9 @@ func (e *Env) ViaAny(fn func(v *Env) error) error {
 // RunServer runs `bob-server <args>` against the stack's S3 (an admin command such as `store fsck`).
 func (e *Env) RunServer(timeout time.Duration, args ...string) harness.Result {
 	info := e.Stack.Info
+	ak, sk := e.roleKeys("orchestrator")
 	return harness.Run(e.T, "bob-server", harness.Spec{Timeout: timeout, Env: []string{
 		"BOB_STORAGE_ENDPOINT=" + info.S3ProxyURL, "BOB_STORAGE_REGION=" + info.Region,
-		"AWS_ACCESS_KEY_ID=" + info.AccessKey, "AWS_SECRET_ACCESS_KEY=" + info.SecretKey,
+		"AWS_ACCESS_KEY_ID=" + ak, "AWS_SECRET_ACCESS_KEY=" + sk,
 	}}, args...)
 }

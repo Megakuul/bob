@@ -19,7 +19,7 @@ import (
 	"github.com/megakuul/bob/tests/harness"
 	"github.com/megakuul/bob/tests/serverenv/rustfs"
 	"github.com/megakuul/bob/tests/serverenv/s3count"
-	"github.com/megakuul/bob/tools/devstack/stack"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 )
 
 // Backend is a RustFS with the counting proxy in front of it.

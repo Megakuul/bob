@@ -14,7 +14,7 @@ import (
 	"github.com/megakuul/bob/tests/serverenv"
 	"github.com/megakuul/bob/tests/serverenv/rustfs"
 	"github.com/megakuul/bob/tests/serverenv/s3sig"
-	"github.com/megakuul/bob/tools/devstack/stack"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 )
 
 // RemoteBuild runs `bob build --remote <args>` in dir against the stack as its admin.

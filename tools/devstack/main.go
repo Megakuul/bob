@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/megakuul/bob/tools/devstack/stack"
+	"github.com/megakuul/bob/tests/serverenv/stack"
 )
 
 const defaultDir = "out/devstack"
