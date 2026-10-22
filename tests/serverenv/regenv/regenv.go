@@ -711,3 +711,30 @@ func (e *Env) ForgejoDelivery(event, id string, body []byte) (int, string) {
 	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	return r.StatusCode, strings.TrimSpace(string(b))
 }
+
+// CommitAppend appends text to file rel in the checkout dir and commits it; it returns the new
+// commit SHA (push it with Push).
+func (e *Env) CommitAppend(dir, rel, text string) string {
+	e.T.Helper()
+	f := filepath.Join(dir, rel)
+	b, err := os.ReadFile(f)
+	if err != nil {
+		e.T.Fatalf("harness error: %v", err)
+	}
+	if err := os.WriteFile(f, append(b, []byte(text)...), 0o644); err != nil {
+		e.T.Fatalf("harness error: %v", err)
+	}
+	e.git(dir, "add", "-A")
+	e.git(dir, "-c", "user.name=alice", "-c", "user.email=alice@harness.local", "commit", "-qm", "edit "+rel)
+	return e.git(dir, "rev-parse", "HEAD")
+}
+
+// RepoID returns the Forgejo repository id of alice/<repo>.
+func (e *Env) RepoID(repo string) int64 {
+	e.T.Helper()
+	var r struct{ ID int64 }
+	if err := e.Forgejo.API(context.Background(), http.MethodGet, "/api/v1/repos/alice/"+repo, forgejo.Auth{Token: e.Forgejo.Seeded.OwnerToken}, nil, &r); err != nil {
+		e.T.Fatalf("harness error: %v", err)
+	}
+	return r.ID
+}
