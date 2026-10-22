@@ -31,3 +31,4 @@ DONE R-NIX-027 → tests/nix/nixidx_test.go::TestRNIX027* (+testdata/fakepkgs)
 PARTIAL R-NIX-021 → tests/nix/namespace_test.go (bind mode); pivot + rootless to add
 DONE R-NIX-020/021/022 (rootless) → tests/rootless/rootless_test.go::TestRNIX020RootlessMatrix,TestRNIX021PivotProbes,TestRNIX022Refusal
 ALL 28 ids have tests. Remaining: full-suite verification, ci fmt/vet/lint/layering, final report
+FINAL: lint/layering/fmt/vet clean for T2a dirs; drv.Job.Spec is any (layering)
