@@ -1,0 +1,6 @@
+{
+  "go.alternateTools": { "go": "${workspaceFolder}/.bob/bin/go", "gopls": "${workspaceFolder}/.bob/bin/gopls" },
+  "go.toolsManagement.autoUpdate": false,
+  "gopls": { "build.buildFlags": ["-tags=bob"], "build.directoryFilters": ["-.bob"] },
+  "files.watcherExclude": { "**/.bob/**": true }
+}
