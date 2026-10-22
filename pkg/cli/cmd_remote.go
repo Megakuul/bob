@@ -120,7 +120,12 @@ func runRemote(e *env, test bool) int {
 		if ae, ok := remote.AsError(err); ok && ae.Method != remote.UploadMethod {
 			method = ae.Method
 		}
-		return e.out.fail(apiDiag(server, method, project, err))
+		d := apiDiag(server, method, project, err)
+		if d.Code == 4012 { // no build exists, so its default hint (bob log --build) does not apply
+			e.out.diagnose(d, "the server refused the request; its log has the details")
+			return e.out.finish(-1, translate.Counts{}, nil)
+		}
+		return e.out.fail(d)
 	}
 	var fin remote.Done
 	for ev := range events {
