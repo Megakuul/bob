@@ -222,7 +222,8 @@ func dedupEnv(env []string) []string {
 // sqliteBusy reports whether a Nix failure is a busy/locked SQLite database (R-NIX-026).
 func sqliteBusy(stderr string) bool {
 	l := strings.ToLower(stderr)
-	return strings.Contains(l, "database is locked") || strings.Contains(l, "database is busy") || strings.Contains(l, "sqlite_busy")
+	return strings.Contains(l, "database is locked") || strings.Contains(l, "database is busy") || strings.Contains(l, "sqlite_busy") ||
+		strings.Contains(l, "sqlite database '") && strings.Contains(l, "' is busy") // Nix 2.34: "SQLite database '<db>' is busy"
 }
 
 // runStore runs a nix-store/nix command with stdin from in (re-readable for retries) and returns

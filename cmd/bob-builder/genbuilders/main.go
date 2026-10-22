@@ -2,16 +2,25 @@
 // writes pkg/engine/store/builders.go (the {system → store path} table) and the embedded
 // binaries pkg/engine/store/builderbin/<goarch>/bob-builder.gz. It runs through
 // `go generate ./pkg/engine/store`.
+//
+// With -check it writes nothing: it fails when the committed table is stale, and (with -base,
+// the table of the last commit) when the builder changed without a bspec.BuilderVersion bump
+// (R-NIX-015; the CI command runs it).
 package main
 
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
+	"flag"
 	"fmt"
 	"go/format"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/megakuul/bob/pkg/builder/bspec"
 	"github.com/megakuul/bob/pkg/engine/drv"
@@ -21,7 +30,10 @@ import (
 var systems = []struct{ system, goarch string }{{"aarch64-linux", "arm64"}, {"x86_64-linux", "amd64"}}
 
 func main() {
-	if err := run(); err != nil {
+	check := flag.Bool("check", false, "write nothing; fail if builders.go is stale or the builder changed without a BuilderVersion bump")
+	base := flag.String("base", "", "with -check: a copy of builders.go of the last commit (missing file = none)")
+	flag.Parse()
+	if err := run(*check, *base); err != nil {
 		fmt.Fprintln(os.Stderr, "genbuilders:", err)
 		os.Exit(1)
 	}
@@ -45,7 +57,7 @@ func moduleRoot() (string, error) {
 	}
 }
 
-func run() error {
+func run(check bool, base string) error {
 	root, err := moduleRoot()
 	if err != nil {
 		return err
@@ -79,6 +91,9 @@ func run() error {
 			return err
 		}
 		fmt.Fprintf(&table, "\tcase %q:\n\t\treturn %q\n", s.system, path)
+		if check {
+			continue
+		}
 		if err := writeGzip(filepath.Join(root, "pkg", "engine", "store", "builderbin", s.goarch, "bob-builder.gz"), bin); err != nil {
 			return err
 		}
@@ -98,8 +113,63 @@ func builderTable(system string) string {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(root, "pkg", "engine", "store", "builders.go"), formatted, 0o644)
+	dst := filepath.Join(root, "pkg", "engine", "store", "builders.go")
+	if !check {
+		return os.WriteFile(dst, formatted, 0o644)
+	}
+	working, err := os.ReadFile(dst)
+	if err != nil {
+		return err
+	}
+	var committed []byte
+	if base != "" {
+		if committed, err = os.ReadFile(base); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return checkTables(string(formatted), string(working), string(committed))
 }
+
+var tableEntry = regexp.MustCompile(`case "([a-z0-9_]+-linux)":\s*return "(/nix/store/[0-9a-z]{32}-bob-builder-(\d+))"`)
+
+// tableOf parses a builders.go into system → store path.
+func tableOf(src string) map[string]string {
+	out := map[string]string{}
+	for _, m := range tableEntry.FindAllStringSubmatch(src, -1) {
+		out[m[1]] = m[2]
+	}
+	return out
+}
+
+// checkTables compares the table computed from the current builder sources with the committed
+// one (working) and with the last commit's (base, "" if none): a different working table is
+// stale; a builder whose store path changed while its version (the "-bob-builder-<n>" name)
+// stayed the same is a builder change without a BuilderVersion bump (R-NIX-015).
+func checkTables(computed, working, base string) error {
+	now := tableOf(computed)
+	if len(now) == 0 {
+		return fmt.Errorf("no builder table computed")
+	}
+	if computed != working {
+		return fmt.Errorf("pkg/engine/store/builders.go is stale: the builder sources changed; bump bspec.BuilderVersion if its behaviour changed, then run go generate ./pkg/engine/store")
+	}
+	var bad []string
+	for system, old := range tableOf(base) {
+		cur, ok := now[system]
+		if ok && cur != old && version(cur) == version(old) {
+			bad = append(bad, system)
+		}
+	}
+	if len(bad) > 0 {
+		slices.Sort(bad)
+		return fmt.Errorf("bob-builder changed (%s) but bspec.BuilderVersion is still %s: bump it (R-NIX-015) and run go generate ./pkg/engine/store",
+			strings.Join(bad, ", "), version(now[bad[0]]))
+	}
+	return nil
+}
+
+// version is the builder version in a store path ".../<hash>-bob-builder-<n>".
+func version(path string) string { return path[strings.LastIndex(path, "-")+1:] }
 
 // writeGzip writes a reproducible gzip of the file bin to dst.
 func writeGzip(dst, bin string) error {

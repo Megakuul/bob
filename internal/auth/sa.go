@@ -57,7 +57,7 @@ func saTokenMsg(t store.SATokenEntry) *accessv1.ServiceAccountToken {
 type saService struct{ id *Identity }
 
 func (s saService) get(ctx context.Context, saID string) (*store.ServiceAccountRecord, error) {
-	if !slugRE.MatchString(saID) {
+	if !saRE.MatchString(saID) {
 		return nil, api.NotFound("service account")
 	}
 	sa, err := store.Get(ctx, s.id.control, store.ServiceAccountKey(saID))
@@ -71,8 +71,8 @@ func (s saService) get(ctx context.Context, saID string) (*store.ServiceAccountR
 
 func (s saService) CreateServiceAccount(ctx context.Context, req *connect.Request[accessv1.CreateServiceAccountRequest]) (*connect.Response[accessv1.CreateServiceAccountResponse], error) {
 	in := req.Msg.GetServiceAccount()
-	if !slugRE.MatchString(in.GetId()) {
-		return nil, api.InvalidArgument("serviceAccount.id", "a service account id must match ^[a-z][a-z0-9-]{1,38}[a-z0-9]$")
+	if !saRE.MatchString(in.GetId()) {
+		return nil, api.InvalidArgument("serviceAccount.id", "a service account id must match ^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$")
 	}
 	if len(in.GetDescription()) > 500 {
 		return nil, api.InvalidArgument("serviceAccount.description", "description too long")

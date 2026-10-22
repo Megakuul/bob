@@ -148,7 +148,10 @@ Expected from other sections:
 #### R-FW-043 Evaluator generation
 - **Statement:** bob builds one evaluator binary per repo state as specified in S1 §5.3, with
   these exact rules:
-  1. Eval key = sha256 over: sorted (path, content) of every `bob.go`, `go.mod`, `go.sum`; bob
+  1. Eval key = sha256 over: sorted (path, content) of every `bob.go`, `go.mod`, `go.sum`; the
+     `go.mod` and every `bob.go` (scan rules of R-FW-002) of each directory `replace` target of
+     the root `go.mod` (a dependency bob repo checked out locally; outside the repo only when
+     the evaluation is not untrusted) [A90]; bob
      version; Go version; `GOARCH` of the host. Key equal to `.bob/eval/key` → reuse
      `.bob/eval/bob-eval`. A size+mtime index (`.bob/eval/index.json`) skips re-reading
      unchanged files; content is re-hashed when size or mtime differ.

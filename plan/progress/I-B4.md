@@ -11,3 +11,9 @@
 ## NEEDS
 
 ## TEST PROBLEM
+
+## Checkpoint (code written)
+- internal/store/identity.go (records), internal/auth/{secret,password,identity,sessions,users,roles,sa,oidc,authsvc,http,bootstrap}.go,
+  cmd/bob-server/auth.go (authParts, admin create-user), internal/http Routes.Patterns + NixCacheInfo,
+  internal/server process.go (Routes, Bootstrap hook), clock_bobtest.go (stat-based re-read).
+- Integrated I-B5: rbac.Authorizer for catalogue, CheckGrant, CheckRolePermissions, Scope, ValidProject, Match/ReplaceOIDC.

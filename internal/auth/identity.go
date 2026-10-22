@@ -46,6 +46,9 @@ type Identity struct {
 	sessions ttlCache[store.SessionRecord]
 	users    ttlCache[store.UserRecord]
 	sas      ttlCache[store.ServiceAccountRecord]
+
+	// bootToken and bootUser are set once by Bootstrap, before the API serves.
+	bootToken, bootUser string
 }
 
 // New returns the identity service. It performs no I/O.
@@ -170,11 +173,21 @@ func storageError(err error) error {
 func (id *Identity) Authenticate(ctx context.Context, c api.Credential) (*api.Principal, error) {
 	switch {
 	case c.Bearer != "":
+		if p, ok, err := id.bootstrapPrincipal(ctx, c.Bearer); ok {
+			return p, err
+		}
 		tok := Secret(c.Bearer)
 		if !tok.hasPrefix(PrefixAccess) && !tok.hasPrefix(PrefixDownload) && !tok.hasPrefix(PrefixSA) {
 			return nil, api.ErrUnknownCredential
 		}
-		return id.tokenPrincipal(ctx, tok)
+		p, err := id.tokenPrincipal(ctx, tok)
+		// A service-account token of scope download is for /nix, /oci/token and /r only
+		// (R-AUTH-005); allow_download_scope methods (WhoAmI) accept the CLI's bob_dt_ token
+		// (R-REG-154), not these.
+		if err == nil && tok.hasPrefix(PrefixSA) && p.Scope == "download" {
+			return nil, api.Unauthenticated("token not valid for the API")
+		}
+		return p, err
 	case c.Session != "":
 		st := Secret(c.Session)
 		if !st.hasPrefix(PrefixSession) {
@@ -390,9 +403,12 @@ func (id *Identity) HTTPPrincipal(r *http.Request) (*api.Principal, error) {
 	if tok == "" {
 		return nil, errInvalidToken
 	}
-	p, err := id.Authenticate(r.Context(), api.Credential{Bearer: tok})
-	if errors.Is(err, api.ErrUnknownCredential) {
+	t := Secret(tok)
+	if !t.hasPrefix(PrefixAccess) && !t.hasPrefix(PrefixDownload) && !t.hasPrefix(PrefixSA) {
+		if p, ok, err := id.bootstrapPrincipal(r.Context(), tok); ok {
+			return p, err
+		}
 		return nil, errInvalidToken
 	}
-	return p, err
+	return id.tokenPrincipal(r.Context(), t)
 }

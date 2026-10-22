@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,7 +51,28 @@ func (s authService) GetServerInfo(ctx context.Context, _ *connect.Request[authv
 }
 
 func (s authService) WhoAmI(ctx context.Context, _ *connect.Request[authv1.WhoAmIRequest]) (*connect.Response[authv1.WhoAmIResponse], error) {
-	return connect.NewResponse(api.WhoAmI(api.PrincipalFrom(ctx), s.id.nix())), nil
+	p := api.PrincipalFrom(ctx)
+	out := api.WhoAmI(p, s.id.nix())
+	if p != nil {
+		// Projects come from the effective permissions ("*" if any permission is on every
+		// project), not from the bindings' projects.
+		eff, err := s.id.rbac.Effective(ctx, p.Bindings)
+		if err != nil {
+			return nil, err
+		}
+		out.Projects = nil
+		for _, e := range eff {
+			if e.Project == "*" {
+				out.Projects = []string{"*"}
+				break
+			}
+			if !slices.Contains(out.Projects, e.Project) {
+				out.Projects = append(out.Projects, e.Project)
+			}
+		}
+		slices.Sort(out.Projects)
+	}
+	return connect.NewResponse(out), nil
 }
 
 var errBadLogin = api.Unauthenticated("invalid login or password")

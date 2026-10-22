@@ -211,6 +211,12 @@ type TestCase struct {
 A failing test makes the derivation fail after writing the result to the build log (so
 failures are never cached); passing results are cached and substitutable (R-FW-024).
 
+Every test unit has a timeout: 10 minutes by default; a test constructor may set another
+(`timeoutSeconds` of the `test-run` job, 0 = the default; ecosystems expose it as a
+`Timeout time.Duration` field of their test options). A test still running at its timeout is
+stopped and fails with BOB-E-2007 `<label> timed out after <n>s` (its result goes to the build
+log, nothing is cached). [A92]
+
 #### R-FW-064 Test results are cached per test unit
 - **Acceptance:** Given the polyglot fixture, when `bob test //...` runs twice, then the second
   run builds 0 derivations, exits 0 and prints the cached result per unit; after editing one Go

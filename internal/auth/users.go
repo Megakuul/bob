@@ -21,6 +21,9 @@ var (
 	slugRE  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,38}[a-z0-9]$`)
 	loginRE = regexp.MustCompile(`^[a-z][a-z0-9._-]{1,62}$`)
 	userRE  = regexp.MustCompile(`^u[0-9a-hjkmnp-tv-z]{26}$`)
+	// saRE: service-account ids are slugs, but 1–40 characters: SPEC's own examples
+	// (§6.3.1 "sa:ci", R-AUTH-005 SA "ci") are shorter than the 3-character slug rule.
+	saRE = regexp.MustCompile(`^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$`)
 )
 
 // Sources of users and bindings as stored.

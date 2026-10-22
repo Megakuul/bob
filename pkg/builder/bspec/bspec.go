@@ -3,8 +3,9 @@ package bspec
 import "encoding/json"
 
 // BuilderVersion is bob-builder's own version (SPEC R-NIX-015). It is bumped only when the
-// builder's behaviour changes.
-const BuilderVersion = 1
+// builder's behaviour changes (2: test-run timeout, A92; unpack symlink rules, F1). The CI
+// stage "builder" fails when the builder changed since the last commit without a bump.
+const BuilderVersion = 2
 
 // Job is one derivation's work. Kind selects the subcommand; Args is the kind's own schema.
 type Job struct {

@@ -48,10 +48,9 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	case server.ModeOrchestrator, server.ModeWorker:
 	case "admin":
 		// `admin create-user --login <name> --admin` (SPEC §6.3.2) writes UserRecord, the
-		// login index and AdminIndex in the control bucket. Those record formats are identity
-		// work (M15.2), so the command lands with them.
+		// login name, the users index and AdminIndex in the control bucket.
 		if len(args) > 1 && args[1] == "create-user" {
-			return report(stderr, diag.NotImplemented("bob-server admin create-user"))
+			return adminCreateUser(args[2:], getenv, os.Stdin, os.Stdout, stderr)
 		}
 		fmt.Fprint(stderr, "usage: bob-server admin create-user --login <name> [--admin]  (password from stdin)\n")
 		return 2

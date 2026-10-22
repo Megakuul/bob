@@ -469,7 +469,10 @@ Expected from other sections:
 #### R-FW-043 Evaluator generation
 - **Statement:** bob builds one evaluator binary per repo state as specified in S1 §5.3, with
   these exact rules:
-  1. Eval key = sha256 over: sorted (path, content) of every `bob.go`, `go.mod`, `go.sum`; bob
+  1. Eval key = sha256 over: sorted (path, content) of every `bob.go`, `go.mod`, `go.sum`; the
+     `go.mod` and every `bob.go` (scan rules of R-FW-002) of each directory `replace` target of
+     the root `go.mod` (a dependency bob repo checked out locally; outside the repo only when
+     the evaluation is not untrusted) [A90]; bob
      version; Go version; `GOARCH` of the host. Key equal to `.bob/eval/key` → reuse
      `.bob/eval/bob-eval`. A size+mtime index (`.bob/eval/index.json`) skips re-reading
      unchanged files; content is re-hashed when size or mtime differ.
@@ -3319,6 +3322,12 @@ type TestCase struct {
 
 A failing test makes the derivation fail after writing the result to the build log (so
 failures are never cached); passing results are cached and substitutable (R-FW-024).
+
+Every test unit has a timeout: 10 minutes by default; a test constructor may set another
+(`timeoutSeconds` of the `test-run` job, 0 = the default; ecosystems expose it as a
+`Timeout time.Duration` field of their test options). A test still running at its timeout is
+stopped and fails with BOB-E-2007 `<label> timed out after <n>s` (its result goes to the build
+log, nothing is cached). [A92]
 
 #### R-FW-064 Test results are cached per test unit
 - **Acceptance:** Given the polyglot fixture, when `bob test //...` runs twice, then the second

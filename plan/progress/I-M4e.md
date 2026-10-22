@@ -13,7 +13,21 @@ Owner of: pkg/cli (not pkg/cli/devenv), cmd/bob. Engine half: I-M4d (pkg/engine/
   doctor incl. --print-nix-env, log), complete.go (__complete, scripts), link.go (pkg/nixpkgs).
 - Replay check: all 56 recorded fault goldens (tests/faults/*/2.34.9/golden.txt) match the
   output of a `-tags bobtest` bob byte for byte.
-- Next: wait for build.Run to compile, then run tests/cli, tests/core, tests/nix, tests/install.
+- 17:00 against the real build package (I-M4d): pkg/cli unit tests green; gofmt clean;
+  go vet + GOWORK=off go vet clean for pkg/cli, cmd/bob; staticcheck, boblint and
+  importboundary clean on pkg/cli, cmd/bob (the repo-wide `tools/ci -only fmt,vet,lint,layering`
+  fails only on other units' WIP: pkg/npm/resolve does not compile, pkg/ocaml/resolve unused).
+- Green: tests/cli TestRCLI001CommandSet, TestRCLI001UnknownCommand, TestRCLI006ExitFunction,
+  TestRCLI006CatalogueExpectations; tests/errors: all 56 replay entries pass with
+  GOFLAGS=-tags=bobtest (57 pass in total; live entries fail on the missing ecosystems).
+  tests/nix TestRNIX024NixEnvironment: the `doctor --print-nix-env` half passes, the build half
+  fails (evaluation).
+- Still red/failing and why: every command that evaluates a fixture stops at evaluation —
+  the fixtures use golang.Module, rust.CLib, cc.Library … (M5+ ecosystem APIs), exit 3; 1011/1012
+  in check need build.Check/Gen (NEEDS); stage events vs schema (TEST PROBLEM 1/3); graph
+  column (NEEDS ir); login, pipeline, dev, env, gen, install, registry, list are later
+  milestones (red, BOB-E-9008); completion scripts: goldens missing (owner) and zsh/fish not on
+  PATH (harness error); tests/install all red (registry/install not implemented).
 
 ## DECISIONS
 - D-M4e-1: BOB_TEST_NIX_REPLAY is honoured only in binaries built with `-tags bobtest` (A27).

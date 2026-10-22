@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"time"
@@ -92,6 +93,11 @@ type OrchestratorParts struct {
 	Authz       api.Authorizer          // RBAC (M15.4); nil = admin bindings only
 	Resolve     api.Resolver            // build/job/release/repository → project
 	Workers     api.WorkerAuthenticator // worker tokens (orchestrator.Registrar)
+	Routes      map[string]http.Handler // further HTTP handlers by mux pattern (OAuth, OIDC, …)
+	// Bootstrap, when set, makes the bootstrap admin credential (BOB_ADMIN_TOKEN, -tags
+	// bobtest only) a real admin user of the identity (R-AUTH-003); without it the token is a
+	// static admin@* principal.
+	Bootstrap func(ctx context.Context, token string) error
 }
 
 // WorkerParts are what internal/worker contributes to a worker process.
@@ -123,6 +129,13 @@ func Orchestrator(ctx context.Context, env *Env, parts OrchestratorParts) error 
 	authn := api.Chain(parts.Authn)
 	if cfg.AdminToken != "" {
 		log.Warn("bootstrap admin token (BOB_ADMIN_TOKEN) is active; unset it once real admins exist")
+	}
+	if cfg.AdminToken != "" && parts.Bootstrap != nil {
+		if err := parts.Bootstrap(ctx, cfg.AdminToken); err != nil {
+			_ = env.ln.Close()
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
+	} else if cfg.AdminToken != "" {
 		authn = append(authn, &api.StaticToken{Token: cfg.AdminToken, Principal: api.Principal{
 			ID: "sa:bootstrap", DisplayName: "bootstrap admin", Scope: "api",
 			Bindings: []api.Binding{{Role: "admin", Project: "*"}},
@@ -137,7 +150,7 @@ func Orchestrator(ctx context.Context, env *Env, parts OrchestratorParts) error 
 		_ = env.ln.Close()
 		return err
 	}
-	main := bhttp.New(env.ln, bhttp.Handler(bhttp.Routes{API: a}, log), log)
+	main := bhttp.New(env.ln, bhttp.Handler(bhttp.Routes{API: a, Patterns: parts.Routes}, log), log)
 	comps := []Component{listener{name: "listener " + cfg.Listen, srv: main}}
 	if cfg.AdminListen != "off" {
 		adm, err := bhttp.Listen(cfg.AdminListen, bhttp.AdminHandler(func() error { return nil }, log), log)

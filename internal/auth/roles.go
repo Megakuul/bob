@@ -11,9 +11,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/megakuul/bob/internal/api"
-	"github.com/megakuul/bob/internal/rbac"
 	accessv1 "github.com/megakuul/bob/internal/gen/bob/access/v1"
 	commonv1 "github.com/megakuul/bob/internal/gen/bob/common/v1"
+	"github.com/megakuul/bob/internal/rbac"
 	"github.com/megakuul/bob/internal/store"
 )
 
@@ -374,7 +374,7 @@ func (id *Identity) bindingsOfPrincipal(ctx context.Context, principal string) (
 		}
 		return u.Bindings, nil
 	case "sa":
-		if !slugRE.MatchString(pid) {
+		if !saRE.MatchString(pid) {
 			return nil, store.ErrNotFound
 		}
 		sa, err := store.Get(ctx, id.control, store.ServiceAccountKey(pid))
@@ -405,7 +405,7 @@ func (id *Identity) updateBindings(ctx context.Context, principal string, fn fun
 		}
 		before, disabled = u.Bindings, u.Disabled
 	case "sa":
-		if !slugRE.MatchString(pid) {
+		if !saRE.MatchString(pid) {
 			return nil, nil, api.NotFound("principal")
 		}
 		sa, err := store.Get(ctx, id.control, store.ServiceAccountKey(pid))

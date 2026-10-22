@@ -37,6 +37,7 @@ The AppImage runtime is bob's own static Go code, so no libfuse is shipped (A15)
 | `github.com/ulikunitz/xz` v0.5.17 | BSD-3-Clause (checked against `LICENSE`) | `.tar.xz` unpacking in `pkg/engine/fetch` (R-NIX-014) | I-M2a (plan/progress/I-M2a.md) |
 | `connectrpc.com/connect` v1.21.1 (+ `cmd/protoc-gen-connect-go` as a Go tool) | Apache-2.0 (checked against `LICENSE`) | connect API server (R-API-001, D5) and its code generator; v1 as in the S17 spike | I-B3 (plan/progress/I-B3.md) |
 | `google.golang.org/protobuf` v1.36.12 (+ `cmd/protoc-gen-go` as a Go tool) | BSD-3-Clause (checked against `LICENSE`) | generated protobuf messages in `internal/gen` and their generator | I-B3 (plan/progress/I-B3.md) |
+| `github.com/megakuul/lake` v0.5.3 (= commit 045e301, SPEC §05.10.1) with `github.com/parquet-go/parquet-go` (Apache-2.0), `parquet-go/bitpack` (Apache-2.0), `parquet-go/jsonlite` (MIT), `google/uuid` (BSD-3-Clause), `andybalholm/brotli` (MIT), `pierrec/lz4/v4` (BSD-3-Clause), `twpayne/go-geom` (BSD-2-Clause) | MIT (checked against each `LICENSE`) | build logs and analytics in lake (R-LOG-001, D20, ADR 0012), `internal/logstore`; all permissive and AGPL-compatible | I-B7 (plan/progress/I-B7.md) |
 | `github.com/klauspost/compress` v1.20.3 (`zstd`) | BSD-3-Clause, with Apache-2.0 and MIT parts (checked against `LICENSE`) | `.tar.zst` unpacking in `pkg/engine/fetch` (R-NIX-014); all parts permissive and AGPL-compatible | I-M2a (plan/progress/I-M2a.md) |
 
 ## Assets

@@ -8,7 +8,9 @@ import (
 )
 
 // Node kinds. A Tool is built for the host (it runs at build time); a Lib or Pkg for the
-// target platform (R-FW-032). The label of every nixpkgs package is "nixpkgs:<attr>".
+// target platform (R-FW-032). The label of every nixpkgs package is "nixpkgs:<attr>"; its node
+// id also names the kind and the options, so one attribute may be used as Tool and Lib, or
+// with different Modules, side by side.
 func init() {
 	ext.Register(ext.Kind{Name: "nixpkgs.tool", Axes: []ext.Axis{ext.AxisPlatform}, Host: true})
 	ext.Register(ext.Kind{Name: "nixpkgs.lib", Axes: []ext.Axis{ext.AxisPlatform}})

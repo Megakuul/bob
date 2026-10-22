@@ -17,8 +17,11 @@ import (
 // Routes are the handlers of the main listener. A nil handler is not mounted.
 type Routes struct {
 	API http.Handler // /api/
-	// Later milestones add /nix/, /v2/, /oci/token, /r/, /upload/, /hooks/, /oauth/, /auth/
-	// and the embedded UI (§6.2).
+	// Patterns are further handlers by http.ServeMux pattern ("POST /oauth/token",
+	// "GET /nix/nix-cache-info", …). A more specific pattern wins over the pending prefixes
+	// below; later milestones add /nix/, /v2/, /oci/token, /r/, /upload/, /hooks/ and the
+	// embedded UI (§6.2).
+	Patterns map[string]http.Handler
 }
 
 // pending are the §6.2 routes whose milestones have not landed: they answer 501 with the
@@ -31,6 +34,9 @@ func Handler(r Routes, log *slog.Logger) http.Handler {
 	if r.API != nil {
 		mux.Handle("/api/", r.API)
 	}
+	for p, h := range r.Patterns {
+		mux.Handle(p, h)
+	}
 	for _, p := range pending {
 		if p == "/api/" && r.API != nil {
 			continue
@@ -40,6 +46,21 @@ func Handler(r Routes, log *slog.Logger) http.Handler {
 		})
 	}
 	return Recover(mux, log)
+}
+
+// NixCacheInfo answers GET /nix/nix-cache-info (SPEC §6.6.1) until the binary cache
+// milestone serves all of /nix/: anonymous or a valid token → the cache info, an invalid or
+// expired token → 401. authn returns an error for a presented credential it refuses.
+func NixCacheInfo(authn func(*http.Request) error) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := authn(r); err != nil {
+			w.Header().Set("WWW-Authenticate", `Basic realm="bob"`)
+			http.Error(w, "unauthorized: token invalid or expired (run 'bob login')", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "text/x-nix-cache-info")
+		_, _ = w.Write([]byte("StoreDir: /nix/store\nWantMassQuery: 1\nPriority: 30\n"))
+	})
 }
 
 // AdminHandler serves /healthz (process alive) and /readyz (ready() == nil) on the admin

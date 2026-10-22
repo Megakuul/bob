@@ -324,7 +324,9 @@ func pkceOK(verifier, challenge string) bool {
 func (id *Identity) tokenFromCode(w http.ResponseWriter, r *http.Request, f url.Values) {
 	ctx := r.Context()
 	code := f.Get("code")
-	invalid := func() { oauthError(w, http.StatusBadRequest, "invalid_grant", "invalid, expired or used authorization code") }
+	invalid := func() {
+		oauthError(w, http.StatusBadRequest, "invalid_grant", "invalid, expired or used authorization code")
+	}
 	if code == "" || len(code) > 200 {
 		invalid()
 		return

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -75,6 +76,15 @@ func run(args []string) error {
 func up(dir string, orch, workers int, asJSON, strict, offline bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// The test clock of this stack is <dir>/clock (the harness contract of tests/auth/authenv
+	// SetClock). Set it here: an inherited value may name another stack's file.
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if err := os.Setenv("BOB_TEST_CLOCK_FILE", filepath.Join(abs, "clock")); err != nil {
+		return err
+	}
 	s, err := stack.Start(ctx, stack.Options{Dir: dir, Orchestrators: orch, Workers: workers, Strict: strict, Offline: offline})
 	if err != nil {
 		return err

@@ -140,8 +140,8 @@ type OidcProviderIndex struct {
 }
 
 // RolesIndexKey, SAIndexKey and OidcProviderIndexKey are the key models of the index documents.
-func RolesIndexKey() *IDList                    { return &IDList{Name: "all"} }
-func SAIndexKey() *SAIndex                      { return &SAIndex{Name: "all"} }
+func RolesIndexKey() *IDList                   { return &IDList{Name: "all"} }
+func SAIndexKey() *SAIndex                     { return &SAIndex{Name: "all"} }
 func OidcProviderIndexKey() *OidcProviderIndex { return &OidcProviderIndex{Name: "all"} }
 
 // RoleMembers is `rmem/<roleID>`: the principals with at least one binding of the role.
