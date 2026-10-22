@@ -38,3 +38,15 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
 8. A75 `pkg/layering_test.go`: E2 ecosystem generators may import `pkg/builder/bspec` (the job
    format is the contract between generators and bob-builder; it has no behaviour, only types).
    Both I-M4a and I-M4c need it. SPEC R-ARCH-003 gets one sentence; test edit pending.
+   (REVOKED, see A75b: the layering test forbids it.)
+
+## Wave 2 (pending owner OK: the permission system blocked these edits)
+9. A83 `tests/eco/ocaml/corpus_test.go` opam oracle (evidence plan/progress/I-R-opam.md):
+   (a) `installLine` regexp `\binstall\s+(\S+)\s+(\S+)` also matches opam's header `=== install N
+   packages`; anchor it: `(?m)^\s*\S\s+install\s+(\S+)\s+(\S+)`;
+   (b) `solve` does not pin the toolchain, so opam upgrades dune to 3.24.2 in 18 of 20 graphs while
+   bob keeps dune fixed (SPEC 03.5.2): append `dune.3.21.1`, `ocamlfind.<v>` and
+   `ocaml-base-compiler.<v>` to the specs (the S5 request);
+   (c) add `--assume-depexts` to the dry-run (opam stops at the system-package prompt for conf-gmp:
+   cohttp, dream).
+   Without these the required 14/20 equality cannot hold for any resolver.
