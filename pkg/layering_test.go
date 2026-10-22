@@ -40,7 +40,7 @@ var (
 		"pkg/connect", "pkg/graphql", "pkg/openapi", "pkg/services"}
 	l3Pkgs      = []string{"pkg/output/oci", "pkg/output/appimage", "pkg/output/tarball", "pkg/release"}
 	e0Pkgs      = []string{"pkg/engine/drv", "pkg/engine/nar", "pkg/engine/ir"}
-	e1Pkgs      = []string{"pkg/engine/store", "pkg/engine/fetch", "pkg/engine/lock", "pkg/engine/nixidx", "pkg/engine/srcs"}
+	e1Pkgs      = []string{"pkg/engine/store", "pkg/engine/fetch", "pkg/engine/lock", "pkg/engine/nixidx", "pkg/engine/srcs", "pkg/engine/materialise"}
 	e3Pkgs      = []string{"pkg/engine/eval", "pkg/engine/build", "pkg/engine/translate"}
 	builderPkgs = []string{"pkg/builder"}
 	gluePkgs    = []string{"pkg/cli", "cmd/bob"}

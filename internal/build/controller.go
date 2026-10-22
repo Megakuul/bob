@@ -314,17 +314,25 @@ func rowOf(job *store.JobRecord, row store.BuildJob) store.BuildJob {
 
 // setRow replaces the row with row's id; it reports whether something changed.
 func setRow(rec *store.BuildRecord, row store.BuildJob) bool {
-	for i := range rec.Jobs.Value() {
-		if rec.Jobs.Value()[i].ID == row.ID {
-			if rec.Jobs.Value()[i] == row {
-				return false
+	jobs, changed := withRow(rec.Jobs.Value(), row)
+	if changed {
+		rec.Jobs = store.Set(jobs)
+	}
+	return changed
+}
+
+// withRow returns jobs with row set (replaced by id, or appended) and whether that changed jobs.
+func withRow(jobs []store.BuildJob, row store.BuildJob) ([]store.BuildJob, bool) {
+	for i := range jobs {
+		if jobs[i].ID == row.ID {
+			if jobs[i] == row {
+				return jobs, false
 			}
-			rec.Jobs.Value()[i] = row
-			return true
+			jobs[i] = row
+			return jobs, true
 		}
 	}
-	rec.Jobs = store.Set(append(rec.Jobs.Value(), row))
-	return true
+	return append(jobs, row), true
 }
 
 var codeRE = regexp.MustCompile(`BOB-E-[0-9]{4}`)
@@ -387,12 +395,17 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 	}
 	now := b.now()
 	next, err := b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
-		setRow(cur, rowOf(job, row))
+		// The fields this update changes in several steps are edited as plain values and
+		// written once at the end (a field set with store.Set cannot be read back).
+		jobs, _ := withRow(cur.Jobs.Value(), rowOf(job, row))
+		errs, result, pipes, evaluated := cur.Errors.Value(), cur.Result.Value(), cur.Pipelines.Value(), cur.Evaluated.Value()
 		if len(job.NonReproducible.Value()) > 0 {
-			if cur.NonReproducible.Value() == nil {
-				cur.NonReproducible = store.Set(map[string][]string{})
+			nr := cur.NonReproducible.Value()
+			if nr == nil {
+				nr = map[string][]string{}
 			}
-			cur.NonReproducible.Value()[job.ID.Value()] = slices.Clone(job.NonReproducible.Value())
+			nr[job.ID.Value()] = slices.Clone(job.NonReproducible.Value())
+			cur.NonReproducible = store.Set(nr)
 		}
 		if cur.Started.Value().IsZero() {
 			cur.Started = store.Set(now)
@@ -401,40 +414,41 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 			cur.State = store.Set[string](StateRunning)
 		}
 		if report != nil {
-			applyReport(cur, report)
+			pipes, result, errs = applyReport(pipes, result, errs, report)
+			evaluated = true
 		}
 		switch {
 		case reject != "":
-			cur.Errors = store.Set(addError(cur.Errors.Value(), store.BuildError{Message: reject}))
+			errs = addError(errs, store.BuildError{Message: reject})
 		case retryRow.ID != "":
-			if len(cur.Jobs.Value()) >= store.MaxBuildJobs {
+			if len(jobs) >= store.MaxBuildJobs {
 				return fmt.Errorf("build %s: %d jobs, the limit", cur.ID.Value(), store.MaxBuildJobs)
 			}
-			if !slices.ContainsFunc(cur.Jobs.Value(), func(j store.BuildJob) bool { return j.ID == retryRow.ID }) {
-				cur.Jobs = store.Set(append(cur.Jobs.Value(), retryRow))
+			if !slices.ContainsFunc(jobs, func(j store.BuildJob) bool { return j.ID == retryRow.ID }) {
+				jobs = append(jobs, retryRow)
 			}
 		case blocked:
-			cur.Errors = store.Set(addError(cur.Errors.Value(), store.BuildError{Message: fmt.Sprintf(
-				"build failed: job %s: %s after %d attempts", job.ID.Value(), job.Promotion.Value(), b.cfg.MaxAttempts)}))
+			errs = addError(errs, store.BuildError{Message: fmt.Sprintf(
+				"build failed: job %s: %s after %d attempts", job.ID.Value(), job.Promotion.Value(), b.cfg.MaxAttempts)})
 		case infraRetry:
-			cur.Errors = store.Set(addError(cur.Errors.Value(), store.BuildError{Message: fmt.Sprintf(
-				"build failed: job %s failed %d times on workers (infrastructure)", job.ID.Value(), b.cfg.MaxAttempts)}))
+			errs = addError(errs, store.BuildError{Message: fmt.Sprintf(
+				"build failed: job %s failed %d times on workers (infrastructure)", job.ID.Value(), b.cfg.MaxAttempts)})
 		case job.State.Value() == orchestrator.StateFailed && report == nil:
 			e := store.BuildError{Message: firstLine(res.Error)}
 			e.Code = codeRE.FindString(res.Error)
 			if e.Message == "" {
 				e.Message = "job " + job.ID.Value() + " failed"
 			}
-			cur.Errors = store.Set(addError(cur.Errors.Value(), e))
-			result := cur.Result.Value()
+			errs = addError(errs, e)
 			for _, l := range res.Failed {
 				result.Failed = appendUnique(result.Failed, l)
 			}
-			cur.Result = store.Set(result)
 		}
 		if cur.Phase.Value() == PhaseEvaluating && report != nil {
 			cur.Phase = store.Set[string](PhaseBuilding)
 		}
+		cur.Jobs, cur.Errors, cur.Result = store.Set(jobs), store.Set(errs), store.Set(result)
+		cur.Pipelines, cur.Evaluated = store.Set(pipes), store.Set(evaluated)
 		return nil
 	})
 	if err != nil {
@@ -483,30 +497,29 @@ func (b *Builds) readReport(ctx context.Context, staging, sha string) (*jobspec.
 	return r, ""
 }
 
-// applyReport takes an accepted evaluation report into the build record.
-func applyReport(rec *store.BuildRecord, r *jobspec.Report) {
-	rec.Evaluated = store.Set[bool](true)
+// applyReport takes an accepted evaluation report into the pipelines, result and errors of a
+// build record (the record is then marked evaluated).
+func applyReport(pipes []store.PipelineRun, result store.BuildResult, errs []store.BuildError, r *jobspec.Report) ([]store.PipelineRun, store.BuildResult, []store.BuildError) {
 	byName := map[string]jobspec.Pipeline{}
 	for _, p := range r.Pipelines {
 		byName[p.Name] = p
 	}
 	for _, name := range r.Matched {
 		p := byName[name]
-		if !slices.ContainsFunc(rec.Pipelines.Value(), func(x store.PipelineRun) bool { return x.Name == name }) {
-			rec.Pipelines = store.Set(append(rec.Pipelines.Value(), store.PipelineRun{Name: name, State: StateRunning,
-				Concurrency: p.Concurrency, Releases: len(p.Releases) > 0}))
+		if !slices.ContainsFunc(pipes, func(x store.PipelineRun) bool { return x.Name == name }) {
+			pipes = append(pipes, store.PipelineRun{Name: name, State: StateRunning,
+				Concurrency: p.Concurrency, Releases: len(p.Releases) > 0})
 		}
 	}
-	result := rec.Result.Value()
 	for _, p := range r.Packages {
 		if p.Status == "failed" || p.Status == "fail" {
 			result.Failed = appendUnique(result.Failed, p.Label)
 		}
 	}
-	rec.Result = store.Set(result)
 	for _, e := range r.Errors {
-		rec.Errors = store.Set(addError(rec.Errors.Value(), store.BuildError{Code: e.Code, Message: e.Message, Label: e.Label, Hint: e.Hint}))
+		errs = addError(errs, store.BuildError{Code: e.Code, Message: e.Message, Label: e.Label, Hint: e.Hint})
 	}
+	return pipes, result, errs
 }
 
 func addError(es []store.BuildError, e store.BuildError) []store.BuildError {
@@ -549,10 +562,12 @@ func (b *Builds) fail(ctx context.Context, rec *store.BuildRecord, _ string, msg
 		if cur.Started.Value().IsZero() {
 			cur.Started = store.Set(now)
 		}
+		errs := cur.Errors.Value()
 		if msg != "" {
-			cur.Errors = store.Set(addError(cur.Errors.Value(), store.BuildError{Message: msg}))
+			errs = addError(errs, store.BuildError{Message: msg})
+			cur.Errors = store.Set(errs)
 		}
-		if errs := cur.Errors.Value(); len(errs) > 0 {
+		if len(errs) > 0 {
 			result := cur.Result.Value()
 			result.Error = errs[0].Message
 			cur.Result = store.Set(result)

@@ -385,3 +385,10 @@ func validRange(req string) bool {
 	_, err := resolve.ParseRange(req)
 	return err == nil
 }
+
+// Materialises reports whether g has npm importers of this repository: their node_modules go
+// into the working tree (engine.Materialiser).
+func (Ecosystem) Materialises(g *ir.Graph) bool {
+	ims, _, err := importers(g)
+	return err == nil && len(ims) > 0
+}

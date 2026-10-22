@@ -334,6 +334,12 @@ func (r *runner) installables(g *ir.Graph, p *planner, units []testrun.Unit, cac
 		}
 		return out
 	}
+	if r.o.Command == CmdGen {
+		for _, m := range r.genSet(g, p) {
+			add(m.Drv, []string{outputName(p, m)})
+		}
+		return out
+	}
 	roots := map[string]bool{}
 	for _, id := range g.Roots {
 		roots[id] = true

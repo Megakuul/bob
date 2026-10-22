@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/megakuul/bob/internal/build/jobspec"
 	"log/slog"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -446,11 +447,11 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	}
 	now := b.now()
 	ctr, err := store.CAS(ctx, b.cfg.Control, &store.ProjectCounters{Project: store.ID(r.Project)}, func(cur *store.ProjectCounters) (*store.ProjectCounters, error) {
-		next := store.ProjectCounters{Project: store.ID(r.Project)}
+		next, builds := store.ProjectCounters{Project: store.ID(r.Project)}, uint64(0)
 		if cur != nil {
-			next = *cur
+			next, builds = *cur, cur.Builds.Value()
 		}
-		next.Builds = store.Set(next.Builds.Value() + 1)
+		next.Builds = store.Set(builds + 1)
 		return &next, nil
 	})
 	if err != nil {
@@ -472,26 +473,37 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	if attempt <= 0 {
 		attempt = 1
 	}
-	rec := &store.BuildRecord{ID: store.ID(id), Project: store.Set(r.Project), Number: store.Set(n), State: store.Set[string](StatePending), Trigger: store.Set(r.Trigger),
-		Branch: store.Set(r.Branch), Commit: store.Set(commit), Author: store.Set(r.Author), Created: store.Set(now), Platforms: store.Set(r.Platforms),
-		RetryOf: store.Set(r.RetryOf), RerunOf: store.Set(r.RerunOf), Source: store.Set(r.Source), Targets: store.Set(r.Targets), Variants: store.Set(r.Variants),
-		LogPartition: store.Set(lg), Attempt: store.Set(attempt), Pipeline: store.Set(strings.Join(r.Pipelines, ",")), Test: store.Set(r.Test), Reason: store.Set(r.Reason)}
-	if len(rec.Platforms.Value()) == 0 {
-		rec.Platforms = store.Set([]string{b.cfg.DefaultPlatform})
+	platforms := r.Platforms
+	if len(platforms) == 0 {
+		platforms = []string{b.cfg.DefaultPlatform}
 	}
 	// intent first: index entries before the record (R-SRV-101)
-	if err := b.setRunning(ctx, rec); err != nil {
+	if err := b.setRunning(ctx, id, store.RunningBuild{Project: r.Project, N: n}); err != nil {
 		return nil, err
 	}
-	if err := b.buildPages(r.Project).Set(ctx, n-1, entryOf(rec)); err != nil {
+	entry := store.BuildEntry{N: n, Build: id, State: StatePending, Branch: r.Branch, Commit: commit,
+		Trigger: r.Trigger.Kind, Created: now}
+	if len(entry.Commit) > 12 {
+		entry.Commit = entry.Commit[:12]
+	}
+	if err := b.buildPages(r.Project).Set(ctx, n-1, entry); err != nil {
 		return nil, fmt.Errorf("bpage: %w", err)
 	}
-	if ref := refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()); ref != "" {
+	if ref := refOf(r.Trigger, r.Source, r.Branch); ref != "" {
 		if err := b.addBranchEntry(ctx, r.Project, ref, n); err != nil {
 			return nil, err
 		}
 	}
-	if err := store.Create(ctx, b.cfg.Control, rec); err != nil {
+	if err := store.Create(ctx, b.cfg.Control, &store.BuildRecord{ID: store.ID(id), Project: store.Set(r.Project), Number: store.Set(n),
+		State: store.Set[string](StatePending), Trigger: store.Set(r.Trigger), Branch: store.Set(r.Branch), Commit: store.Set(commit),
+		Author: store.Set(r.Author), Created: store.Set(now), Platforms: store.Set(platforms), RetryOf: store.Set(r.RetryOf),
+		RerunOf: store.Set(r.RerunOf), Source: store.Set(r.Source), Targets: store.Set(r.Targets), Variants: store.Set(r.Variants),
+		LogPartition: store.Set(lg), Attempt: store.Set(attempt), Pipeline: store.Set(strings.Join(r.Pipelines, ",")),
+		Test: store.Set(r.Test), Reason: store.Set(r.Reason)}); err != nil {
+		return nil, fmt.Errorf("build/%s: %w", id, err)
+	}
+	rec, err := store.Get(ctx, b.cfg.Control, &store.BuildRecord{ID: store.ID(id)})
+	if err != nil {
 		return nil, fmt.Errorf("build/%s: %w", id, err)
 	}
 	b.cfg.Log.Info("build created", "build", id, "project", r.Project, "number", n, "trigger", r.Trigger.Kind)
@@ -511,25 +523,22 @@ func (b *Builds) checkUpload(ctx context.Context, project, sha string) error {
 	return err
 }
 
-// setRunning adds rec to bidx/running (every non-terminal build is listed there, decision
+// setRunning adds build id to bidx/running (every non-terminal build is listed there, decision
 // D-IB11-1; the started time is set when its first job is claimed).
-func (b *Builds) setRunning(ctx context.Context, rec *store.BuildRecord) error {
+func (b *Builds) setRunning(ctx context.Context, id string, e store.RunningBuild) error {
 	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
-		next := store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{})}
+		builds := map[string]store.RunningBuild{}
 		if cur != nil {
-			for k, v := range cur.Builds.Value() {
-				next.Builds.Value()[k] = v
-			}
+			maps.Copy(builds, cur.Builds.Value())
 		}
-		e := store.RunningBuild{Project: rec.Project.Value(), N: rec.Number.Value(), Started: rec.Started.Value()}
-		if old, ok := next.Builds.Value()[rec.ID.Value()]; ok && old == e {
+		if old, ok := builds[id]; ok && old == e {
 			return nil, store.ErrNoChange
 		}
-		if _, ok := next.Builds.Value()[rec.ID.Value()]; !ok && len(next.Builds.Value()) >= MaxRunningBuilds {
+		if _, ok := builds[id]; !ok && len(builds) >= MaxRunningBuilds {
 			return nil, fmt.Errorf("%w: %d running builds (the limit of bidx/running)", ErrLimit, MaxRunningBuilds)
 		}
-		next.Builds.Value()[rec.ID.Value()] = e
-		return &next, nil
+		builds[id] = e
+		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(builds)}, nil
 	})
 	if err != nil {
 		return fmt.Errorf("bidx/running: %w", err)
@@ -546,13 +555,9 @@ func (b *Builds) dropRunning(ctx context.Context, id string) error {
 		if _, ok := cur.Builds.Value()[id]; !ok {
 			return nil, store.ErrNoChange
 		}
-		next := store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{})}
-		for k, v := range cur.Builds.Value() {
-			if k != id {
-				next.Builds.Value()[k] = v
-			}
-		}
-		return &next, nil
+		builds := maps.Clone(cur.Builds.Value())
+		delete(builds, id)
+		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(builds)}, nil
 	})
 	return err
 }
@@ -560,18 +565,18 @@ func (b *Builds) dropRunning(ctx context.Context, id string) error {
 // addFailed appends a build to the bidx/failed ring (last 200).
 func (b *Builds) addFailed(ctx context.Context, rec *store.BuildRecord) error {
 	_, err := store.CAS(ctx, b.cfg.Control, &store.FailedBuilds{Name: store.ID("failed")}, func(cur *store.FailedBuilds) (*store.FailedBuilds, error) {
-		next := store.FailedBuilds{Name: store.ID("failed")}
+		var builds []store.FailedBuild
 		if cur != nil {
 			if slices.ContainsFunc(cur.Builds.Value(), func(f store.FailedBuild) bool { return f.Build == rec.ID.Value() }) {
 				return nil, store.ErrNoChange
 			}
-			next.Builds = store.Set(slices.Clone(cur.Builds.Value()))
+			builds = slices.Clone(cur.Builds.Value())
 		}
-		next.Builds = store.Set(append(next.Builds.Value(), store.FailedBuild{Build: rec.ID.Value(), Project: rec.Project.Value(), N: rec.Number.Value(), Finished: rec.Finished.Value()}))
-		if len(next.Builds.Value()) > 200 {
-			next.Builds = store.Set(next.Builds.Value()[len(next.Builds.Value())-200:])
+		builds = append(builds, store.FailedBuild{Build: rec.ID.Value(), Project: rec.Project.Value(), N: rec.Number.Value(), Finished: rec.Finished.Value()})
+		if len(builds) > 200 {
+			builds = builds[len(builds)-200:]
 		}
-		return &next, nil
+		return &store.FailedBuilds{Name: store.ID("failed"), Builds: store.Set(builds)}, nil
 	})
 	return err
 }
@@ -583,11 +588,11 @@ func (b *Builds) addBranchEntry(ctx context.Context, project, ref string, n uint
 		return err
 	}
 	ctr, err := store.CAS(ctx, b.cfg.Control, key, func(cur *store.BranchCounter) (*store.BranchCounter, error) {
-		next := *key
+		next, count := *key, uint64(0)
 		if cur != nil {
-			next = *cur
+			next, count = *cur, cur.Count.Value()
 		}
-		next.Count = store.Set(next.Count.Value() + 1)
+		next.Count = store.Set(count + 1)
 		return &next, nil
 	})
 	if err != nil {
@@ -665,22 +670,9 @@ func (b *Builds) update(ctx context.Context, id string, fn func(cur *store.Build
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
+		// cur is a fresh read of this CAS attempt, so fn may change its slices and maps in
+		// place; a field fn replaces with store.Set must not be read again by fn.
 		next := *cur
-		next.Jobs = store.Set(slices.Clone(cur.Jobs.Value()))
-		next.Pipelines = store.Set(slices.Clone(cur.Pipelines.Value()))
-		next.Errors = store.Set(slices.Clone(cur.Errors.Value()))
-		if cur.NonReproducible.Value() != nil {
-			next.NonReproducible = store.Set(make(map[string][]string, len(cur.NonReproducible.Value())))
-			for k, v := range cur.NonReproducible.Value() {
-				next.NonReproducible.Value()[k] = v
-			}
-		}
-		if cur.Reported.Value() != nil {
-			next.Reported = store.Set(make(map[string]string, len(cur.Reported.Value())))
-			for k, v := range cur.Reported.Value() {
-				next.Reported.Value()[k] = v
-			}
-		}
 		if err := fn(&next); err != nil {
 			return nil, err
 		}

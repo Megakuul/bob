@@ -20,6 +20,9 @@ type Command string
 const (
 	CmdBuild Command = "build" // realise the requested packages
 	CmdTest  Command = "test"  // realise the test units among the requested packages
+	// CmdGen realises the working-tree outputs (engine.Materialisation) of the requested
+	// packages and materialises them (bob gen); nothing else is built.
+	CmdGen Command = "gen"
 )
 
 // nixVersion is the embedded Nix (run.start "nix").
@@ -57,7 +60,12 @@ type Options struct {
 	PrintPaths      bool     // fill Package.HostPaths and package.finish Paths
 	JSONLog         bool     // --json-log: emit log events with build log lines
 	Replay          string   // BOB_TEST_NIX_REPLAY: translate this capture instead of running Nix
-	Events          func(Event)
+	// NoMaterialise keeps the working tree as it is (remote workers and pipeline runs never
+	// materialise, SPEC §03.6.6); Untrusted implies it.
+	NoMaterialise bool
+	// Force moves conflicting files of owned directories to .bob/gen/backup/ (bob gen --force).
+	Force  bool
+	Events func(Event)
 }
 
 // Event is one typed event of a run. Names: the SPEC §02.4 events (run.start, package.start,

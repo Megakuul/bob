@@ -147,3 +147,75 @@ func TestLevels(t *testing.T) {
 		t.Errorf("levels = %v", got)
 	}
 }
+
+// TestLinkobjSplit (R-GO-005): with Export set, a package's export data and its object code
+// are separate files; importers compile against the export data, the link takes the object
+// code, and the program is byte-identical to the build without the split. A body-only change
+// of a non-inlinable function keeps the export data byte-identical (the cutoff's premise).
+func TestLinkobjSplit(t *testing.T) {
+	root := goroot(t)
+	top := t.TempDir()
+	std := stdConfig(t, top)
+	tc := Toolchain{GoRoot: root, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Path: []string{}}
+	lib := func(body string) string {
+		return "package lib\n\nimport \"strings\"\n\n// Up upper-cases each word.\nfunc Up(xs []string) string {\n\tvar b strings.Builder\n\tfor i, x := range xs {\n\t\tif i > 0 {\n\t\t\tb.WriteString(\",\")\n\t\t}\n\t\tb.WriteString(x)\n\t}\n\treturn " + body + "\n}\n"
+	}
+	build := func(name, libSrc string, split bool) (bin, export []byte) {
+		src := filepath.Join(top, name, "src")
+		for rel, body := range map[string]string{
+			"lib/lib.go":   libSrc,
+			"main/main.go": "package main\n\nimport (\n\t\"fmt\"\n\n\t\"example.com/m/lib\"\n)\n\nfunc main() { fmt.Println(lib.Up([]string{\"a\", \"b\"})) }\n",
+		} {
+			p := filepath.Join(src, rel)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		out := filepath.Join(top, name, "out")
+		libA, mainA := out+"/pkg/example.com/m/lib.a", out+"/pkg/example.com/m/main.a"
+		libImport, libExport := libA, ""
+		if split {
+			libExport = out + "/export/example.com/m/lib.a"
+			libImport = libExport
+		}
+		args := BuildArgs{Toolchain: tc, Std: std, Packages: []Package{
+			{ImportPath: "example.com/m/lib", Name: "lib", Flags: []string{"-p", "example.com/m/lib", "-lang=go1.26"},
+				Dir: filepath.Join(src, "lib"), GoFiles: []string{"lib.go"}, Imports: map[string]string{},
+				Trim: "example.com/m/lib", Out: libA, Export: libExport},
+			{ImportPath: "example.com/m/main", Name: "main", Flags: []string{"-p", "main", "-lang=go1.26"},
+				Dir: filepath.Join(src, "main"), GoFiles: []string{"main.go"},
+				Imports: map[string]string{"example.com/m/lib": libImport}, Trim: "example.com/m/main", Out: mainA},
+		}, Link: &Link{Main: mainA, Packages: map[string]string{"example.com/m/lib": libA, "example.com/m/main": mainA},
+			Out: out + "/bin/m", Mode: "exe"}}
+		if code, log := runJob(t, filepath.Join(top, name), "go-link", args, map[string]string{"out": out}); code != 0 {
+			t.Fatalf("%s: go-link exited %d:\n%s", name, code, log)
+		}
+		bin, err := os.ReadFile(out + "/bin/m")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if split {
+			if export, err = os.ReadFile(libExport); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return bin, export
+	}
+	for _, d := range []string{"plain", "split", "edited"} {
+		if err := os.MkdirAll(filepath.Join(top, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plain, _ := build("plain", lib("strings.ToUpper(b.String())"), false)
+	split, export := build("split", lib("strings.ToUpper(b.String())"), true)
+	if !bytes.Equal(plain, split) {
+		t.Error("the program linked from -linkobj objects differs from the plain build")
+	}
+	_, export2 := build("edited", lib("strings.ToLower(b.String())"), true)
+	if len(export) == 0 || !bytes.Equal(export, export2) {
+		t.Error("a body-only change of a non-inlinable function changed the export data")
+	}
+}

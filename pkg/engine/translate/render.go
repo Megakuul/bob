@@ -158,7 +158,7 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 
 // definitionLine is the first line of the errors SPEC writes as `✗ <message>` lines (§03.1.3
 // R-CC-002a, §04 R-PLAT-006, §03.4.4): a package's invalid option (BOB-E-1020), a package that
-// does not support the requested platform (BOB-E-0006) and the npm runtime translations
+// does not support the requested platform (BOB-E-0006), the platform usage errors (0008, 0010, 0011, §04 R-PLAT-001/005), the nixpkgs mismatch (1026) and the npm runtime translations
 // (BOB-E-2013, BOB-E-2014). A definition error without a code of its
 // own (option "build definition") shows its reason, since `-->` gives the position. Every other
 // error keeps the `error[CODE]:` head of the S15 goldens.
@@ -167,7 +167,7 @@ func definitionLine(e *diag.Error) (string, bool) {
 		return "", false
 	}
 	switch e.Code {
-	case 6:
+	case 6, 8, 10, 11, 1026: // usage and definition errors SPEC writes as `✗ <message>`
 		return e.Error(), true
 	case 1020:
 		if e.Args["option"] == "build definition" && e.Location != nil && e.Args["reason"] != "" {

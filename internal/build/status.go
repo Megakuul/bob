@@ -144,12 +144,14 @@ func (b *Builds) report(ctx context.Context, rec *store.BuildRecord) bool {
 		return settled
 	}
 	if _, err := b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
-		if cur.Reported.Value() == nil {
-			cur.Reported = store.Set(map[string]string{})
+		reported := cur.Reported.Value()
+		if reported == nil {
+			reported = map[string]string{}
 		}
 		for c, m := range sent {
-			cur.Reported.Value()[c] = m
+			reported[c] = m
 		}
+		cur.Reported = store.Set(reported)
 		return nil
 	}); err != nil {
 		return false

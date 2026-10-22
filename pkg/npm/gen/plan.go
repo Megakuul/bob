@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path"
 	"slices"
 	"sort"
 	"strings"
@@ -799,6 +800,13 @@ func (pl *planner) nodeModules(n *ir.Node, im *importer, pi *platInfo) (nmRef, e
 	}
 	r := nmRef{drv: dp, d: d, out: outPath(d)}
 	pl.nm[memo] = r
+	if pi.system == engine.HostSystem() {
+		// The working tree gets this node_modules (§03.4.3): editors, tsc and bob exec see the
+		// packages bob built; .vite and .cache stay the dev server's.
+		pl.out.Materialise = append(pl.out.Materialise, engine.Materialisation{
+			Dir: path.Join(im.dir, "node_modules"), Label: im.node.Label, Drv: dp, Output: r.out,
+			Keep: []string{".vite", ".cache"}, Record: path.Join(im.dir, ".bob", "node_modules.path")})
+	}
 	return r, nil
 }
 

@@ -52,6 +52,14 @@ pkg/cli/link.go (blank import pkg/rust/gen) and cmd/bob-builder/main.go (rustbop
 ## next
 - nothing in this chain beyond NEEDS / TEST PROBLEM.
 
+## corpus (R-RS-002a, warm BOB_HOME, regmirror recording from crates.io 2026-10-22, pinned cargo
+1.95.0, vibe-engine arm64 under load 25-35; bob = private copy with NEEDS 1)
+Cargo.lock from `bob lock` + `bob gen` byte-identical to `cargo generate-lockfile` on all 15:
+fixture-rust 59 packages, s3-serde_json 12, s3-tokio-full 25, s3-web 200, s3-big 389,
+itoa-hex 3, serde 12, regex 6, clap 22, anyhow-thiserror 8, tokio 8, zstd 13, reqwest 155,
+axum 54, tonic 95. (bob lock+gen 2-11 min each, dominated by the engine's nixpkgs tarball
+import for every new repository on the loaded host, not by crate resolution.)
+
 ## DECISIONS
 - D-M8a-1: rust.Test's result type is rust.TestSet (SPEC names type and function Test).
 - D-M8a-2: Toolchain is a bob.Tool (nixpkgs.Tool returns *ToolPackage; the tests pass one).

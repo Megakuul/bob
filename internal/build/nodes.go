@@ -41,14 +41,14 @@ type Node struct {
 // package counts of all nodes in the build record.
 func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job string, r *jobspec.Report) (*store.BuildRecord, error) {
 	bn, err := store.CAS(ctx, b.cfg.Control, &BuildNodes{ID: rec.ID}, func(cur *BuildNodes) (*BuildNodes, error) {
-		next := &BuildNodes{ID: rec.ID}
+		var nodes []Node
 		if cur != nil {
 			if slices.ContainsFunc(cur.Nodes.Value(), func(n Node) bool { return n.Job == job }) {
 				return nil, store.ErrNoChange
 			}
-			next.Nodes = store.Set(slices.Clone(cur.Nodes.Value()))
+			nodes = slices.Clone(cur.Nodes.Value())
 		}
-		base := len(next.Nodes.Value())
+		base := len(nodes)
 		if base+len(r.Packages) > jobspec.MaxReportPackages {
 			return nil, store.ErrNoChange // the graph view is capped; counts come from what is kept
 		}
@@ -60,9 +60,9 @@ func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job str
 			if p.Error != nil {
 				n.Error = &store.BuildError{Code: p.Error.Code, Message: p.Error.Message, Label: p.Error.Label, Hint: p.Error.Hint}
 			}
-			next.Nodes = store.Set(append(next.Nodes.Value(), n))
+			nodes = append(nodes, n)
 		}
-		return next, nil
+		return &BuildNodes{ID: rec.ID, Nodes: store.Set(nodes)}, nil
 	})
 	if err != nil {
 		return rec, err

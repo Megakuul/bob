@@ -120,7 +120,9 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 
 // Stale reports a section resolved from other Externals than the graph declares (R-FW-062).
 // Only the declarations are compared (the section's inputs); a declared External whose entry
-// is missing while the declarations match is refused by Plan (BOB-E-1009, R-CC-005a).
+// is missing while the declarations match is refused by Plan (BOB-E-1009, R-CC-005a). When the
+// graph is only part of the repository its inputs differ from the section's; then only the
+// declarations present are checked against their entries.
 func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Pos, error) {
 	decls, err := externals(req.Graph)
 	if err != nil {
@@ -148,5 +150,9 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 			return fmt.Sprintf("cc.External %s changed Strip to %d", d.Label, d.Strip), d.pos, nil
 		}
 	}
-	return "the cc.External declarations changed", ir.Pos{}, nil
+	// Every declaration of this graph matches its entry. The graph may hold only part of the
+	// repository (`bob test //libs/mathx:mathx_test` evaluates the pattern's closure), so the
+	// other entries of the section are not evidence of a change: an External that is no longer
+	// declared leaves an unused entry, which the next bob lock drops.
+	return "", ir.Pos{}, nil
 }

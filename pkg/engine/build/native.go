@@ -125,6 +125,7 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	}
 	// Native files describe whole modules, so they always come from the whole repository's
 	// graph in its host configuration, whatever patterns name (those select codegen roots).
+	patterns := o.Patterns
 	o.Patterns, o.Platform, o.Variants = nil, "", nil
 	g, _, err := evaluate(ctx, st, o)
 	if err != nil {
@@ -142,7 +143,13 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return generate(ctx, o.Root, g, lf, idx, force, time.Now())
+	paths, err := generate(ctx, o.Root, g, lf, idx, force, time.Now())
+	if err != nil {
+		return paths, err
+	}
+	// Then the working-tree outputs (§03.6.6): built and materialised for patterns.
+	o.Store, o.Patterns = st, patterns
+	return paths, genMaterialise(ctx, o, g, force)
 }
 
 // generate is Gen after evaluation (also the drift check of bob build/test, with force false).

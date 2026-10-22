@@ -103,6 +103,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		}
 		p = newPlanner(g, st, builder, srcPaths, entries, lf, idx)
 		p.root, p.fetcher = o.Root, f
+		p.offline, p.maxJobs = o.Offline, o.MaxJobs
 		if o.Command == CmdTest {
 			p.testArgs = o.TestArgs
 		}
@@ -153,10 +154,14 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return res, err
 	}
+	rep.Counts.Built += p.planBuilt // derivations built while planning (early cutoff)
 	res.Report = rep
 	r.collect(st, g, p, res, targets)
 	if o.Command == CmdTest {
 		res.Tests = append(r.testResults(ctx, st, units, cached), r.skippedResults()...)
+	}
+	if err := r.materialise(ctx, st, p, res); err != nil {
+		return res, err
 	}
 	return res, nil
 }
@@ -394,6 +399,9 @@ func (r *runner) collect(st *store.Store, g *ir.Graph, p *planner, res *Result, 
 // targetLabels are the requested labels this command realises: bob build leaves test units
 // out (they run with bob test), bob test keeps only them.
 func (r *runner) targetLabels(g *ir.Graph, p *planner, requested []string) []string {
+	if r.o.Command == CmdGen {
+		return nil // bob gen realises only working-tree outputs (installables)
+	}
 	tests := map[string]bool{}
 	for _, n := range g.Nodes {
 		if d := p.byPath[p.nodes[n.ID].Drv]; d != nil && isTestDrv(d) && n.Kind != "bob.file" {

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -42,12 +43,19 @@ type planner struct {
 	testArgs []string      // bob test -- args, passed to the ecosystems
 	root     string        // repository root (PlanRequest.Root)
 	fetcher  fetch.Fetcher // the run's fetcher (PlanRequest.Store.Ensure)
+	offline  bool          // no substituters for builds while planning (Options.Offline)
+	maxJobs  int           // --max-jobs of builds while planning (0 = Nix's default)
+	// planBuilt counts the bob derivations built while planning (PlanRealiser): the
+	// translator only sees the build stage, run.finish counts.built includes these.
+	planBuilt int
 
 	nodes   map[string]engine.Resolved // node id → planned outputs
 	drvs    []*drv.Derivation          // every bob derivation, in planning order
 	byPath  map[string]*drv.Derivation // drv path → derivation
 	drvNode map[string]string          // drv path → node id of the package it builds
 	fetches []fetch.Request
+	// materialise are the ecosystems' working-tree outputs (engine.PlanResult.Materialise).
+	materialise []engine.Materialisation
 }
 
 func newPlanner(g *ir.Graph, st *store.Store, builder string, srcs map[string]string,
@@ -135,7 +143,7 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 	}()
 	res, err := eco.Plan(ctx, engine.PlanRequest{Graph: p.g, Nodes: nodes, Lock: p.lockf.Sections[name],
 		Inputs: p.nodes, Sources: p.srcs, Nixpkgs: p.idx, Builder: p.builder,
-		Resolver: p.res, TestArgs: p.testArgs, Root: p.root, Store: planStore{st: p.st, f: p.fetcher}})
+		Resolver: p.res, TestArgs: p.testArgs, Root: p.root, Store: planStore{st: p.st, f: p.fetcher, p: p}})
 	if err != nil {
 		if _, ok := diagErrors(err); ok {
 			return err
@@ -158,6 +166,7 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 		p.setNode(n, rv)
 	}
 	p.fetches = append(p.fetches, res.Fetches...)
+	p.materialise = append(p.materialise, res.Materialise...)
 	return nil
 }
 
@@ -598,6 +607,7 @@ func (r *resolver) remember(p string, h [32]byte, learned bool) {
 type planStore struct {
 	st *store.Store
 	f  fetch.Fetcher
+	p  *planner // the derivations of earlier waves and the run's build options
 }
 
 func (s planStore) HostPath(p string) string { return hostPath(s.st, p) }
@@ -611,4 +621,129 @@ func (s planStore) Ensure(ctx context.Context, r fetch.Request) (string, error) 
 		return "", fmt.Errorf("fetch %s: no fetcher while planning", r.Label)
 	}
 	return s.f.Ensure(ctx, r)
+}
+
+// maxPlanLog bounds the Nix output kept from a build while planning (only its tail is used).
+const maxPlanLog = 64 << 10
+
+// RealiseNow implements engine.PlanRealiser: drvs and the bob derivations they need (planned
+// in earlier waves) are written to the store, those with invalid outputs are built with one
+// `nix build`, and the outputs are checked structurally (R-NIX-018) before they are returned.
+func (s planStore) RealiseNow(ctx context.Context, drvs map[string]*drv.Derivation) (map[string]map[string]string, error) {
+	all := map[string]*drv.Derivation{}
+	var add func(path string, d *drv.Derivation)
+	add = func(path string, d *drv.Derivation) {
+		if _, ok := all[path]; ok {
+			return
+		}
+		all[path] = d
+		for _, in := range d.InputDrvs {
+			if dd, ok := drvs[in.Path]; ok {
+				add(in.Path, dd)
+			} else if s.p != nil && s.p.byPath[in.Path] != nil {
+				add(in.Path, s.p.byPath[in.Path])
+			}
+		}
+	}
+	paths := make([]string, 0, len(drvs))
+	for p, d := range drvs {
+		if d == nil {
+			return nil, fmt.Errorf("realise while planning: no derivation for %s", p)
+		}
+		paths = append(paths, p)
+		add(p, d)
+	}
+	sort.Strings(paths)
+	list := make([]*drv.Derivation, 0, len(all))
+	for _, p := range sortedKeys(all) {
+		list = append(list, all[p])
+	}
+	if _, err := s.st.ImportDrvs(ctx, list); err != nil {
+		return nil, err
+	}
+	var outs []string
+	outOf := map[string]string{} // output path → drv path
+	for p, d := range all {
+		for _, o := range d.Outputs {
+			outs = append(outs, o.Path)
+			outOf[o.Path] = p
+		}
+	}
+	sort.Strings(outs)
+	before, err := s.st.Invalid(ctx, outs)
+	if err != nil {
+		return nil, err
+	}
+	if len(before) > 0 {
+		args := []string{"build", "--no-link", "--keep-going"}
+		if s.p != nil && s.p.maxJobs > 0 {
+			args = append(args, "--max-jobs", strconv.Itoa(s.p.maxJobs))
+		}
+		if s.p != nil && s.p.offline {
+			args = append(args, "--option", "substituters", "")
+		}
+		for _, p := range paths {
+			var names []string
+			for _, o := range drvs[p].Outputs {
+				names = append(names, o.Name)
+			}
+			sort.Strings(names)
+			args = append(args, p+"^"+strings.Join(names, ","))
+		}
+		var log tailBuffer
+		c := s.st.Command(ctx, "nix", args...)
+		c.Stderr = &log
+		runErr := c.Run()
+		after, err := s.st.Invalid(ctx, outs)
+		if err != nil {
+			return nil, err
+		}
+		still := map[string]bool{}
+		for _, o := range after {
+			still[outOf[o]] = true
+		}
+		built := map[string]bool{}
+		for _, o := range before {
+			if dp := outOf[o]; !still[dp] {
+				built[dp] = true
+			}
+		}
+		if s.p != nil {
+			s.p.planBuilt += len(built)
+		}
+		for _, p := range paths {
+			if still[p] {
+				return nil, fmt.Errorf("building %s while planning failed (%v): %s", p, runErr, log.tail())
+			}
+		}
+	}
+	res := make(map[string]map[string]string, len(paths))
+	for _, p := range paths {
+		m := map[string]string{}
+		for _, o := range drvs[p].Outputs {
+			m[o.Name] = s.HostPath(o.Path)
+		}
+		res[p] = m
+	}
+	return res, nil
+}
+
+// tailBuffer keeps the last maxPlanLog bytes written to it.
+type tailBuffer struct{ b []byte }
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.b = append(t.b, p...)
+	if len(t.b) > maxPlanLog {
+		t.b = append([]byte(nil), t.b[len(t.b)-maxPlanLog:]...)
+	}
+	return len(p), nil
+}
+
+// tail is the last lines of the output (at most 12).
+func (t *tailBuffer) tail() string {
+	lines := strings.Split(strings.TrimSpace(string(t.b)), "\n")
+	if len(lines) > 12 {
+		lines = lines[len(lines)-12:]
+	}
+	return strings.Join(lines, "\n")
 }

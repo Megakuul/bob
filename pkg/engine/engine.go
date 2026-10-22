@@ -73,6 +73,8 @@ type PlanResult struct {
 	Drvs    []*drv.Derivation   // new derivations, any order (bob sorts topologically)
 	Nodes   map[string]Resolved // node id → its outputs and, for Linkables, filled LinkInfo
 	Fetches []fetch.Request     // external inputs; the fetcher makes their paths valid before nix build
+	// Materialise are outputs of this plan bob puts into the working tree (host platform only).
+	Materialise []Materialisation
 }
 
 // Resolved is a node's outputs after planning.
