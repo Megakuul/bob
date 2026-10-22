@@ -28,12 +28,13 @@ func run() error {
 	manifests := flag.String("manifests", "tests/fixtures/registry", "manifest directory")
 	blobs := flag.String("blobs", "", "blob cache directory")
 	listen := flag.String("listen", "127.0.0.1:0", "listen address (loopback)")
+	record := flag.Bool("record-crates", false, "fetch missing crates.io index files and .crate files from the network and keep them (manual capture)")
 	flag.Parse()
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: regmirror.New(regmirror.Config{Manifests: *manifests, Blobs: *blobs}), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: regmirror.New(regmirror.Config{Manifests: *manifests, Blobs: *blobs, RecordCrates: *record}), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() {

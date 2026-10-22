@@ -49,6 +49,11 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 	if out == "" {
 		return Invalidf("test-run declares no output \"out\"")
 	}
+	for _, cp := range a.Copy {
+		if err := c.copyAny(cp.From, cp.To); err != nil {
+			return err
+		}
+	}
 	dir := c.BuildTop
 	if a.Cwd != "" {
 		cwd, err := c.Writable(a.Cwd)

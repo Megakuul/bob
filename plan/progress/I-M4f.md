@@ -41,6 +41,32 @@ pkg/engine/eco (I-M5a).
   no problems; graph shows bob.go:21:9 / 22:23 / 22:48; build --json stage events; bob log
   reads the .drv log.
 
+## Coordinator items (17:15, from I-M5a NEEDS) — done
+1. plan.go: PlanRequest.Root (o.Root) and PlanRequest.Store (planStore: HostPath, ImportSources
+   = srcs.Import, Ensure = the run's fetcher); fields on planner, no package global.
+2. pkg/cli/link.go blank-imports pkg/golang/gen.
+3. eval nested go.mod (A103): patch reviewed and applied by hand (scan.go bobGoMod/bobMods,
+   gen.go overlay hides them); SPEC R-FW-002 scan text amended identically in spec/01-core.md
+   and SPEC.md; test pkg/engine/eval/scan_nested_test.go.
+4. counts.built (run.finish) = bob derivations Nix built (helpers included); the human summary
+   keeps counting packages (Report.BuiltPackages, json:"-") so the protected fault goldens hold.
+5. realise.go: helper drvs attributed first to packages this run realises, deterministically
+   (sorted drv paths); role "unpack" only for bob-builder unpack jobs, else "helper"; a
+   --rerun unit drv replaces its planned drv in the translator context (no 9002).
+6. Human error/warning blocks and the summary after them go to stderr (translate.HumanTo,
+   out.diagnose, refusal, check, test); package/PASS lines and clean summaries stay on stdout;
+   stdout+stderr reads as before. Overturns D-M4e-3; pkg/cli unit tests TestMainUsage /
+   TestOutsideRepository now read stderr. Builder diagnostics' detail lines (a failed
+   service's log tail) keep 20 lines (R-FW-025), the only exception to the 12-line excerpt.
+7. builder test-run `copy` (TestRunArgs.Copy, before services; Cwd into the copy);
+   BuilderVersion 4; builders.go regenerated; `tools/ci -only builder` ok; test
+   pkg/builder/testrun_copy_test.go.
+- NEEDS for I-M5a: set TestRunArgs.Copy {from: <package source path>, to: <build dir>/…} and
+  Cwd for Go test units.
+- Host: / is 100 % full (151G, other units' data); evaluator-based tests (pkg/engine/eval,
+  evalbox, pkg/engine/build Run tests, tests/errors) fail with ENOSPC until space is freed.
+  I removed my own test leftovers (~4 GB) — still 0 bytes available.
+
 ## DECISIONS
 - D-M4f-1: drift (1011) = working copy differs from what bob would write AND from the sha256
   bob recorded in native.json (no record: any difference). A copy bob wrote from older bob.go

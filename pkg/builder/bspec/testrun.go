@@ -4,12 +4,16 @@ package bspec
 // order, run the test binary once, write $out/test-result.json and $out/test.log. Every
 // ecosystem's test unit ends in one such job; the engine recognises test units by this kind.
 type TestRunArgs struct {
-	Argv     []string          `json:"argv"`               // the test binary (looked up in Path) and its args
-	Path     []string          `json:"path,omitempty"`     // PATH of the test, in order (tool bin dirs)
-	Env      map[string]string `json:"env,omitempty"`      // added to the test's environment
-	Cwd      string            `json:"cwd,omitempty"`      // working directory (default: the build dir)
-	Format   string            `json:"format,omitempty"`   // per-case parser: "" (none) or "go" (-test.v output)
-	Services []Service         `json:"services,omitempty"` // R-FW-025, started in list order
+	Argv []string          `json:"argv"`           // the test binary (looked up in Path) and its args
+	Path []string          `json:"path,omitempty"` // PATH of the test, in order (tool bin dirs)
+	Env  map[string]string `json:"env,omitempty"`  // added to the test's environment
+	Cwd  string            `json:"cwd,omitempty"`  // working directory (default: the build dir)
+	// Copy is copied (in order, before the services start) into writable paths, typically the
+	// package's source tree into the build dir so the test runs in it with Cwd there (Go tests
+	// read testdata/ relative to their package directory).
+	Copy     []CopyArgs `json:"copy,omitempty"`
+	Format   string     `json:"format,omitempty"`   // per-case parser: "" (none) or "go" (-test.v output)
+	Services []Service  `json:"services,omitempty"` // R-FW-025, started in list order
 	// TimeoutS stops the test after that many seconds (0 = DefaultTestTimeoutS); the unit then
 	// fails with the diagnostic "<label> timed out after <n>s" (BOB-E-2007).
 	TimeoutS int64 `json:"timeoutSeconds,omitempty"`
