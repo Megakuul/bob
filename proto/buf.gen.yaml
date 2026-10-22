@@ -1,4 +1,7 @@
-# proto/buf.gen.yaml
+# proto/buf.gen.yaml — run `go tool buf generate` in proto/ (SPEC §6.1, R-API-001).
+# The Go plugins are pinned Go tools of tools/go.mod (`go tool`, workspace mode); protoc-gen-es
+# 2.16.0 (npm @bufbuild/protoc-gen-es, same version as web/'s @bufbuild/protobuf) must be on PATH.
+# No remote plugins: generation works offline and with the pinned versions only.
 version: v2
 managed:
   enabled: true
@@ -6,12 +9,12 @@ managed:
     - file_option: go_package_prefix
       value: github.com/megakuul/bob/internal/gen
 plugins:
-  - remote: buf.build/protocolbuffers/go
+  - local: [go, tool, protoc-gen-go]
     out: ../internal/gen
     opt: paths=source_relative
-  - remote: buf.build/connectrpc/go
+  - local: [go, tool, protoc-gen-connect-go]
     out: ../internal/gen
     opt: paths=source_relative
-  - remote: buf.build/bufbuild/es
+  - local: protoc-gen-es
     out: ../web/src/lib/gen
     opt: target=ts

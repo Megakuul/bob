@@ -2,18 +2,111 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/megakuul/bob/internal/safe"
+	"github.com/megakuul/bob/internal/server"
+	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/pkg/bob/diag"
 )
 
+const usage = `usage: bob-server <mode>
+
+modes:
+  orchestrator   serve the API and run the controllers
+  worker         run builds for the orchestrators
+  admin          administrative commands (create-user)
+
+Configuration comes from BOB_* environment variables (SPEC §05.11.1).
+`
+
+// startTimeout bounds the start-up checks (storage probe, policy self-check).
+const startTimeout = 2 * time.Minute
+
 func main() {
-	mode := "bob-server"
-	if len(os.Args) > 1 {
-		mode += " " + os.Args[1]
+	os.Exit(run(os.Args[1:], os.Getenv, os.Stderr))
+}
+
+func run(args []string, getenv func(string) string, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprint(stderr, usage)
+		return 2
 	}
-	err := diag.NotImplemented(mode)
-	fmt.Fprintf(os.Stderr, "error[BOB-E-%04d]: %s\n", uint16(err.Code), err.Error())
-	os.Exit(diag.ExitCode([]*diag.Error{err}))
+	mode := args[0]
+	switch mode {
+	case "-h", "--help", "help":
+		fmt.Fprint(stderr, usage)
+		return 0
+	case server.ModeOrchestrator, server.ModeWorker:
+	case "admin":
+		return report(stderr, diag.NotImplemented("bob-server admin"))
+	default:
+		fmt.Fprintf(stderr, "bob-server: unknown mode %q\n\n%s", mode, usage)
+		return 2
+	}
+	log := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelInfo})).With("mode", mode)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	var env *server.Env
+	err := safe.Run(func() error {
+		sctx, cancel := context.WithTimeout(ctx, startTimeout)
+		defer cancel()
+		var err error
+		env, err = server.Open(sctx, mode, getenv, log, workerHostCheck)
+		return err
+	})
+	if err != nil {
+		return report(stderr, err)
+	}
+	err = safe.Run(func() error {
+		if mode == server.ModeOrchestrator {
+			return server.Orchestrator(ctx, env, orchestratorParts(env))
+		}
+		return server.Worker(ctx, env, workerParts(env))
+	})
+	if err != nil {
+		return report(stderr, err)
+	}
+	return 0
+}
+
+// report prints a start-up refusal or failure and returns the exit status: 78 (EX_CONFIG)
+// for refusals and bad configuration, the diag class status for bob errors, 1 otherwise.
+func report(stderr io.Writer, err error) int {
+	var (
+		refusal *store.Refusal
+		host    *server.HostRefusal
+		cfgErr  *server.ConfigError
+		de      *diag.Error
+	)
+	switch {
+	case errors.As(err, &refusal):
+		fmt.Fprintf(stderr, "✗ %s\nhint: %s\n", refusal.Msg, refusal.Hint)
+		return refusal.ExitCode()
+	case errors.As(err, &host):
+		fmt.Fprintf(stderr, "✗ %s\nhint: %s\n", host.Msg, host.Hint)
+		return host.ExitCode()
+	case errors.As(err, &cfgErr):
+		fmt.Fprintf(stderr, "✗ %s\n", cfgErr.Msg)
+		return store.ExitConfig
+	case errors.As(err, &de):
+		fmt.Fprintf(stderr, "error[%s]: %s\n", de.Code.ID(), de.Error())
+		if h := de.Hint(); h != "" {
+			fmt.Fprintf(stderr, "hint: %s\n", h)
+		}
+		return diag.ExitCode([]*diag.Error{de})
+	default:
+		fmt.Fprintf(stderr, "✗ bob-server: %v\n", err)
+		return 1
+	}
 }
