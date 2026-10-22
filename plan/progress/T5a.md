@@ -11,3 +11,8 @@ DONE R-STORE-004 → tests/store/stack_test.go::TestRSTORE004ReadPlan (+ PagedIn
 DONE R-STORE-105 → tests/store/retention_test.go::TestRSTORE105StagingCleanup
 DONE R-STORE-007 → tests/store/retention_test.go::TestRSTORE007Retention
 DONE R-STORE-150 → tests/store/retention_test.go::TestRSTORE150ReleasesAreNeverCollected (knobs: BOB_TEST_CLOCK_OFFSET)
+DONE R-STORE-002 → tests/policy/matrix_test.go::TestRSEC002PolicyMatrix,TestRSEC002PrefixTable,TestRSTORE002GlobalOperations
+DONE R-SEC-002 → tests/policy/{matrix,sec}_test.go::TestRSEC002PolicyMatrix,TestRSEC002PrefixTable,TestRSEC002ShippedPolicyFiles
+DONE R-SEC-100 → tests/policy/sec_test.go::TestRSEC100NoCredentialMintingInSource,TestRSEC100RPCsWithoutWorkerTokenReturnNoCredentials
+DONE R-SEC-102(+) → tests/policy/sec_test.go::TestRSEC102PositivePathAndRefusal
+SKIP R-SEC-101 (manual: runbook docs/operations/worker-compromise.md)
