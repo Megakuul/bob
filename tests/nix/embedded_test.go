@@ -139,7 +139,8 @@ func TestRNIX024StateLayoutAndNixConf(t *testing.T) {
 			t.Errorf("<home>/%s is not a directory: %v", d, err)
 		}
 	}
-	for f, mode := range map[string]os.FileMode{"etc/nix/nix.conf": 0o644, "etc/nix/netrc": 0o600, "etc/nix/user.conf": 0o644} {
+	// SPEC gives modes for nix.conf (0644) and netrc (0600) only; user.conf is just "empty".
+	for f, mode := range map[string]os.FileMode{"etc/nix/nix.conf": 0o644, "etc/nix/netrc": 0o600} {
 		fi, err := os.Stat(filepath.Join(e.Home, filepath.FromSlash(f)))
 		if err != nil {
 			t.Errorf("<home>/%s: %v", f, err)
@@ -149,7 +150,9 @@ func TestRNIX024StateLayoutAndNixConf(t *testing.T) {
 			t.Errorf("<home>/%s mode %v, want %v", f, fi.Mode().Perm(), mode)
 		}
 	}
-	if fi, err := os.Stat(filepath.Join(e.Home, "etc", "nix", "user.conf")); err == nil && fi.Size() != 0 {
+	if fi, err := os.Stat(filepath.Join(e.Home, "etc", "nix", "user.conf")); err != nil {
+		t.Errorf("<home>/etc/nix/user.conf: %v", err)
+	} else if fi.Size() != 0 {
 		t.Errorf("user.conf must be empty, has %d bytes", fi.Size())
 	}
 	if _, err := os.Stat(filepath.Join(e.Home, "lock")); err != nil {
@@ -273,10 +276,10 @@ func TestRNIX025SystemNixCoexistence(t *testing.T) {
 func TestRNIX026ConcurrentCommands(t *testing.T) {
 	parity.Covers(t, "R-NIX-026")
 	e := newBobEnv(t)
-	warm := e.run(t, "polyglot", "build", "//...") // creates the state once; concurrency is about shared use
-	if harness.Red(t, warm) {
-		return
-	}
+	// The four builds start on an empty state (SPEC: "4 concurrent bob build //... on
+	// examples/polyglot all succeed"), so creating the state is itself concurrent. The checkout
+	// is made first: bobEnv caches fixture directories in a map.
+	e.dir(t, "polyglot")
 	var wg sync.WaitGroup
 	results := make([]harness.Result, 4)
 	for i := range results {
@@ -287,6 +290,9 @@ func TestRNIX026ConcurrentCommands(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	if harness.Red(t, results[0]) {
+		return
+	}
 	for i, r := range results {
 		out := r.Combined()
 		if r.Exit != 0 || strings.Contains(out, "BOB-E-7004") || strings.Contains(strings.ToLower(out), "lock") && strings.Contains(strings.ToLower(out), "error") {
