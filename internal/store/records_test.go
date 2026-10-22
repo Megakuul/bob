@@ -16,7 +16,8 @@ import (
 
 // recordCase runs the R-STORE-103 table for one record type: create, CAS win, CAS loss (a
 // stale ETag), lost response (the proxy drops the PUT response after the backend applied it),
-// and decode of the stored CBOR (the record reads back to the same data).
+// and decode of the stored CBOR (a fetched record written again through its Draft reads back
+// to the same data). v is a fresh value; change edits a fetched record in place.
 func recordCase[T any](t *testing.T, ctx context.Context, be *env.Backend, b *store.Bucket, v *T, change func(*T)) {
 	t.Helper()
 	enc := func(x *T) []byte {
@@ -36,10 +37,11 @@ func recordCase[T any](t *testing.T, ctx context.Context, be *env.Backend, b *st
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !bytes.Equal(enc(got), enc(v)) {
-		t.Errorf("decode: got %+v, wrote %+v", got, v)
+	same, err := store.CAS(ctx, b, v, func(cur *T) (*T, error) { return cur, nil })
+	if err != nil || !bytes.Equal(enc(same), enc(got)) {
+		t.Errorf("decode: rewritten %+v (%v), read %+v", same, err, got)
 	}
-	stale := *got
+	stale := *same
 	won, err := store.CAS(ctx, b, v, func(cur *T) (*T, error) { change(cur); return cur, nil })
 	if err != nil {
 		t.Fatalf("cas: %v", err)
@@ -105,7 +107,11 @@ func TestRecordTypes(t *testing.T) {
 	t.Run("BuildRecord", func(t *testing.T) {
 		recordCase(t, ctx, be, b, &store.BuildRecord{ID: store.ID("b1"), Project: store.Set[string]("p1"), Number: store.Set[uint64](1), State: store.Set[string]("pending"),
 			Trigger: store.Set(store.BuildTrigger{Kind: "push"}), Jobs: store.Set([]store.BuildJob{{ID: "j1"}}), Created: store.Set(now)},
-			func(c *store.BuildRecord) { c.Jobs.Value()[0].Attempts++ })
+			func(c *store.BuildRecord) {
+				jobs := c.Jobs.Value()
+				jobs[0].Attempts++
+				c.Jobs = store.Set(jobs)
+			})
 	})
 	t.Run("ProjectCounters", func(t *testing.T) {
 		recordCase(t, ctx, be, b, &store.ProjectCounters{Project: store.ID("p1")}, func(c *store.ProjectCounters) { c.Builds = store.Set(c.Builds.Value() + 1) })

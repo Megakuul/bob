@@ -20,8 +20,10 @@ type RustcArgs struct {
 	CrateType  string            `json:"crateType"` // lib | proc-macro | bin | staticlib | cdylib
 	Test       bool              `json:"test"`      // --test (a test harness binary)
 	Edition    string            `json:"edition"`
-	Root       string            `json:"root"`   // crate root, relative to Src
-	Target     string            `json:"target"` // target triple
+	Root       string            `json:"root"`              // crate root, relative to Src
+	Target     string            `json:"target"`            // target triple ("" = the host's, no --target)
+	Sysroot    string            `json:"sysroot,omitempty"` // cross: the rust-std-<triple> sysroot
+	Linker     string            `json:"linker,omitempty"`  // cross: -C linker= (the target's C compiler)
 	Features   []string          `json:"features"`
 	Metadata   string            `json:"metadata"` // -C metadata (and the file suffix of libs)
 	OptLevel   string            `json:"optLevel"`

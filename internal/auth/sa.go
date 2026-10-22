@@ -105,7 +105,11 @@ func (s saService) CreateServiceAccount(ctx context.Context, req *connect.Reques
 		}
 		return nil, storageError(err)
 	}
-	return connect.NewResponse(&accessv1.CreateServiceAccountResponse{ServiceAccount: saMsg(sa)}), nil
+	created, err := store.Get(ctx, s.id.control, &store.ServiceAccountRecord{ID: sa.ID})
+	if err != nil {
+		return nil, storageError(err)
+	}
+	return connect.NewResponse(&accessv1.CreateServiceAccountResponse{ServiceAccount: saMsg(created)}), nil
 }
 
 func (s saService) GetServiceAccount(ctx context.Context, req *connect.Request[accessv1.GetServiceAccountRequest]) (*connect.Response[accessv1.GetServiceAccountResponse], error) {

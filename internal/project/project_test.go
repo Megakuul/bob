@@ -235,17 +235,35 @@ func TestProjects(t *testing.T) {
 	// pipelines cache: a default-branch evaluation, then a branch one (ignored), then the end
 	rep := &jobspec.Report{Pipelines: []jobspec.Pipeline{{Name: "ci", Triggers: []string{"push trunk"}, Concurrency: "queue"},
 		{Name: "release", Triggers: []string{"tag v*"}, Releases: []string{"api"}}}, Matched: []string{"ci"}}
-	b1 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa1"), Project: store.Set[string]("acme"), Number: store.Set[uint64](1), Branch: store.Set[string]("trunk"), Commit: store.Set[string]("c1"),
-		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/trunk"})}
+	// build records as the build controller reads them (fetched values)
+	persist := func(r *store.BuildRecord) *store.BuildRecord {
+		t.Helper()
+		if err := store.Create(ctx, control, r); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.Get(ctx, control, &store.BuildRecord{ID: r.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	b1 := persist(&store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa1"), Project: store.Set[string]("acme"), Number: store.Set[uint64](1), Branch: store.Set[string]("trunk"), Commit: store.Set[string]("c1"),
+		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/trunk"})})
 	if err := p.Evaluated(ctx, b1, rep); err != nil {
 		t.Fatal(err)
 	}
-	b2 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa2"), Project: store.Set[string]("acme"), Number: store.Set[uint64](2), Branch: store.Set[string]("feature"), Commit: store.Set[string]("c2"),
-		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/feature"})}
+	b2 := persist(&store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa2"), Project: store.Set[string]("acme"), Number: store.Set[uint64](2), Branch: store.Set[string]("feature"), Commit: store.Set[string]("c2"),
+		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/feature"})})
 	if err := p.Evaluated(ctx, b2, &jobspec.Report{Pipelines: []jobspec.Pipeline{{Name: "other"}}}); err != nil {
 		t.Fatal(err)
 	}
-	b1.State, b1.Pipelines = store.Set[string](buildctl.StateSucceeded), store.Set([]store.PipelineRun{{Name: "ci", State: buildctl.StateSucceeded}})
+	b1, err = store.CAS(ctx, control, &store.BuildRecord{ID: b1.ID}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
+		cur.State, cur.Pipelines = store.Set[string](buildctl.StateSucceeded), store.Set([]store.PipelineRun{{Name: "ci", State: buildctl.StateSucceeded}})
+		return cur, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := p.Finished(ctx, b1); err != nil {
 		t.Fatal(err)
 	}

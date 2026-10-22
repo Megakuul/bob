@@ -25,24 +25,24 @@ const (
 // node's label. Deps of the node: the toolchain tools (Toolchain, CC, Binutils), the local
 // crates of Deps/BuildDeps/DevDeps, the Native libraries and the Uses libraries.
 type Crate struct {
-	Name        string              `json:"name"`        // package name (Cargo's, '-' kept)
-	Type        string              `json:"type"`        // Type*
-	Edition     string              `json:"edition"`     // "2021"
-	Root        string              `json:"root"`        // crate root relative to the crate dir
-	Deps        []Dep               `json:"deps"`        // [dependencies]
-	BuildDeps   []Dep               `json:"buildDeps"`   // [build-dependencies]
-	DevDeps     []Dep               `json:"devDeps"`     // [dev-dependencies]
-	Features    map[string][]string `json:"features"`    // the crate's feature table
-	Default     []string            `json:"default"`     // default features
-	Enable      []string            `json:"enable"`      // features enabled when built as a root
-	BuildScript string              `json:"buildScript"` // relative to the crate dir; "" = none
-	Native      []int               `json:"native"`      // dep indices of bob.Linkable libraries
-	Headers     string              `json:"headers"`     // staticlib/cdylib include dir; "" = none
-	Toolchain   int                 `json:"toolchain"`   // dep index of rustc
-	CC          int                 `json:"cc"`          // dep index of the C compiler (linker)
-	Binutils    int                 `json:"binutils"`    // dep index of binutils (ar for build scripts)
-	PkgConfig   int                 `json:"pkgConfig"`   // dep index of pkg-config; -1 = none (no Uses)
-	Uses        []Use               `json:"uses"`        // native packages of registry crates' build scripts
+	Name        string              `json:"name"`            // package name (Cargo's, '-' kept)
+	Type        string              `json:"type"`            // Type*
+	Edition     string              `json:"edition"`         // "2021"
+	Root        string              `json:"root"`            // crate root relative to the crate dir
+	Deps        []Dep               `json:"deps"`            // [dependencies]
+	BuildDeps   []Dep               `json:"buildDeps"`       // [build-dependencies]
+	DevDeps     []Dep               `json:"devDeps"`         // [dev-dependencies]
+	Features    map[string][]string `json:"features"`        // the crate's feature table
+	Default     []string            `json:"default"`         // default features
+	Enable      []string            `json:"enable"`          // features enabled when built as a root
+	BuildScript string              `json:"buildScript"`     // relative to the crate dir; "" = none
+	Native      []int               `json:"native"`          // dep indices of bob.Linkable libraries
+	Headers     string              `json:"headers"`         // staticlib/cdylib include dir; "" = none
+	Toolchain   int                 `json:"toolchain"`       // dep index of rustc
+	CC          int                 `json:"cc"`              // dep index of the C compiler (linker)
+	Binutils    int                 `json:"binutils"`        // dep index of binutils (ar for build scripts)
+	PkgConfig   int                 `json:"pkgConfig"`       // dep index of pkg-config; -1 = none (no Uses)
+	Uses        []Use               `json:"uses"`            // native packages of registry crates' build scripts
 	Cross       *Cross              `json:"cross,omitempty"` // set when the crate is built for another platform than the host
 }
 

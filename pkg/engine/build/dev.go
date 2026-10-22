@@ -43,6 +43,9 @@ type DevResult struct {
 	Hooks     []string
 	Servers   []engine.DevServerSpec
 	Ecosystem []string // names of the ecosystems the repository uses, sorted
+	// Realise are derivations (in the store) the CLI realises with the packages: outputs the
+	// working-tree files name (proc-macro dylibs, OUT_DIR, local libraries).
+	Realise []string
 	Generated []string // native files written that stay out of git (as Result.Generated)
 }
 
@@ -51,7 +54,9 @@ type DevResult struct {
 // implements engine.DevPreparer for its share of the shell named shell ("" = the shell named
 // "default", else the only one; a repository without a DevShell gets an implicit "default").
 // It also prepares the working tree: native files (R-FW-060) and the ecosystems' DevPrep.Files.
-// Nothing is built; the CLI realises DevResult.Packages.
+// The whole graph is planned and its derivations are written to the store (as bob build
+// does), so ecosystems may name any of them; nothing is built here: the CLI realises
+// DevResult.Packages and DevResult.Realise.
 func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 	if o.Root == "" {
 		return nil, errors.New("build: Options.Root is empty")
@@ -114,14 +119,29 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 	}
 	res.Generated = gen
 
-	p := newPlanner(g, st, "", nil, entries, lf, idx)
-	for _, n := range g.Nodes {
-		if strings.HasPrefix(n.Kind, "nixpkgs.") {
-			if err := p.planNixpkgs(n); err != nil {
-				return nil, err
-			}
-		}
+	// The whole graph is planned as bob build plans it, and its derivations are in the store,
+	// so an ecosystem's dev share may name any of them (language servers see local libraries
+	// and generated code: R-ML-001b, R-RS-003a proc-macro dylibs and OUT_DIR).
+	srcPaths, err := importSources(ctx, st, o.Root, g)
+	if err != nil {
+		return nil, err
 	}
+	builder, err := st.Builder(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p := newPlanner(g, st, builder, srcPaths, entries, lf, idx)
+	p.root, p.fetcher, p.offline = o.Root, f, o.Offline
+	if err := p.plan(ctx); err != nil {
+		return nil, err
+	}
+	if err := ensureAll(ctx, f, p.fetches); err != nil {
+		return nil, err
+	}
+	if _, err := st.ImportDrvs(ctx, p.drvs); err != nil {
+		return nil, err
+	}
+	recordDrvCache(st, g, p)
 
 	var spec devShellSpec
 	if sh != nil {
@@ -180,10 +200,16 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 		}
 		prep, err := prepareDev(ctx, dp, eco.Name(), engine.DevRequest{
 			PlanRequest: engine.PlanRequest{Graph: g, Nodes: nodes, Lock: lf.Sections[eco.Name()], Inputs: p.nodes,
-				Nixpkgs: idx, Root: o.Root, Store: planStore{st: st, f: f}},
+				Sources: srcPaths, Nixpkgs: idx, Builder: builder, Resolver: p.res, Root: o.Root,
+				Store: planStore{st: st, f: f}},
 			Shell: res.Shell, Servers: srv})
 		if err != nil {
 			return nil, err
+		}
+		if len(prep.Drvs) > 0 {
+			if _, err := st.ImportDrvs(ctx, prep.Drvs); err != nil {
+				return nil, err
+			}
 		}
 		if err := res.add(o.Root, prep); err != nil {
 			return nil, err
@@ -246,6 +272,7 @@ func (res *DevResult) add(root string, prep engine.DevPrep) error {
 		}
 	}
 	res.Servers = append(res.Servers, prep.Servers...)
+	res.Realise = append(res.Realise, prep.Realise...)
 	return nil
 }
 

@@ -206,7 +206,11 @@ func (s roleService) CreateRole(ctx context.Context, req *connect.Request[access
 		}
 		return nil, storageError(err)
 	}
-	return connect.NewResponse(&accessv1.CreateRoleResponse{Role: roleMsg(r)}), nil
+	created, err := store.Get(ctx, s.id.control, store.RoleKey(in.GetId()))
+	if err != nil {
+		return nil, storageError(err)
+	}
+	return connect.NewResponse(&accessv1.CreateRoleResponse{Role: roleMsg(created)}), nil
 }
 
 func (s roleService) GetRole(ctx context.Context, req *connect.Request[accessv1.GetRoleRequest]) (*connect.Response[accessv1.GetRoleResponse], error) {

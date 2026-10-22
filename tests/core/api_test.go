@@ -295,11 +295,30 @@ func checkSurface(t *testing.T, dir, rel string) (missingExamples []string) {
 		byRet[c.ret] = append(byRet[c.ret], c.name)
 	}
 	for ret, names := range byRet {
-		if len(names) > 1 && ret != "" && !isInterfaceish(ret) {
+		if len(names) > 1 && ret != "" && !isInterfaceish(ret) && !specShared(rel, ret, names) {
 			t.Errorf("%s: constructors %v all return %s; one constructor per kind (R-FW-014)", rel, names, ret)
 		}
 	}
 	return missingExamples
+}
+
+// specSharedResults are the constructors the SPEC API itself declares with one result type: one
+// Go type for kinds that differ only in what they build (SPEC §03.1.1 cc libraries, §03.3.1 Rust
+// libraries and C libraries). Exactly these sets are allowed; any other constructor returning
+// the same type still fails.
+var specSharedResults = map[string]map[string][]string{
+	"pkg/cc":   {"*Library": {"SharedLibrary", "StaticLibrary"}},
+	"pkg/rust": {"*Lib": {"Library", "ProcMacro"}, "*CLib": {"CDylib", "StaticLib"}},
+}
+
+func specShared(rel, ret string, names []string) bool {
+	want, ok := specSharedResults[rel][ret]
+	if !ok {
+		return false
+	}
+	got := append([]string(nil), names...)
+	sort.Strings(got)
+	return strings.Join(got, ",") == strings.Join(want, ",")
 }
 
 // isInterfaceish exempts shared interface results (bob.Tree, bob.Package): they are not kinds.

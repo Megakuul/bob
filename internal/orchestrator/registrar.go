@@ -187,7 +187,7 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 	suite := fleet.Suite(body.Suite)
 	rec := &store.WorkerRecord{Wid: store.ID(wid), State: store.Set[string]("active"), Gen: store.Set[int64](0), Serial: store.Set[int64](1), SigPub: store.Set(body.SigPub), Suite: store.Set(suite.String()),
 		KEMPub: store.Set(body.KEMPub), Platform: store.Set(body.Platform), Caps: store.Set(body.Caps), Labels: store.Set(body.Labels)}
-	if err := r.issue(rec, now); err != nil {
+	if err := r.issue(rec, wid, 0, 1, suite.String(), body.SigPub, body.KEMPub, now); err != nil {
 		return false, "", err
 	}
 	if err := store.Create(ctx, r.cfg.Fleet, rec); errors.Is(err, store.ErrExists) {
@@ -195,7 +195,6 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 	} else if err != nil {
 		return false, "", err
 	}
-	r.remember(rec, now)
 	entry := store.WorkerIndexEntry{Platform: body.Platform, State: "active"}
 	if err := store.WorkerIndex(r.cfg.Fleet, r.cfg.WorkerShards).Add(ctx, wid, entry); err != nil {
 		return true, "", err
@@ -204,18 +203,19 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 }
 
 // issue signs a token for rec's current gen and serial and seals it into rec.
-func (r *Registrar) issue(rec *store.WorkerRecord, now time.Time) error {
-	suite, err := fleet.ParseSuite(rec.Suite.Value())
+// issue seals a new token for worker wid (generation gen, serial) into rec.
+func (r *Registrar) issue(rec *store.WorkerRecord, wid string, gen, serial int64, suiteName string, sigPub, kemPub []byte, now time.Time) error {
+	suite, err := fleet.ParseSuite(suiteName)
 	if err != nil {
 		return err
 	}
 	exp := now.Add(r.cfg.TokenTTL)
-	tok, err := fleet.SignToken(r.cfg.Key, fleet.Claims{V: 1, Aud: fleet.Audience, Kid: r.cfg.Kid, Wid: rec.Wid.Value(),
-		Gen: rec.Gen.Value(), Serial: rec.Serial.Value(), Iat: now.Unix(), Exp: exp.Unix(), Cnf: fleet.Cnf(rec.SigPub.Value())})
+	tok, err := fleet.SignToken(r.cfg.Key, fleet.Claims{V: 1, Aud: fleet.Audience, Kid: r.cfg.Kid, Wid: wid,
+		Gen: gen, Serial: serial, Iat: now.Unix(), Exp: exp.Unix(), Cnf: fleet.Cnf(sigPub)})
 	if err != nil {
 		return err
 	}
-	sealed, err := fleet.SealToken(suite, rec.KEMPub.Value(), rec.Wid.Value(), rec.Gen.Value(), rec.Serial.Value(), fleet.TokenEnvelope{Token: tok, Exp: exp.Unix()})
+	sealed, err := fleet.SealToken(suite, kemPub, wid, gen, serial, fleet.TokenEnvelope{Token: tok, Exp: exp.Unix()})
 	if err != nil {
 		return err
 	}
@@ -364,8 +364,8 @@ func (r *Registrar) rotate(ctx context.Context, wid string, force bool) (bool, e
 			return nil, store.ErrNoChange
 		}
 		n := *cur
-		n.Serial = store.Set(n.Serial.Value() + 1)
-		if err := r.issue(&n, now); err != nil {
+		n.Serial = store.Set(cur.Serial.Value() + 1)
+		if err := r.issue(&n, cur.Wid.Value(), cur.Gen.Value(), cur.Serial.Value()+1, cur.Suite.Value(), cur.SigPub.Value(), cur.KEMPub.Value(), now); err != nil {
 			return nil, err
 		}
 		return &n, nil
@@ -396,7 +396,7 @@ func (r *Registrar) Revoke(ctx context.Context, wid, reason string) error {
 			return nil, store.ErrNoChange
 		}
 		n := *cur
-		n.State, n.Gen, n.Sealed, n.TokenExp = store.Set[string]("revoked"), store.Set(cur.Gen.Value()+1), nil, store.Set(time.Time{})
+		n.State, n.Gen, n.Sealed, n.TokenExp = store.Set[string]("revoked"), store.Set(cur.Gen.Value()+1), nil, nil
 		return &n, nil
 	})
 	if err != nil {

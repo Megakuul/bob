@@ -452,7 +452,11 @@ func (s oidcService) CreateOidcProvider(ctx context.Context, req *connect.Reques
 		}
 		return nil, storageError(err)
 	}
-	return connect.NewResponse(&accessv1.CreateOidcProviderResponse{Provider: s.providerMsg(p, s.id.info.BaseURL)}), nil
+	created, err := store.Get(ctx, s.id.control, store.OidcProviderKey(in.GetId()))
+	if err != nil {
+		return nil, storageError(err)
+	}
+	return connect.NewResponse(&accessv1.CreateOidcProviderResponse{Provider: s.providerMsg(created, s.id.info.BaseURL)}), nil
 }
 
 func (s oidcService) get(ctx context.Context, pid string) (*store.OidcProviderRecord, error) {

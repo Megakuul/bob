@@ -24,6 +24,7 @@ func Kinds() map[string]builder.Kind {
 	return map[string]builder.Kind{
 		"rustc":          {Run: rustcKind, NoFixup: true},
 		"rust-build-run": {Run: buildRunKind, NoFixup: true},
+		"rust-std":       {Run: rustStdKind, NoFixup: true},
 	}
 }
 
@@ -123,6 +124,12 @@ func rustcArgv(a *RustcArgs, o string) ([]string, map[string]string, error) {
 	}
 	if a.Target != "" {
 		argv = append(argv, "--target", a.Target)
+	}
+	if a.Sysroot != "" {
+		argv = append(argv, "--sysroot", a.Sysroot)
+	}
+	if a.Linker != "" {
+		argv = append(argv, "-C", "linker="+a.Linker)
 	}
 	if a.CapLints {
 		argv = append(argv, "--cap-lints", "allow")

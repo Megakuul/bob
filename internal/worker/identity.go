@@ -196,9 +196,9 @@ func Heartbeat(ctx context.Context, fleetB *store.Bucket, id *Identity, free int
 }
 
 func heartbeat(ctx context.Context, fleetB *store.Bucket, wid string, key ed25519.PrivateKey, free int, held []store.HeldJobEpoch, now time.Time) error {
-	hb := &store.Heartbeat{Wid: store.ID(wid), At: store.Set(now.UTC()), Free: store.Set(free), Jobs: store.Set(held)}
-	fleet.SignHeartbeat(key, hb)
-	return store.PutOwned(ctx, fleetB, hb)
+	at := now.UTC()
+	return store.PutOwned(ctx, fleetB, &store.Heartbeat{Wid: store.ID(wid), At: store.Set(at), Free: store.Set(free), Jobs: store.Set(held),
+		Sig: store.Set(fleet.SignHeartbeat(key, wid, at, held))})
 }
 
 // ForgeResult writes a job result for jobID at epoch as if owner had produced it, but signed

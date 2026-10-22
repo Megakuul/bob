@@ -127,3 +127,22 @@ the end), budgets, completion goldens candidates.
    cmdlines. With that one-line fix in a scratch copy, see results below.
 3. TestRDEV010LSPLocations' typescript case uses `bob dev --no-servers -- true` and `bob gen`
    in vite-react: npm (other unit). clangd/rust-analyzer cases need cc/rust DevPreparers.
+6. eval rules (other unit, in progress at 20:30): a root bob.go `package acme` in a directory
+   named al2 with no other Go files in it fails BOB-E-1024 "the Go code in this directory is
+   package al2" — the package seems derived from the directory name when the directory has no
+   Go code. Real repos are rarely cloned into a directory named like their package.
+
+## Coordinator items (20:20) — done
+- build.Dev plans the whole graph like bob build (sources import, planner with builder,
+  fetches, drvs imported into the store, drv cache recorded) and passes the full PlanRequest
+  (Builder, Sources, Resolver, Inputs = every planned node) to PrepareDev (R-ML-001b,
+  R-RS-003a). DevPrep gains `Drvs` (extra derivations bob imports) and `Realise` (derivations
+  realised by the CLI before tools run, GC-rooted under .bob/dev/gcroots/<shell>-prep).
+- Go: GOPROXY=file://<gen.ProxyDir()>, GOFLAGS=-mod=readonly, GOSUMDB=off inside (shims,
+  bob dev; not exported outside, so the user's other Go work is untouched); the directory is
+  filled from bob.lock's go section on every dev evaluation (.mod for every module, .zip for
+  packages:true ones; missing files are fetched once from the proxy bob reads, cached ones
+  cost a stat) (I-M5b NEEDS 3). gopls keeps GOFLAGS=-tags=bob (tests/devenv checks it exactly).
+- clangd shim (R-CC-003a), npm tsc shim/.bob/node_modules.path: provided by the cc and npm
+  DevPreparers (Packages → bin/ shims, Tools → in-tree shims); nothing cc/npm-specific in the
+  CLI.

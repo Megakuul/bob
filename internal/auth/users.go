@@ -98,6 +98,10 @@ func (id *Identity) createUser(ctx context.Context, u *store.UserRecord, name an
 	if err := store.Create(ctx, id.control, u); err != nil {
 		return storageError(err)
 	}
+	created, err := store.Get(ctx, id.control, store.UserKey(u.ID.Value()))
+	if err != nil {
+		return storageError(err)
+	}
 	switch n := name.(type) {
 	case *store.NameRecord:
 		n.ID = store.Set(u.ID.Value())
@@ -107,15 +111,15 @@ func (id *Identity) createUser(ctx context.Context, u *store.UserRecord, name an
 		err = store.Create(ctx, id.control, n)
 	}
 	if err != nil {
-		if derr := store.Delete(ctx, id.control, u); derr != nil {
+		if derr := store.Delete(ctx, id.control, created); derr != nil {
 			id.log.Warn("user record of a failed create not removed", "user", u.ID.Value(), "err", derr.Error())
 		}
 		if errors.Is(err, store.ErrExists) {
-			return api.AlreadyExists(fmt.Sprintf("user %s already exists", u.Login.Value()))
+			return api.AlreadyExists(fmt.Sprintf("user %s already exists", created.Login.Value()))
 		}
 		return storageError(err)
 	}
-	if err := id.indexUser(ctx, u); err != nil {
+	if err := id.indexUser(ctx, created); err != nil {
 		id.log.Warn("user not added to the users index", "user", u.ID.Value(), "err", err.Error())
 	}
 	return nil

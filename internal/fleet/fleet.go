@@ -327,9 +327,9 @@ func HeartbeatMessage(wid string, at time.Time, jobs []store.HeldJobEpoch) []byt
 	return msg(dsHeartbeat, parts...)
 }
 
-// SignHeartbeat signs a heartbeat record in place.
-func SignHeartbeat(key ed25519.PrivateKey, hb *store.Heartbeat) {
-	hb.Sig = store.Set(ed25519.Sign(key, HeartbeatMessage(hb.Wid.Value(), hb.At.Value(), hb.Jobs.Value())))
+// SignHeartbeat is the signature Heartbeat.s of a heartbeat (wid, at, held jobs).
+func SignHeartbeat(key ed25519.PrivateKey, wid string, at time.Time, jobs []store.HeldJobEpoch) []byte {
+	return ed25519.Sign(key, HeartbeatMessage(wid, at, jobs))
 }
 
 // VerifyHeartbeat checks a heartbeat record against the worker's signing key.

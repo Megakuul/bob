@@ -48,6 +48,10 @@ func (e *env) devEnv(st *store.Store, root, shell string, inside bool) (*devenv.
 	if err := realiseDev(e, st, root, res.Shell, res.Packages); err != nil {
 		return nil, nil, nil, err
 	}
+	// Outputs the ecosystems' working-tree files name (a no-op when they are valid).
+	if err := realiseDrvs(e, st, root, res.Shell+"-prep", res.Realise); err != nil {
+		return nil, nil, nil, err
+	}
 	read := func(p string) string { return p }
 	if !inside {
 		read = func(p string) string { return build.HostPath(st, p) }

@@ -6,9 +6,10 @@ import "encoding/json"
 // builder's behaviour changes (2: test-run timeout, A92; unpack symlink rules, F1; 3: the Go
 // kinds of pkg/golang/bop; 4: test-run Copy; 5: the C/C++ kinds of pkg/cc/bop, test-run format
 // tap; 6: the npm kinds of pkg/npm/bop, Ctx.Unpack/Copy; 7: the OCaml kinds of
-// pkg/ocaml/bop; Go cross env, variant flags and the -asan compiler shim of pkg/golang/bop). The CI stage "builder" fails when the builder changed since the last commit
+// pkg/ocaml/bop; Go cross env, variant flags and the -asan compiler shim of pkg/golang/bop; 8: Rust
+// cross compiles (--sysroot, -C linker) and kind rust-std of pkg/rust/bop). The CI stage "builder" fails when the builder changed since the last commit
 // without a bump.
-const BuilderVersion = 7
+const BuilderVersion = 8
 
 // Job is one derivation's work. Kind selects the subcommand; Args is the kind's own schema.
 type Job struct {

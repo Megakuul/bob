@@ -357,10 +357,12 @@ func retention(t *testing.T, b buckets) {
 	// queue slots: 5 slots, head 1006 → all below head − 1000
 	if _, err := store.CAS(ctx, b.fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := store.FleetConfigKey()
+		var classes []store.FleetClass
 		if cur != nil {
 			*next = *cur
+			classes = cur.Classes.Value()
 		}
-		next.Classes = store.Set(append(next.Classes.Value(), store.FleetClass{ID: "c1"}))
+		next.Classes = store.Set(append(classes, store.FleetClass{ID: "c1"}))
 		return next, nil
 	}); err != nil {
 		t.Fatal(err)
