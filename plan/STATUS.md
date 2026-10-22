@@ -4,16 +4,13 @@
 - **Phase:** 3.1 — Harness first (M0 → M1) → Gate H. Phase 3.0 kickoff: owner said "If there are
   open questions ask them now or auto decide them" → SPEC Appendix A / HARNESS open items are
   auto-decided by their recommendations (A24); Gate H handling asked in chat 2026-10-21.
-- **Current task:** **Gate H rulings applied 2026-10-22; waiting for the owner to confirm Gate H.**
-  Owner delegated the contradictions ("read all harness data and understand the spirit of the
-  project ... resolve the conflicts"); coordinator rulings G1-G25 in `plan/gate-h-rulings.md`
-  (decisions A42-A64, owner may overturn), applied to SPEC/ADR 0016/proto/tests/fixtures; full
-  `go run ./tools/ci` green (15 stages, 0 failed). 248/252 R-ids have red tests (3 manual, 4
-  budget-only). Open follow-ups: `plan/m1.8-ledger.md` "Follow-ups from Gate H rulings" (layers73
-  fixture for the 4-worker split run, worker Attach client, scale-limit seeding), 4 R-NIX-012 goldens
-  with `full log:` but no excerpt (named exceptions). Recording Gate H (`go run ./tools/ci protect
-  -write`, tag `gate-h`) was refused by the permission classifier as self-approval: the owner runs
-  it or says go. Then M2 (parallel tracks, `plan/execution-plan.md`).
+- **Current task:** **Phase 3.2 started 2026-10-22 (M2 + M3 in parallel).** Gate H recorded on
+  owner instruction ("if everything is resolved please continue implementation ... auto-resolve
+  follow-up questions the same way"); tag `gate-h` set; rulings G1-G25 (`plan/gate-h-rulings.md`).
+  Owner action pending: `go run ./tools/ci protect -write` (hash manifest; the permission system
+  reserves it). Until then tests are protected by rule (`plan/impl-brief.md`). Units and state:
+  `plan/impl-ledger.md` (I-M2a drv/nar/fetch, I-M2b store/srcs, I-M3a core API/IR, I-M3b evalbox).
+  Follow-ups: `plan/m1.8-ledger.md` "Follow-ups from Gate H rulings".
 - **Last gate passed:** **Gate S** (2026-10-21): SPEC, budgets, ADRs 0003–0019 (locked), HARNESS.md,
   plan approved → D65–D69. AGENTS.md replaces BOOTSTRAP.md.
 - **Next:** finish M0/M1 → Gate H (self-reviewed, D70; owner answer "b)" 2026-10-21) → M2…
