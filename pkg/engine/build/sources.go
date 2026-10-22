@@ -44,6 +44,21 @@ func Evaluate(ctx context.Context, o Options) (*ir.Graph, error) {
 	return g, err
 }
 
+// CheckDeterminism evaluates twice with the evaluator's Go of Evaluate and returns BOB-E-1018
+// (as ir.Errors) when the two IRs differ (bob check --determinism, R-FW-008).
+func CheckDeterminism(ctx context.Context, o Options) error {
+	st, err := openStore(ctx, o.Store, o.Home, o.Caches)
+	if err != nil {
+		return err
+	}
+	r := &runner{o: o}
+	goRoot, err := r.evalGoRoot(ctx, st, fetch.New(st, fetch.Policy{}))
+	if err != nil {
+		return err
+	}
+	return eval.CheckDeterminism(ctx, evalRequest(o, goRoot))
+}
+
 // evaluate runs the evaluator (with the pinned Go) and validates its IR.
 func evaluate(ctx context.Context, st *store.Store, o Options) (*ir.Graph, *eval.Result, error) {
 	r := &runner{o: o}

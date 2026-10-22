@@ -26,14 +26,8 @@ type Config struct {
 	Forge orchestrator.ForgeMinter
 }
 
-// Controller intervals (SPEC §05.11, R-SRV-004).
-const (
-	RegistrarEvery  = 2 * time.Second
-	RotateEvery     = 60 * time.Second
-	ReconcilerEvery = 10 * time.Second
-	SweepEvery      = 60 * time.Second
-	SecondWakeAfter = 2 * time.Second
-)
+// SecondWakeAfter is when a still queued job wakes a second worker (R-FLEET-012).
+const SecondWakeAfter = 2 * time.Second
 
 // Fleet is the fleet side of one orchestrator.
 type Fleet struct {
@@ -166,91 +160,20 @@ func (f *Fleet) addClass(ctx context.Context, class string) error {
 	return fmt.Errorf("scheduling class %s is not published in fleet/cfg (AddClass first)", class)
 }
 
-// Components are the fleet controllers of this orchestrator, for the server's supervisor.
-func (f *Fleet) Components() []*Controller {
-	log := f.cfg.Log
-	reg := store.NewLease(f.cfg.Fleet, "ctl/registrar", f.cfg.Name, 3*RegistrarEvery)
-	sweep := store.NewLease(f.cfg.Fleet, "ctl/forge-sweeper", f.cfg.Name, 3*SweepEvery)
-	lastRotate := time.Time{}
-	return []*Controller{
-		{N: "registrar", Every: RegistrarEvery, Lease: reg, F: func(ctx context.Context) error {
-			res, err := f.Registrar.Pass(ctx)
-			for _, r := range res.Rejected {
-				log.Warn(r, "controller", "registrar")
-			}
-			if err != nil {
-				return err
-			}
-			if time.Since(lastRotate) >= RotateEvery {
-				lastRotate = time.Now()
-				if _, err := f.Registrar.Rotate(ctx); err != nil {
-					return fmt.Errorf("token rotation: %w", err)
-				}
-			}
-			return nil
-		}},
-		// The reconciler holds ctl/job-reconciler itself (Reconciler.UseLease).
-		{N: "job-reconciler", Every: ReconcilerEvery, F: func(ctx context.Context) error {
-			_, err := f.Reconciler.Pass(ctx)
-			return err
-		}},
-		{N: "forge-sweeper", Every: SweepEvery, Lease: sweep, F: func(ctx context.Context) error {
-			_, err := f.Checkouts.Sweep(ctx)
-			return err
-		}},
+// Components are the fleet controllers of this orchestrator (SPEC §05.11), each leader-only
+// under its lease ctl/<name>: registrar (2 s; token rotation every 60 s), job-reconciler
+// (10 s), forge-sweeper (60 s).
+func (f *Fleet) Components() []*orchestrator.Controller {
+	name, skew, now := f.cfg.Name, f.cfg.Params.Skew, f.cfg.Now
+	cs := []*orchestrator.Controller{
+		orchestrator.RegistrarController(f.Registrar, f.cfg.Fleet, name, skew, now),
+		orchestrator.ReconcilerController(f.Reconciler, name, skew, now),
+		orchestrator.ForgeSweeperController(f.Checkouts, f.cfg.Fleet, name, skew, now),
 	}
-}
-
-// Controller runs F every Every while this orchestrator holds Lease (when set). A failing
-// pass is logged and retried at the next tick; Run returns when ctx ends.
-type Controller struct {
-	N     string
-	Every time.Duration
-	Lease *store.Lease
-	F     func(ctx context.Context) error
-	Log   *slog.Logger
-}
-
-// Name implements server.Component.
-func (c *Controller) Name() string { return c.N }
-
-// Run implements server.Component.
-func (c *Controller) Run(ctx context.Context) error {
-	log := c.Log
-	if log == nil {
-		log = slog.Default()
+	for _, c := range cs {
+		c.Log = f.cfg.Log
 	}
-	t := time.NewTicker(c.Every)
-	defer t.Stop()
-	held := false
-	defer func() {
-		if held && c.Lease != nil {
-			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			_ = c.Lease.Release(rctx) // §05.6.5 shutdown: the next leader takes over at once
-		}
-	}()
-	for {
-		pctx, cancel := context.WithTimeout(ctx, 3*c.Every)
-		var err error
-		if c.Lease != nil {
-			held, _, err = c.Lease.TryAcquire(pctx)
-		} else {
-			held = true
-		}
-		if err == nil && held {
-			err = c.F(pctx)
-		}
-		cancel()
-		if err != nil && ctx.Err() == nil {
-			log.Warn("controller pass failed", "controller", c.N, "err", err.Error())
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-t.C:
-		}
-	}
+	return cs
 }
 
 // noForge is the checkout minter until the forge adapters exist (M17.1).

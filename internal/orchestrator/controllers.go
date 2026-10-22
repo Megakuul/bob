@@ -132,7 +132,9 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 	c.held = false
 	defer c.release()
-	due := true // a fresh leader passes at once (unless Persist says the last pass is recent)
+	// A fresh leader passes at once: its last pass time is zero, or for a Persist controller the
+	// predecessor's, so an hourly pass that just ran is not repeated.
+	due := false
 	for {
 		now := c.now()
 		if err := c.acquire(ctx, now); err != nil && ctx.Err() == nil {

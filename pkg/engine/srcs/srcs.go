@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
+	"hash"
 	"io/fs"
 	"os"
 	"path"
@@ -128,37 +128,41 @@ func filesOf(s Source) []string {
 // serialise hashes the NAR of a source tree and returns it too when it is small enough to keep
 // (kept counts the bytes kept by all calls).
 func serialise(s Source, kept *atomic.Int64) ([32]byte, []byte, error) {
-	h := sha256.New()
 	kw := &keepWriter{max: keepMax}
-	if err := nar.Write(io.MultiWriter(h, kw), s.Tree.Root, filesOf(s)); err != nil {
+	if err := nar.Write(kw, s.Tree.Root, filesOf(s)); err != nil {
 		return [32]byte{}, nil, fmt.Errorf("srcs: %s: %w", s.Name, err)
 	}
-	var sum [32]byte
-	copy(sum[:], h.Sum(nil))
+	if kw.h != nil {
+		var sum [32]byte
+		copy(sum[:], kw.h.Sum(nil))
+		return sum, nil, nil
+	}
 	b := kw.buf.Bytes()
-	if kw.over || kept.Add(int64(len(b))) > keepBudget {
+	sum := sha256.Sum256(b)
+	if kept.Add(int64(len(b))) > keepBudget {
 		b = nil
 	}
 	return sum, b, nil
 }
 
-// keepWriter keeps what is written until it exceeds max, then drops it.
+// keepWriter keeps what is written up to max bytes; beyond that it drops the bytes and only
+// hashes the stream (h != nil), so a large tree never sits in memory.
 type keepWriter struct {
-	buf  bytes.Buffer
-	max  int
-	over bool
+	buf bytes.Buffer
+	max int
+	h   hash.Hash
 }
 
 func (k *keepWriter) Write(p []byte) (int, error) {
-	if !k.over {
-		if k.buf.Len()+len(p) > k.max {
-			k.over = true
-			k.buf = bytes.Buffer{}
-		} else {
-			k.buf.Write(p)
-		}
+	if k.h == nil && k.buf.Len()+len(p) <= k.max {
+		return k.buf.Write(p)
 	}
-	return len(p), nil
+	if k.h == nil {
+		k.h = sha256.New()
+		k.h.Write(k.buf.Bytes())
+		k.buf = bytes.Buffer{}
+	}
+	return k.h.Write(p)
 }
 
 // parallel runs f(0..n-1) on GOMAXPROCS workers and returns the first error. Panics in f become

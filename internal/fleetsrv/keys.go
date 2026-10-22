@@ -5,30 +5,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base32"
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
+	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/store"
 )
-
-// OrchKey is `okey/<kid>` in the control bucket: the seed of an orchestrator signing key (SPEC
-// §05.4.2, §05.9.2). Its public half is published in fleet/cfg.k. Workers cannot read it.
-type OrchKey struct {
-	Kid      string    `pk:"okey" cbor:"-"`
-	ETag     string    `etag:"true" cbor:"-"`
-	Seed     []byte    `cbor:"sd,omitempty"`
-	Created  time.Time `cbor:"cr,omitzero"`
-	NotAfter time.Time `cbor:"na,omitzero"`
-}
-
-// KeyLifetime is how long a new orchestrator key is valid. The key controller (§05.11, 1 h)
-// creates the next one 7 days before notAfter.
-const KeyLifetime = 90 * 24 * time.Hour
 
 // Keys are the orchestrator signing keys this process uses.
 type Keys struct {
@@ -38,13 +22,7 @@ type Keys struct {
 	Pubs   []ed25519.PublicKey          // the same keys, for JobSpec verification
 }
 
-// kidOf derives the key id from the public key (stable and collision-free in practice).
-func kidOf(pub ed25519.PublicKey) string {
-	h := sha256.Sum256(pub)
-	return "k" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(h[:10]))
-}
-
-// EnsureKeys returns the fleet's current signing key, creating and publishing one when
+// EnsureKeys (start-up; the hourly rotation is orchestrator.Keys, the key controller) returns the fleet's current signing key, creating and publishing one when
 // fleet/cfg has no valid key yet, and publishes params in fleet/cfg.pr when it holds none.
 // Orchestrators that start together may each publish a key; all of them then pick the same
 // one (the valid key with the smallest kid), so every orchestrator signs with one key and the
@@ -55,13 +33,13 @@ func EnsureKeys(ctx context.Context, control, fleet *store.Bucket, now time.Time
 		return nil, fmt.Errorf("fleet/cfg: %w", err)
 	}
 	if cfg == nil || !hasValid(cfg.Keys, now) || cfg.Params.PollInterval == 0 {
-		var fresh *OrchKey
+		var fresh *orchestrator.OrchKeyRecord
 		if cfg == nil || !hasValid(cfg.Keys, now) {
 			pub, priv, err := ed25519.GenerateKey(rand.Reader)
 			if err != nil {
 				return nil, err
 			}
-			fresh = &OrchKey{Kid: kidOf(pub), Seed: priv.Seed(), Created: now.UTC(), NotAfter: now.Add(KeyLifetime).UTC()}
+			fresh = &orchestrator.OrchKeyRecord{Kid: orchestrator.KeyID(pub), Seed: priv.Seed(), Created: now.UTC(), NotAfter: now.Add(orchestrator.KeyLifetime).UTC()}
 			// The seed first: a published key whose seed is missing could never sign.
 			if err := store.Create(ctx, control, fresh); err != nil {
 				return nil, fmt.Errorf("okey/%s: %w", fresh.Kid, err)
@@ -122,7 +100,7 @@ func keysOf(ctx context.Context, control *store.Bucket, cfg *store.FleetConfig, 
 	if pick == nil {
 		return nil, errors.New("fleet/cfg holds no valid orchestrator key")
 	}
-	rec, err := store.Get(ctx, control, &OrchKey{Kid: pick.Kid})
+	rec, err := store.Get(ctx, control, &orchestrator.OrchKeyRecord{Kid: pick.Kid})
 	if err != nil {
 		return nil, fmt.Errorf("okey/%s: %w", pick.Kid, err)
 	}

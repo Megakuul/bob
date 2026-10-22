@@ -12,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/megakuul/bob/internal/isolation"
 	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/server"
 	"github.com/megakuul/bob/internal/store"
+	"github.com/megakuul/bob/internal/worker"
 	"github.com/megakuul/bob/pkg/bob/diag"
 )
 
@@ -32,6 +34,11 @@ Configuration comes from BOB_* environment variables (SPEC §05.11.1).
 const startTimeout = 2 * time.Minute
 
 func main() {
+	// A re-executed bob-server that sets up a job container (internal/isolation) is not
+	// bob-server: it never reaches run.
+	if len(os.Args) > 2 && os.Args[1] == isolation.ChildArg {
+		os.Exit(isolation.Child(os.Args[2]))
+	}
 	os.Exit(run(os.Args[1:], os.Getenv, os.Stderr))
 }
 
@@ -46,6 +53,15 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 0
 	case server.ModeOrchestrator, server.ModeWorker:
+	case "job-run":
+		// Hidden: the program of a job container (worker side), never started by hand.
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := worker.RunJob(ctx, os.Stdin, os.Stdout, worker.NotBuilt{}); err != nil {
+			fmt.Fprintf(stderr, "✗ %v\n", err)
+			return 1
+		}
+		return 0
 	case "admin":
 		// `admin create-user --login <name> --admin` (SPEC §6.3.2) writes UserRecord, the
 		// login name, the users index and AdminIndex in the control bucket.
@@ -76,9 +92,19 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	}
 	err = safe.Run(func() error {
 		if mode == server.ModeOrchestrator {
-			return server.Orchestrator(ctx, env, orchestratorParts(env))
+			pctx, cancel := context.WithTimeout(ctx, startTimeout)
+			parts, err := orchestratorParts(pctx, env)
+			cancel()
+			if err != nil {
+				return err
+			}
+			return server.Orchestrator(ctx, env, parts)
 		}
-		return server.Worker(ctx, env, workerParts(env))
+		parts, err := workerParts(env)
+		if err != nil {
+			return err
+		}
+		return server.Worker(ctx, env, parts)
 	})
 	if err != nil {
 		return report(stderr, err)

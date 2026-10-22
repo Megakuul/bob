@@ -1,29 +1,28 @@
 package main
 
 import (
+	"context"
+
 	"github.com/megakuul/bob/internal/server"
-	"github.com/megakuul/bob/pkg/bob/diag"
 )
 
-// orchestratorParts wires the feature packages into an orchestrator process: controllers
-// (internal/orchestrator), service implementations, identity, RBAC and worker
-// authentication. Each milestone adds its part here.
-func orchestratorParts(env *server.Env) server.OrchestratorParts {
+// parts.go is the single composition point of bob-server (owner: I-B6). Each feature wires
+// itself in a file parts_<feature>.go and adds one call here.
+
+// orchestratorParts wires the feature packages into an orchestrator process: fleet
+// controllers and services, identity, RBAC, worker authentication.
+func orchestratorParts(ctx context.Context, env *server.Env) (server.OrchestratorParts, error) {
 	var parts server.OrchestratorParts
 	rbacParts(env, &parts)
-	authParts(env, &parts)
+	authParts(env, &parts) // identity needs parts.Authz (rbacParts)
 	controllerParts(env, &parts)
-	return parts
+	if _, err := fleetParts(ctx, env, &parts); err != nil {
+		return parts, err
+	}
+	return parts, nil
 }
 
 // workerParts wires the worker loop (internal/worker) into a worker process.
-func workerParts(*server.Env) server.WorkerParts {
-	return server.WorkerParts{}
-}
-
-// workerHostCheck is the worker's build isolation check (R-FLEET-008: cgroup v2, Landlock,
-// user namespaces; BOB-E-7010 as a *server.HostRefusal). It runs before the configuration is
-// read. The worker isolation milestone (M13.7) replaces the stub.
-func workerHostCheck() error {
-	return diag.NotImplemented("bob-server worker isolation check")
+func workerParts(env *server.Env) (server.WorkerParts, error) {
+	return workerLoop(env)
 }

@@ -72,7 +72,18 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 
 	var idx *nixidx.Index
 	entries := map[string]nixidx.Entry{}
-	if err := r.stage(StageIndex, func() (err error) { idx, entries, err = r.indexStage(ctx, st, f, g, lf); return }); err != nil {
+	// R-FW-061 runs in the index stage (it needs the index): generated files edited by hand stop
+	// the run before anything is built; missing or outdated ones are rewritten. Only a run of
+	// the whole repository sees whole modules (nativeScope).
+	if err := r.stage(StageIndex, func() (err error) {
+		if idx, entries, err = r.indexStage(ctx, st, f, g, lf); err != nil {
+			return err
+		}
+		if nativeScope(o) {
+			res.Generated, err = generate(ctx, o.Root, g, lf, idx, false, time.Now())
+		}
+		return err
+	}); err != nil {
 		return res, err
 	}
 
@@ -298,10 +309,14 @@ func (r *runner) collect(st *store.Store, g *ir.Graph, p *planner, res *Result, 
 	}
 	r.hostPaths = map[string][]string{}
 	byLabel := map[string]map[string]string{}
+	drvOf := map[string]string{} // label → derivation of its first configuration (bob log)
 	for _, n := range g.Nodes {
 		rv := p.nodes[n.ID]
 		if len(rv.Outputs) == 0 {
 			continue
+		}
+		if drvOf[n.Label] == "" {
+			drvOf[n.Label] = rv.Drv
 		}
 		if byLabel[n.Label] == nil {
 			byLabel[n.Label] = map[string]string{}
@@ -321,7 +336,7 @@ func (r *runner) collect(st *store.Store, g *ir.Graph, p *planner, res *Result, 
 		}
 	}
 	for _, l := range targets {
-		pkg := Package{Label: l, Status: status[l], Outputs: byLabel[l]}
+		pkg := Package{Label: l, Status: status[l], Outputs: byLabel[l], Drv: drvOf[l]}
 		if pkg.Status == "" {
 			// Nix had nothing to do for it: valid already (or nothing to build).
 			st := translate.StCached

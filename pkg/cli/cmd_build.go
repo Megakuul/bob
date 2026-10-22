@@ -284,13 +284,16 @@ func renderBuild(o *out, res *build.Result) {
 	}
 }
 
-// drvsOf maps each requested package to the store path bob log reads the log of: its main
-// output, whose deriver Nix records (build.Package has no derivation yet, see NEEDS).
+// drvsOf maps each requested package to the store path bob log reads the log of: its
+// derivation (also for a failed build, whose outputs are not valid), else its main output.
 func drvsOf(res *build.Result) map[string]string {
 	m := map[string]string{}
 	for _, p := range res.Packages {
-		if out := p.Outputs["out"]; out != "" {
-			m[p.Label] = out
+		switch {
+		case p.Drv != "":
+			m[p.Label] = p.Drv
+		case p.Outputs["out"] != "":
+			m[p.Label] = p.Outputs["out"]
 		}
 	}
 	return m

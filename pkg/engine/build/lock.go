@@ -128,8 +128,9 @@ func resolveSource(ctx context.Context, f fetch.Fetcher, label string, s fetchSp
 }
 
 // lockStage is the lock check of bob build/test (R-FW-005): missing pins (nixpkgs, fetch
-// inputs) are added on demand; pins that no longer match their declaration fail with
-// BOB-E-1012 unless --lock, which re-resolves them and the ecosystem sections.
+// inputs) are added on demand; pins that no longer match their declaration and stale
+// ecosystem sections (engine.LockFreshness) fail with BOB-E-1012 unless --lock, which
+// re-resolves them and the ecosystem sections.
 func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher, g *ir.Graph) (*lock.File, error) {
 	lf, err := readLock(r.o.Root)
 	if err != nil {
@@ -138,6 +139,24 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 	before, err := lf.Encode()
 	if err != nil {
 		return nil, err
+	}
+	if !r.o.Lock {
+		// Stale ecosystem sections fail before anything is downloaded (R-FW-062).
+		ecos, err := ecosystemsOf(g)
+		if err != nil {
+			return nil, err
+		}
+		stale, err := staleSections(ctx, g, lf, f, ecos)
+		if err != nil {
+			return nil, err
+		}
+		if len(stale) > 0 {
+			errs := make([]error, len(stale))
+			for i, d := range stale {
+				errs[i] = d
+			}
+			return nil, errors.Join(errs...)
+		}
 	}
 	var stale []error
 	if decl := nixpkgsDecl(g); usesNixpkgs(g) || lf.Nixpkgs.Rev != "" || r.transientPin.Rev != "" {

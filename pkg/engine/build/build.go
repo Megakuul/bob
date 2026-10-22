@@ -108,6 +108,9 @@ type Result struct {
 	Packages  []Package    // requested packages, sorted by label
 	Tests     []TestResult // CmdTest only, sorted by label
 	ExitCode  int
+	// Generated are the not-committed generated native files this run wrote or kept (for bob's
+	// block in .git/info/exclude), as Gen returns them.
+	Generated []string
 }
 
 // Package is one requested package after the run.
@@ -115,6 +118,7 @@ type Package struct {
 	Label     string
 	Status    string            // built | cached | failed | skipped | cancelled
 	Outputs   map[string]string // output name → store path
+	Drv       string            // its derivation ("" when it has none): bob log reads its build log
 	HostPaths []string          // PrintPaths: <home>/nix/store/… of the outputs, by output name
 }
 

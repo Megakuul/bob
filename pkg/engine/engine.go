@@ -69,12 +69,36 @@ type Resolved struct {
 	MainProgram string
 }
 
-// GeneratedFile is one native tooling file an ecosystem writes (§03.0.2).
+// GeneratedFile is one native tooling file an ecosystem writes (§03.0.2). bob writes it with
+// mode 0444 and records its sha256 in .bob/state/native.json (R-FW-060).
 type GeneratedFile struct {
-	Path    string // repo-relative
+	Path    string // repo-relative, clean, slash-separated
 	Content []byte
-	Mode    fs.FileMode
-	Owner   string // label of the owning package
+	Mode    fs.FileMode // always 0o444 (bob writes 0444 whatever is set here)
+	Owner   string      // label of the owning package
+	// Committed marks a file that belongs in git (Go's go.mod and go.sum, R-FW-022). Every
+	// other generated file is kept out of git by bob's block in .git/info/exclude.
+	Committed bool
+	// Explain maps the bytes found in the working tree to the differences in bob.go terms
+	// (R-FW-061); nil: the drift error names the file only.
+	Explain func(onDisk []byte) []DriftLine
+}
+
+// DriftLine is one difference between a generated file and the working tree, in bob.go terms.
+type DriftLine struct {
+	Op   string // "+" added outside bob, "-" removed outside bob, "~" changed
+	Text string // e.g. "golang.org/x/text v0.20.0  (not declared in bob.go)"
+}
+
+// LockFreshness is implemented by an Ecosystem whose lock section records the declarations it
+// was resolved from (`inputs`, R-FW-062). Stale compares req.Prev (nil: no section yet) with the
+// declarations in req.Graph without network and without changing anything; it returns "" when
+// the section is fresh, else what changed ("npm zod ^3 is not pinned") and the bob.go position
+// of the changed declaration (zero when unknown). bob build, bob test and bob check report a
+// stale section as BOB-E-1012; bob lock and --lock re-resolve it. An Ecosystem without this
+// method is never reported stale.
+type LockFreshness interface {
+	Stale(ctx context.Context, req LockRequest) (what string, at ir.Pos, err error)
 }
 
 // The registry is filled by generator packages' init functions and read by the build; the mutex
