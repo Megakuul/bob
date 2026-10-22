@@ -65,6 +65,16 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
+14. A97 (evidence plan/progress/I-B2.md TEST PROBLEM): (a) `TestRFLEET003Reslot`: `newLab` builds the
+   Queue without a clock, so Enqueue stamps wall-clock time while the reconciler runs on the test's
+   fixed clock; add `Now: l.clk.Now` in `newLab` (the optional `Queue.Now` exists); (b)
+   `TestRFLEET005Planner` "within 25 % of the S14 model" rows compare absolute times of the SPEC
+   formula (S14 5.1: +0.14 s per drv) with simulation numbers: go200 closure 39.0 s vs 30.0 s,
+   wide2000 closure 329.9 s vs 223.6 s, split 6.5 s vs 16.6 s, while every split/no-split decision
+   is right. Ruling: the SPEC formula is the predictor; compare the predicted GAIN ratio and the
+   decision against the simulation (gain within 25 %), not absolute makespans; if the gains also
+   differ by more than 25 %, the acceptance sentence must be restated to "decisions equal"
+   (coordinator verifies with the formula before editing).
 13. A95 (evidence plan/progress/I-M4d.md TEST PROBLEM 3, 4): (a) `TestRFW051ToyEcosystem` leak-checks
    the `--print-paths` output whose `paths[]` must hold store paths (tests/cli already excludes
    `paths`): exclude `paths` there too; (b) `tests/cli/events_test.go` `knownEvents()` must list the

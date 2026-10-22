@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -96,7 +97,21 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 		Stdout: io.MultiWriter(logFile, c.stderr), Stderr: io.MultiWriter(logFile, c.stderr),
 		// A process the test left behind may hold the output pipe; do not wait for it forever.
 		WaitDelay: 10 * time.Second}
-	runErr := cmd.Run()
+	timeoutS := a.TimeoutS
+	if timeoutS == 0 {
+		timeoutS = bspec.DefaultTestTimeoutS
+	}
+	var timedOut atomic.Bool
+	runErr := cmd.Start()
+	if runErr == nil {
+		proc := cmd.Process
+		timer := time.AfterFunc(time.Duration(timeoutS)*time.Second, func() {
+			timedOut.Store(true)
+			_ = proc.Kill()
+		})
+		runErr = cmd.Wait()
+		timer.Stop()
+	}
 	took := time.Since(start)
 	if err := logFile.Close(); err != nil && runErr == nil {
 		runErr = err
@@ -122,6 +137,10 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 			Result bspec.TestResult `json:"result"`
 		}{"test-result", res})
 		fmt.Fprintf(c.stderr, "bob:: %s\n", line)
+		if timedOut.Load() {
+			c.Diag("error", "", 0, 0, fmt.Sprintf("%s timed out after %ds", c.Job.Label, timeoutS))
+			return fmt.Errorf("timed out after %ds", timeoutS)
+		}
 		var ee *exec.ExitError
 		if errors.As(runErr, &ee) {
 			return fmt.Errorf("test failed (%s)", ee.ProcessState.String())
@@ -138,6 +157,9 @@ func checkTestRun(a bspec.TestRunArgs) error {
 	}
 	if a.Format != "" && a.Format != "go" {
 		return Invalidf("test-run format %q is not \"\" or \"go\"", a.Format)
+	}
+	if a.TimeoutS < 0 {
+		return Invalidf("test-run timeout %d is negative", a.TimeoutS)
 	}
 	if len(a.Services) > maxServices {
 		return Invalidf("test-run has %d services, at most %d are allowed", len(a.Services), maxServices)

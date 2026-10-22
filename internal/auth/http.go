@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/megakuul/bob/internal/api"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -164,7 +166,8 @@ func (id *Identity) browserUser(r *http.Request) (string, error) {
 }
 
 func isUnauthenticated(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "unauthenticated")
+	var ce *connect.Error
+	return errors.As(err, &ce) && ce.Code() == connect.CodeUnauthenticated
 }
 
 func toLogin(w http.ResponseWriter, r *http.Request, next string) {
@@ -175,7 +178,7 @@ func toLogin(w http.ResponseWriter, r *http.Request, next string) {
 // SameSite=Strict cookie already keeps cross-site POSTs anonymous; this is the second line.)
 func (id *Identity) sameOrigin(r *http.Request) bool {
 	o := r.Header.Get("Origin")
-	return o == "" || o == "null" && false || strings.EqualFold(o, id.baseURL(r))
+	return o == "" || strings.EqualFold(o, id.baseURL(r))
 }
 
 // authorize: GET /oauth/authorize. A browser without a session goes to /login first; with

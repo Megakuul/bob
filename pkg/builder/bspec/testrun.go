@@ -10,7 +10,13 @@ type TestRunArgs struct {
 	Cwd      string            `json:"cwd,omitempty"`      // working directory (default: the build dir)
 	Format   string            `json:"format,omitempty"`   // per-case parser: "" (none) or "go" (-test.v output)
 	Services []Service         `json:"services,omitempty"` // R-FW-025, started in list order
+	// TimeoutS stops the test after that many seconds (0 = DefaultTestTimeoutS); the unit then
+	// fails with the diagnostic "<label> timed out after <n>s" (BOB-E-2007).
+	TimeoutS int64 `json:"timeoutSeconds,omitempty"`
 }
+
+// DefaultTestTimeoutS is the timeout of a test unit that sets none: 10 minutes (A92).
+const DefaultTestTimeoutS = 600
 
 // Service is one loopback service of a test (R-FW-025). Instance i (from 0) gets the address
 // 127.0.0.(i+2): it is exported as ADDR to the service and its probe, as <NAME>_ADDR to the

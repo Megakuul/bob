@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -207,7 +208,7 @@ func (s authService) ListMySessions(ctx context.Context, req *connect.Request[au
 		out.Sessions = append(out.Sessions, &authv1.Session{
 			Id: x.ID, Kind: x.Kind, UserAgent: x.UserAgent,
 			CreatedAt:  timestamppb.New(x.Created),
-			LastUsedAt: timestamppb.New(x.LastUsed.UTC().Truncate(24 * 60 * 60 * 1e9)),
+			LastUsedAt: timestamppb.New(x.LastUsed.UTC().Truncate(24 * time.Hour)),
 			Current:    x.Hash == cur,
 		})
 	}
