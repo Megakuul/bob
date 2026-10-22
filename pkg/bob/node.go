@@ -27,6 +27,8 @@ type node struct {
 	nix   json.RawMessage // nixpkgs kinds: the IR "nix" object
 	proj  projection
 
+	allowed []Platform // platforms the node may be built for (ext.Restrict); nil = all
+
 	evals map[*P]bool   // configurations whose evaluation created or reused the node
 	defs  []*definition // definitions that created it
 }
@@ -60,6 +62,11 @@ func init() {
 	graph.ConfigOf = func(n any) graph.Config {
 		nn, _ := n.(*Node)
 		return configOf(nn)
+	}
+	graph.Restrict = func(n, platforms any) {
+		nn, _ := n.(Node)
+		ps, _ := platforms.([]Platform)
+		restrict(nn.n, ps)
 	}
 	graph.Misuse = func(msg string) {
 		if ev := active; ev != nil {
@@ -160,6 +167,26 @@ func newNode(p *P, kindName, name string, deps []Package, srcs []Sources, spec a
 	n.addDef(ev)
 	ev.nodes[n.id] = n
 	return Node{n: n}
+}
+
+// restrict is ext.Restrict: it records the platforms n allows. Unknown platforms are a
+// definition error of the running constructor.
+func restrict(n *node, ps []Platform) {
+	if n == nil || active == nil {
+		return
+	}
+	var allowed []Platform
+	for _, p := range ps {
+		if !slices.Contains(platforms, p) {
+			active.misuse(fmt.Sprintf("%s: %s: unknown platform %q in Platforms (known: linux-amd64, linux-arm64)", n.pos, n.label, p))
+			return
+		}
+		if !slices.Contains(allowed, p) {
+			allowed = append(allowed, p)
+		}
+	}
+	slices.Sort(allowed)
+	n.allowed = allowed
 }
 
 // nilDep reports a nil dependency. A nil package is usually the result of an earlier error (its

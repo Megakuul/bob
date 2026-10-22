@@ -414,7 +414,7 @@ var sectionSeeds = map[string]string{
 	"rust": `{"crates":[{"checksum":"sha256-uQTfBw5nXEUrOTW0UY9fbKzVnYOU5x1IwZwZnw2J9D0=","meta":{"edition":"2021"},"name":"itoa","narHash":"sha256-uQTfBw5nXEUrOTW0UY9fbKzVnYOU5x1IwZwZnw2J9D0=","version":"1.0.15"}],"index":"sparse+https://index.crates.io/","inputs":"` + zeros64 + `"}`,
 	"npm":  `{"importers":{"web":{"deps":{"react":"react@19.3.1"}}},"inputs":"` + zeros64 + `","packages":{"react@19.3.1":{"integrity":"sha512-P0AVX8anMVIC5BBYWWQwfWNBbIAB/SQ2Z+2djRoCtn3uyssl6cL+tAnFN7vft4F9kRaN5N3WQ1Mv9R1sHGlqSg==","name":"react","version":"19.3.1"}},"registry":"https://registry.npmjs.org/"}`,
 	"opam": `{"inputs":"` + zeros64 + `","packages":{"fmt":{"hash":"sha512-P0AVX8anMVIC5BBYWWQwfWNBbIAB/SQ2Z+2djRoCtn3uyssl6cL+tAnFN7vft4F9kRaN5N3WQ1Mv9R1sHGlqSg==","opam":"02bb57a07d169eef9bde16e0a50a00423a4f756d589f7d1fed0d4d3aa367d11c","url":"https://erratique.ch/software/fmt/releases/fmt-0.11.0.tbz","version":"0.11.0"}},"repository":{"commit":"af5ddb0addf6e75660ee9d7485b27425459d1d66","narHash":"sha256-uQTfBw5nXEUrOTW0UY9fbKzVnYOU5x1IwZwZnw2J9D0=","url":"github:ocaml/opam-repository"}}`,
-	"cc":   `{"externals":{"//third_party/zstd:zstd":{"narHash":"sha256-uQTfBw5nXEUrOTW0UY9fbKzVnYOU5x1IwZwZnw2J9D0=","strip":1,"url":"https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"}}},"inputs":"` + zeros64 + `"}`,
+	"cc":   `{"externals":{"//third_party/zstd:zstd":{"narHash":"sha256-uQTfBw5nXEUrOTW0UY9fbKzVnYOU5x1IwZwZnw2J9D0=","strip":1,"url":"https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"}},"inputs":"` + zeros64 + `"}`,
 }
 
 const zeros64 = "0000000000000000000000000000000000000000000000000000000000000000"

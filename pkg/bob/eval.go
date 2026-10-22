@@ -50,6 +50,7 @@ type diagnostic struct {
 	pos   Position
 	label string
 	msg   string
+	chain []string // labels from a requested package to the one the error is about
 	defs  []*definition
 }
 
@@ -208,6 +209,9 @@ func writeDiags(w io.Writer, diags []diagnostic) {
 		if d.pos.File != "" {
 			line["file"], line["line"] = d.pos.File, d.pos.Line
 		}
+		if len(d.chain) > 0 {
+			line["chain"] = d.chain
+		}
 		b, err := json.Marshal(line)
 		if err != nil {
 			continue
@@ -274,6 +278,7 @@ func run(r *registry, e *environment, req request) ([]byte, []diagnostic) {
 
 	roots, relevant, errs := ev.selectRoots(targets, defs)
 	global = append(global, errs...)
+	global = append(global, checkPlatforms(roots)...)
 	for _, dg := range ev.diags {
 		if len(dg.defs) == 0 {
 			global = append(global, dg)
@@ -426,6 +431,45 @@ func (ev *evaluation) selectRoots(targets []target, defs []*definition) ([]*node
 		mark(d)
 	}
 	return roots, relevant, errs
+}
+
+// checkPlatforms reports every node reachable from roots that is built for a platform its kind
+// does not allow (ext.Restrict, R-FW-030, R-PLAT-006), with the shortest chain from a root.
+func checkPlatforms(roots []*node) []diagnostic {
+	parent := map[*node]*node{}
+	seen := map[*node]bool{}
+	queue := slices.Clone(roots)
+	sort.Slice(queue, func(i, j int) bool { return queue[i].id < queue[j].id })
+	for _, r := range queue {
+		seen[r] = true
+	}
+	var out []diagnostic
+	for len(queue) > 0 {
+		n := queue[0]
+		queue = queue[1:]
+		if n.allowed != nil && !slices.Contains(n.allowed, n.p.platform) {
+			var chain []string
+			for c := n; c != nil; c = parent[c] {
+				chain = append(chain, c.label.String())
+			}
+			slices.Reverse(chain)
+			allowed := make([]string, len(n.allowed))
+			for i, p := range n.allowed {
+				allowed[i] = string(p)
+			}
+			e := diag.New(6, "label", n.label.String(), "platform", string(n.p.platform), "platforms", strings.Join(allowed, ", "))
+			out = append(out, diagnostic{code: 6, pos: n.pos, label: n.label.String(), msg: e.Error(), chain: chain})
+			continue // its dependencies are not built for it
+		}
+		for _, d := range n.deps {
+			if !seen[d] {
+				seen[d] = true
+				parent[d] = n
+				queue = append(queue, d)
+			}
+		}
+	}
+	return out
 }
 
 // keys returns the keys of m (a copy, so the caller may add to m while ranging).

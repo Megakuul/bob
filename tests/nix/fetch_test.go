@@ -99,7 +99,8 @@ func diagOf(t testing.TB, err error, code diag.Code) (string, bool) {
 		t.Errorf("error code = %s (%v), want %s", de.Code.ID(), err, code.ID())
 		return "", false
 	}
-	text := de.Error() + "\n" + de.Cause + "\n" + strings.Join(de.Excerpt, "\n") + "\n" + strings.Join(de.Raw, "\n")
+	// Raw holds the Nix text shown only with -v (SPEC R-NIX-010, R-NIX-027); it is not user output.
+	text := de.Error() + "\n" + de.Cause + "\n" + strings.Join(de.Excerpt, "\n")
 	for _, v := range de.Args {
 		text += "\n" + v
 	}

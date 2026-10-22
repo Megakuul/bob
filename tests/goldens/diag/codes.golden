@@ -105,7 +105,7 @@ BOB-E-1018 definition - exit=3
 
 BOB-E-1019 definition - exit=3
   message: bob.lock cannot be read: {reason} (line {line})
-  hint:    resolve the merge conflict, or run bob lock
+  hint:    resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go
 
 BOB-E-1020 definition - exit=3
   message: {label}: invalid {option}: {reason}

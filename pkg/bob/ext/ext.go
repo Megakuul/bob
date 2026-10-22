@@ -131,6 +131,19 @@ func New(p *bob.P, kind, name string, deps []bob.Package, srcs []bob.Sources, sp
 	return n
 }
 
+// Restrict limits the platforms n may be built for, from a kind's `Platforms []bob.Platform`
+// option (SPEC R-FW-030, R-PLAT-006); an empty list allows every platform. Requesting n,
+// directly or as a dependency, for another platform fails the evaluation with BOB-E-0006
+// "<label> does not support <platform> (it allows: <platforms>)". It returns n.
+//
+//	return &Library{Node: ext.Restrict(ext.New(p, "cc.library", name, deps, srcs, spec), opts.Platforms)}
+func Restrict(n bob.Node, platforms []bob.Platform) bob.Node {
+	if graph.Restrict != nil && len(platforms) > 0 {
+		graph.Restrict(n, platforms)
+	}
+	return n
+}
+
 // ConfigOf returns the projected configuration of a node.
 func ConfigOf(n *bob.Node) Config {
 	if graph.ConfigOf == nil {

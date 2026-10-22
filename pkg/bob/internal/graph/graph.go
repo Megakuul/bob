@@ -102,4 +102,7 @@ var (
 	// Misuse records a definition error caused by a constructor (for example reading an axis
 	// its kind did not declare). Evaluation goes on; the error fails it at the end.
 	Misuse func(msg string)
+	// Restrict limits the platforms n (a bob.Node) may be built for; platforms is a
+	// []bob.Platform (empty = every platform).
+	Restrict func(n any, platforms any)
 )
