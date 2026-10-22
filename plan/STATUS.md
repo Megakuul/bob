@@ -4,18 +4,16 @@
 - **Phase:** 3.1 — Harness first (M0 → M1) → Gate H. Phase 3.0 kickoff: owner said "If there are
   open questions ask them now or auto decide them" → SPEC Appendix A / HARNESS open items are
   auto-decided by their recommendations (A24); Gate H handling asked in chat 2026-10-21.
-- **Current task:** **Gate H prepared 2026-10-22, waiting for owner rulings.** M0/M1 complete: 248 of
-  252 R-ids have red acceptance tests (3 manual: R-PLAT-002, R-SEC-101, R-UI-003; 4 budget-only map
-  to `tests/budgets`), full `go run ./tools/ci` green (15 stages incl. acceptance, twice in a row),
-  harness self-validation `docs/harness-validation.md` (9 faults caught, 7 deferred to named
-  milestones, gaps recorded), fresh-context test review `docs/review/gate-h-{A,B,C,D}.md` with test
-  fixes applied (FIX-A..D). Remaining owner rulings: `docs/review/owner-items.md` (SPEC
-  contradictions/ambiguities) plus: proto problem (UpdateProject/UpdateRelease `project_field`),
-  `schema/events-v1.json`, acme fixture release/pipelines, `bob.PipelineOpts` fields, exit 78 vs 7,
-  R-FLEET-005/006 contradictions, protected stage never fails (D68). M1.9 (budget re-measure):
-  28 rows await benchmarks that come with the features. After Gate H: `go run ./tools/ci protect
-  -write`, tag `gate-h`, then M2 (parallel tracks, `plan/execution-plan.md`).
-  Host check (D69): newuidmap/newgidmap have file caps, bobtest has subuid/subgid 524288:65536 — nothing to change.
+- **Current task:** **Gate H rulings applied 2026-10-22; waiting for the owner to confirm Gate H.**
+  Owner delegated the contradictions ("read all harness data and understand the spirit of the
+  project ... resolve the conflicts"); coordinator rulings G1-G25 in `plan/gate-h-rulings.md`
+  (decisions A42-A64, owner may overturn), applied to SPEC/ADR 0016/proto/tests/fixtures; full
+  `go run ./tools/ci` green (15 stages, 0 failed). 248/252 R-ids have red tests (3 manual, 4
+  budget-only). Open follow-ups: `plan/m1.8-ledger.md` "Follow-ups from Gate H rulings" (layers73
+  fixture for the 4-worker split run, worker Attach client, scale-limit seeding), 4 R-NIX-012 goldens
+  with `full log:` but no excerpt (named exceptions). Recording Gate H (`go run ./tools/ci protect
+  -write`, tag `gate-h`) was refused by the permission classifier as self-approval: the owner runs
+  it or says go. Then M2 (parallel tracks, `plan/execution-plan.md`).
 - **Last gate passed:** **Gate S** (2026-10-21): SPEC, budgets, ADRs 0003–0019 (locked), HARNESS.md,
   plan approved → D65–D69. AGENTS.md replaces BOOTSTRAP.md.
 - **Next:** finish M0/M1 → Gate H (self-reviewed, D70; owner answer "b)" 2026-10-21) → M2…
