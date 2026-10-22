@@ -29,6 +29,8 @@ type Claim struct {
 type Outcome struct {
 	Status string // "ok" | "failed" | "infra"
 	Error  string
+	// LogLast is, per package, the last log seq persisted in the lake (JobResult.LogLast).
+	LogLast map[string]int64
 }
 
 // Config configures one in-process worker (the server worker mode builds the same value).
@@ -662,7 +664,7 @@ func (w *Worker) finish(ctx context.Context, j *job, out Outcome, lost func()) {
 		errText = errText[:8<<10]
 	}
 	now := w.now()
-	rs, err := fleet.Encode(store.JobResult{V: 1, Status: status, Error: errText, Finished: now.Unix()})
+	rs, err := fleet.Encode(store.JobResult{V: 1, Status: status, Error: errText, LogLast: out.LogLast, Finished: now.Unix()})
 	if err != nil {
 		slog.Error("worker: encode result", "job", id, "err", err)
 		return

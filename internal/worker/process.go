@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -15,9 +16,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/megakuul/lake"
+
+	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/isolation"
+	"github.com/megakuul/bob/internal/logstore"
 	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -36,6 +43,11 @@ type ProcessConfig struct {
 	Executable string
 	// Substituters and TrustedKeys are bob's caches for the container's nix.conf.
 	Substituters, TrustedKeys []string
+	// Storage locates the analytics bucket of the job logs (lake); Orchestrators are the
+	// Attach endpoints (BOB_ORCHESTRATOR_ADDRS; empty: the members of fleet/cfg.m).
+	Storage       store.StorageConfig
+	Orchestrators []string
+	LogFlush      time.Duration // log.flush_interval; 0 = 30 s
 }
 
 // DefaultStateDir is the worker state directory when BOB_STATE_DIR is not set.
@@ -55,6 +67,14 @@ type Process struct {
 	exe     string
 	slot    chan int // free slot numbers
 	limits  isolation.Limits
+
+	// Set once registration succeeded.
+	id   *Identity
+	logs *Logs // nil when the analytics bucket is unreachable: jobs run without live logs
+	cur  atomic.Pointer[Worker]
+
+	tokMu sync.Mutex
+	tok   *Token
 }
 
 // NewProcess prepares the worker's state: the root-owned persistent store and the root-mode
@@ -146,11 +166,31 @@ func (p *Process) Critical() bool { return true }
 // wrapping ErrRevoked when the worker is revoked.
 func (p *Process) Run(ctx context.Context) error {
 	log := p.cfg.Log
-	id, err := p.register(ctx)
+	id, tok, err := p.register(ctx)
 	if err != nil || id == nil {
 		return err
 	}
+	p.id, p.tok = id, tok
 	log.Info("worker registered", "wid", id.ID(), "platform", id.Profile.Platform, "slots", p.cfg.Slots)
+	bctx, stop := context.WithCancel(ctx)
+	var bg []<-chan error
+	defer func() {
+		stop()
+		for _, c := range bg {
+			<-c
+		}
+	}()
+	if logs, err := NewProcessLogs(ctx, LogConfig{Storage: p.cfg.Storage, Wid: id.ID(), FlushInterval: p.cfg.LogFlush, Now: p.cfg.Now, Log: log}); err != nil {
+		log.Error("worker: job logs not available", "err", err.Error())
+	} else {
+		p.logs = logs
+		// The lake writer outlives the job loop by its last flush (Run ends after ctx).
+		bg = append(bg, safe.Go(func() error { return logs.Run(bctx) }))
+	}
+	bg = append(bg, safe.Go(func() error { return p.refreshToken(bctx) }))
+	for _, addr := range p.attachAddrs(ctx) {
+		bg = append(bg, safe.Go(func() error { return p.attachLoop(bctx, addr) }))
+	}
 	for {
 		fc, err := p.fleetConfig(ctx)
 		if err != nil {
@@ -180,21 +220,21 @@ func (p *Process) Run(ctx context.Context) error {
 
 // register creates a fresh identity, registers it and waits for the registrar's approval
 // (worker/<wid>, polled every second). After RegistrationWait it starts over with new keys.
-func (p *Process) register(ctx context.Context) (*Identity, error) {
+func (p *Process) register(ctx context.Context) (*Identity, *Token, error) {
 	log := p.cfg.Log
 	for {
 		id, err := NewIdentity(rand.Reader)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		id.Profile = store.WorkerProfile{Platform: Platform()}
 		if _, err := Register(ctx, p.cfg.Fleet, id, p.cfg.Now()); err != nil {
 			if ctx.Err() != nil {
-				return nil, nil
+				return nil, nil, nil
 			}
 			log.Warn("worker: registration failed; retrying", "err", err.Error())
 			if !sleep(ctx, 2*time.Second) {
-				return nil, nil
+				return nil, nil, nil
 			}
 			continue
 		}
@@ -203,17 +243,18 @@ func (p *Process) register(ctx context.Context) (*Identity, error) {
 			s, err := FetchSealed(ctx, p.cfg.Fleet, id.ID())
 			switch {
 			case err == nil:
-				if _, err := id.OpenToken(s); err != nil {
-					return nil, fmt.Errorf("worker %s: the sealed token does not open: %w", id.ID(), err)
+				tok, err := id.OpenToken(s)
+				if err != nil {
+					return nil, nil, fmt.Errorf("worker %s: the sealed token does not open: %w", id.ID(), err)
 				}
-				return id, nil
+				return id, tok, nil
 			case errors.Is(err, ErrRevoked):
-				return nil, err
+				return nil, nil, err
 			case !errors.Is(err, store.ErrNotFound) && ctx.Err() == nil:
 				log.Warn("worker: reading the worker record failed", "err", err.Error())
 			}
 			if !sleep(ctx, time.Second) {
-				return nil, nil
+				return nil, nil, nil
 			}
 		}
 		log.Warn("worker: not approved within the registration wait; registering again with new keys", "wid", id.ID())
@@ -256,6 +297,7 @@ func (p *Process) loop(ctx context.Context, id *Identity, fc *store.FleetConfig)
 	if err != nil {
 		return err
 	}
+	p.cur.Store(w)
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	have := classIDs(fc)
@@ -302,8 +344,27 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 	if err != nil {
 		return Outcome{Status: "infra", Error: err.Error()}
 	}
-	var out bytes.Buffer
 	errTail := &tail{max: 8 << 10}
+	var jl *JobLog
+	spec, _ := fleet.DecodeSpec(c.Spec)
+	if p.logs != nil && spec.BuildID != "" {
+		if jl, err = p.logs.Start(ctx, spec.BuildID, c.JobID, c.Epoch, int32(c.Attempt), nil); err != nil {
+			p.cfg.Log.Warn("worker: job log not started", "job", c.JobID, "err", err.Error())
+			jl = nil
+		}
+	}
+	pr, pw := io.Pipe()
+	var out Output
+	if jl != nil {
+		out = &jobLogOutput{jl: jl, build: spec.BuildID, project: spec.Project, worker: p.id.ID()}
+	}
+	var outcome *jobOutcome
+	events := safe.Go(func() error {
+		var err error
+		outcome, err = readEvents(pr, out)
+		_, _ = io.Copy(io.Discard, pr) // never block the container on a full pipe
+		return err
+	})
 	exit, err := isolation.Run(ctx, isolation.Spec{
 		JobID: c.JobID, RootDir: filepath.Join(dir, "root"), Store: p.store,
 		Binds: []isolation.Bind{
@@ -315,16 +376,48 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 		Env: []string{"PATH=/bin", "HOME=/root", "TMPDIR=/tmp", "NIX_CONF_DIR=/etc/nix",
 			"NIX_SSL_CERT_FILE=" + isolation.CABundle, "SSL_CERT_FILE=" + isolation.CABundle},
 		Dir: "/work", Limits: p.limits,
-		Stdin: bytes.NewReader(in), Stdout: &out, Stderr: errTail,
+		Stdin: bytes.NewReader(in), Stdout: pw, Stderr: errTail,
 	})
-	if err != nil {
-		return Outcome{Status: "infra", Error: fmt.Sprintf("job container: %v %s", err, errTail.String())}
+	_ = pw.Close()
+	evErr := <-events
+	var o Outcome
+	switch {
+	case err != nil:
+		o = Outcome{Status: "infra", Error: fmt.Sprintf("job container: %v %s", err, errTail.String())}
+	case exit != 0 || evErr != nil || outcome == nil || outcome.Status == "":
+		o = Outcome{Status: "infra", Error: fmt.Sprintf("job container exited %d (%v): %s", exit, evErr, errTail.String())}
+	default:
+		o = Outcome{Status: outcome.Status, Error: outcome.Error}
 	}
-	var o jobOutcome
-	if exit != 0 || json.Unmarshal(out.Bytes(), &o) != nil || o.Status == "" {
-		return Outcome{Status: "infra", Error: fmt.Sprintf("job container exited %d: %s", exit, errTail.String())}
+	if jl != nil {
+		// Commit the job's log before the result names its last seqs (R-LOG-001 "at job end").
+		// A commit that does not land in time stays queued in the writer.
+		ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		last, err := jl.End(ectx)
+		cancel()
+		if err != nil {
+			p.cfg.Log.Warn("worker: job log not committed at job end", "job", c.JobID, "err", err.Error())
+		}
+		o.LogLast = last
 	}
-	return Outcome(o)
+	return o
+}
+
+// jobLogOutput feeds a job container's output events into the job's log.
+type jobLogOutput struct {
+	jl                     *JobLog
+	build, project, worker string
+}
+
+func (o *jobLogOutput) Line(pkg string, stream int32, text string) { o.jl.Line(pkg, stream, text) }
+
+func (o *jobLogOutput) EndPackage(pkg string, e PackageEnd) {
+	o.jl.EndPackage(pkg, &logstore.PackageRun{
+		BuildID: lake.NewString(o.build), Project: lake.NewString(o.project), Package: lake.NewString(pkg),
+		Drv: lake.NewString(e.Drv), Worker: lake.NewString(o.worker), Status: lake.NewString(e.Status),
+		Start: lake.NewInt(e.Start.UnixNano()), End: lake.NewInt(e.End.UnixNano()),
+		DurationMs: lake.NewInt(e.End.Sub(e.Start).Milliseconds()), Lines: lake.NewInt(e.Lines),
+	})
 }
 
 // tail keeps the last max bytes written to it.

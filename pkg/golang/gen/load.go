@@ -1,6 +1,9 @@
 package gen
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"go/build"
@@ -14,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
-	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
@@ -34,7 +36,7 @@ const (
 type wsModule struct {
 	node *ir.Node // nil for a module found on disk only
 	spec gospec.Module
-	dir  string // repository-relative module root ("" = repository root)
+	dir  string         // repository-relative module root ("" = repository root)
 	gens map[string]int // generated package import path → index into spec.Generated
 }
 
@@ -66,8 +68,10 @@ func (pl *planner) workspace() error {
 			return internal(n, "module spec: %v", err)
 		}
 		if old, ok := pl.mods[s.Path]; ok && old.dir != labelDir(n.Label) {
-			return diag.New(1024, "variant", "", "pos", n.DefinedAt.String(), "message",
-				fmt.Sprintf("Go module %s is declared twice (%s and %s)", s.Path, old.node.Label, n.Label))
+			e := diag.New(1020, "label", n.Label, "option", "Path", "reason",
+				fmt.Sprintf("Go module %s is also declared by %s", s.Path, old.node.Label))
+			e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
+			return e
 		}
 		m := &wsModule{node: n, spec: s, dir: labelDir(n.Label), gens: map[string]int{}}
 		for i, g := range s.Generated {
@@ -575,4 +579,17 @@ func relPath(p string) string {
 		return ""
 	}
 	return path.Clean(p)
+}
+
+// sriHex turns "sha256-<base64>" into lowercase hex.
+func sriHex(sri string) (string, error) {
+	b64, ok := strings.CutPrefix(sri, "sha256-")
+	if !ok {
+		return "", fmt.Errorf("%q is not a sha256 SRI hash", sri)
+	}
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil || len(raw) != sha256.Size {
+		return "", fmt.Errorf("%q is not a sha256 SRI hash", sri)
+	}
+	return hex.EncodeToString(raw), nil
 }

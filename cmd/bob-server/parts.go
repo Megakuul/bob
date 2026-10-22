@@ -14,10 +14,11 @@ import (
 func orchestratorParts(ctx context.Context, env *server.Env) (server.OrchestratorParts, error) {
 	var parts server.OrchestratorParts
 	rbacParts(env, &parts)
-	authParts(env, &parts) // identity needs parts.Authz (rbacParts)
-	controllerParts(env, &parts)
-	logParts(env, &parts) // I-B7: LogService, lake-maintenance; the returned LiveLogs goes to Attach
-	if _, err := fleetParts(ctx, env, &parts); err != nil {
+	authParts(env, &parts)             // identity needs parts.Authz (rbacParts)
+	cacheParts(ctx, env, &parts)       // /nix/ cache, promotion, signing keys (needs identity)
+	cs := controllerParts(env, &parts) // membership, key, index-repair, retention, staging sweep
+	live := logParts(env, &parts)      // LogService, lake-maintenance; LiveLogs feeds Attach
+	if _, err := fleetParts(ctx, env, &parts, cs, live); err != nil {
 		return parts, err
 	}
 	return parts, nil

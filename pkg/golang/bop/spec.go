@@ -42,7 +42,8 @@ type BuildArgs struct {
 type Package struct {
 	ImportPath string `json:"importPath"`
 	Name       string `json:"name"` // package name (cgo -dynpackage)
-	P          string `json:"p"`    // the -p value: the import path, "main" for commands
+	// Flags are the planner's compile flags: "-p <path>" ("main" for commands) and -lang.
+	Flags []string `json:"flags"`
 	Dir        string `json:"dir"`  // source directory ("" = the work directory)
 	// Write holds generated sources (the test main): file name → content, written to the
 	// package's work directory; GoFiles names them relative to it when Dir is "".
@@ -56,7 +57,6 @@ type Package struct {
 	LDFlags   []string          `json:"ldflags,omitempty"` // cgo LDFLAGS: #cgo directives, then the deps' -L/-l
 	Imports   map[string]string `json:"imports"`           // import path → archive or export data
 	Embed     *Embed            `json:"embed,omitempty"`
-	Lang      string            `json:"lang"` // "go1.26"
 	Trim      string            `json:"trim"` // what Dir becomes in recorded paths ("<module>@<v>/<rel>")
 	Out       string            `json:"out"`  // the archive
 	// Export, when set, receives the export data alone (-linkobj split, R-GO-005); Out then

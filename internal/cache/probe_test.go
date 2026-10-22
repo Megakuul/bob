@@ -48,13 +48,13 @@ func TestObjectsConditionalOps(t *testing.T) {
 	if _, err := o.Put(ctx, "a", []byte("x"), "", Cond{IfMatch: `"nope"`}); !errors.Is(err, ErrPrecondition) {
 		t.Fatalf("If-Match with a stale ETag: %v", err)
 	}
-	if err := o.Copy(ctx, "a", `"0123"`, "b", map[string]string{"bob-narhash": "h1"}, true); !errors.Is(err, ErrPrecondition) {
+	if err := o.Copy(ctx, "a", `"0123"`, "b", map[string]string{"bob-narhash": "h1"}, ""); !errors.Is(err, ErrPrecondition) {
 		t.Fatalf("copy with a stale source ETag: %v", err)
 	}
-	if err := o.Copy(ctx, "a", etag, "b", map[string]string{"bob-narhash": "h1"}, true); err != nil {
+	if err := o.Copy(ctx, "a", etag, "b", map[string]string{"bob-narhash": "h1"}, ""); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
-	if err := o.Copy(ctx, "a", etag, "b", map[string]string{"bob-narhash": "h2"}, true); !errors.Is(err, ErrPrecondition) {
+	if err := o.Copy(ctx, "a", etag, "b", map[string]string{"bob-narhash": "h2"}, ""); !errors.Is(err, ErrPrecondition) {
 		t.Fatalf("create-only copy over an existing key: %v", err)
 	}
 	inf, err := o.Head(ctx, "b")

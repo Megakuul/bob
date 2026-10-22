@@ -93,20 +93,39 @@ func hasValid(ks []store.FleetKey, now time.Time) bool {
 	return false
 }
 
-// keysOf picks the signing key of cfg (the valid key that lives longest, ties by smallest kid,
-// so orchestrators that read the same fleet/cfg pick the same key) and loads its seed.
+// signMargin is how long a key must still be valid to be picked for signing: a key the key
+// controller just published (7 d before the old one ends) is used only once the old one has
+// 3.5 d left, long after every worker's 30 s config refresh has seen it.
+const signMargin = 84 * time.Hour
+
+// keysOf picks the signing key of cfg and loads its seed: the oldest valid key (earliest
+// notAfter) with more than signMargin left, else the valid key that lives longest; ties by
+// kid, so orchestrators that read the same fleet/cfg pick the same key.
 func keysOf(ctx context.Context, control *store.Bucket, cfg *store.FleetConfig, now time.Time) (*Keys, error) {
 	ks := &Keys{Verify: map[string]ed25519.PublicKey{}}
-	var pick *store.FleetKey
+	var pick, longest *store.FleetKey
+	before := func(a, b *store.FleetKey) bool {
+		return a.NotAfter.Before(b.NotAfter) || a.NotAfter.Equal(b.NotAfter) && a.Kid < b.Kid
+	}
 	for i, k := range cfg.Keys {
 		if len(k.Pub) != ed25519.PublicKeySize {
 			continue
 		}
 		ks.Verify[k.Kid] = ed25519.PublicKey(k.Pub)
 		ks.Pubs = append(ks.Pubs, ed25519.PublicKey(k.Pub))
-		if k.NotAfter.After(now) && (pick == nil || k.NotAfter.After(pick.NotAfter) || k.NotAfter.Equal(pick.NotAfter) && k.Kid < pick.Kid) {
-			pick = &cfg.Keys[i]
+		k := &cfg.Keys[i]
+		if !k.NotAfter.After(now) {
+			continue
 		}
+		if k.NotAfter.After(now.Add(signMargin)) && (pick == nil || before(k, pick)) {
+			pick = k
+		}
+		if longest == nil || before(longest, k) {
+			longest = k
+		}
+	}
+	if pick == nil {
+		pick = longest
 	}
 	if pick == nil {
 		return nil, errors.New("fleet/cfg holds no valid orchestrator key")

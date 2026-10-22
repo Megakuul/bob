@@ -26,6 +26,7 @@ modes:
   orchestrator   serve the API and run the controllers
   worker         run builds for the orchestrators
   admin          administrative commands: create-user --login <name> [--admin]
+  store fsck     check that every record of the control and fleet buckets decodes and validates
 
 Configuration comes from BOB_* environment variables (SPEC §05.11.1).
 `
@@ -53,6 +54,12 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 0
 	case server.ModeOrchestrator, server.ModeWorker:
+	case "store":
+		if len(args) > 1 && args[1] == "fsck" {
+			return storeFsck(getenv, os.Stdout, stderr)
+		}
+		fmt.Fprint(stderr, "usage: bob-server store fsck\n")
+		return 2
 	case "job-run":
 		// Hidden: the program of a job container (worker side), never started by hand.
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

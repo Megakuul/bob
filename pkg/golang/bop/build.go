@@ -115,7 +115,8 @@ func (b *build) compileLevel(pkgs []Package) error {
 
 func (b *build) compile(p Package) error {
 	r := b.r
-	if p.ImportPath == "" || p.Out == "" || p.P == "" {
+	pflag := flagValue(p.Flags, "-p")
+	if p.ImportPath == "" || p.Out == "" || pflag == "" {
 		return builder.Invalidf("go package without import path, -p or output")
 	}
 	obj := workDir(r.tmp, p.ImportPath)
@@ -169,8 +170,9 @@ func (b *build) compile(p Package) error {
 	} else {
 		args = append(args, "-o", out)
 	}
-	args = append(args, "-trimpath", trim, "-p", p.P, "-lang="+p.Lang, "-c="+strconv.Itoa(cores()),
-		"-nolocalimports", "-importcfg", filepath.Join(obj, "importcfg"), "-pack")
+	args = append(args, "-trimpath", trim)
+	args = append(args, p.Flags...)
+	args = append(args, "-c="+strconv.Itoa(cores()), "-nolocalimports", "-importcfg", filepath.Join(obj, "importcfg"), "-pack")
 	if len(p.CgoFiles)+len(p.CFiles)+len(p.SFiles)+len(p.SysoFiles) == 0 {
 		args = append(args, "-complete")
 	}
@@ -187,7 +189,7 @@ func (b *build) compile(p Package) error {
 			return err
 		}
 		sym := filepath.Join(obj, "symabis")
-		asm := append(b.asmArgs(p, dir, obj), "-gensymabis", "-o", sym)
+		asm := append(b.asmArgs(pflag, p.Trim, dir, obj), "-gensymabis", "-o", sym)
 		if _, err := r.run(dir, false, append(asm, rel(p.SFiles)...)...); err != nil {
 			return fmt.Errorf("%s: %w", p.ImportPath, err)
 		}
@@ -210,7 +212,7 @@ func (b *build) compile(p Package) error {
 	}
 	for _, s := range p.SFiles {
 		o := filepath.Join(obj, strings.TrimSuffix(s, filepath.Ext(s))+".o")
-		asm := append(b.asmArgs(p, dir, obj), "-o", o, "./"+s)
+		asm := append(b.asmArgs(pflag, p.Trim, dir, obj), "-o", o, "./"+s)
 		if _, err := r.run(dir, false, asm...); err != nil {
 			return fmt.Errorf("%s: %w", p.ImportPath, err)
 		}
@@ -230,9 +232,19 @@ func (b *build) compile(p Package) error {
 	return nil
 }
 
-func (b *build) asmArgs(p Package, dir, obj string) []string {
+// flagValue returns the value after flag in flags ("" if absent).
+func flagValue(flags []string, flag string) string {
+	for i, f := range flags {
+		if f == flag && i+1 < len(flags) {
+			return flags[i+1]
+		}
+	}
+	return ""
+}
+
+func (b *build) asmArgs(pflag, trimTo, dir, obj string) []string {
 	t := b.r.t
-	args := []string{t.tool("asm"), "-p", p.P, "-trimpath", dir + "=>" + p.Trim + ";" + obj + "=>",
+	args := []string{t.tool("asm"), "-p", pflag, "-trimpath", dir + "=>" + trimTo + ";" + obj + "=>",
 		"-I", obj + "/", "-I", filepath.Join(t.GoRoot, "pkg", "include"),
 		"-D", "GOOS_" + t.GOOS, "-D", "GOARCH_" + t.GOARCH}
 	if t.GOARCH == "amd64" {

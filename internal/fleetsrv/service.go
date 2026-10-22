@@ -17,6 +17,7 @@ import (
 	"github.com/megakuul/bob/internal/gen/bob/fleet/v1/fleetv1connect"
 	workerv1 "github.com/megakuul/bob/internal/gen/bob/worker/v1"
 	"github.com/megakuul/bob/internal/gen/bob/worker/v1/workerv1connect"
+	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -27,6 +28,32 @@ import (
 type FleetService struct {
 	fleetv1connect.UnimplementedFleetServiceHandler
 	F *Fleet
+	// Members lists the orchestrators (the membership controller, M14.3); nil: none listed.
+	Members *orchestrator.Membership
+}
+
+// ListOrchestrators implements FleetService: the members of fleet/cfg.m with their heartbeat
+// and the controller leases they hold.
+func (s *FleetService) ListOrchestrators(ctx context.Context, _ *connect.Request[fleetv1.ListOrchestratorsRequest]) (*connect.Response[fleetv1.ListOrchestratorsResponse], error) {
+	res := &fleetv1.ListOrchestratorsResponse{}
+	if s.Members == nil {
+		return connect.NewResponse(res), nil
+	}
+	ms, err := s.Members.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range ms {
+		o := &fleetv1.Orchestrator{Id: m.ID, Endpoint: m.Endpoint, Version: m.Version, LeaderOf: m.LeaderOf}
+		if !m.Started.IsZero() {
+			o.StartedAt = timestamppb.New(m.Started)
+		}
+		if !m.Heartbeat.IsZero() {
+			o.LastHeartbeat = timestamppb.New(m.Heartbeat)
+		}
+		res.Orchestrators = append(res.Orchestrators, o)
+	}
+	return connect.NewResponse(res), nil
 }
 
 var stateNames = map[string]fleetv1.WorkerState{
@@ -228,6 +255,9 @@ func (s *FleetService) RevokeWorker(ctx context.Context, req *connect.Request[fl
 type WorkerControl struct {
 	workerv1connect.UnimplementedWorkerControlServiceHandler
 	F *Fleet
+	// Live is the live log path (M14.2): it subscribes to a worker's job logs over its
+	// Attach stream and takes the LiveChunks; nil: no live logs.
+	Live *orchestrator.LiveLogs
 }
 
 // GetCheckoutCredential implements WorkerControlService: a checkout credential for the job the
@@ -296,6 +326,18 @@ func (w *WorkerControl) Attach(ctx context.Context, st *connect.BidiStream[worke
 	conn := w.F.Hub.Attach(wid)
 	defer conn.Detach()
 	conn.SetSlots(int(hello.SlotsFree))
+	liveOut := make(chan *workerv1.AttachResponse, 64)
+	if w.Live != nil {
+		detach := w.Live.Attached(wid, func(m *workerv1.AttachResponse) bool {
+			select {
+			case liveOut <- m:
+				return true
+			default:
+				return false
+			}
+		})
+		defer detach()
+	}
 	if err := st.Send(&workerv1.AttachResponse{Msg: &workerv1.AttachResponse_Welcome{Welcome: &workerv1.Welcome{OrchestratorId: w.F.cfg.Name, FleetConfigGen: gen}}}); err != nil {
 		return err
 	}
@@ -314,6 +356,10 @@ func (w *WorkerControl) Attach(ctx context.Context, st *connect.BidiStream[worke
 				conn.SetSlots(int(x.Slots.SlotsFree))
 			case *workerv1.AttachRequest_JobEvent:
 				_ = conn.JobEvent(ctx, x.JobEvent.JobId, x.JobEvent.Epoch, x.JobEvent.Kind.String())
+			case *workerv1.AttachRequest_LiveChunk:
+				if w.Live != nil {
+					_ = w.Live.Chunk(wid, x.LiveChunk) // LiveLogs logs and counts rejected chunks
+				}
 			}
 		}
 	})
@@ -330,6 +376,8 @@ func (w *WorkerControl) Attach(ctx context.Context, st *connect.BidiStream[worke
 			out = &workerv1.AttachResponse{Msg: &workerv1.AttachResponse_Ping{Ping: &workerv1.Ping{UnixMs: time.Now().UnixMilli()}}}
 		case line := <-conn.Recv():
 			out = attachMessage(line)
+		case m := <-liveOut:
+			out = m
 		}
 		if out == nil {
 			continue
@@ -340,8 +388,8 @@ func (w *WorkerControl) Attach(ctx context.Context, st *connect.BidiStream[worke
 	}
 }
 
-// attachMessage turns a Hub line ("wake <class> <slot> <job>", "cancel <job>", "drain",
-// "subscribe <job>") into its Attach message.
+// attachMessage turns a Hub line ("wake <class> <slot> <job>", "cancel <job>", "drain") into
+// its Attach message. Live log subscriptions come from LiveLogs, not from the Hub.
 func attachMessage(line string) *workerv1.AttachResponse {
 	f := strings.Fields(line)
 	if len(f) == 0 {
@@ -358,9 +406,6 @@ func attachMessage(line string) *workerv1.AttachResponse {
 		return &workerv1.AttachResponse{Msg: &workerv1.AttachResponse_CancelJob{CancelJob: &workerv1.CancelJob{JobId: f[1]}}}
 	case f[0] == "drain":
 		return &workerv1.AttachResponse{Msg: &workerv1.AttachResponse_Drain{Drain: &workerv1.Drain{Drain: true}}}
-	case f[0] == "subscribe" && len(f) == 2:
-		return &workerv1.AttachResponse{Msg: &workerv1.AttachResponse_LiveSubscribe{LiveSubscribe: &workerv1.LiveSubscribe{
-			JobId: f[1], ExpiresUnixMs: time.Now().Add(15 * time.Second).UnixMilli()}}}
 	}
 	return nil
 }

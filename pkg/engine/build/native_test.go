@@ -250,3 +250,43 @@ func TestNativePathOK(t *testing.T) {
 		}
 	}
 }
+
+// Package.Drv (bob log of a package) is its derivation; Check and Gen of a demo repo without
+// generated files are clean and write nothing but native.json; CheckDeterminism passes.
+func TestRunDrvCheckGen(t *testing.T) {
+	if testing.Short() {
+		t.Skip("evaluates and builds in a real store")
+	}
+	st := testStore(t)
+	dir := demoRepo(t)
+	res, _ := runBuild(t, Options{Root: dir, Store: st})
+	if res.ExitCode != 0 {
+		t.Fatalf("exit %d:\n%s", res.ExitCode, describe(res))
+	}
+	for _, p := range res.Packages {
+		if !strings.HasPrefix(p.Drv, "/nix/store/") || !strings.HasSuffix(p.Drv, ".drv") {
+			t.Errorf("%s: Drv %q", p.Label, p.Drv)
+		}
+	}
+	ctx := context.Background()
+	o := Options{Root: dir, Store: st}
+	findings, err := Check(ctx, o)
+	if err != nil || len(findings) != 0 {
+		t.Errorf("Check: %v %v", findings, err)
+	}
+	if excl, err := Gen(ctx, o, false); err != nil || len(excl) != 0 {
+		t.Errorf("Gen: %v %v", excl, err)
+	}
+	if err := CheckDeterminism(ctx, o); err != nil {
+		t.Errorf("CheckDeterminism: %v", err)
+	}
+	// A stale lock entry: a pinned source nothing declares.
+	lf := `{"lockVersion": 1, "sources": {"//x:gone": {"kind": "file", "url": "https://example.invalid/x", "name": "x", "hash": "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="}}}`
+	if err := os.WriteFile(filepath.Join(dir, "bob.lock"), []byte(lf+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	findings, err = Check(ctx, o)
+	if err != nil || len(findings) != 1 || findings[0].Code != 1012 {
+		t.Errorf("stale lock: %v %v", findings, err)
+	}
+}

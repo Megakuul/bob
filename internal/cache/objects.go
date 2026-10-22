@@ -255,15 +255,18 @@ func (o *Objects) PutFile(ctx context.Context, key string, r io.ReadSeeker, size
 }
 
 // Copy copies src (only while its ETag is srcETag) to dst, replacing dst's metadata with
-// meta. With createOnly, an existing dst is ErrPrecondition; so is a changed src.
-func (o *Objects) Copy(ctx context.Context, src, srcETag, dst string, meta map[string]string, createOnly bool) error {
+// meta. dstETag "" creates dst only when absent; otherwise only that version of dst is
+// replaced. A precondition that does not hold (dst, or a changed src) is ErrPrecondition.
+func (o *Objects) Copy(ctx context.Context, src, srcETag, dst string, meta map[string]string, dstETag string) error {
 	in := &s3.CopyObjectInput{Bucket: aws.String(o.bucket), Key: aws.String(dst),
 		CopySource: aws.String(o.bucket + "/" + src), MetadataDirective: types.MetadataDirectiveReplace, Metadata: meta}
 	if srcETag != "" {
 		in.CopySourceIfMatch = aws.String(srcETag)
 	}
-	if createOnly {
+	if dstETag == "" {
 		in.IfNoneMatch = aws.String("*")
+	} else {
+		in.IfMatch = aws.String(dstETag)
 	}
 	for a := 0; ; a++ {
 		_, err := o.s3.CopyObject(ctx, in)

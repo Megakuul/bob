@@ -40,8 +40,11 @@ type Options struct {
 	// one batch before Nix runs and hits are substituted by bob; bob derivations carry
 	// allowSubstitutes = false, so Nix never asks a cache about them itself (A71).
 	Caches []store.Substituter
+	// Untrusted and Strict are the worker's evaluation mode (A98, S13-3): replace targets
+	// outside the repository are refused and the evaluator sandbox refuses weaker isolation.
+	Untrusted, Strict bool
 
-	Lock       bool  // --lock: re-resolve stale lock entries instead of failing with BOB-E-1012
+	Lock      bool  // --lock: re-resolve stale lock entries instead of failing with BOB-E-1012
 	Offline    bool  // --offline: no substituters, no downloads
 	KeepGoing  *bool // nil = true
 	MaxJobs    int   // -j (0 = Nix's default: the number of CPUs)
@@ -270,5 +273,5 @@ func hostPath(st *store.Store, p string) string { return filepath.Join(st.Home()
 
 // evalRequest is the evaluator request of o with the evaluator's Go toolchain.
 func evalRequest(o Options, goRoot string) eval.Request {
-	return eval.Request{Root: o.Root, Patterns: targets(o), GoRoot: goRoot}
+	return eval.Request{Root: o.Root, Patterns: targets(o), GoRoot: goRoot, Untrusted: o.Untrusted, Strict: o.Strict}
 }

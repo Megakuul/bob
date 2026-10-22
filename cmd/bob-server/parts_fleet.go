@@ -6,6 +6,7 @@ import (
 
 	"github.com/megakuul/bob/internal/fleetsrv"
 	"github.com/megakuul/bob/internal/isolation"
+	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/server"
 	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/internal/worker"
@@ -17,7 +18,7 @@ import (
 // forge-sweeper (60 s), worker authentication, FleetService and WorkerControlService (Attach
 // feeding the hub the dispatcher wakes workers over; GetCheckoutCredential). The returned
 // Fleet is what the build controller enqueues jobs through.
-func fleetParts(ctx context.Context, env *server.Env, parts *server.OrchestratorParts) (*fleetsrv.Fleet, error) {
+func fleetParts(ctx context.Context, env *server.Env, parts *server.OrchestratorParts, cs *controllerSet, live *orchestrator.LiveLogs) (*fleetsrv.Fleet, error) {
 	params, err := fleetsrv.ParamsFromEnv(env.Getenv)
 	if err != nil {
 		return nil, &server.ConfigError{Msg: err.Error()}
@@ -31,8 +32,12 @@ func fleetParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 		parts.Controllers = append(parts.Controllers, c)
 	}
 	parts.Workers = f.Registrar
-	parts.Services.Fleet = &fleetsrv.FleetService{F: f}
-	parts.Services.WorkerControl = &fleetsrv.WorkerControl{F: f}
+	fs := &fleetsrv.FleetService{F: f}
+	if cs != nil {
+		fs.Members = cs.Membership
+	}
+	parts.Services.Fleet = fs
+	parts.Services.WorkerControl = &fleetsrv.WorkerControl{F: f, Live: live}
 	return f, nil
 }
 
@@ -46,6 +51,7 @@ func workerLoop(env *server.Env) (server.WorkerParts, error) {
 		Fleet: env.Storage.Fleet, Name: env.Config.Name, StateDir: env.Config.StateDir, Slots: env.Config.Slots,
 		Params: func(pr store.FleetParams) store.FleetParams { return fleetsrv.Merge(pr, params) },
 		Now:    env.Now, Log: env.Log,
+		Storage: env.Storage.Config, Orchestrators: env.Config.OrchestratorAddrs, LogFlush: params.FlushInterval,
 	})
 	if err != nil {
 		return server.WorkerParts{}, err

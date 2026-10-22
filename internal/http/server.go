@@ -122,7 +122,14 @@ func Listen(addr string, h http.Handler, log *slog.Logger) (*Server, error) {
 // New serves h on an already bound listener. Connections that arrive before Serve wait in
 // the listen backlog instead of being refused.
 func New(ln net.Listener, h http.Handler, log *slog.Logger) *Server {
+	// HTTP/1.1 plus cleartext HTTP/2 (h2c): the bidirectional Attach stream needs HTTP/2, and
+	// a plain http:// listener (devstack, a TLS-terminating proxy in front) has no ALPN.
+	protos := new(http.Protocols)
+	protos.SetHTTP1(true)
+	protos.SetHTTP2(true)
+	protos.SetUnencryptedHTTP2(true)
 	return &Server{ln: ln, srv: &http.Server{
+		Protocols:         protos,
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,

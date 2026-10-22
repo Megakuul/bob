@@ -27,6 +27,12 @@ type ForgeMinter interface {
 	Revoke(ctx context.Context, handle string) error
 }
 
+// JobMinter is a ForgeMinter that names the token after the job (the forge adapters: Forgejo
+// tokens are bob-job-<unix-seconds>-<jobID>, D62); Get prefers it.
+type JobMinter interface {
+	MintForJob(ctx context.Context, jobID, repo string, expires time.Time) (handle string, c Checkout, err error)
+}
+
 // CheckoutTTL is the lifetime asked of a per-job forge token; the sweeper revokes it at expiry
 // even while the job runs, and the worker asks again (D62).
 const CheckoutTTL = time.Hour
@@ -98,7 +104,13 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 		return Checkout{}, err
 	}
 	now := c.now()
-	handle, co, err := c.Forge.Mint(ctx, spec.Repo, now.Add(CheckoutTTL))
+	var handle string
+	var co Checkout
+	if jm, ok := c.Forge.(JobMinter); ok {
+		handle, co, err = jm.MintForJob(ctx, jobID, spec.Repo, now.Add(CheckoutTTL))
+	} else {
+		handle, co, err = c.Forge.Mint(ctx, spec.Repo, now.Add(CheckoutTTL))
+	}
 	if err != nil {
 		return Checkout{}, fmt.Errorf("forge: issue checkout token for %s: %w", spec.Repo, err)
 	}

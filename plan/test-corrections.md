@@ -84,6 +84,8 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
 12. A88 (evidence plan/progress/I-B3.md): (a) the R-API-001 generated-trees subtest runs `go tool
    buf` outside the module (needs the module dir / GOWORK); (b) `srvtest.Call` posts without the
    `/api/` prefix of SPEC 6.2; (c) `srvtest` reports a "not implemented" answer from `bob login` as
-   a real failure instead of red; (d) `tests/harness` leaves a 53 MB `bob-harness-bin-*` directory
+   a real failure instead of red; (e) `tests/store/env/api.go` RPC posts to `<api_url>/<method>`
+   without the `/api/` prefix (same bug as (b), another helper: TestRFLEET001ZeroSetupRegistration
+   fails on it; by hand with /api/ 20 workers were ACTIVE in 1.97-2.19 s, budget 5 s); (d) `tests/harness` leaves a 53 MB `bob-harness-bin-*` directory
    per test process in /tmp (580 across the agents, /tmp hit 100 % twice): the harness must remove
    it (TestMain cleanup or a shared cache dir keyed by source hash).

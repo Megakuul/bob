@@ -251,6 +251,9 @@ type JobResult struct {
 	Error    string           `cbor:"6,keyasint"` // translated error (§02 taxonomy), ≤ 8 KiB
 	LogLast  map[string]int64 `cbor:"7,keyasint"` // package → last persisted seq
 	Finished int64            `cbor:"8,keyasint"`
+	// EvalSHA is the hex SHA-256 of <staging>eval.json, the evaluation report of an evalbuild
+	// or eval job (internal/build); it binds the report to the owner's signature.
+	EvalSHA string `cbor:"9,keyasint,omitempty"`
 }
 
 // ---- Control bucket (§05.4.2, §05.4.4, §05.4.5) ----
@@ -282,6 +285,37 @@ type BuildRecord struct {
 	Result       BuildResult       `cbor:"rs,omitzero"`
 	LogPartition string            `cbor:"lg,omitempty"`
 	RequestID    string            `cbor:"rq,omitempty"`
+
+	// Fields of the build controller (internal/build, §06 Build message) beyond the §05.4.4
+	// list; all optional.
+	Attempt   int           `cbor:"an,omitempty"`  // 1 + retries in the retry-of chain (0 = 1)
+	RerunOf   uint64        `cbor:"ro,omitempty"`  // build number this build re-runs
+	Pipeline  string        `cbor:"pn,omitempty"`  // CreateBuild{pipeline}: run this pipeline only
+	Test      bool          `cbor:"ts,omitempty"`  // targets are tests (bob test --remote)
+	Reason    string        `cbor:"why,omitempty"` // CreateBuild reason (≤ 200 bytes)
+	Evaluated bool          `cbor:"ev,omitempty"`  // an evaluation result was accepted
+	Counts    PackageCounts `cbor:"pc,omitzero"`
+	Errors    []BuildError  `cbor:"er,omitempty"` // first failures, ≤ 20
+}
+
+// PackageCounts is BuildRecord.pc (§06 PackageCounts).
+type PackageCounts struct {
+	Total     int `cbor:"t,omitempty"`
+	Cached    int `cbor:"c,omitempty"`
+	Built     int `cbor:"b,omitempty"`
+	Running   int `cbor:"r,omitempty"`
+	Queued    int `cbor:"q,omitempty"`
+	Failed    int `cbor:"f,omitempty"`
+	Skipped   int `cbor:"s,omitempty"`
+	Cancelled int `cbor:"x,omitempty"`
+}
+
+// BuildError is one entry of BuildRecord.er (§06 ErrorSummary).
+type BuildError struct {
+	Code    string `cbor:"c,omitempty"` // BOB-E-NNNN
+	Message string `cbor:"m,omitempty"`
+	Label   string `cbor:"l,omitempty"`
+	Hint    string `cbor:"h,omitempty"`
 }
 
 // MaxBuildJobs bounds BuildRecord.Jobs.
@@ -289,9 +323,14 @@ const MaxBuildJobs = 1024
 
 // BuildTrigger is BuildRecord.tr.
 type BuildTrigger struct {
-	Kind  string `cbor:"k,omitempty"` // push|pr|api|remote|retry
+	Kind  string `cbor:"k,omitempty"` // push|tag|pr|api|remote|rerun|retry
 	By    string `cbor:"by,omitempty"`
 	Event string `cbor:"ev,omitempty"` // forge event id
+
+	Ref    string `cbor:"rf,omitempty"` // refs/heads/…, refs/tags/…, refs/pull/N/head
+	PR     int64  `cbor:"pr,omitempty"` // pull request number
+	Fork   bool   `cbor:"fk,omitempty"` // pull request from a fork
+	Sender string `cbor:"sd,omitempty"` // forge login (display only)
 }
 
 // BuildSource is BuildRecord.src: a git ref or an uploaded snapshot.
@@ -307,6 +346,9 @@ type PipelineRun struct {
 	Name    string `cbor:"n,omitempty"`
 	State   string `cbor:"st,omitempty"`
 	Release string `cbor:"rel,omitempty"` // release id
+
+	Concurrency string `cbor:"cc,omitempty"` // queue|supersede|parallel ("" = per-ref default)
+	Releases    bool   `cbor:"rl,omitempty"` // a release pipeline (never superseded)
 }
 
 // BuildJob is one entry of BuildRecord.jb.

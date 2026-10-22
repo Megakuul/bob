@@ -32,6 +32,9 @@ type Request struct {
 	// Untrusted marks a repository bob does not trust (a worker evaluating pushed commits):
 	// directory replace targets of its go.mod must stay inside Root (review F2).
 	Untrusted bool
+	// Strict runs the evaluator sandbox in worker mode (evalbox.Spec.Strict, S13-3): no
+	// evaluation without a delegated cgroup and Landlock ABI >= 4.
+	Strict bool
 }
 
 // Limits bound one evaluation inside the evaluator sandbox (R-FW-045, S13 §5.3). Wall clock,
@@ -222,6 +225,7 @@ func compile(ctx context.Context, r Request, root string, tc toolchain, fw *fram
 		Seed:     seed,
 		CacheDir: cache,
 		Dir:      srcDir,
+		Strict:   r.Strict,
 		Steps: []evalbox.Step{{
 			Args: []string{tc.goroot + "/bin/go", "build", "-tags=bob", "-trimpath",
 				"-modfile=" + sandboxPath(genDir, "go.mod"), "-overlay=" + sandboxPath(genDir, "overlay.json"),
@@ -258,6 +262,7 @@ func run(ctx context.Context, r Request, root string, tc toolchain) (*evalbox.Ou
 		Dir:    srcDir,
 		Steps:  []evalbox.Step{{Args: []string{binDir + "/" + evalBin, string(req)}, Env: tc.env()}},
 		Limits: r.Limits.box(),
+		Strict: r.Strict,
 	})
 	if err != nil {
 		return nil, err
