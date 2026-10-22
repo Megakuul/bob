@@ -2,9 +2,12 @@ package ocaml
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"reflect"
 	"regexp"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -119,10 +122,7 @@ func Library(p *bob.P, o LibOpts) *Lib {
 		wrapped = *o.Wrapped
 	}
 	t := mlspec.Target{Type: mlspec.TypeLibrary, Wrapped: wrapped, Flags: list(o.Flags), Dune: o.Dune}
-	srcs := o.Srcs
-	if isEmpty(srcs) {
-		srcs = bob.Glob("*.ml", "*.mli")
-	}
+	srcs := defaultSrcs(o.Srcs)
 	b := newBuilder(p, &t, o.Name)
 	b.deps(o.Deps)
 	b.native(o.Native)
@@ -162,10 +162,7 @@ func program(p *bob.P, o ExeOpts, kind, typ string) (bob.Node, string) {
 		main = "main"
 	}
 	t := mlspec.Target{Type: typ, Main: main, Flags: []string{}, Dune: o.Dune}
-	srcs := o.Srcs
-	if isEmpty(srcs) {
-		srcs = bob.Glob("*.ml", "*.mli")
-	}
+	srcs := defaultSrcs(o.Srcs)
 	b := newBuilder(p, &t, o.Name)
 	if !moduleName.MatchString(main) {
 		b.problems = append(b.problems, fmt.Sprintf("Main %q is not a module name (a .ml file name without the extension)", main))
@@ -350,4 +347,53 @@ func isNil(v any) bool {
 	}
 	rv := reflect.ValueOf(v)
 	return rv.Kind() == reflect.Pointer && rv.IsNil()
+}
+
+// defaultSrcs is s, or the .ml files of the bob.go's directory and its .mli files when it has
+// any (a pattern that matches nothing is a definition error).
+func defaultSrcs(s bob.Sources) bob.Sources {
+	if !isEmpty(s) {
+		return s
+	}
+	if dir, ok := siteDir(); ok {
+		if dir == "" {
+			dir = "."
+		}
+		ents, _ := os.ReadDir(dir)
+		for _, e := range ents {
+			if strings.HasSuffix(e.Name(), ".mli") {
+				return bob.Glob("*.ml", "*.mli")
+			}
+		}
+	}
+	return bob.Glob("*.ml")
+}
+
+// siteDir is the repository-relative directory of the calling bob.go when it belongs to the
+// repository being evaluated (the evaluator runs in the repository root); ok is false for
+// dependency repositories, whose files bob cannot list here.
+func siteDir() (dir string, ok bool) {
+	bi, found := debug.ReadBuildInfo()
+	if !found || bi.Main.Path == "" {
+		return "", false
+	}
+	var pcs [64]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		f, more := frames.Next()
+		if path.Base(f.File) == "bob.go" {
+			rel, inMain := strings.CutPrefix(f.File, bi.Main.Path+"/")
+			if !inMain {
+				return "", false
+			}
+			if d := path.Dir(rel); d != "." {
+				return d, true
+			}
+			return "", true
+		}
+		if !more {
+			return "", false
+		}
+	}
 }

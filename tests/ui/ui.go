@@ -42,6 +42,8 @@ type Page struct {
 	List  bool     // has a filter bar (R-UI-006)
 	// Filter is a seeded id prefix that must reduce the list to matching rows.
 	Filter string
+	// Text is text the page derives from seeded data (in no single response); checked in the DOM only.
+	Text []string
 }
 
 // Seeded ids. Fixed so pages render the same every time.
@@ -58,7 +60,7 @@ const (
 // Pages is every route of SPEC §6.10.3, in SPEC order. Tabs are covered by their page.
 var Pages = []Page{
 	{ID: "overview", Route: "/", Path: "/", IDs: []string{seedBuild, seedFailed},
-		RPCs: []string{"/bob.analytics.v1.AnalyticsService/GetOverview", "/bob.build.v1.BuildService/ListBuilds"},
+		RPCs: []string{"/bob.analytics.v1.AnalyticsService/GetOverview"},
 		List: true, Filter: "01jbq7k"},
 	{ID: "projects", Route: "/projects", Path: "/projects", IDs: []string{seedProject, "web"},
 		RPCs: []string{"/bob.project.v1.ProjectService/ListProjects"}, List: true, Filter: "ap"},
@@ -67,7 +69,7 @@ var Pages = []Page{
 		List: true, Filter: "01jbq7k"},
 	{ID: "build", Route: "/p/<project>/builds/<id>", Path: "/p/" + seedProject + "/builds/" + seedBuild,
 		IDs:  []string{seedBuild, "//svc/api:server"},
-		RPCs: []string{"/bob.build.v1.BuildService/GetBuild", "/bob.build.v1.JobService/ListJobs"}},
+		RPCs: []string{"/bob.build.v1.BuildService/GetBuild", "/bob.build.v1.BuildService/GetBuildGraph"}},
 	{ID: "fleet", Route: "/fleet", Path: "/fleet", IDs: []string{seedWorker, "o-1"},
 		RPCs: []string{"/bob.fleet.v1.FleetService/ListWorkers", "/bob.fleet.v1.FleetService/ListOrchestrators"},
 		List: true, Filter: "w3k"},
@@ -82,7 +84,9 @@ var Pages = []Page{
 		RPCs: []string{"/bob.registry.v1.RegistryService/GetRepository", "/bob.registry.v1.RegistryService/ListTags"}},
 	{ID: "release", Route: "/p/<project>/releases/<name>/<version>",
 		Path: "/p/" + seedProject + "/releases/" + seedProject + "/" + seedRelease,
-		IDs:  []string{"bob install acme/api@1.4.2"}, RPCs: []string{"/bob.release.v1.ReleaseService/GetRelease"}},
+		IDs:  []string{seedRelease}, RPCs: []string{"/bob.release.v1.ReleaseService/ResolveRelease"},
+		// install reference grammar of SPEC §02.8: <project>/<release>@<version>
+		Text: []string{"bob install " + seedProject + "/api@" + seedRelease}},
 	{ID: "access", Route: "/access", Path: "/access", IDs: []string{seedUser},
 		RPCs: []string{"/bob.access.v1.UserService/ListUsers"}, List: true, Filter: "ali"},
 	{ID: "settings", Route: "/settings", Path: "/settings", IDs: []string{"bob-test"},
@@ -151,6 +155,9 @@ func Handler(dir string, seed *Seed) http.Handler {
 			return
 		case strings.HasPrefix(p, "/bob."):
 			serveRPC(w, r, p, seed, rel)
+			return
+		case strings.HasPrefix(p, "/api/bob."): // SPEC §6.2 mounts connect under /api/
+			serveRPC(w, r, strings.TrimPrefix(p, "/api"), seed, rel)
 			return
 		}
 		if strings.HasPrefix(p, "/_app/immutable/") {

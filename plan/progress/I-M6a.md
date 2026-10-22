@@ -80,3 +80,28 @@ the end), budgets, completion goldens candidates.
   at every dev evaluation), `bob exec -- <tool>` from .bob/bin.
 - D-M6a-13: tools/pins.json gains "bash": "bashInteractive" (tests/devenv pinned("bash", …)
   looks the name up first; zsh, fish, strace, bashInteractive were already listed).
+
+## NEEDS
+1. Start-up cost of every bob command (hook ≤ 10 ms p95, shim ≤ 15 ms p95, completion ≤ 50 ms):
+   package init compiles regexps eagerly. GODEBUG=inittrace=1 on `bob __complete` [8c/15G,
+   load ~25]: ~6 ms of ~10 ms are init: pkg/engine/translate 1.6 ms, pkg/npm 1.3 ms,
+   pkg/engine/nixidx 1.1 ms, pkg/golang 0.9 ms, pkg/bob 0.8 ms, pkg/engine/lock 0.65 ms,
+   pkg/npm/resolve 0.45 ms. Owners: make package-level regexps lazy (sync.OnceValue) or
+   simpler string checks. The hook/shim code paths of this unit open/exec nothing else.
+2. Cold first command in a fresh HOME (tests/devenv uses a fresh HOME per test, 4 min per
+   bob run, 2 min per shell prompt): measured `bob dev -- true` cold 322 s [8c/15G, load ~20],
+   of which evaluation (evaluator Go from nixpkgs: nixpkgs fetch+import, go realise, evaluator
+   seed + compile) is 312 s; build.Dev's own part (lock, index, gopls lookup, realise) ~10 s.
+   Every devenv acceptance test's first bob call times out on this host for that reason
+   (TestRDEV001DevShell's first case; the rest of it passes). Engine/eval owners: cold-path
+   cost (nixpkgs source import, seed build).
+3. tests/devenv uses acme everywhere (hook, trust, cost, shims, exec, signal, LSP, editor):
+   acme does not evaluate yet (deploy/bob.go: oci.image, appimage.bundle, release kinds are
+   M12; cc/rust/npm APIs are other units). Those tests stay red until then. Verified instead on
+   a scratch copy (out/_i-m6a, deleted at the end) with an acme-like Go-only fixture.
+4. Ecosystem owners (cc, rust, npm, ocaml): implement engine.DevPreparer (pkg/engine/dev.go):
+   toolchains + LSP servers (clangd from clang-tools, rust-analyzer, typescript-language-server)
+   as DevPrep.Packages, CC/CXX/PKG_CONFIG_PATH/RUSTC as InsideEnv, node_modules/.bin as Tools,
+   materialised files as Files, npm.Vite's dev server as Servers (DevServerSpec: Name
+   "<dir>-vite", Cmd ["vite","--config",".bob/vite.bob.config.mjs"], Ready "http", Port).
+   R-DEV-010 clangd/rust-analyzer/typescript and R-DEV-002 (M9.6) depend on it.

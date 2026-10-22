@@ -11,7 +11,6 @@ import (
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
-	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/build/testrun"
 	"github.com/megakuul/bob/pkg/engine/ir"
@@ -233,8 +232,9 @@ type Note struct {
 // ecosystemNames are the names of ecosystems in notes.
 var ecosystemNames = map[string]string{"cc": "C/C++", "go": "Go", "rust": "Rust", "npm": "npm", "ocaml": "OCaml"}
 
-// noteDropped prints a note for each requested package whose kind does not see a requested
-// variant field (R-FW-038: the projection drops it; a note, never an error).
+// noteDropped prints a note for each requested package that is built without a requested
+// variant field (R-FW-038: its projection drops the field; a note, never an error). A package
+// is built with a field when its projection holds it, its own or through a dependency.
 func (r *runner) noteDropped(g *ir.Graph) {
 	byID := nodesByID(g)
 	for _, id := range g.Roots {
@@ -242,28 +242,18 @@ func (r *runner) noteDropped(g *ir.Graph) {
 		if n == nil || isCoreKind(n.Kind) {
 			continue
 		}
-		k, ok := ext.Lookup(n.Kind)
-		if !ok {
-			continue
-		}
-		declares := func(a ext.Axis) bool {
-			for _, x := range k.Axes {
-				if x == a {
-					return true
-				}
-			}
-			return false
-		}
 		p, _ := engine.NodePlatform(n)
+		_, hasSan := n.Proj["sanitizers"]
+		_, hasRace := n.Proj["race"]
 		var dropped []string
 		for _, c := range g.Configs {
 			if c.Platform != "" && bob.Platform(c.Platform) != p {
 				continue
 			}
-			if !declares(ext.AxisSanitizers) {
+			if !hasSan {
 				dropped = append(dropped, c.Sanitizers...)
 			}
-			if c.Race && !declares(ext.AxisGoRace) {
+			if c.Race && !hasRace {
 				dropped = append(dropped, "race")
 			}
 		}

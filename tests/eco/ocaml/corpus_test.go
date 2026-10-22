@@ -144,11 +144,19 @@ func (o *opamOracle) run(args ...string) (string, error) {
 	return string(b), err
 }
 
-var installLine = regexp.MustCompile(`(?m)\binstall\s+(\S+)\s+(\S+)`)
+// installLine matches opam's action lines (`  - install <name> <version>`), not its header
+// (`=== install N packages`).
+var installLine = regexp.MustCompile(`(?m)^\s*\S\s+install\s+(\S+)\s+(\S+)`)
+
+// toolchain pins the packages bob fixes (SPEC §03.5.2) in every request, as S5 did: opam would
+// otherwise upgrade dune, which bob cannot choose.
+var toolchain = []string{"ocaml-base-compiler." + ocamlVersion, "dune." + duneVersion, "ocamlfind." + ocamlfindVersion}
 
 // solve returns name to version of `opam install --dry-run specs...` without the provided set.
+// --assume-depexts: opam stops at the system-package prompt (conf-gmp) otherwise.
 func (o *opamOracle) solve(specs ...string) (map[string]string, error) {
-	out, err := o.run(append([]string{"install", "--dry-run", "--yes"}, specs...)...)
+	args := append([]string{"install", "--dry-run", "--yes", "--assume-depexts"}, specs...)
+	out, err := o.run(append(args, toolchain...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%v: %s", err, out)
 	}

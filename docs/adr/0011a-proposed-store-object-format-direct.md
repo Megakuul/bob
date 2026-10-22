@@ -1,6 +1,6 @@
 # ADR 0011a — PROPOSED: the store speaks dynamitedb's object format directly
 
-Status: **Proposed (change proposal to the locked ADR 0011 / D8 / D46; owner decision needed)**,
+Status: **REJECTED by the owner 2026-10-22 ("of course use the library"); see A111.**
 2026-10-22. Raised by unit I-B1 (plan/progress/I-B1.md, D-IB1-1). Not an owner decision yet: the
 code exists on branch bob-v1 and can be reverted or adapted either way.
 

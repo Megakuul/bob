@@ -267,10 +267,11 @@ func stackInfo(t *testing.T) (api, token, stackDir string, ok bool) {
 	return api, token, stackDir, true
 }
 
-// rpc calls a ConnectRPC method with the JSON codec and returns the status and body.
+// rpc calls a ConnectRPC method under /api/ (SPEC §6.2) with the JSON codec and returns the
+// status and body.
 func rpc(api, token, method string, req any) (int, []byte, error) {
 	b, _ := json.Marshal(req)
-	r, err := http.NewRequest(http.MethodPost, api+"/"+method, bytes.NewReader(b))
+	r, err := http.NewRequest(http.MethodPost, api+"/api/"+method, bytes.NewReader(b))
 	if err != nil {
 		return 0, nil, err
 	}

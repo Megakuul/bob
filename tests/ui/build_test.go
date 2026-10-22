@@ -34,7 +34,7 @@ func TestBuildPage(t *testing.T) {
 	parity.Covers(t, "R-UI-002")
 	e := setup(t)
 	checkAPI(t, e, Page{RPCs: []string{
-		"/bob.build.v1.BuildService/GetBuild", "/bob.build.v1.JobService/ListJobs", "/bob.log.v1.LogService/GetLog",
+		"/bob.build.v1.BuildService/GetBuild", "/bob.build.v1.BuildService/GetBuildGraph", "/bob.log.v1.LogService/GetLog", "/bob.cache.v1.CacheService/GetPath",
 	}, IDs: []string{"//svc/api:server", "//lib/db:db", "//lib/auth:test", "BOB-E-2005", "compiling internal/http", "1258291"}})
 
 	tb := e.newTab(t, "", Sizes[0])
@@ -64,7 +64,7 @@ func TestBuildPage(t *testing.T) {
 
 	// Packages table: one row per seeded job with its state; the failure row carries the code.
 	rows := text(`[data-section=packages] tbody > tr`)
-	for _, want := range [][2]string{{"//svc/api:server", "BUILDING"}, {"//lib/db:db", "CACHED"}, {"//lib/auth:test", "FAILED"}} {
+	for _, want := range [][2]string{{"//svc/api:image", "BUILDING"}, {"//lib/db:db", "CACHED"}, {"//lib/auth:test", "FAILED"}} {
 		found := false
 		for _, r := range rows {
 			found = found || (strings.Contains(r, want[0]) && strings.Contains(r, want[1]))
@@ -80,14 +80,14 @@ func TestBuildPage(t *testing.T) {
 	// Graph mode: one node per package.
 	if err := chromedp.Do(tb.ctx, chromedp.Click(chromedp.CSS(`[data-section=packages] [data-view="graph"]`))); err != nil {
 		t.Errorf("R-UI-002: graph toggle [data-view=graph]: %v", err)
-	} else if nodes := attrs(`[data-section=packages] svg [data-node]`, "data-node"); len(nodes) != 3 {
-		t.Errorf("R-UI-002: graph mode shows %d nodes %q, want 3", len(nodes), nodes)
+	} else if nodes := attrs(`[data-section=packages] svg [data-node]`, "data-node"); len(nodes) != 4 {
+		t.Errorf("R-UI-002: graph mode shows %d nodes %q, want 4", len(nodes), nodes)
 	}
 
-	// Waterfall: a bar with positive width for each of the three seeded jobs.
+	// Waterfall: a bar with positive width for each of the four seeded packages.
 	bars := attrs(`[data-section=waterfall] [data-bar]`, "data-bar")
-	if len(bars) != 3 {
-		t.Errorf("R-UI-002: waterfall has %d bars %q, want 3", len(bars), bars)
+	if len(bars) != 4 {
+		t.Errorf("R-UI-002: waterfall has %d bars %q, want 4", len(bars), bars)
 	}
 	widths, err := chromedp.Run(tb.ctx, chromedp.Evaluate[[]float64](
 		`[...document.querySelectorAll('[data-section=waterfall] [data-bar]')].map(n => n.getBoundingClientRect().width)`))
@@ -102,7 +102,7 @@ func TestBuildPage(t *testing.T) {
 
 	// Artifacts: store path, size and image ref of the seeded artifact.
 	art := strings.Join(text(`[data-section=artifacts] tbody > tr`), "\n")
-	for _, want := range []string{"/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server", "1.2 MiB", "api/server:b-" + seedBuild} {
+	for _, want := range []string{"/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server", "1.2 MiB", seedRepo + ":b-" + seedBuild} {
 		if !strings.Contains(art, want) {
 			t.Errorf("R-UI-002: artifacts section does not show %q: %q", want, art)
 		}
@@ -124,7 +124,7 @@ func TestBuildPage(t *testing.T) {
 	if strings.Contains(lines(), "LIVE-LINE-LATE") {
 		t.Fatalf("harness: late line visible before release")
 	}
-	resp, err := http.Post(e.url+"/__test/release", "text/plain", nil)
+	resp, err := insecure.Post(e.url+"/__test/release", "text/plain", nil)
 	if err != nil {
 		t.Fatalf("harness: release: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestStreamMock(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/connect+json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := insecure.Do(req)
 	if err != nil {
 		t.Fatalf("harness: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestStreamMock(t *testing.T) {
 	if m := next(); !strings.Contains(m, "0042 linking server") {
 		t.Fatalf("harness: first message %s", m)
 	}
-	r, err := http.Post(e.url+"/__test/release", "text/plain", nil)
+	r, err := insecure.Post(e.url+"/__test/release", "text/plain", nil)
 	if err != nil {
 		t.Fatalf("harness: %v", err)
 	}

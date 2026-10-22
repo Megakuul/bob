@@ -46,7 +46,8 @@ func buf(t *testing.T, dir string, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", append([]string{"tool", "buf"}, args...)...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	// The repo's go.work resolves the pinned tools also when dir is a scratch copy outside the module.
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOWORK="+filepath.Join(repoRoot(t), "go.work"))
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()

@@ -695,7 +695,10 @@ the zip is never the imported path (S2 §3.6).
 
 #### R-GO-004a Toolchain per module
 - **Acceptance:** Given two modules with `Go: "1.25"` and `Go: "1.26"`, then each package is
-  compiled with its module's toolchain (job golden shows the toolchain store path), std is
+  compiled with its module's toolchain (job golden shows the toolchain store path; a package
+  imported by a module with another Go is also compiled in the importer's closure with the
+  importer's toolchain at its own module's `-lang`, since Go cannot import an archive of
+  another toolchain; amended 2026-10-22, A102), std is
   built once per toolchain variant, and a module requirement whose `go` directive exceeds the
   module's Go fails at `bob lock` with the toolchain error above.
 - **Source:** R-GO-004.

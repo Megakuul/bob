@@ -49,8 +49,20 @@ Owner of: pkg/golang/** (new pkg/golang/resolve); go-section glue in pkg/engine/
   is adopted instead of drift (missing requirements are not a user edit); added/changed ones
   still are.
 
+- R-GO-002b by hand on the real corpus (scratch repo per module like tests/eco/golang
+  corpusRepo, real proxy.golang.org, script /var/tmp/i-m5b/scripts/corpus.sh): bob lock + bob
+  gen, then `go list -m all` (GOFLAGS=-mod=readonly GOSUMDB=off GOTOOLCHAIN=local, GOPROXY =
+  bob's goproxy dir) equals bob's build list and go build/vet ./... pass offline for: go-cmp
+  (1 module), x/text (4), testify (6), uuid (1), cobra (7), zap (8), protobuf (4), grpc (26),
+  prometheus (37), client-go (77), bob's own requirements (51). Found and fixed on the way:
+  gopkg.in .v1 pseudo-version rule, go line raised to deps' patch level (lake needs 1.26.1).
+  [8c/15G shared host, disk nearly full: one Nix ENOSPC on retry, not a resolver issue]
+- go.mod go line = declared X.Y.0 raised to the highest go line of a selected module of the
+  same language version (the go command wants go.mod updated otherwise); bob.lock keeps the
+  declared one.
+
 ## next
-- remaining corpus entries (grpc, prometheus, client-go, bob's requirements) running.
+- nothing in this chain beyond NEEDS / TEST PROBLEM.
 
 ## DECISIONS
 - D-M5b-1: go.mod roots rule: every build-list module that some workspace module declares or

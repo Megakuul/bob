@@ -45,6 +45,14 @@ func TestRGO004aToolchainPerModule(t *testing.T) {
 		"example.com/api/cmd/api":      "1.26",
 		"example.com/tools/cmd/stamp":  "1.26",
 	}
+	// Go cannot import an archive built by another toolchain, so a package imported from another
+	// module (lib, imported by api and tools at Go 1.26) is also compiled again inside the
+	// importer's closure with the importer's toolchain, at its own module's -lang. Its own
+	// module's closures still compile it with its module's toolchain.
+	importers := map[string]string{
+		"example.com/lib/strutil": "1.26",
+		"example.com/lib/fastadd": "1.26",
+	}
 	seen := map[string]bool{}
 	for _, d := range bobDrvs(all) {
 		spec := jobSpec(d)
@@ -52,21 +60,30 @@ func TestRGO004aToolchainPerModule(t *testing.T) {
 			if !regexp.MustCompile(`-p["',\s:]+` + regexp.QuoteMeta(pkg) + `["',\s\]}]`).MatchString(spec) {
 				continue
 			}
-			seen[pkg] = true
 			m := goToolchainRe.FindAllStringSubmatch(spec, -1)
 			if len(m) == 0 {
 				t.Errorf("%s: the job of %s names no Go toolchain store path", pkg, d.Name)
 			}
+			own := true
 			for _, x := range m {
-				if x[1] != goVer {
+				switch {
+				case x[1] == goVer:
+				case x[1] == importers[pkg]:
+					own = false
+					if !strings.Contains(spec, "-lang=go"+goVer) {
+						t.Errorf("%s is compiled with the importer's Go %s but not at its own module's -lang=go%s (job %s)", pkg, x[1], goVer, d.Name)
+					}
+				default:
+					own = false
 					t.Errorf("%s is compiled with Go %s, its module declares Go %s (job %s)", pkg, x[1], goVer, d.Name)
 				}
 			}
+			seen[pkg] = seen[pkg] || (own && len(m) > 0)
 		}
 	}
-	for pkg := range want {
+	for pkg, goVer := range want {
 		if !seen[pkg] {
-			t.Errorf("no compile job found for %s", pkg)
+			t.Errorf("no compile job found for %s with its module's Go %s", pkg, goVer)
 		}
 	}
 	// std: one derivation per (Go version, cgo) variant, and one variant set per toolchain.

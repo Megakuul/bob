@@ -32,6 +32,14 @@ func knownEvents() map[string]map[string]string {
 		"remote.state":     {"buildId": "s", "state": "s"},
 		"result":           {"command": "s", "data": "o"},
 		"run.finish":       {"exitCode": "n", "counts": "o", "drift": "a", "durationMs": "n"},
+		// R-FW-049: one event per build stage with its duration (schema v1 ev.stage).
+		"namespace": {"durationMs": "n"}, "scan": {"durationMs": "n"}, "eval": {"durationMs": "n"},
+		"ir": {"durationMs": "n"}, "lock": {"durationMs": "n"}, "index": {"durationMs": "n"},
+		"sources": {"durationMs": "n"}, "plan": {"durationMs": "n"}, "fetch": {"durationMs": "n"},
+		"drv": {"durationMs": "n"}, "nix": {"durationMs": "n"}, "validity": {"durationMs": "n"},
+		"translate": {"durationMs": "n"},
+		// R-NIX-007: derivations the drv stage imported (schema v1 ev.drv.imported).
+		"drv.imported": {"count": "n"},
 	}
 }
 

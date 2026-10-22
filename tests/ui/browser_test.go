@@ -3,12 +3,14 @@ package ui
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/png"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,10 +98,15 @@ func start() (*env, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fixture server: %w", err)
 	}
-	srv := &http.Server{Handler: Handler(e.build, e.seed), ReadHeaderTimeout: 5 * time.Second}
-	go srv.Serve(ln)
-	stop = append(stop, func() { srv.Close() })
-	e.url = "http://" + ln.Addr().String()
+	// TLS + HTTP/2 like a deployment (the session cookie is Secure): over HTTP/1.1 the build
+	// page's two server streams per open tab use up Chromium's six connections per host.
+	srv := httptest.NewUnstartedServer(Handler(e.build, e.seed))
+	srv.Listener.Close()
+	srv.Listener = ln
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	stop = append(stop, srv.Close)
+	e.url = srv.URL
 
 	bin, err := chromium(root)
 	if err != nil {
@@ -120,6 +127,7 @@ func start() (*env, error) {
 		chromedp.Flag("disable-lcd-text", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("ignore-certificate-errors", true), // the fixture server's test certificate
 	)
 	if os.Geteuid() == 0 {
 		// Chromium refuses its sandbox as root; the harness host runs tests as root.
@@ -177,12 +185,18 @@ type fonts struct{ dir, file string }
 // Goldens taken with the stand-in change once the bundled fonts land and are re-approved.
 func fontConfig(root string) (fonts, error) {
 	dirs := []string{filepath.Join(root, "web", "static", "fonts")}
+	var aliases string
 	if !hasFonts(dirs[0]) {
 		dejavu, err := nixBuild(root, "dejavu_fonts")
 		if err != nil {
 			return fonts{}, err
 		}
 		dirs = append(dirs, dejavu)
+		// Generic families must map to the stand-in, or sans-serif/system-ui resolve to a serif.
+		for _, a := range [][2]string{{"sans-serif", "DejaVu Sans"}, {"system-ui", "DejaVu Sans"},
+			{"serif", "DejaVu Serif"}, {"monospace", "DejaVu Sans Mono"}} {
+			aliases += fmt.Sprintf("<alias><family>%s</family><prefer><family>%s</family></prefer></alias>", a[0], a[1])
+		}
 	}
 	dir, err := os.MkdirTemp("", "bob-ui-")
 	if err != nil {
@@ -193,6 +207,7 @@ func fontConfig(root string) (fonts, error) {
 	for _, d := range dirs {
 		fmt.Fprintf(&conf, "<dir>%s</dir>", d)
 	}
+	conf.WriteString(aliases)
 	fmt.Fprintf(&conf, "<cachedir>%s</cachedir></fontconfig>\n", filepath.Join(dir, "fc-cache"))
 	f := filepath.Join(dir, "fonts.conf")
 	if err := os.WriteFile(f, []byte(conf.String()), 0o644); err != nil {
@@ -409,3 +424,6 @@ func writePNG(file string, img image.Image) error {
 	}
 	return os.WriteFile(file, b.Bytes(), 0o644)
 }
+
+// insecure talks to the fixture server, which serves a test certificate.
+var insecure = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, ForceAttemptHTTP2: true}}

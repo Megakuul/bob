@@ -69,7 +69,7 @@ func checkAPI(t *testing.T, e *env, p Page) {
 	var bodies []byte
 	for _, rpc := range p.RPCs {
 		u := e.url + rpc + "?connect=v1&encoding=json&message=" + url.QueryEscape("{}")
-		resp, err := http.Get(u)
+		resp, err := insecure.Get(u)
 		if err != nil {
 			t.Fatalf("harness: GET %s: %v", rpc, err)
 		}
@@ -96,7 +96,7 @@ func checkDOM(t *testing.T, e *env, tb *tab, p Page) {
 	if err != nil {
 		t.Fatalf("harness: %v", err)
 	}
-	for _, id := range p.IDs {
+	for _, id := range append(append([]string(nil), p.IDs...), p.Text...) {
 		if !strings.Contains(text, id) {
 			t.Errorf("R-UI-002: %s does not show seeded %q", p.Path, id)
 		}

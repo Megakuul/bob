@@ -156,9 +156,7 @@ func (c config) name(base ...string) string {
 	if c.profile == string(bob.Debug) {
 		parts = append(parts, "dbg")
 	}
-	for _, s := range c.sanitizeNames() {
-		parts = append(parts, s)
-	}
+	parts = append(parts, c.sanitizeNames()...)
 	return drv.Name(parts...)
 }
 

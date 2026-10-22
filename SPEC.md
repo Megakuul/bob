@@ -3810,7 +3810,10 @@ the zip is never the imported path (S2 §3.6).
 
 #### R-GO-004a Toolchain per module
 - **Acceptance:** Given two modules with `Go: "1.25"` and `Go: "1.26"`, then each package is
-  compiled with its module's toolchain (job golden shows the toolchain store path), std is
+  compiled with its module's toolchain (job golden shows the toolchain store path; a package
+  imported by a module with another Go is also compiled in the importer's closure with the
+  importer's toolchain at its own module's `-lang`, since Go cannot import an archive of
+  another toolchain; amended 2026-10-22, A102), std is
   built once per toolchain variant, and a module requirement whose `go` directive exceeds the
   module's Go fails at `bob lock` with the toolchain error above.
 - **Source:** R-GO-004.
@@ -6629,7 +6632,10 @@ CAS that is safe if two leaders overlap (S9 §3.3 measured no-leader runs as cor
     W = 100 with 2 slots → split (fixture: 14.7 s vs 19.4 s, no split). Boundary rows: a predicted
     gain of exactly 10 s and exactly 30 % splits; just below either bound does not; just above
     both does.
-  - The predicted gain is within 25 % of the S14 model.
+  - The planner's split decision equals the S14 simulation's on each S14 graph (amended
+    2026-10-22, test-corrections item 14: the formula's predicted gain differs from the
+    simulated one by more than 25 % on go200 (24.9 s vs 13.6 s) and wide2000 (323.4 s vs
+    207.0 s), so closeness of times or gains is not an acceptance criterion).
   - A real-run test on 4 local workers: a split build of the 73-drv layer graph is faster than
     the closure job (S14 quiet: closure 20.6 s; per-drv 9.3 s; a batch build must be ≤ 15 s)
     **[proposal]** [8c/15G].

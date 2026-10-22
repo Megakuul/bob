@@ -4,6 +4,7 @@ package cache
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -187,17 +188,35 @@ func TestRREG152KilledPromotion(t *testing.T) {
 }
 
 // assertNoDanglingReferences reads every served narinfo straight from S3 and checks that all
-// its references have a narinfo and a NAR (the invariant of SPEC 6.6.4).
+// its references have a narinfo and a NAR (the invariant of SPEC 6.6.4). References to paths a
+// staging COMPLETE.json lists as skipped (served by cache.nixos.org, R-REG-005) have no bob
+// narinfo by design and are exempt.
 func assertNoDanglingReferences(t *testing.T, e *regenv.Env) {
 	t.Helper()
 	have := map[string]bool{}
 	for _, k := range e.S3List("nix/narinfo/") {
 		have[hashOfKey(k)] = true
 	}
+	skipped := map[string]bool{}
+	for _, k := range e.S3List("staging/") {
+		if !strings.HasSuffix(k, "/COMPLETE.json") {
+			continue
+		}
+		_, body := e.S3Do(e.S3Creds("root"), http.MethodGet, artifacts, k, nil)
+		var c struct {
+			Skipped []string `json:"skipped"`
+		}
+		if err := json.Unmarshal(body, &c); err != nil {
+			t.Fatalf("harness error: %s: %v", k, err)
+		}
+		for _, p := range c.Skipped {
+			skipped[regenv.StoreHash(p)] = true
+		}
+	}
 	for _, k := range e.S3List("nix/narinfo/") {
 		_, body := e.S3Do(e.S3Creds("root"), http.MethodGet, artifacts, k, nil)
 		for _, ref := range strings.Fields(refsLine(string(body))) {
-			if h := strings.SplitN(ref, "-", 2)[0]; !have[h] {
+			if h := strings.SplitN(ref, "-", 2)[0]; !have[h] && !skipped[h] {
 				t.Errorf("narinfo %s references %s, which has no narinfo", k, ref)
 			}
 		}

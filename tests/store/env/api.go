@@ -66,7 +66,7 @@ type Call struct {
 	Body   []byte
 }
 
-// RPC calls "<package.Service>/<Method>" on the stack's public listener as the admin.
+// RPC calls "<package.Service>/<Method>" under /api/ (SPEC §6.2) on the stack's public listener as the admin.
 // token "" uses the admin token; token "-" sends no credential.
 func RPC(t testing.TB, x Extra, method, token string, req any) Call {
 	t.Helper()
@@ -76,7 +76,7 @@ func RPC(t testing.TB, x Extra, method, token string, req any) Call {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	r, err := http.NewRequestWithContext(ctx, http.MethodPost, x.APIURL+"/"+method, bytes.NewReader(body))
+	r, err := http.NewRequestWithContext(ctx, http.MethodPost, x.APIURL+"/api/"+method, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}

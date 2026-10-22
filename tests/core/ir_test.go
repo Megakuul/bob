@@ -133,7 +133,7 @@ func TestRFW051ToyEcosystem(t *testing.T) {
 	bin := buildBobtoy(t)
 	dir := repo(t, "toy")
 	r := harness.RunPath(t, bin, harness.Spec{Dir: dir}, "build", "//toy:b", "--print-paths", "--json")
-	noLeak(t, r)
+	noLeak(t, withoutPaths(r))
 	if harness.Red(t, r) || !exitIs(t, r, 0) {
 		return
 	}
@@ -160,6 +160,25 @@ func TestRFW051ToyEcosystem(t *testing.T) {
 	if c := counts(t, evs); c["built"] != 2 {
 		t.Errorf("built %v derivations, want exactly the two nodes of the graph", c["built"])
 	}
+}
+
+// withoutPaths drops package.finish `paths[]` from r's --json lines: they hold host store paths
+// by SPEC §02.6 (--print-paths), the one field the leak check must not see (as tests/cli
+// checkStream does). Lines that are not JSON are kept as they are.
+func withoutPaths(r harness.Result) harness.Result {
+	lines := strings.Split(r.Stdout, "\n")
+	for i, line := range lines {
+		var e map[string]any
+		if json.Unmarshal([]byte(line), &e) != nil {
+			continue
+		}
+		delete(e, "paths")
+		if b, err := json.Marshal(e); err == nil {
+			lines[i] = string(b)
+		}
+	}
+	r.Stdout = strings.Join(lines, "\n")
+	return r
 }
 
 // ownVersion is the bobVersion of the IR documents below.

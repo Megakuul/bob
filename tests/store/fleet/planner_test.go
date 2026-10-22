@@ -22,18 +22,19 @@ func within(got, want, frac float64) bool { return math.Abs(got-want) <= frac*wa
 
 // TestRFLEET005Planner runs the planner on the S14 graphs (rule, ruling G2: split = I >= 2 and
 // T1 - Tsplit >= max(10 s, 0.3 x T1)): the fixture is not split; go200,
-// rust129 and wide2000 at W = 100 workers with 2 slots are split, and the predicted wall times
-// are within 25 % of the S14 model (docs/spikes/s14-sched.md §3.2, W = 100, 2-slot workers:
-// closure "a" and best split).
+// rust129 and wide2000 at W = 100 workers with 2 slots are split, and every decision equals the
+// one the same rule takes on the S14 simulation's times (docs/spikes/s14-sched.md §3.2, W = 100,
+// 2-slot workers: closure "a" and best split). The formula's times are not compared with the
+// simulation's: they differ by more than 25 % (SPEC R-FLEET-005 acceptance, amended 2026-10-22).
 func TestRFLEET005Planner(t *testing.T) {
 	parity.Covers(t, "R-FLEET-005")
 	cases := []struct {
 		g          *s14graph.Graph
 		split      bool
 		closureRef float64 // S14 mode a, seconds
-		splitRef   float64 // S14 best split mode, seconds (0: not split)
+		splitRef   float64 // S14 best split mode, seconds
 	}{
-		{s14graph.Fixture(), false, 14.7, 0},
+		{s14graph.Fixture(), false, 14.7, 19.4},
 		{s14graph.Go200(), true, 30.0, 16.4},
 		{s14graph.Rust(129, 300, 2.2, 2), true, 327.4, 217.8},
 		{s14graph.Wide2000(), true, 223.6, 16.6},
@@ -50,11 +51,12 @@ func TestRFLEET005Planner(t *testing.T) {
 		if res.Split != c.split {
 			t.Errorf("%s at W=100, 2 slots: Split = %v, want %v (closure %.1f s, split %.1f s)", c.g.Name, res.Split, c.split, res.ClosureS, res.SplitS)
 		}
-		if !within(res.ClosureS, c.closureRef, 0.25) {
-			t.Errorf("%s: predicted closure time %.1f s is not within 25%% of the S14 model's %.1f s", c.g.Name, res.ClosureS, c.closureRef)
+		simSplit := c.closureRef-c.splitRef >= math.Max(10, 0.3*c.closureRef)
+		if simSplit != c.split {
+			t.Fatalf("harness error: %s: the S14 times %.1f s / %.1f s give split %v, the table says %v", c.g.Name, c.closureRef, c.splitRef, simSplit, c.split)
 		}
-		if c.split && !within(res.SplitS, c.splitRef, 0.25) {
-			t.Errorf("%s: predicted split time %.1f s is not within 25%% of the S14 model's %.1f s", c.g.Name, res.SplitS, c.splitRef)
+		if res.Split != simSplit {
+			t.Errorf("%s: Split = %v, the S14 simulation (closure %.1f s, split %.1f s) decides %v", c.g.Name, res.Split, c.closureRef, c.splitRef, simSplit)
 		}
 		if !c.split {
 			if len(res.Batches) != 0 || res.EvalJob {

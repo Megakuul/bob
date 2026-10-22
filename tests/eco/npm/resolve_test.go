@@ -26,6 +26,7 @@ type npmLock struct {
 		Link         bool              `json:"link"`
 		InBundle     bool              `json:"inBundle"`
 		Deps         map[string]string `json:"dependencies"`
+		DevDeps      map[string]string `json:"devDependencies"`
 		OptionalDeps map[string]string `json:"optionalDependencies"`
 		PeerDeps     map[string]string `json:"peerDependencies"`
 		PeerMeta     map[string]struct {
@@ -144,7 +145,8 @@ func npmResolution(t *testing.T, raw []byte, importers []string) resolution {
 			key = ""
 		}
 		p := l.Packages[key]
-		edges("importer:"+dir, key, p.Deps, p.OptionalDeps)
+		// An importer's deps in bob.lock include its Dev() dependencies and peers (SPEC §03.4.2).
+		edges("importer:"+dir, key, p.Deps, p.OptionalDeps, p.DevDeps, p.PeerDeps)
 	}
 	return r
 }

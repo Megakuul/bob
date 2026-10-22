@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
 	"github.com/megakuul/bob/pkg/engine/translate"
@@ -33,6 +34,9 @@ func runPipeline(e *env, cmd build.Command) int {
 	}
 	if dir := replayDir(e.getenv); dir != "" {
 		return runReplay(e, dir)
+	}
+	if err := checkPlatforms(e.a.str("platform"), e.a.pos); err != nil {
+		return e.out.fail(err) // before the store opens: no Nix process for a platform bob rejects
 	}
 	root, err := e.root(false)
 	if err != nil {
@@ -90,6 +94,25 @@ func runPipeline(e *env, cmd build.Command) int {
 		renderBuild(e.out, res)
 	}
 	return exit
+}
+
+// checkPlatforms refuses an unknown platform in --platform or a pattern's "@<platform>" suffix
+// (R-PLAT-001, usage error). SPEC's text "unknown platform "<p>" (known: …)" has no code of its
+// own in §02.3 yet; code 1 ("unknown {kind} "{name}"") names the known ones in its hint.
+func checkPlatforms(flag string, patterns []string) error {
+	ps := []string{flag}
+	for _, p := range patterns {
+		if _, cfg, ok := strings.Cut(p, "@"); ok {
+			plat, _, _ := strings.Cut(cfg, "+")
+			ps = append(ps, plat)
+		}
+	}
+	for _, p := range ps {
+		if p != "" && bob.Platform(p).NixSystem() == "" {
+			return diag.New(1, "kind", "platform", "name", p, "suggest", "linux-amd64 or linux-arm64")
+		}
+	}
+	return nil
 }
 
 // buildOptions turns the command line into build.Options.

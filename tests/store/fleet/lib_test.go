@@ -90,7 +90,8 @@ func newLab(t *testing.T) *lab {
 		t.Fatal(err)
 	}
 	l.q = &orchestrator.Queue{Fleet: f, Control: c, Class: l.classID, Shards: 16, Key: l.priv, Kid: "k1",
-		WorkerKey: func(wid string) ed25519.PublicKey { l.kmu.Lock(); defer l.kmu.Unlock(); return l.keys[wid] }}
+		WorkerKey: func(wid string) ed25519.PublicKey { l.kmu.Lock(); defer l.kmu.Unlock(); return l.keys[wid] },
+		Now:       l.clk.Now} // queue times on the lab's clock, like the reconciler
 	return l
 }
 

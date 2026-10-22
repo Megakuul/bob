@@ -134,6 +134,11 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	o.configure(a)
+	if m, ok := hostArchitecture(); !ok {
+		// R-PLAT-001: bob runs on linux-amd64 and linux-arm64 only (uname -m, so that a 32-bit
+		// personality is refused too).
+		return o.fail(diag.New(8, "arch", m))
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -327,4 +332,21 @@ func diagErrors(err error) []*diag.Error {
 	d = diag.New(9005, "reason", reason)
 	d.Raw = raw
 	return []*diag.Error{d}
+}
+
+// hostArchitecture returns uname -m and whether bob supports it (x86_64, aarch64).
+func hostArchitecture() (string, bool) {
+	var u syscall.Utsname
+	if err := syscall.Uname(&u); err != nil {
+		return "", true // cannot tell; the store setup fails later if it matters
+	}
+	b := make([]byte, 0, len(u.Machine))
+	for _, c := range u.Machine {
+		if c == 0 {
+			break
+		}
+		b = append(b, byte(c))
+	}
+	m := string(b)
+	return m, m == "x86_64" || m == "aarch64"
 }

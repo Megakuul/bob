@@ -390,6 +390,10 @@ var events = map[string]bool{
 	"run.start": true, "package.start": true, "package.wait": true, "upstream.start": true,
 	"log": true, "error": true, "warning": true, "test.result": true, "package.finish": true,
 	"remote.submitted": true, "remote.state": true, "result": true, "run.finish": true,
+	// R-FW-049 stage events and drv.imported (schema/events-v1.json ev.stage, ev.drv.imported).
+	"namespace": true, "scan": true, "eval": true, "ir": true, "lock": true, "index": true,
+	"sources": true, "plan": true, "fetch": true, "drv": true, "nix": true, "validity": true,
+	"translate": true, "drv.imported": true,
 }
 
 // checkJSON checks that every line parses, has "v":1 and a known "event".

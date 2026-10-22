@@ -16,8 +16,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -43,7 +45,7 @@ func Bin(t testing.TB, name string) string {
 			binsErr = err
 			return
 		}
-		dir, err := os.MkdirTemp("", "bob-harness-bin-")
+		dir, err := binDir()
 		if err != nil {
 			binsErr = err
 			return
@@ -71,6 +73,36 @@ func Bin(t testing.TB, name string) string {
 		t.Fatalf("harness: unknown binary %q", name)
 	}
 	return b
+}
+
+// binDir makes this process's directory for the built binaries (about 50 MB) under
+// $TMPDIR/bob-harness-bin/ and removes the directories of test processes that have exited, so
+// test runs do not fill the temp file system: a test binary has no hook that runs at its exit
+// in every package, so the next run cleans up instead.
+func binDir() (string, error) {
+	parent := filepath.Join(os.TempDir(), "bob-harness-bin")
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return "", err
+	}
+	entries, _ := os.ReadDir(parent)
+	for _, e := range entries {
+		b, err := os.ReadFile(filepath.Join(parent, e.Name(), "pid"))
+		if err != nil {
+			continue // being created right now, or not ours
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+		if err == nil && pid > 0 && syscall.Kill(pid, 0) == syscall.ESRCH {
+			_ = os.RemoveAll(filepath.Join(parent, e.Name()))
+		}
+	}
+	dir, err := os.MkdirTemp(parent, "run-")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pid"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 // Root is the repository root.

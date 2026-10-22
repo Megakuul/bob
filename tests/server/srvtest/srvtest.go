@@ -148,6 +148,9 @@ func Start(t *testing.T, o Options) *Env {
 	e.home = []string{"HOME=" + h, "XDG_CONFIG_HOME=" + h + "/.config", "XDG_DATA_HOME=" + h + "/.local/share",
 		"XDG_STATE_HOME=" + h + "/.local/state", "XDG_CACHE_HOME=" + h + "/.cache", "TERM=dumb"}
 	r := harness.Run(t, "bob", harness.Spec{Env: e.home, Stdin: e.Token + "\n"}, "login", "--token-stdin", e.apis[0])
+	if harness.Red(t, r) { // the CLI's login is still a stub: red, not a real failure
+		return nil
+	}
 	if r.Exit != 0 {
 		t.Fatalf("bob login: exit %d\n%s", r.Exit, r.Combined())
 	}
@@ -164,13 +167,14 @@ func (e *Env) Via(i int) *Env {
 // Proxy returns the URL of the counting S3 proxy.
 func (e *Env) Proxy() string { return e.Stack.Info.S3ProxyURL }
 
-// Call makes one unary Connect call (JSON) and decodes the response into resp.
+// Call makes one unary Connect call (JSON) to the /api/ mount (SPEC §6.2) and decodes the
+// response into resp.
 func (e *Env) Call(ctx context.Context, service, method string, req, resp any) error {
 	b, err := json.Marshal(req)
 	if err != nil {
 		return err
 	}
-	hr, err := http.NewRequestWithContext(ctx, http.MethodPost, e.apis[e.via]+"/"+service+"/"+method, bytes.NewReader(b))
+	hr, err := http.NewRequestWithContext(ctx, http.MethodPost, e.apis[e.via]+"/api/"+service+"/"+method, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -698,7 +702,7 @@ func (e *Env) FollowFrom(buildID, pkg string, seq int64, attempt int) *Follower 
 		env := make([]byte, 5, 5+len(body))
 		binary.BigEndian.PutUint32(env[1:], uint32(len(body)))
 		env = append(env, body...)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.apis[e.via]+"/bob.log.v1.LogService/FollowLog", bytes.NewReader(env))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.apis[e.via]+"/api/bob.log.v1.LogService/FollowLog", bytes.NewReader(env))
 		if err != nil {
 			f.Msgs <- FollowMsg{Err: err}
 			return
