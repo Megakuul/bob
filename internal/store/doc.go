@@ -6,8 +6,8 @@
 // this package because only internal/store may import dynamitedb). All record reads and
 // writes are dynamitedb calls: Get (dynamitedb.Get), Create (dynamitedb.Create, If-None-Match),
 // CAS (dynamitedb.Get, then dynamitedb.Put with the read's ETag on a fresh value, ADR 0011 and
-// R-STORE-103 rule 4), PutOwned (dynamitedb.Put without ETag) and Delete (dynamitedb.Delete
-// with the ETag). The primitives SeqLog, PagedIndex, ShardSet, Counter and Lease are generic
+// R-STORE-103 rule 4; Change is CAS without the read-back), PutOwned (dynamitedb.Put without
+// ETag) and Delete (dynamitedb.Delete with the ETag). The primitives SeqLog, PagedIndex, ShardSet, Counter and Lease are generic
 // over the record type of their documents; builder functions supply the record kind.
 //
 // The package adds only what the library leaves to its user (docs/dynamitedb-lake-usage.md):

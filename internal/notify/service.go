@@ -101,7 +101,7 @@ func (s Service) CreateNotifyWebhook(ctx context.Context, req *connect.Request[n
 	secret := hex.EncodeToString(b[8:])
 	h.URL, h.Secret, h.Events, h.Projects, h.Enabled, h.Created = store.Set(in.GetUrl()), store.Set(secret), store.Set(dedupe(in.GetEvents())),
 		store.Set(dedupe(in.GetProjects())), store.Set(in.GetEnabled()), store.Set(s.N.Now().UTC())
-	if _, err := store.CAS(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
+	if err := store.Change(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
 		var vals []string
 		if cur == nil {
 			cur = HookIndexKey()
@@ -224,7 +224,7 @@ func (s Service) DeleteNotifyWebhook(ctx context.Context, req *connect.Request[n
 	if err := store.Delete(ctx, s.N.Control, h); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, storageErr(err)
 	}
-	if _, err := store.CAS(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
+	if err := store.Change(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
 		if cur == nil || !slices.Contains(cur.IDs.Value(), h.ID.Value()) {
 			return nil, store.ErrNoChange
 		}

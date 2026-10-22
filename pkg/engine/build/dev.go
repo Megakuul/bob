@@ -45,7 +45,7 @@ type DevResult struct {
 	Ecosystem []string // names of the ecosystems the repository uses, sorted
 	// Realise are derivations (in the store) the CLI realises with the packages: outputs the
 	// working-tree files name (proc-macro dylibs, OUT_DIR, local libraries).
-	Realise []string
+	Realise   []string
 	Generated []string // native files written that stay out of git (as Result.Generated)
 }
 

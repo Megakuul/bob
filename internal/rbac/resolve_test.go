@@ -70,7 +70,7 @@ func TestResolver(t *testing.T) {
 	if ps, ok, err := roles.Permissions(ctx, "dev"); err != nil || !ok || len(ps) != 1 {
 		t.Fatalf("role dev: %v %v %v", ps, ok, err)
 	}
-	if _, err := store.CAS(ctx, control, store.RoleKey("dev"), func(*store.RoleRecord) (*store.RoleRecord, error) { return nil, nil }); err != nil {
+	if err := store.Change(ctx, control, store.RoleKey("dev"), func(*store.RoleRecord) (*store.RoleRecord, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok, err := roles.Permissions(ctx, "dev"); err != nil || ok {

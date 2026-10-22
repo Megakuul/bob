@@ -183,7 +183,7 @@ func (k *Keys) create(ctx context.Context, want func(*SigningKeyIndex) bool) (Ke
 		}
 		entry := KeyEntry{Name: name, N: n, Public: sk.Public(), State: KeyActive, Created: k.now()}
 		var out KeyEntry
-		_, err = store.CAS(ctx, k.Control, indexKey(), func(cur *SigningKeyIndex) (*SigningKeyIndex, error) {
+		err = store.Change(ctx, k.Control, indexKey(), func(cur *SigningKeyIndex) (*SigningKeyIndex, error) {
 			if i := cur.find(name); i >= 0 { // a concurrent create of the same name won
 				out = cur.Entries()[i]
 				return nil, store.ErrNoChange
@@ -296,7 +296,7 @@ func (k *Keys) PublicKeys(ctx context.Context) ([]string, error) {
 // SetState moves key name from one of the states in from to state to (CAS on the index).
 func (k *Keys) SetState(ctx context.Context, name, to string, from ...string) (KeyEntry, error) {
 	var out KeyEntry
-	_, err := store.CAS(ctx, k.Control, indexKey(), func(cur *SigningKeyIndex) (*SigningKeyIndex, error) {
+	err := store.Change(ctx, k.Control, indexKey(), func(cur *SigningKeyIndex) (*SigningKeyIndex, error) {
 		if cur == nil {
 			return nil, fmt.Errorf("%w: %s", ErrKeyNotFound, name)
 		}

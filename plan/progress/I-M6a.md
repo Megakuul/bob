@@ -146,3 +146,30 @@ the end), budgets, completion goldens candidates.
 - clangd shim (R-CC-003a), npm tsc shim/.bob/node_modules.path: provided by the cc and npm
   DevPreparers (Packages → bin/ shims, Tools → in-tree shims); nothing cc/npm-specific in the
   CLI.
+
+## Results (21:05, host load 25-33 on 8 CPUs; disk was 100 % full once from other units)
+- Green in tests/devenv as written: TestRDEV010ProxyRewrite, TestRDEV010ProxyFraming,
+  TestRDEV003HookScripts, TestRDEV006DevNoop. TestRDEV001DevShell: every case passes except
+  the first `bob dev` in a fresh HOME, which exceeds the harness's 4 min (cold evaluation,
+  NEEDS 2).
+- Scratch copy (out/_i-m6a, acme replaced by an acme-like Go fixture named acme, a shared warm
+  state home, nested project B as a sibling (NEEDS 5), findTool fix (TEST PROBLEM 2)): PASS
+  TestRDEV003AutomaticActivation (bash/zsh/fish × unset/preset), TestRDEV009Trust (bash, zsh,
+  fish, no-spawn), TestRDEV008ShimFiles, TestRDEV008NoEnv, TestRDEV008Signal,
+  TestRDEV010LSPLocations/gopls (hide-nix client, def fmt.Println → host print.go, hover/def
+  inside it, 0 raw store refs), TestRDEV011EditorSettings go-only/new file/comments;
+  TestRDEV007HookCost strace part passes. Fail: budgets under load — hook fast path p95
+  46-55 ms (budget 10), shim p95 117 ms (15), LSP warm definition mean 4.9 ms (2);
+  single runs at load 30: hook 10-13 ms, shim 20-27 ms (NEEDS 1). ExecAndShims: only the go run
+  exit status (TEST PROBLEM 1). Editor go+rust+c needs acme (cc/rust).
+- Unit tests: pkg/cli/devenv (enter/leave round trip incl. switch, fish quoting, outside rules,
+  shims, allow list, stamps, editor merge), pkg/cli TestDevServer*, pkg/engine/build
+  TestPickShell. gofmt clean; go vet / GOWORK=off vet, staticcheck, boblint clean on touched
+  packages; tools/ci fmt+layering ok (vet/lint fail only in out/uicheck and internal/store,
+  other units).
+- Golden candidates (owner approves): out/golden-candidates/tests/goldens/cli/completion/
+  {bash,zsh,fish}.txt (sourced without errors in bash, zsh 5.9.1, fish 4.7.1; label, --shell
+  and exec-tool completion checked by hand in bash and fish).
+- Host incident: /dev/null was a regular root-owned file (born 18:36:15, unknown process);
+  restored with `mknod -m 666 /dev/null c 1 3`. A /root/bob/bob build artifact (another
+  agent's `go build ./cmd/bob`) was overwritten and removed by my `go build ./cmd/bob` check.

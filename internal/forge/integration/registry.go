@@ -217,7 +217,7 @@ func (r *Registry) Report(ctx context.Context, id string, callErr error) {
 	if err != nil || (cur.Health.Value() == int32(health) && cur.HealthMsg.Value() == msg) {
 		return
 	}
-	_, err = store.CAS(ctx, r.Control, ForgeKey(id), func(cur *ForgeRecord) (*ForgeRecord, error) {
+	err = store.Change(ctx, r.Control, ForgeKey(id), func(cur *ForgeRecord) (*ForgeRecord, error) {
 		if cur == nil || (cur.Health.Value() == int32(health) && cur.HealthMsg.Value() == msg) {
 			return nil, store.ErrNoChange
 		}

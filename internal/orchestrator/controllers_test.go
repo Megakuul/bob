@@ -186,7 +186,7 @@ func membership(t *testing.T, b buckets) {
 		return err == nil && len(l) == 1 && l[0].ID == "o1"
 	})
 	// a dead member: entry plus a stale record
-	if _, err := store.CAS(ctx, b.fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
+	if err := store.Change(ctx, b.fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := *cur
 		next.Members = store.Set(append(slices.Clone(cur.Members.Value()),
 			store.FleetMember{Orch: "dead", Endpoint: "http://127.0.0.1:2", Since: now.Add(-time.Hour)},
@@ -355,7 +355,7 @@ func retention(t *testing.T, b buckets) {
 		t.Fatal(err)
 	}
 	// queue slots: 5 slots, head 1006 → all below head − 1000
-	if _, err := store.CAS(ctx, b.fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
+	if err := store.Change(ctx, b.fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := store.FleetConfigKey()
 		var classes []store.FleetClass
 		if cur != nil {

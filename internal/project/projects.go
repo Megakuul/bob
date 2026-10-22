@@ -460,7 +460,7 @@ func (p *Projects) Delete(ctx context.Context, id, etag string) error {
 			p.cfg.Log.Warn("project: index entry left pending; index repair clears it", "project", id, "err", err.Error())
 		}
 	}
-	if _, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(id)}, func(*PipelinesRecord) (*PipelinesRecord, error) {
+	if err := store.Change(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(id)}, func(*PipelinesRecord) (*PipelinesRecord, error) {
 		return nil, nil // deletes the pipelines cache
 	}); err != nil {
 		p.cfg.Log.Debug("project: pipelines cache not removed", "project", id, "err", err.Error())

@@ -426,7 +426,7 @@ func (s oidcService) CreateOidcProvider(ctx context.Context, req *connect.Reques
 	p := store.OidcProviderKey(in.GetId())
 	p.DisplayName, p.Issuer, p.ClientID, p.ClientSecret = store.Set(in.GetDisplayName()), store.Set(in.GetIssuerUrl()), store.Set(in.GetClientId()), store.Set(in.GetClientSecret())
 	p.Scopes, p.UsernameClaim, p.RequireMapping, p.Created = store.Set(in.GetScopes()), store.Set(in.GetUsernameClaim()), store.Set(in.GetRequireMapping()), store.Set(s.id.now())
-	if _, err := store.CAS(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
+	if err := store.Change(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
 		var vals []string
 		if cur == nil {
 			cur = store.OidcProviderIndexKey()
@@ -557,7 +557,7 @@ func (s oidcService) DeleteOidcProvider(ctx context.Context, req *connect.Reques
 	if err := store.Delete(ctx, s.id.control, p); err != nil {
 		return nil, storageError(err)
 	}
-	if _, err := store.CAS(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
+	if err := store.Change(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
 		if cur == nil || !slices.Contains(cur.IDs.Value(), p.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
@@ -566,7 +566,7 @@ func (s oidcService) DeleteOidcProvider(ctx context.Context, req *connect.Reques
 	}); err != nil {
 		s.id.log.Warn("OIDC provider index not updated", "provider", p.ID.Value(), "err", err.Error())
 	}
-	if _, err := store.CAS(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
+	if err := store.Change(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
@@ -611,7 +611,7 @@ func (s oidcService) CreateOidcMapping(ctx context.Context, req *connect.Request
 		ID: "m" + randomString(crockford, 12), Provider: in.GetProviderId(), Claim: in.GetClaim(),
 		Value: in.GetValue(), Role: in.GetRole(), Project: in.GetProject(),
 	}
-	if _, err := store.CAS(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
+	if err := store.Change(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
 		var vals []store.OidcMappingEntry
 		if cur == nil {
 			cur = store.OidcMappingsKey()
@@ -654,7 +654,7 @@ func (s oidcService) ListOidcMappings(ctx context.Context, req *connect.Request[
 
 func (s oidcService) DeleteOidcMapping(ctx context.Context, req *connect.Request[accessv1.DeleteOidcMappingRequest]) (*connect.Response[accessv1.DeleteOidcMappingResponse], error) {
 	found := false
-	if _, err := store.CAS(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
+	if err := store.Change(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}

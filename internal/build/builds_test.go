@@ -179,7 +179,7 @@ func (l *lab) run(j *store.JobRecord, status string, report *jobspec.Report, fai
 	if status != "ok" {
 		state = "failed"
 	}
-	if _, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	if err := store.Change(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
 		n.State, n.Result, n.ResultSig, n.Changed = store.Set(state), store.Set(rs), store.Set(fleet.SignResult(l.key, j.ID.Value(), cur.Epoch.Value(), rs)), store.Set(time.Now())
 		return &n, nil
@@ -433,7 +433,7 @@ func eventIdempotent(t *testing.T, l *lab) {
 
 func setPM(t *testing.T, l *lab, id, pm string, nr ...string) {
 	t.Helper()
-	if _, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	if err := store.Change(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
 		n.Promotion, n.NonReproducible = store.Set(pm), store.Set(nr)
 		return &n, nil

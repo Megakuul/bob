@@ -207,3 +207,32 @@ for the root, SPEC R2 says the directory name: implementation vs SPEC, owner), o
    graphs, golang corproot/synroot, rust rsroot, srvtest srv, tests/nix probe dir, devenv
    vite-react package, ocaml corpus) were reverted to their original form; no test change remains
    from that rule.
+
+## I-B15 (2026-10-22, owner-approved evidence-based corrections, A111: store re-based on dynamitedb)
+Evidence: dynamitedb v0.6.1 keys a record by its `pk`/`sk` struct tags on `KeyField` fields
+(dynamitedb.go `retrievePartKey`: "partition key ... is unset" for a plain string field) and
+reads/writes data only through `DataField` operators (data.go: `Value()` of an update operator
+panics, `set()` of a fetched value panics). tests/store/doc.go names rec_test.go as the file that
+changes when dynamitedb joins go.mod. Every assertion is kept; only record construction, field
+access and the primitive constructors change.
+29. APPLIED. tests/store/rec_test.go: `rec` and `slot` are dynamitedb models (`dynamitedb.KeyField`
+   with `pk:"trec"` / `pk:"tqs"` + `sk:"s"`, `ETagField`, `DataField` with the same CBOR names);
+   new test document kinds tail (tqt), head (tqh), page (tbpage + sk p), shard (tjact) and the
+   builder helpers newSeqLog / newPagedIndex / newShardSet (the primitives take the record kind
+   as builder functions, SPEC 05.3 as amended); `act` moved here from TestRSTORE106ShardSet.
+30. APPLIED. tests/store/primitives_test.go: `store.NewSeqLog[slot](b, "tqs", "tqt", "tqh", name)`
+   → `newSeqLog(b, name)` (same keys tqs/<name>/s/<seq20>, tqt/<name>, tqh/<name>);
+   `store.NewPagedIndex[entry](b, "tbpage", "p1", 50)` → `newPagedIndex(b, "p1", 50)`;
+   `store.NewShardSet[act](b, "tjact", 4)` → `newShardSet(b, 4)`; `store.NewLease(b,
+   "ctl/job-reconciler", o, ttl)` → `store.NewControllerLease(b, "job-reconciler", o, ttl)` (same
+   key ctl/job-reconciler). Appended values carry no key (`ID: "a%d-%d"` was ignored before too:
+   the slot key is the log's); the test's own bookkeeping of who got which slot uses a plain
+   struct `appended` instead of `slot` values; reads use `.Value()`.
+31. APPLIED. tests/store/records_test.go and panic_test.go: literals `&rec{ID: "c1", N: 1}` →
+   `&rec{ID: store.ID("c1"), N: store.Set[int64](1)}`; reads `got.N` → `got.N.Value()`, `got.ETag
+   == ""` → `store.ETagOf(got.ETag) == ""`; the "cas loss" closure starts its count from
+   `cur.N.Value()` (a fresh `rec{ID: ...}` has no N to read). Same assertions, same counts (the
+   "two uncontended CAS cost 2 PUTs" check holds: one Create, one PUT If-Match).
+32. APPLIED. tests/server/logs_forged_test.go: `&store.JobRecord{ID: j.ID}` →
+   `&store.JobRecord{ID: store.ID(j.ID)}`; `victim.ID` / `victim.Epoch` / `victim.Owner` →
+   `.Value()`.

@@ -58,7 +58,7 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 			"repository", repo.FullName, "err", err)
 	}
 	rid := strconv.FormatInt(repo.ID, 10)
-	if _, err := store.CAS(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
+	if err := store.Change(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
 		if cur == nil {
 			return nil, ErrUnknown
 		}
@@ -94,7 +94,7 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 		return Linked{}, err
 	}
 	// The Repos entry may still name a stale project of a crashed link; make it this one.
-	_, err = store.CAS(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
+	err = store.Change(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
 		if cur == nil || cur.Repos.Value()[rid] == project {
 			return nil, store.ErrNoChange
 		}
@@ -118,7 +118,7 @@ func (r *Registry) UnlinkRepo(ctx context.Context, forgeID string, repoID int64)
 		}
 	}
 	rid := strconv.FormatInt(repoID, 10)
-	_, err = store.CAS(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
+	err = store.Change(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}

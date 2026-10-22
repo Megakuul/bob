@@ -154,7 +154,7 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 // deleteToken removes tok/<hash> (absent is fine) and drops it from this orchestrator's cache.
 func (id *Identity) deleteToken(ctx context.Context, hash string) {
 	id.tokens.drop(hash)
-	if _, err := store.CAS(ctx, id.control, &store.TokenRecord{Hash: store.ID(hash)}, func(cur *store.TokenRecord) (*store.TokenRecord, error) {
+	if err := store.Change(ctx, id.control, &store.TokenRecord{Hash: store.ID(hash)}, func(cur *store.TokenRecord) (*store.TokenRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
@@ -170,7 +170,7 @@ func (id *Identity) deleteToken(ctx context.Context, hash string) {
 func (id *Identity) deleteSession(ctx context.Context, hash string) {
 	id.sessions.drop(hash)
 	var tokens []string
-	_, err := store.CAS(ctx, id.control, &store.SessionRecord{Hash: store.ID(hash)}, func(cur *store.SessionRecord) (*store.SessionRecord, error) {
+	err := store.Change(ctx, id.control, &store.SessionRecord{Hash: store.ID(hash)}, func(cur *store.SessionRecord) (*store.SessionRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}

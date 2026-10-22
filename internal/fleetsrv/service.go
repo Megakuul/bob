@@ -167,7 +167,7 @@ func (s *FleetService) setState(ctx context.Context, wid, to string, from ...str
 	if _, err := store.Segment(wid); err != nil {
 		return api.NotFound("worker")
 	}
-	_, err := store.CAS(ctx, s.F.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
+	err := store.Change(ctx, s.F.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)}, func(cur *store.WorkerRecord) (*store.WorkerRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}

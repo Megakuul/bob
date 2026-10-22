@@ -129,7 +129,7 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 	}
 	forge, _, _ := strings.Cut(spec.Repo, "/")
 	entry := CheckoutRecord{Epoch: epoch, Forge: forge, Handle: handle, Expires: now.Add(CheckoutTTL), ForgeExpires: co.Expires.UTC()}
-	_, err = store.CAS(ctx, c.Control, key, func(cur *checkoutShard) (*checkoutShard, error) {
+	err = store.Change(ctx, c.Control, key, func(cur *checkoutShard) (*checkoutShard, error) {
 		jobs := map[string][]CheckoutRecord{}
 		if cur != nil {
 			maps.Copy(jobs, cur.Jobs.Value())
@@ -228,7 +228,7 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 	if len(gone) == 0 {
 		return 0, errors.Join(errs...)
 	}
-	_, err := store.CAS(ctx, c.Control, &checkoutShard{Shard: key.Shard}, func(cur *checkoutShard) (*checkoutShard, error) {
+	err := store.Change(ctx, c.Control, &checkoutShard{Shard: key.Shard}, func(cur *checkoutShard) (*checkoutShard, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}

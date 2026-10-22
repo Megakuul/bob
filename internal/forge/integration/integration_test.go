@@ -141,7 +141,7 @@ func TestIntakeAndService(t *testing.T) {
 	}
 
 	// link repository 1 (alice/demo) to project acme, as ProjectService does after LookupRepo
-	if _, err := store.CAS(ctx, control, ForgeKey("fjx"), func(cur *ForgeRecord) (*ForgeRecord, error) {
+	if err := store.Change(ctx, control, ForgeKey("fjx"), func(cur *ForgeRecord) (*ForgeRecord, error) {
 		cur.Repos = store.Set(map[string]string{"1": "acme"})
 		return cur, nil
 	}); err != nil {

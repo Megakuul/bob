@@ -309,7 +309,7 @@ func (n *Notifier) attempt(ctx context.Context, did string, p Pending, now time.
 		p.Attempt++
 		errs = append(errs, n.outbox.Add(ctx, did, p))
 	}
-	if _, err := store.CAS(ctx, n.Control, HookKey(p.Hook), func(cur *HookRecord) (*HookRecord, error) {
+	if err := store.Change(ctx, n.Control, HookKey(p.Hook), func(cur *HookRecord) (*HookRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}

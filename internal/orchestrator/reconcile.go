@@ -319,7 +319,7 @@ func (r *Reconciler) worker(ctx context.Context, wid string, now time.Time) work
 // increments it), or cancels it when a cancel was requested. won is true for the CAS winner.
 func (r *Reconciler) requeue(ctx context.Context, rec *store.JobRecord, class string, now time.Time) (won bool, err error) {
 	var queued bool
-	_, err = store.CAS(ctx, r.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err = store.Change(ctx, r.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		won = false
 		if cur == nil || (cur.State.Value() != StateClaimed && cur.State.Value() != StateRunning) || cur.Owner.Value() != rec.Owner.Value() || cur.Epoch.Value() != rec.Epoch.Value() {
 			return nil, store.ErrNoChange
@@ -347,7 +347,7 @@ func (r *Reconciler) requeue(ctx context.Context, rec *store.JobRecord, class st
 // reslot appends a new slot for a job that stayed queued for reslot_after (its slot was lost
 // or skipped). won is true for the CAS winner.
 func (r *Reconciler) reslot(ctx context.Context, rec *store.JobRecord, class string, now time.Time) (won bool, err error) {
-	_, err = store.CAS(ctx, r.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err = store.Change(ctx, r.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		won = false
 		if cur == nil || cur.State.Value() != StateQueued || !cur.Queued.Value().Equal(rec.Queued.Value()) {
 			return nil, store.ErrNoChange

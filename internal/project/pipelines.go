@@ -82,7 +82,7 @@ func (p *Projects) Evaluated(ctx context.Context, rec *store.BuildRecord, r *job
 		}
 		defs = append(defs, d)
 	}
-	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
+	err := store.Change(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
 		next := PipelinesRecord{Project: store.ID(rec.Project.Value())}
 		last := map[string]LastRun{}
 		if cur != nil {
@@ -111,7 +111,7 @@ func (p *Projects) Finished(ctx context.Context, rec *store.BuildRecord) error {
 	if len(rec.Pipelines.Value()) == 0 {
 		return nil
 	}
-	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
+	err := store.Change(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
 		next := PipelinesRecord{Project: store.ID(rec.Project.Value())}
 		last := map[string]LastRun{}
 		if cur != nil {

@@ -261,7 +261,7 @@ func (c *Controller) pass(ctx context.Context, now time.Time) {
 		return
 	}
 	epoch := c.epoch
-	_, err = store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+	err = store.Change(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
 		if cur == nil || cur.Owner.Value() != c.Owner || cur.Epoch.Value() != epoch {
 			return nil, errLeaseLost // another leader took over: its state wins
 		}
@@ -287,7 +287,7 @@ func (c *Controller) release() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	now := c.now()
-	_, err := store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+	err := store.Change(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
 		if cur == nil || cur.Owner.Value() != c.Owner || cur.Epoch.Value() != c.epoch {
 			return nil, store.ErrNoChange
 		}

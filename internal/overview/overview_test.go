@@ -116,18 +116,18 @@ func TestSettingsAndAnalytics(t *testing.T) {
 	mk(2, "01aaaaaaaaaaaaaaaaaaaaaaa2", buildctl.StateFailed, day1, 20*time.Second)
 	mk(3, "01aaaaaaaaaaaaaaaaaaaaaaa3", buildctl.StateSucceeded, day2, 30*time.Second)
 	mk(4, "01aaaaaaaaaaaaaaaaaaaaaaa4", buildctl.StateRunning, day2, 0)
-	if _, err := store.CAS(ctx, control, &store.ProjectCounters{Project: store.ID("p1")}, func(*store.ProjectCounters) (*store.ProjectCounters, error) {
+	if err := store.Change(ctx, control, &store.ProjectCounters{Project: store.ID("p1")}, func(*store.ProjectCounters) (*store.ProjectCounters, error) {
 		return &store.ProjectCounters{Project: store.ID("p1"), Builds: store.Set[uint64](4)}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
+	if err := store.Change(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
 		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{
 			"01aaaaaaaaaaaaaaaaaaaaaaa4": {Project: "p1", N: 4}, "01aaaaaaaaaaaaaaaaaaaaaaa9": {Project: "p2", N: 1}})}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CAS(ctx, control, &store.FailedBuilds{Name: store.ID("failed")}, func(*store.FailedBuilds) (*store.FailedBuilds, error) {
+	if err := store.Change(ctx, control, &store.FailedBuilds{Name: store.ID("failed")}, func(*store.FailedBuilds) (*store.FailedBuilds, error) {
 		return &store.FailedBuilds{Name: store.ID("failed"), Builds: store.Set([]store.FailedBuild{{Build: "01aaaaaaaaaaaaaaaaaaaaaaa2", Project: "p1", N: 2}})}, nil
 	}); err != nil {
 		t.Fatal(err)

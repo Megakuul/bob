@@ -501,7 +501,7 @@ func (id *Identity) tokenFromDevice(w http.ResponseWriter, r *http.Request, f ur
 	now := id.now()
 	var answer string // "" = issue tokens
 	var uid, ua string
-	_, err := store.CAS(ctx, id.control, store.DeviceCodeKey(dev), func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
+	err := store.Change(ctx, id.control, store.DeviceCodeKey(dev), func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
 		uid, ua = "", ""
 		switch {
 		case cur == nil || cur.Client.Value() != clientID || cur.State.Value() == "used":
@@ -589,7 +589,7 @@ func (id *Identity) deviceApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var msg string
-	_, err = store.CAS(ctx, id.control, &store.DeviceCodeRecord{Hash: store.ID(du.Hash.Value())}, func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
+	err = store.Change(ctx, id.control, &store.DeviceCodeRecord{Hash: store.ID(du.Hash.Value())}, func(cur *store.DeviceCodeRecord) (*store.DeviceCodeRecord, error) {
 		switch {
 		case cur == nil || !now.Before(cur.Expires.Value()) || cur.UserCode.Value() != code:
 			msg = "unknown or expired code"

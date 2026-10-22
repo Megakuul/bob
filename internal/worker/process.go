@@ -267,12 +267,15 @@ func (p *Process) register(ctx context.Context) (*Identity, *Token, error) {
 func (p *Process) fleetConfig(ctx context.Context) (*store.FleetConfig, error) {
 	fc, err := store.Get(ctx, p.cfg.Fleet, store.FleetConfigKey())
 	if errors.Is(err, store.ErrNotFound) {
-		return &store.FleetConfig{Name: store.ID("cfg")}, nil
+		return nil, nil // not published yet: no classes, default params
 	}
 	return fc, err
 }
 
 func classIDs(fc *store.FleetConfig) []string {
+	if fc == nil {
+		return []string{}
+	}
 	ids := make([]string, 0, len(fc.Classes.Value()))
 	for _, c := range fc.Classes.Value() {
 		ids = append(ids, c.ID)
@@ -284,16 +287,22 @@ func classIDs(fc *store.FleetConfig) []string {
 // loop runs one Worker over the classes of fc until ctx ends, the worker is revoked, or the
 // published classes change while it is idle (the Worker reads a fixed class set).
 func (p *Process) loop(ctx context.Context, id *Identity, fc *store.FleetConfig) error {
-	pr := p.cfg.Params(fc.Params.Value())
+	var params store.FleetParams
+	var keys []store.FleetKey
+	var classes []store.FleetClass
+	if fc != nil { // nil: fleet/cfg is not published yet
+		params, keys, classes = fc.Params.Value(), fc.Keys.Value(), fc.Classes.Value()
+	}
+	pr := p.cfg.Params(params)
 	wc := Config{Fleet: p.cfg.Fleet, ID: id.ID(), Profile: id.Profile, Slots: p.cfg.Slots, SigKey: id.SigningKey(),
 		PollInterval: pr.PollInterval, Heartbeat: pr.Heartbeat, LeaseTTL: pr.LeaseTTL, Skew: pr.Skew,
 		Seed: uint64(time.Now().UnixNano()), Now: p.cfg.Now, Exec: p.exec}
-	for _, k := range fc.Keys.Value() {
+	for _, k := range keys {
 		if len(k.Pub) == ed25519.PublicKeySize {
 			wc.Keys = append(wc.Keys, ed25519.PublicKey(k.Pub))
 		}
 	}
-	for _, c := range fc.Classes.Value() {
+	for _, c := range classes {
 		wc.Classes = append(wc.Classes, store.Class{Platform: c.Platform, Caps: c.Caps, Labels: c.Labels})
 	}
 	w, err := New(wc)

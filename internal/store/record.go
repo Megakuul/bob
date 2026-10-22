@@ -563,6 +563,24 @@ func CAS[T any](ctx context.Context, b *Bucket, key *T, fn func(cur *T) (*T, err
 	})
 }
 
+// Change is CAS for callers that do not need the stored record: the same reads, decision and
+// conditional write, without the read-back GET (the hot paths of R-FLEET-009). It returns
+// fn's error, ErrConflict after 8 lost rounds, and nil after a write, a delete or ErrNoChange.
+func Change[T any](ctx context.Context, b *Bucket, key *T, fn func(cur *T) (*T, error)) error {
+	_, err := Call(ctx, func(ctx context.Context) (struct{}, error) {
+		if err := checkBucket(b); err != nil {
+			return struct{}{}, err
+		}
+		k, err := objectKey(key)
+		if err != nil {
+			return struct{}{}, err
+		}
+		_, _, err = cas(ctx, b, key, casAttempts, fn)
+		return struct{}{}, wrap(k, err)
+	})
+	return err
+}
+
 // cas is CAS without the read-back: it returns the current record when fn chose ErrNoChange,
 // nil after a delete, and wrote=true after a write.
 func cas[T any](ctx context.Context, b *Bucket, key *T, attempts int, fn func(cur *T) (*T, error)) (*T, bool, error) {

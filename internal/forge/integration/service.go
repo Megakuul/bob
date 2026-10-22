@@ -163,7 +163,7 @@ func (s *Service) CreateForgeIntegration(ctx context.Context, req *connect.Reque
 	c.apply(rec)
 	rec.Secret, rec.Created = store.Set(secret), store.Set(s.Registry.now().UTC())
 	// Index first (intent-first, R-SRV-101): readers skip ids without a record.
-	if _, err := store.CAS(ctx, s.Registry.Control, ForgeIndexKey(), func(cur *ForgeIndex) (*ForgeIndex, error) {
+	if err := store.Change(ctx, s.Registry.Control, ForgeIndexKey(), func(cur *ForgeIndex) (*ForgeIndex, error) {
 		var vals []string
 		if cur == nil {
 			cur = ForgeIndexKey()
@@ -308,7 +308,7 @@ func (s *Service) DeleteForgeIntegration(ctx context.Context, req *connect.Reque
 		}
 		return nil, storageErr(err)
 	}
-	if _, err := store.CAS(ctx, s.Registry.Control, ForgeIndexKey(), func(cur *ForgeIndex) (*ForgeIndex, error) {
+	if err := store.Change(ctx, s.Registry.Control, ForgeIndexKey(), func(cur *ForgeIndex) (*ForgeIndex, error) {
 		if cur == nil || !slices.Contains(cur.IDs.Value(), rec.ID.Value()) {
 			return nil, store.ErrNoChange
 		}

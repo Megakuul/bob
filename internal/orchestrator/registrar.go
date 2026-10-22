@@ -149,7 +149,7 @@ func (r *Registrar) cursor(ctx context.Context) (uint64, error) {
 
 // saveCursor raises ctl/registrar.cu (monotonic CAS; the lease fields are kept).
 func (r *Registrar) saveCursor(ctx context.Context, n uint64) error {
-	_, err := store.CAS(ctx, r.cfg.Fleet, &store.ControllerLease{Name: store.ID("registrar")}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
+	err := store.Change(ctx, r.cfg.Fleet, &store.ControllerLease{Name: store.ID("registrar")}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
 		next := store.ControllerLease{Name: store.ID("registrar")}
 		if cur != nil {
 			if old, _ := strconv.ParseUint(string(cur.Cursor.Value()), 10, 64); old >= n {

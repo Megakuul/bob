@@ -79,7 +79,7 @@ func (s saService) CreateServiceAccount(ctx context.Context, req *connect.Reques
 	}
 	sa := store.ServiceAccountKey(in.GetId())
 	sa.Description, sa.Disabled, sa.Created = store.Set(in.GetDescription()), store.Set(in.GetDisabled()), store.Set(s.id.now())
-	if _, err := store.CAS(ctx, s.id.control, store.SAIndexKey(), func(cur *store.SAIndex) (*store.SAIndex, error) {
+	if err := store.Change(ctx, s.id.control, store.SAIndexKey(), func(cur *store.SAIndex) (*store.SAIndex, error) {
 		var vals []string
 		if cur == nil {
 			cur = store.SAIndexKey()
@@ -245,7 +245,7 @@ func (s saService) DeleteServiceAccount(ctx context.Context, req *connect.Reques
 	for _, b := range cur.Bindings.Value() {
 		s.id.removeMember(ctx, b.Role, principal, nil)
 	}
-	if _, err := store.CAS(ctx, s.id.control, store.SAIndexKey(), func(idx *store.SAIndex) (*store.SAIndex, error) {
+	if err := store.Change(ctx, s.id.control, store.SAIndexKey(), func(idx *store.SAIndex) (*store.SAIndex, error) {
 		if idx == nil || !slices.Contains(idx.IDs.Value(), cur.ID.Value()) {
 			return nil, store.ErrNoChange
 		}

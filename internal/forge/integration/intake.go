@@ -157,7 +157,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 			result = resultAccepted
 		}
 	}
-	if _, err := store.CAS(ctx, in.Registry.Control, DeliveryKey(id, did), func(cur *DeliveryRecord) (*DeliveryRecord, error) {
+	if err := store.Change(ctx, in.Registry.Control, DeliveryKey(id, did), func(cur *DeliveryRecord) (*DeliveryRecord, error) {
 		if cur == nil {
 			cur = fresh()
 		}
@@ -180,7 +180,7 @@ func (in *Intake) ring(ctx context.Context, id string, e RingEntry) {
 	if len(e.ID) > 255 {
 		e.ID = e.ID[:255]
 	}
-	_, err := store.CAS(ctx, in.Registry.Control, &DeliveryRing{Forge: store.ID(id)}, func(cur *DeliveryRing) (*DeliveryRing, error) {
+	err := store.Change(ctx, in.Registry.Control, &DeliveryRing{Forge: store.ID(id)}, func(cur *DeliveryRing) (*DeliveryRing, error) {
 		var vals []RingEntry
 		if cur == nil {
 			cur = &DeliveryRing{Forge: store.ID(id)}

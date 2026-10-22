@@ -320,9 +320,12 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 			if lf.Sections[name] == nil {
 				op = "add"
 			}
-			if name == lock.SectionGo {
+			switch name {
+			case lock.SectionGo:
 				changes = append(changes, goChanges(lf.Sections[name], sec)...)
-			} else {
+			case lock.SectionNpm:
+				changes = append(changes, npmChanges(lf.Sections[name], sec)...)
+			default:
 				changes = append(changes, LockChange{Ecosystem: name, Name: name, Op: op})
 			}
 			if lf.Sections == nil {
@@ -544,6 +547,52 @@ func goChanges(prev, next json.RawMessage) []LockChange {
 	}
 	if len(out) == 0 { // only hashes or other details changed
 		out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: lock.SectionGo, Op: "update"})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// npmChanges lists the package versions that differ between two npm sections, one change per
+// package name ("~ npm react 19.1.0 → 19.2.0"; several versions of a name are joined by ",").
+func npmChanges(prev, next json.RawMessage) []LockChange {
+	versions := func(raw json.RawMessage) map[string]string {
+		out := map[string]string{}
+		if len(raw) == 0 {
+			return out
+		}
+		v, err := lock.DecodeSection(lock.SectionNpm, raw)
+		if err != nil {
+			return out
+		}
+		sets := map[string]map[string]bool{}
+		for _, p := range v.(*lock.NpmSection).Packages {
+			if sets[p.Name] == nil {
+				sets[p.Name] = map[string]bool{}
+			}
+			sets[p.Name][p.Version] = true
+		}
+		for name, vs := range sets {
+			out[name] = strings.Join(sortedKeys(vs), ",")
+		}
+		return out
+	}
+	a, b := versions(prev), versions(next)
+	var out []LockChange
+	for n, v := range b {
+		switch w, ok := a[n]; {
+		case !ok:
+			out = append(out, LockChange{Ecosystem: lock.SectionNpm, Name: n, To: v, Op: "add"})
+		case w != v:
+			out = append(out, LockChange{Ecosystem: lock.SectionNpm, Name: n, From: w, To: v, Op: "update"})
+		}
+	}
+	for n, v := range a {
+		if _, ok := b[n]; !ok {
+			out = append(out, LockChange{Ecosystem: lock.SectionNpm, Name: n, From: v, Op: "remove"})
+		}
+	}
+	if len(out) == 0 { // only edges, importers or hashes changed
+		out = append(out, LockChange{Ecosystem: lock.SectionNpm, Name: lock.SectionNpm, Op: "update"})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

@@ -231,7 +231,7 @@ func (x *Retention) dropBuild(ctx context.Context, id string, cutoff time.Time) 
 	if !expired(rec, cutoff) {
 		return false, nil
 	}
-	if _, err := store.CAS(ctx, x.Control, &buildNodes{ID: store.ID(id)}, func(*buildNodes) (*buildNodes, error) { return nil, nil }); err != nil {
+	if err := store.Change(ctx, x.Control, &buildNodes{ID: store.ID(id)}, func(*buildNodes) (*buildNodes, error) { return nil, nil }); err != nil {
 		return false, err
 	}
 	left, err := store.CAS(ctx, x.Control, &store.BuildRecord{ID: store.ID(id)}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
@@ -279,7 +279,7 @@ func (x *Retention) queues(ctx context.Context, st *retentionState) (int, error)
 		}
 		from := max(st.Queues[c.ID], 1)
 		k, next, err := deleteSlots(ctx, from, head-slotKeep, func(seq uint64) error {
-			_, err := store.CAS(ctx, x.Fleet, store.QueueSlotKey(c.ID, seq), func(*store.QueueSlot) (*store.QueueSlot, error) { return nil, nil })
+			err := store.Change(ctx, x.Fleet, store.QueueSlotKey(c.ID, seq), func(*store.QueueSlot) (*store.QueueSlot, error) { return nil, nil })
 			return err
 		})
 		st.Queues[c.ID] = next
@@ -306,7 +306,7 @@ func (x *Retention) registrations(ctx context.Context, st *retentionState) (int,
 	}
 	k, next, err := deleteSlots(ctx, max(st.Reg, 1), cur-slotKeep, func(seq uint64) error {
 		s, _ := store.Seq20(seq)
-		_, err := store.CAS(ctx, x.Fleet, &store.RegSlot{Log: store.ID("reg"), Seq: store.ID(s)}, func(*store.RegSlot) (*store.RegSlot, error) { return nil, nil })
+		err := store.Change(ctx, x.Fleet, &store.RegSlot{Log: store.ID("reg"), Seq: store.ID(s)}, func(*store.RegSlot) (*store.RegSlot, error) { return nil, nil })
 		return err
 	})
 	st.Reg = next

@@ -483,7 +483,7 @@ func (p *Promoter) fail(ctx context.Context, rec *store.JobRecord, log *slog.Log
 
 // finish CASes the verdict into the job record (only the attempt that was promoted).
 func (p *Promoter) finish(ctx context.Context, rec *store.JobRecord, verdict string, nonRepro []string) error {
-	_, err := store.CAS(ctx, p.c.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err := store.Change(ctx, p.c.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil || cur.State.Value() != jobSucceded || cur.Epoch.Value() != rec.Epoch.Value() || cur.Owner.Value() != rec.Owner.Value() || cur.Promotion.Value() != Pending {
 			return nil, store.ErrNoChange
 		}

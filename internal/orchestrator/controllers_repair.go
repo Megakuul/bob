@@ -271,7 +271,7 @@ func (x *IndexRepair) dropMember(ctx context.Context, role, principal string) er
 	if err != nil || binds {
 		return err
 	}
-	_, err = store.CAS(ctx, x.Control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
+	err = store.Change(ctx, x.Control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
 		if cur == nil || !slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
@@ -339,7 +339,7 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 	added := 0
 	for role, ps := range want {
 		var n int
-		_, err := store.CAS(ctx, x.Control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
+		err := store.Change(ctx, x.Control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
 			next := store.RoleMembersKey(role)
 			var members []string
 			if cur != nil {

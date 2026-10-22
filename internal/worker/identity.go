@@ -208,7 +208,7 @@ func ForgeResult(ctx context.Context, fleetB *store.Bucket, forger *Identity, ow
 	if err != nil {
 		return err
 	}
-	_, err = store.CAS(ctx, fleetB, &store.JobRecord{ID: store.ID(jobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err = store.Change(ctx, fleetB, &store.JobRecord{ID: store.ID(jobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}

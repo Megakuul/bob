@@ -106,7 +106,7 @@ func (m *Membership) listed(fc *store.FleetConfig) bool {
 
 // join adds (or updates) this orchestrator's entry of fleet/cfg.m.
 func (m *Membership) join(ctx context.Context, now time.Time) error {
-	_, err := store.CAS(ctx, m.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
+	err := store.Change(ctx, m.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := store.FleetConfigKey()
 		var members []store.FleetMember
 		var gen int64
@@ -139,7 +139,7 @@ func (m *Membership) leave() {
 
 // remove deletes orch/<id> (only while stale says so, when given) and then the member entry.
 func (m *Membership) remove(ctx context.Context, id string, stale func(*store.OrchRecord) bool) error {
-	_, err := store.CAS(ctx, m.Fleet, &store.OrchRecord{ID: store.ID(id)}, func(cur *store.OrchRecord) (*store.OrchRecord, error) {
+	err := store.Change(ctx, m.Fleet, &store.OrchRecord{ID: store.ID(id)}, func(cur *store.OrchRecord) (*store.OrchRecord, error) {
 		if cur != nil && stale != nil && !stale(cur) {
 			return nil, errAlive
 		}
@@ -151,7 +151,7 @@ func (m *Membership) remove(ctx context.Context, id string, stale func(*store.Or
 	if err != nil {
 		return err
 	}
-	_, err = store.CAS(ctx, m.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
+	err = store.Change(ctx, m.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		if cur == nil || !slices.ContainsFunc(cur.Members.Value(), func(x store.FleetMember) bool { return x.Orch == id }) {
 			return nil, store.ErrNoChange
 		}

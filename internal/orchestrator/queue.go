@@ -218,7 +218,7 @@ func (q *Queue) SlotTaken(ctx context.Context, seq uint64) (string, error) {
 // Cancel requests cancellation of a job (queued: cancelled at once; claimed or running: cx).
 func (q *Queue) Cancel(ctx context.Context, id string) error {
 	now := q.now()
-	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err := store.Change(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNotFound
 		}
@@ -269,7 +269,7 @@ func (q *Queue) Finalise(ctx context.Context, id string) (accepted bool, err err
 			return false, err
 		}
 	}
-	_, err = store.CAS(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err = store.Change(ctx, q.Fleet, &store.JobRecord{ID: store.ID(id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
@@ -298,7 +298,7 @@ func (q *Queue) signedByOwner(rec *store.JobRecord) bool {
 // the owner left it in, so that the owner's own result can still land (R-FLEET-002).
 func (q *Queue) dropForged(ctx context.Context, rec *store.JobRecord) error {
 	forged.Add(1)
-	_, err := store.CAS(ctx, q.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err := store.Change(ctx, q.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		if cur == nil || store.ETagOf(cur.ETag) != store.ETagOf(rec.ETag) {
 			return nil, store.ErrNoChange
 		}
@@ -314,7 +314,7 @@ func (q *Queue) dropForged(ctx context.Context, rec *store.JobRecord) error {
 
 // summarise copies the job's final row into build/<id>.jb (absent build: nothing to do).
 func (q *Queue) summarise(ctx context.Context, buildID string, rec *store.JobRecord) error {
-	_, err := store.CAS(ctx, q.Control, &store.BuildRecord{ID: store.ID(buildID)}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
+	err := store.Change(ctx, q.Control, &store.BuildRecord{ID: store.ID(buildID)}, func(cur *store.BuildRecord) (*store.BuildRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}

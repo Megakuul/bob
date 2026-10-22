@@ -286,7 +286,7 @@ func TestProjects(t *testing.T) {
 	l.health = 0
 
 	// delete: refused while a build runs, then unlinks and disappears
-	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
+	if err := store.Change(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
 		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{"b": {Project: "acme", N: 3}})}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -294,7 +294,7 @@ func TestProjects(t *testing.T) {
 	if _, err := svc.DeleteProject(ctx, req(&projectv1.DeleteProjectRequest{Id: "acme"})); code(err) != connect.CodeFailedPrecondition {
 		t.Errorf("DeleteProject with a running build: %v", err)
 	}
-	if _, err := store.CAS(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
+	if err := store.Change(ctx, control, &store.RunningBuilds{Name: store.ID("running")}, func(*store.RunningBuilds) (*store.RunningBuilds, error) {
 		return &store.RunningBuilds{Name: store.ID("running"), Builds: store.Set(map[string]store.RunningBuild{})}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -323,7 +323,7 @@ func TestProjects(t *testing.T) {
 	if err := idx.Set(ctx, n, project.Entry{ID: "ghost", Pending: true, At: clock}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CAS(ctx, control, &project.IndexCounter{Name: store.ID("all")}, func(c *project.IndexCounter) (*project.IndexCounter, error) {
+	if err := store.Change(ctx, control, &project.IndexCounter{Name: store.ID("all")}, func(c *project.IndexCounter) (*project.IndexCounter, error) {
 		return &project.IndexCounter{Name: store.ID("all"), Count: store.Set(c.Count.Value() + 1)}, nil
 	}); err != nil {
 		t.Fatal(err)

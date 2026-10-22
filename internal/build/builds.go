@@ -526,7 +526,7 @@ func (b *Builds) checkUpload(ctx context.Context, project, sha string) error {
 // setRunning adds build id to bidx/running (every non-terminal build is listed there, decision
 // D-IB11-1; the started time is set when its first job is claimed).
 func (b *Builds) setRunning(ctx context.Context, id string, e store.RunningBuild) error {
-	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
+	err := store.Change(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
 		builds := map[string]store.RunningBuild{}
 		if cur != nil {
 			maps.Copy(builds, cur.Builds.Value())
@@ -548,7 +548,7 @@ func (b *Builds) setRunning(ctx context.Context, id string, e store.RunningBuild
 
 // dropRunning removes a build from bidx/running.
 func (b *Builds) dropRunning(ctx context.Context, id string) error {
-	_, err := store.CAS(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
+	err := store.Change(ctx, b.cfg.Control, &store.RunningBuilds{Name: store.ID("running")}, func(cur *store.RunningBuilds) (*store.RunningBuilds, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
@@ -564,7 +564,7 @@ func (b *Builds) dropRunning(ctx context.Context, id string) error {
 
 // addFailed appends a build to the bidx/failed ring (last 200).
 func (b *Builds) addFailed(ctx context.Context, rec *store.BuildRecord) error {
-	_, err := store.CAS(ctx, b.cfg.Control, &store.FailedBuilds{Name: store.ID("failed")}, func(cur *store.FailedBuilds) (*store.FailedBuilds, error) {
+	err := store.Change(ctx, b.cfg.Control, &store.FailedBuilds{Name: store.ID("failed")}, func(cur *store.FailedBuilds) (*store.FailedBuilds, error) {
 		var builds []store.FailedBuild
 		if cur != nil {
 			if slices.ContainsFunc(cur.Builds.Value(), func(f store.FailedBuild) bool { return f.Build == rec.ID.Value() }) {

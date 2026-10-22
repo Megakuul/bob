@@ -5938,14 +5938,18 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
   2. No dynamitedb filters: decisions are made in Go on the fetched value (B5–B7).
   3. No `WithExpires` (B10); expiry is a field that a controller acts on.
   4. A shared record is changed only by `store.CAS`: `dynamitedb.Get`, then decide, then
-     `dynamitedb.Put` with the Get's `ETagField` (one `PUT If-Match`). A new record is written
-     with `dynamitedb.Create`. Only a record with exactly one legitimate writer may use
-     `store.PutOwned` (unconditional `Put`).
+     `dynamitedb.Put` of a fresh update value (store.Set operators; fields left as read are
+     written through the record type's `Draft`) with the Get's `ETagField` (one `PUT If-Match`).
+     A new record is written with `dynamitedb.Create`. Only a record with exactly one legitimate
+     writer may use `store.PutOwned` (unconditional `Put`). A fetched record is never passed
+     to a write (dynamitedb panics).
   5. `dynamitedb.Update` is not used.
   6. After a failed call, `ctx.Err()` is checked first (B11). A 404 from `Put` with an ETag
      maps to `store.ErrNotFound` (B13).
-  7. On `ErrConcurrencyConflict`/`ErrAlreadyExists`, the caller re-reads and treats the result as
-     success when the stored value carries its own write id (`wid` + epoch, or request id `rq`).
+  7. On `ErrConcurrencyConflict`/`ErrAlreadyExists` after an attempt whose answer was lost (the
+     SDK retried, or no response came), the store re-reads the key and treats the write as
+     successful when the stored object holds exactly the bytes this call sent; the records'
+     write ids (`wid` + epoch, or request id `rq`) keep the values of different writers apart.
 - **Acceptance:** a table-driven test per record type covers create, CAS win, CAS loss, lost
   response (fault proxy drops the response after the server applied the write → caller reports
   success), and decode of the stored CBOR.
@@ -6077,7 +6081,10 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
 
 ## 05.3 `internal/store` primitives
 
-All signatures below are exact. Doc comments are part of the contract.
+All signatures below are exact. Doc comments are part of the contract. Record kinds are
+dynamitedb models (one struct type per kind, key names in `pk`/`sk` struct tags, §05.4), so the
+primitives are generic over the record type of their documents and take the record kind as
+builder functions; they never take key names at run time (I-B15, A111).
 
 ```go
 package store // import "github.com/megakuul/bob/internal/store"
@@ -6107,7 +6114,20 @@ var (
 	ErrNoChange = errors.New("no change") // returned by a CAS func to skip the write
 )
 
-// Get reads the record whose key fields are set in key. The result carries the ETag.
+// The library's types and value constructors for packages that may not import dynamitedb
+// (R-STORE-106): aliases, not copies.
+type (
+	KeyField         = dynamitedb.KeyField
+	ETagField        = dynamitedb.ETagField
+	DataField[T any] = dynamitedb.DataField[T]
+)
+func Set[T any](v T) DataField[T]              // dynamitedb.Set: update operator
+func ID(id string) KeyField                    // dynamitedb.Key: key value
+func Carry[T any](f DataField[T]) DataField[T] // Set(f.Value()) of a fetched field (nil for zero)
+func ETagOf(e ETagField) string                // "" for a fresh value
+
+// Get reads the record whose key fields are set in key (dynamitedb.Get, one GET). The result
+// carries the ETag. Fetched records are read-only results: read them with .Value().
 func Get[T any](ctx context.Context, b *Bucket, key *T) (*T, error)
 
 // Cache keeps the last value and ETag per key for GetCached. Zero value is ready to use.
@@ -6118,22 +6138,32 @@ type Cache[T any] struct{ /* unexported */ }
 // (2 requests in total) and updates the cache. On 404 it drops the entry and returns ErrNotFound.
 func GetCached[T any](ctx context.Context, b *Bucket, c *Cache[T], key *T) (v *T, changed bool, err error)
 
-// Create writes v only if its key does not exist (PUT If-None-Match: *).
+// Create writes v only if its key does not exist (dynamitedb.Create, PUT If-None-Match: *).
+// v is a fresh value (store.Set operators).
 func Create[T any](ctx context.Context, b *Bucket, v *T) error
 
 // CAS reads the record at key, calls fn with it (nil if absent), and writes fn's result with
-// If-Match of that read (or If-None-Match when absent). On ErrConflict it re-reads and calls fn
-// again, up to 8 times with jittered backoff (10–200 ms). fn returning ErrNoChange ends CAS
-// without writing; fn returning nil, nil deletes the record (DELETE If-Match).
+// If-Match of that read (dynamitedb.Put with the read's ETag) or with If-None-Match when absent
+// (dynamitedb.Create). fn returns a fresh value, or the fetched record (or a copy) with some
+// fields replaced by store.Set operators: fields still holding read values are written through
+// the record type's Draft. On ErrConflict it re-reads and calls fn again, up to 8 times with
+// jittered backoff (10–200 ms). fn returning ErrNoChange ends CAS without writing (CAS then
+// returns the current record); fn returning nil, nil deletes the record (DELETE If-Match).
+// After a write CAS returns the record as stored (one more GET).
 func CAS[T any](ctx context.Context, b *Bucket, key *T, fn func(cur *T) (*T, error)) (*T, error)
 
-// PutOwned writes v unconditionally. Only for records with exactly one legitimate writer
-// (orch/<self>, whb/<self>).
+// PutOwned writes v unconditionally (dynamitedb.Put without ETag). Only for records with
+// exactly one legitimate writer (orch/<self>, whb/<self>).
 func PutOwned[T any](ctx context.Context, b *Bucket, v *T) error
 
 // Delete removes the record if its ETag still matches v's ETag (2 requests, dynamitedb.Delete).
 func Delete[T any](ctx context.Context, b *Bucket, v *T) error
 ```
+
+Every record type has a `Draft() *T` method: the fresh update value that writes a fetched
+record again (keys, ETag, `store.Carry` of every data field). A field set with `store.Set`
+cannot be read back (dynamitedb panics on `Value()` of an operator), so code that changes a
+field in several steps edits a plain local value and sets it once.
 
 ### 05.3.1 Sequence log (queues, registration inbox, promotion log)
 
@@ -6143,37 +6173,43 @@ make things faster. The truth is which slots exist (`If-None-Match` makes each s
 unique).
 
 ```go
+// Counter is a record kind that holds one number: a sequence-log hint (`SeqHint`: n).
+type Counter struct{ /* unexported */ }
+
+// NewCounter describes a counter record kind: build returns the fresh value of the record
+// holding n (key + Set(n)), n reads a fetched one. It performs no I/O.
+func NewCounter[H any](b *Bucket, build func(n uint64) *H, n func(h *H) uint64) *Counter
+
 // SeqLog is a dense append-only log of slots on known keys. Readers find new entries by
 // GETting the next slot number; a 404 means "nothing new". It never lists.
-type SeqLog[T any] struct {
-	Bucket  *Bucket
-	SlotPK  string // e.g. "qs"
-	TailPK  string // e.g. "qt"
-	HeadPK  string // e.g. "qh"
-	Name    string // e.g. "x86_64-linux.k3j9d0a1b2"
+type SeqLog[S any] struct {
+	Bucket *Bucket
+	// unexported: slot key builder, tail and head counters
 }
 
-// NewSeqLog returns the log; it performs no I/O.
+// NewSeqLog returns the log; it performs no I/O. slot returns the key value of slot seq;
+// head may be nil (no head hint).
 //
-// Example:
+// Example (records.go):
 //
-//	q := store.NewSeqLog[QueueSlot](fleet, "qs", "qt", "qh", "x86_64-linux.k3j9d0a1b2")
-//	seq, err := q.Append(ctx, &QueueSlot{Job: dynamitedb.Set(jobID)})
-func NewSeqLog[T any](b *Bucket, slotPK, tailPK, headPK, name string) *SeqLog[T]
+//	q := store.Queue(fleet, "x86_64-linux.k3j9d0a1b2") // qs/<class>/s/<seq20>, qt/, qh/
+//	seq, err := q.Append(ctx, &QueueSlot{Job: store.Set(jobID)})
+func NewSeqLog[S any](b *Bucket, slot func(seq uint64) *S, tail, head *Counter) *SeqLog[S]
 
 // Append reads the tail hint t (1 GET), Creates slot t, t+1, … until one succeeds, then raises
-// the tail hint to seq+1 with a best-effort CAS (a conflict is ignored). Returns the slot number.
-func (l *SeqLog[T]) Append(ctx context.Context, v *T) (seq uint64, err error)
+// the tail hint to seq+1 with a best-effort CAS (a conflict is ignored). Returns the slot
+// number. v is a fresh value; Append sets its keys.
+func (l *SeqLog[S]) Append(ctx context.Context, v *S) (seq uint64, err error)
 
 // Read GETs one slot. ErrNotFound means seq is at or past the end of the log.
-func (l *SeqLog[T]) Read(ctx context.Context, seq uint64) (*T, error)
+func (l *SeqLog[S]) Read(ctx context.Context, seq uint64) (*S, error)
 
 // Tail and Head return the hints (GetCached; 1 request when unchanged).
-func (l *SeqLog[T]) Tail(ctx context.Context) (uint64, error)
-func (l *SeqLog[T]) Head(ctx context.Context) (uint64, error)
+func (l *SeqLog[S]) Tail(ctx context.Context) (uint64, error)
+func (l *SeqLog[S]) Head(ctx context.Context) (uint64, error)
 
 // AdvanceHead raises the head hint to n if it is lower (CAS, monotonic; never lowers it).
-func (l *SeqLog[T]) AdvanceHead(ctx context.Context, n uint64) error
+func (l *SeqLog[S]) AdvanceHead(ctx context.Context, n uint64) error
 ```
 
 Invariants:
@@ -6184,23 +6220,26 @@ Invariants:
 ### 05.3.2 Paged index (newest-first lists without LIST)
 
 ```go
-// PagedIndex is a list of entries numbered 0,1,2,… stored P per page document
+// PagedIndex is a list of entries numbered 0,1,2,… stored P per page record
 // <pagePK>/<scope>/p/<num10>. The entry count is a counter field in a record the caller names
 // (e.g. ProjectCounters.Builds). Page k holds entries [k*P, (k+1)*P).
 type PagedIndex[E any] struct {
 	Bucket *Bucket
-	PagePK string // e.g. "bpage"
-	Scope  string // e.g. projectID
-	P      int    // entries per page, 50 unless stated
+	P      int // entries per page, 50 unless stated
+	// unexported: page builder and accessor
 }
 
-// NewPagedIndex performs no I/O.
+// NewPagedIndex performs no I/O. build returns the fresh value of page k holding entries e;
+// entries reads a fetched page.
 //
-// Example:
+// Example (records.go):
 //
-//	idx := store.NewPagedIndex[BuildEntry](control, "bpage", projectID, 50)
+//	idx := store.NewPagedIndex(control, 50, func(k uint64, e []BuildEntry) *BuildPage {
+//		n, _ := store.Num10(k)
+//		return &BuildPage{Project: store.ID(projectID), Page: store.ID(n), Entries: store.Set(e)}
+//	}, func(p *BuildPage) []BuildEntry { return p.Entries.Value() })
 //	page, err := idx.Page(ctx, idx.LastPage(count))
-func NewPagedIndex[E any](b *Bucket, pagePK, scope string, p int) *PagedIndex[E]
+func NewPagedIndex[P, E any](b *Bucket, p int, build func(k uint64, e []E) *P, entries func(*P) []E) *PagedIndex[E]
 
 // Set writes entry n (CAS on its page; creates the page on first use).
 func (x *PagedIndex[E]) Set(ctx context.Context, n uint64, e E) error
@@ -6215,22 +6254,23 @@ func (x *PagedIndex[E]) LastPage(count uint64) uint64
 ### 05.3.3 Sharded set (membership docs for reconcilers)
 
 ```go
-// ShardSet is a set of string ids spread over N shard documents <pk>/<sh2>, each a bounded
+// ShardSet is a set of string ids spread over N shard records <pk>/<sh2>, each a bounded
 // map id -> E (≤ 1,000 entries). Reconcilers read all N shards with GetCached each pass,
 // so an unchanged set costs N × 304.
 type ShardSet[E any] struct {
 	Bucket *Bucket
-	PK     string // e.g. "jact"
-	N      int    // shard count, from FleetConfig
+	N      int // shard count, from FleetConfig
+	// unexported: shard builder and accessor
 }
 
-// NewShardSet performs no I/O.
+// NewShardSet performs no I/O. build returns the fresh value of shard sh (its sh2 segment)
+// holding m; entries reads a fetched shard.
 //
-// Example:
+// Example (records.go):
 //
-//	active := store.NewShardSet[ActiveJob](fleet, "jact", cfg.JobShards)
-//	err := active.Add(ctx, jobID, ActiveJob{Build: dynamitedb.Set(buildID)})
-func NewShardSet[E any](b *Bucket, pk string, n int) *ShardSet[E]
+//	active := store.ActiveJobs(fleet, cfg.JobShards) // jact/<sh2>
+//	err := active.Add(ctx, jobID, ActiveJob{Build: buildID})
+func NewShardSet[S, E any](b *Bucket, n int, build func(sh string, m map[string]E) *S, entries func(*S) map[string]E) *ShardSet[E]
 
 func (s *ShardSet[E]) Add(ctx context.Context, id string, e E) error    // CAS on shard sh2(id)
 func (s *ShardSet[E]) Remove(ctx context.Context, id string) error      // CAS; absent = nil
@@ -6243,22 +6283,35 @@ Shard count changes go through a new `FleetConfig.Gen`. Entries are rehashed by 
 ### 05.3.4 Lease
 
 ```go
-// Lease is a CAS-held lease on one record: owner, epoch (incremented on every takeover),
-// expires. Used for controller leadership (ctl/<name>).
-type Lease struct {
-	Bucket *Bucket
-	Key    string        // e.g. "ctl/job-reconciler"
-	Owner  string        // this process's orchestrator id
-	TTL    time.Duration // 3 × controller interval
+// LeaseState is the data of a lease record: owner, epoch (incremented on every takeover),
+// expires, and a cursor the holder owns (kept as it is).
+type LeaseState struct {
+	Owner   string
+	Epoch   uint64
+	Expires time.Time
+	Cursor  []byte
 }
 
-// NewLease performs no I/O.
+// Lease is a CAS-held lease on one record. Used for controller leadership (ctl/<name>) and the
+// promotion lock (plock/<jobID>).
+type Lease struct {
+	Bucket *Bucket
+	Owner  string        // this process's orchestrator id
+	TTL    time.Duration // 3 × controller interval
+	// unexported: record builder and accessor
+}
+
+// NewLease performs no I/O. build returns the fresh value of the lease record holding s;
+// state reads a fetched one.
+func NewLease[L any](b *Bucket, build func(s LeaseState) *L, state func(*L) LeaseState, owner string, ttl time.Duration) *Lease
+
+// NewControllerLease is the lease ctl/<name> of a controller.
 //
 // Example:
 //
-//	l := store.NewLease(fleet, "ctl/job-reconciler", self.ID, 30*time.Second)
+//	l := store.NewControllerLease(fleet, "job-reconciler", self.ID, 30*time.Second)
 //	if held, epoch, err := l.TryAcquire(ctx); held { reconcile(ctx, epoch) }
-func NewLease(b *Bucket, key, owner string, ttl time.Duration) *Lease
+func NewControllerLease(fleet *Bucket, name, owner string, ttl time.Duration) *Lease
 
 // TryAcquire creates the lease if absent, renews it if owned, or takes it over (epoch+1) when
 // expires + skew < now. 1 GET + at most 1 PUT.
@@ -6344,7 +6397,7 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 ```go
 // JobRecord is the fleet-side truth of one job while it is not finalised.
 type JobRecord struct {
-	ID   dynamitedb.KeyField  `pk:"job"`
+	ID   dynamitedb.KeyField  `pk:"job" cbor:"-"`
 	ETag dynamitedb.ETagField `etag:"true" cbor:"-"`
 
 	Spec    dynamitedb.DataField[[]byte] `cbor:"sp,omitempty"` // canonical CBOR JobSpec, ≤ 64 KiB

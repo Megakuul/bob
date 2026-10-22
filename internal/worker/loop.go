@@ -471,7 +471,8 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 
 	now := w.now()
 	verdict := ""
-	rec, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(jobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	var claim Claim
+	err := store.Change(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(jobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		switch {
 		case cur == nil:
 			verdict = "orphan"
@@ -490,6 +491,7 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 		next := *cur
 		next.State, next.Owner, next.Epoch, next.Attempt, next.Claimed = store.Set[string]("claimed"), store.Set(w.cfg.ID), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(now)
 		verdict = "claimed"
+		claim = Claim{JobID: jobID, Epoch: cur.Epoch.Value() + 1, Attempt: cur.Attempt.Value() + 1, Spec: cur.Spec.Value()}
 		return &next, nil
 	})
 	if err != nil {
@@ -501,13 +503,13 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 	}
 	switch verdict {
 	case "claimed":
-		j := &job{claim: Claim{JobID: jobID, Epoch: rec.Epoch.Value(), Attempt: rec.Attempt.Value(), Spec: rec.Spec.Value()}, class: class, viaPoll: viaPoll,
+		j := &job{claim: claim, class: class, viaPoll: viaPoll,
 			check: make(chan struct{}, 1)}
 		w.mu.Lock()
 		w.claiming--
 		w.running[jobID] = j
 		w.mu.Unlock()
-		w.emit(Event{Kind: "claimed", JobID: jobID, Epoch: rec.Epoch.Value()})
+		w.emit(Event{Kind: "claimed", JobID: jobID, Epoch: claim.Epoch})
 		j.seq = seq
 		w.start(ctx, j)
 		return
@@ -528,7 +530,7 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 // saw the job already claimed before the claimer wrote the slot); stale and orphan are only
 // written on an open slot.
 func (w *Worker) mark(ctx context.Context, class string, seq uint64, jobID, tk string) {
-	_, err := store.CAS(ctx, w.cfg.Fleet, store.QueueSlotKey(class, seq), func(cur *store.QueueSlot) (*store.QueueSlot, error) {
+	err := store.Change(ctx, w.cfg.Fleet, store.QueueSlotKey(class, seq), func(cur *store.QueueSlot) (*store.QueueSlot, error) {
 		if cur == nil || cur.Job.Value() != jobID || cur.Taken.Value() == tk {
 			return nil, store.ErrNoChange
 		}
@@ -568,7 +570,7 @@ func (w *Worker) start(ctx context.Context, j *job) {
 // It reports false (lease lost) when the guard fails.
 func (w *Worker) update(ctx context.Context, j *job, fn func(cur, next *store.JobRecord) bool) (bool, error) {
 	held := false
-	_, err := store.CAS(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(j.claim.JobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+	err := store.Change(ctx, w.cfg.Fleet, &store.JobRecord{ID: store.ID(j.claim.JobID)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		held = false
 		if cur == nil || cur.Owner.Value() != w.cfg.ID || cur.Epoch.Value() != j.claim.Epoch {
 			return nil, store.ErrNoChange

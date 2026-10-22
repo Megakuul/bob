@@ -124,7 +124,7 @@ func (f *Fleet) AddClass(ctx context.Context, c store.Class) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = store.CAS(ctx, f.cfg.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
+	err = store.Change(ctx, f.cfg.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		if cur == nil {
 			return nil, errors.New("fleet/cfg is missing")
 		}

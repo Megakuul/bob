@@ -37,7 +37,7 @@ func isAdmin(ro []store.RoleBindingEntry, disabled bool) bool {
 
 // adminAdd records principal in AdminIndex (idempotent).
 func (id *Identity) adminAdd(ctx context.Context, principal string) error {
-	_, err := store.CAS(ctx, id.control, store.AdminIndexKey(), func(cur *store.AdminIndex) (*store.AdminIndex, error) {
+	err := store.Change(ctx, id.control, store.AdminIndexKey(), func(cur *store.AdminIndex) (*store.AdminIndex, error) {
 		var vals []string
 		if cur == nil {
 			cur = store.AdminIndexKey()
@@ -59,7 +59,7 @@ func (id *Identity) adminAdd(ctx context.Context, principal string) error {
 // It runs before the write that takes the admin binding away (and is undone when that write
 // fails), so concurrent removals on several orchestrators leave at least one admin.
 func (id *Identity) adminRemove(ctx context.Context, principal string) error {
-	_, err := store.CAS(ctx, id.control, store.AdminIndexKey(), func(cur *store.AdminIndex) (*store.AdminIndex, error) {
+	err := store.Change(ctx, id.control, store.AdminIndexKey(), func(cur *store.AdminIndex) (*store.AdminIndex, error) {
 		if cur == nil || !slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
@@ -78,7 +78,7 @@ func (id *Identity) adminRemove(ctx context.Context, principal string) error {
 // addMember / removeMember maintain rmem/<role>, the derived member list. Best effort: a
 // failure is logged; DeleteRole re-checks the members' records.
 func (id *Identity) addMember(ctx context.Context, role, principal string) {
-	_, err := store.CAS(ctx, id.control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
+	err := store.Change(ctx, id.control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
 		var vals []string
 		if cur == nil {
 			cur = store.RoleMembersKey(role)
@@ -102,7 +102,7 @@ func (id *Identity) removeMember(ctx context.Context, role, principal string, re
 	if slices.ContainsFunc(remaining, func(b store.RoleBindingEntry) bool { return b.Role == role }) {
 		return
 	}
-	_, err := store.CAS(ctx, id.control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
+	err := store.Change(ctx, id.control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
 		if cur == nil || !slices.Contains(cur.Principals.Value(), principal) {
 			return nil, store.ErrNoChange
 		}
@@ -180,7 +180,7 @@ func (s roleService) CreateRole(ctx context.Context, req *connect.Request[access
 	}
 	r := store.RoleKey(in.GetId())
 	r.Description, r.Permissions, r.Created = store.Set(in.GetDescription()), store.Set(perms), store.Set(s.id.now())
-	if _, err := store.CAS(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
+	if err := store.Change(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
 		var vals []string
 		if cur == nil {
 			cur = store.RolesIndexKey()
@@ -360,7 +360,7 @@ func (s roleService) DeleteRole(ctx context.Context, req *connect.Request[access
 	if err := store.Delete(ctx, s.id.control, r); err != nil {
 		return nil, storageError(err)
 	}
-	if _, err := store.CAS(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
+	if err := store.Change(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
 		if cur == nil || !slices.Contains(cur.IDs.Value(), rid) {
 			return nil, store.ErrNoChange
 		}
