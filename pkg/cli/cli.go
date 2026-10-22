@@ -30,7 +30,7 @@ type command struct {
 func commands() []command {
 	return []command{
 		{"build", []string{"bob build [patterns…] [--remote] [--platform P] [--variant V] [--print-paths] [--keep-going=true] [--lock]"}, "build packages",
-			[]flag{{name: "remote"}, {name: "platform", kind: fStr}, {name: "variant", kind: fStr}, {name: "print-paths"}, {name: "keep-going"}, {name: "lock"}, {name: "no-download"}, {name: "dry-run"}}, runBuildCmd},
+			[]flag{{name: "remote"}, {name: "platform", kind: fStr}, {name: "variant", kind: fStr}, {name: "version", kind: fStr}, {name: "print-paths"}, {name: "keep-going"}, {name: "lock"}, {name: "no-download"}, {name: "dry-run"}}, runBuildCmd},
 		{"test", []string{"bob test [patterns…] [--remote] [--rerun] [--lock] [--require-all-tests] [-- test args]"}, "run tests",
 			[]flag{{name: "remote"}, {name: "rerun"}, {name: "lock"}, {name: "require-all-tests"}, {name: "platform", kind: fStr}, {name: "variant", kind: fStr}, {name: "keep-going"}}, runTest},
 		{"run", []string{"bob run <label> [--platform native] [-- args]"}, "build and run a binary",

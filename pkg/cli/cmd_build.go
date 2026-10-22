@@ -146,6 +146,12 @@ func (e *env) buildOptions(root string, cmd build.Command) (build.Options, error
 	if cmd == build.CmdTest {
 		o.TestArgs = e.a.pass
 	}
+	if e.a.has("version") { // release version (R-OUT-022); checked before the store opens
+		o.Version = e.a.str("version")
+		if err := build.CheckVersion(o.Version); err != nil {
+			return o, err
+		}
+	}
 	return o, nil
 }
 

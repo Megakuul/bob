@@ -13,6 +13,10 @@ import (
 	gobop "github.com/megakuul/bob/pkg/golang/bop"
 	npmbop "github.com/megakuul/bob/pkg/npm/bop"
 	mlbop "github.com/megakuul/bob/pkg/ocaml/bop"
+	aibop "github.com/megakuul/bob/pkg/output/appimage/bop"
+	ocibop "github.com/megakuul/bob/pkg/output/oci/bop"
+	tarbop "github.com/megakuul/bob/pkg/output/tarball/bop"
+	relbop "github.com/megakuul/bob/pkg/release/bop"
 	rustbop "github.com/megakuul/bob/pkg/rust/bop"
 )
 
@@ -23,7 +27,7 @@ func main() {
 // kinds are the core kinds plus every ecosystem's.
 func kinds() map[string]builder.Kind {
 	k := builder.Core()
-	for _, eco := range []map[string]builder.Kind{gobop.Kinds(), ccbop.Kinds(), rustbop.Kinds(), npmbop.Kinds(), mlbop.Kinds()} {
+	for _, eco := range []map[string]builder.Kind{gobop.Kinds(), ccbop.Kinds(), rustbop.Kinds(), npmbop.Kinds(), mlbop.Kinds(), aibop.Kinds(), ocibop.Kinds(), tarbop.Kinds(), relbop.Kinds()} {
 		for name, kind := range eco {
 			k[name] = kind
 		}

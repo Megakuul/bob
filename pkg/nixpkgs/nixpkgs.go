@@ -174,3 +174,21 @@ func outputsOf(pkg bob.Package, names []string) []bob.Output {
 	}
 	return out
 }
+
+// Program is a nixpkgs package of the target set used as an Executable (Exe).
+type Program struct {
+	*Package
+	main string
+}
+
+// MainProgram is the program's path relative to the package's bin (else out) output.
+func (x *Program) MainProgram() string { return x.main }
+
+// Exe is a nixpkgs package needed at run time (like Pkg) whose program mainProgram is run, e.g.
+// as an extra entry of an AppImage. mainProgram is relative to the package's "bin" output when
+// it has one (nixpkgs puts the programs of multi-output packages there), else to "out":
+//
+//	nixpkgs.Exe(p, "curl", "bin/curl")
+func Exe(p *bob.P, attr, mainProgram string, opts ...Option) *Program {
+	return &Program{Package: Pkg(p, attr, opts...), main: mainProgram}
+}

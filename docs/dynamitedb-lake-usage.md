@@ -32,20 +32,18 @@ type JobRecord struct {
 * **Values returned by `Get`/`Query` are read-only results.** Read them with `.Value()` and `.ETag`.
   Never pass a fetched record to `Put`/`Update`/`Create`: its fields are plain read values, not
   operators, and the library panics ("incorrect DataField usage"). Build a **fresh** value for the write.
-* **Compare-and-swap is `Update` with the ETag you read:**
+* **Compare-and-swap is `Get` then `Put` with the ETag you read** (ADR 0011 decision 2 and SPEC R-STORE-103: `dynamitedb.Update` is NOT used; the protected test TestRSTORE103SourceRules fails if `dynamitedb.Update(` appears under internal/). Build the Put value fresh:
 
   ```go
   cur, err := dynamitedb.Get(ctx, b, &JobRecord{ID: dynamitedb.Key(id)})            // read (ETag in cur.ETag)
   // decide from cur.State.Value() ...
-  err = dynamitedb.Update(ctx, b, &JobRecord{                                        // fresh value, update operators
+  err = dynamitedb.Put(ctx, b, &JobRecord{                                           // fresh value, update operators
       ID: dynamitedb.Key(id), ETag: cur.ETag,
-      State: dynamitedb.Set("running"), Epoch: dynamitedb.Increment(1),
+      State: dynamitedb.Set("running"), Epoch: dynamitedb.Set(cur.Epoch.Value()+1),
   })
   if errors.Is(err, dynamitedb.ErrConcurrencyConflict) { /* lost the race: re-read, retry (bounded) */ }
   ```
-  `Update` does one GET with If-Match and one PUT with If-Match. `CustomUpdate(func(old T) T)` computes
-  the new field value from the stored one. Note `Update` always writes, even when you would not want a
-  change: decide **before** calling it (ADR 0011 rule).
+  `Put` writes the whole document with If-Match. Decide **before** calling it whether to write at all.
 * Create-only is `Create` (If-None-Match: `ErrAlreadyExists`). Whole-document write is `Put` with an ETag
   for a conditional replace. `Delete` takes a filter value with an ETag for a conditional delete.
 * `Get` with only keys is one GET. A filter operator that fails gives `ErrNotFound`. `Query` lists: **no

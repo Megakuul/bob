@@ -24,6 +24,8 @@ const (
 	cNetwork            diag.Code = 2009
 	cRustCrate          diag.Code = 2010
 	cLogLimit           diag.Code = 2011
+	cPruned             diag.Code = 2015 // bob-builder: a prune pattern removes a needed library
+	cBuilderWarning     diag.Code = 2016 // bob-builder: warning of a successful build
 	cHashMismatch       diag.Code = 3001
 	cDownloadFailed     diag.Code = 3002
 	cDownloadNotFound   diag.Code = 3003

@@ -30,6 +30,11 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	if o.Root == "" {
 		return res, errors.New("build: Options.Root is empty")
 	}
+	if o.Version != "" {
+		if err := CheckVersion(o.Version); err != nil {
+			return res, err
+		}
+	}
 	st, err := openStore(ctx, o.Store, o.Home, o.Caches)
 	if err != nil {
 		return res, err
@@ -67,6 +72,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		return res, err
 	}
 	r.noteDropped(g)
+	version := r.releaseVersion(g)
 
 	var lf *lock.File
 	if err := r.stage(StageLock, func() (err error) { lf, err = r.lockStage(ctx, st, f, g); return }); err != nil {
@@ -104,6 +110,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		p = newPlanner(g, st, builder, srcPaths, entries, lf, idx)
 		p.root, p.fetcher = o.Root, f
 		p.offline, p.maxJobs = o.Offline, o.MaxJobs
+		p.version = version
 		if o.Command == CmdTest {
 			p.testArgs = o.TestArgs
 		}

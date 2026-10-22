@@ -10,6 +10,10 @@ type P struct {
 	variant  Variant // normalised
 	id       string  // canonical "<platform>[+token...]"
 	host     *P
+	// nested marks a configuration made by ext.Elsewhere: it is never a target, so nothing it
+	// creates is a root; vals holds what nested constructors record for the outer one.
+	nested bool
+	vals   map[string]any
 }
 
 // Platform returns the platform packages built with p run on.

@@ -23,3 +23,6 @@ schema). Not pkg/output/appimage (I-M12b).
 
 ## done
 (starting 21:35)
+- 22:20 BuilderVersion 9 → 10 (I-M12b took 9 for appimage; my kinds oci-layer/oci-image/tarball/
+  release + pkg/builder reprotar.go/args.go). Whoever regenerates builders.go last runs
+  `go generate ./pkg/engine/store` after both.

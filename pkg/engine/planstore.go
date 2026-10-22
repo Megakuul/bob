@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/fetch"
@@ -38,3 +39,26 @@ type PlanRealiser interface {
 	// the caller then plans without the cutoff and the build stage reports the failure.
 	RealiseNow(ctx context.Context, drvs map[string]*drv.Derivation) (map[string]map[string]string, error)
 }
+
+// PlanOutput is one store output an ecosystem needs on disk while planning: Path is the output
+// of the derivation Drv (its output Name). Drv is "" for a plain store path (a source).
+type PlanOutput struct {
+	Drv, Name, Path string
+}
+
+// PlanCloser is an optional extension of PlanStore (a type assertion on PlanRequest.Store) for
+// outputs that are built from closures (SPEC §04): an OCI image has one layer derivation per
+// store path of its programs' closures (R-OUT-011), a static tarball must reject a program with
+// run-time dependencies before anything is built (R-OUT-004), and pruning is checked against
+// the ELF files of the closure (R-OUT-007).
+type PlanCloser interface {
+	// Closure makes outs valid (bob derivations planned so far are built as RealiseNow does,
+	// other derivations are substituted or built by Nix) and returns every path of their
+	// closure with its references (without the path itself), sorted.
+	Closure(ctx context.Context, outs []PlanOutput) (map[string][]string, error)
+}
+
+// ErrClosureBuild wraps a Closure failure caused by a build (a program that does not compile):
+// the planner then plans a derivation that depends on the failing inputs, so the build stage
+// reports the real failure with its log.
+var ErrClosureBuild = errors.New("building a closure while planning failed")

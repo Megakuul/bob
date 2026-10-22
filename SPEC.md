@@ -6154,6 +6154,10 @@ func Create[T any](ctx context.Context, b *Bucket, v *T) error
 // After a write CAS returns the record as stored (one more GET).
 func CAS[T any](ctx context.Context, b *Bucket, key *T, fn func(cur *T) (*T, error)) (*T, error)
 
+// Change is CAS without the read-back GET, for callers that do not use the stored record
+// (the per-job hot paths of R-FLEET-009).
+func Change[T any](ctx context.Context, b *Bucket, key *T, fn func(cur *T) (*T, error)) error
+
 // PutOwned writes v unconditionally (dynamitedb.Put without ETag). Only for records with
 // exactly one legitimate writer (orch/<self>, whb/<self>).
 func PutOwned[T any](ctx context.Context, b *Bucket, v *T) error

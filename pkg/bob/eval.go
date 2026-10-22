@@ -35,6 +35,7 @@ type evaluation struct {
 	hostPlatform Platform
 	root         string // repository root (for reading bob.go lines in messages)
 	ps           map[string]*P
+	nestedPs     map[string]*P // configurations of ext.Elsewhere (nested.go), apart from ps
 	stack        []frame
 	nodes        map[string]*node
 	diags        []diagnostic

@@ -41,6 +41,7 @@ type planner struct {
 	idx      *nixidx.Index
 	res      *resolver
 	testArgs []string      // bob test -- args, passed to the ecosystems
+	version  string        // release version (PlanRequest.Version)
 	root     string        // repository root (PlanRequest.Root)
 	fetcher  fetch.Fetcher // the run's fetcher (PlanRequest.Store.Ensure)
 	offline  bool          // no substituters for builds while planning (Options.Offline)
@@ -143,7 +144,8 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 	}()
 	res, err := eco.Plan(ctx, engine.PlanRequest{Graph: p.g, Nodes: nodes, Lock: p.lockf.Sections[name],
 		Inputs: p.nodes, Sources: p.srcs, Nixpkgs: p.idx, Builder: p.builder,
-		Resolver: p.res, TestArgs: p.testArgs, Root: p.root, Store: planStore{st: p.st, f: p.fetcher, p: p}})
+		Resolver: p.res, TestArgs: p.testArgs, Root: p.root, Store: planStore{st: p.st, f: p.fetcher, p: p},
+		Version: p.version})
 	if err != nil {
 		if _, ok := diagErrors(err); ok {
 			return err

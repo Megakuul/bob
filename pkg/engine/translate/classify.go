@@ -322,18 +322,29 @@ func diagnostics(lines []string, i int) []string {
 // bob's own text; its first line is the cause, further lines (or the log before it) the excerpt.
 func (t *Translator) builderDiag(drv string, p Pkg, lines []string) *diag.Error {
 	msg, at := "", -1
+	var code int
+	var args map[string]string
 	for i, l := range lines {
 		m := reBobDiag().FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}
-		var d struct{ Type, Severity, Msg string }
+		var d struct {
+			Type, Severity, Msg string
+			Code                int
+			Args                map[string]string
+		}
 		if json.Unmarshal([]byte(m[1]), &d) == nil && d.Type == "diag" && d.Severity == "error" && d.Msg != "" {
-			msg, at = d.Msg, i
+			msg, at, code, args = d.Msg, i, d.Code, d.Args
 		}
 	}
 	if at < 0 {
 		return nil
+	}
+	if code == int(cPruned) { // a bundle's prune check (R-OUT-007): the code's own message
+		e := t.pkgErr(cPruned, drv, map[string]string{"pattern": capArg(args["pattern"]), "file": capArg(args["file"]), "user": capArg(args["user"])})
+		e.Excerpt = lastN(plainLog(lines[:at]), 10)
+		return e
 	}
 	first, rest, _ := strings.Cut(msg, "\n")
 	if m := reDiagTimout().FindStringSubmatch(first); m != nil && m[1] == p.Label {
@@ -350,6 +361,33 @@ func (t *Translator) builderDiag(drv string, p Pkg, lines []string) *diag.Error 
 		e.Excerpt = lastN(plainLog(lines[:at]), 10)
 	}
 	return e
+}
+
+// capArg bounds a message argument a builder reported (its log is untrusted text).
+func capArg(s string) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) > 512 {
+		s = s[:512]
+	}
+	return s
+}
+
+// builderWarning returns the reason of a bob-builder warning line (BOB-E-2016,
+// `bob:: {"type":"diag","severity":"warning","code":2016,…}`), or "".
+func builderWarning(line string) string {
+	m := reBobDiag().FindStringSubmatch(line)
+	if m == nil {
+		return ""
+	}
+	var d struct {
+		Type, Severity string
+		Code           int
+		Args           map[string]string
+	}
+	if json.Unmarshal([]byte(m[1]), &d) != nil || d.Type != "diag" || d.Severity != "warning" || d.Code != int(cBuilderWarning) {
+		return ""
+	}
+	return capArg(d.Args["reason"])
 }
 
 // maxServiceTail bounds the excerpt of a bob-builder diagnostic: R-FW-025 shows the last 20

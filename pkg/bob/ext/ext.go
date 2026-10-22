@@ -183,3 +183,40 @@ func CallerDir() (dir string, ok bool) {
 	}
 	return graph.CallerDir()
 }
+
+// Elsewhere evaluates the constructor that is running now (the innermost bob.Define function)
+// once more for platform pl, with p's variant, and returns the configuration it ran in. The
+// run is "nested": its configuration is never a target, so the packages it creates become part
+// of the graph only through a node of the outer run that depends on them. Output constructors
+// use it for their programs on other platforms (oci.ImageOpts.Platforms,
+// release.ReleaseOpts.Platforms): called in the outer run, the constructor runs again for each
+// other platform; in the nested run (Nested reports true) it records the packages it got with
+// Record instead of creating its node, and the outer run reads them with Recorded under the
+// same key. For p's own platform Elsewhere returns p without running anything. An unknown
+// platform is a definition error and gives nil.
+func Elsewhere(p *bob.P, pl bob.Platform) *bob.P {
+	if graph.Elsewhere == nil {
+		return nil
+	}
+	q, _ := graph.Elsewhere(p, string(pl)).(*bob.P)
+	return q
+}
+
+// Nested reports whether p is a configuration made by Elsewhere.
+func Nested(p *bob.P) bool { return graph.Nested != nil && graph.Nested(p) }
+
+// Record stores v under key in configuration p (see Elsewhere). Keys are chosen by the kind,
+// e.g. "oci.image:" + label.
+func Record(p *bob.P, key string, v any) {
+	if graph.Record != nil {
+		graph.Record(p, key, v)
+	}
+}
+
+// Recorded returns the value stored under key in configuration p.
+func Recorded(p *bob.P, key string) (any, bool) {
+	if graph.Recorded == nil {
+		return nil, false
+	}
+	return graph.Recorded(p, key)
+}

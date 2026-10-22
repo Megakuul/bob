@@ -32,7 +32,7 @@ var resolveNix []byte
 
 // indexVersion is part of the cache key: a change of resolve.nix or of the cache layout
 // invalidates every cache file.
-const indexVersion = 1
+const indexVersion = 2
 
 // maxOutput caps what one resolve.nix run may print (the names list of nixpkgs is ~1 MB).
 const maxOutput = 64 << 20
@@ -55,6 +55,8 @@ type Entry struct {
 	Unfree               bool              `json:"unfree,omitempty"`
 	Available            bool              `json:"available,omitempty"`
 	Version              string            `json:"version,omitempty"`
+	Pname                string            `json:"pname,omitempty"`
+	Licenses             []string          `json:"licenseIds,omitempty"` // SPDX ids of meta.license (R-OUT-008)
 	DrvPath              string            `json:"drvPath,omitempty"`
 	Outputs              map[string]string `json:"outputs,omitempty"` // output name → store path
 	EvalRefused          string            `json:"evalRefused,omitempty"`

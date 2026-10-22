@@ -100,6 +100,7 @@ var table = []Entry{
 	{2013, one(`{label}: {package} needs its {script} script ({reason})`, `add npm.AllowScripts("{package}") to {label}`)},
 	{2014, one(`{label}: {package} uses {dep} without declaring it`, `add npm.Extend("{package}", npm.Peer("{dep}"))`)},
 	{2015, one(`{label}: prune pattern "{pattern}" removes {file}, which {user} needs`, "narrow the pattern")},
+	{2016, one(`{label}: {reason}`)}, // a warning bob-builder reports on a successful build (R-OUT-019)
 
 	// 3xxx fetch
 	{3001, one(`{label}: download does not match bob.lock`, "if the upstream file legitimately changed, run bob lock; otherwise the source was tampered with")},

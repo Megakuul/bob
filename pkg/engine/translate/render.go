@@ -117,6 +117,9 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 	}
 	if line, ok := definitionLine(e); ok {
 		fmt.Fprintf(w, "%s %s\n", s.c(color, "✗"), s.c(cBold, line))
+	} else if e.Code == cBuilderWarning && e.Severity == diag.SeverityWarning {
+		// bob-builder's warnings read as SPEC writes them (R-OUT-019): `warning: <label>: <reason>`
+		fmt.Fprintf(w, "%s %s\n", s.c(color, "warning:"), s.c(cBold, e.Error()))
 	} else {
 		fmt.Fprintf(w, "%s %s\n", s.c(color, head+"["+e.Code.ID()+"]:"), s.c(cBold, e.Error()))
 	}
@@ -167,7 +170,7 @@ func definitionLine(e *diag.Error) (string, bool) {
 		return "", false
 	}
 	switch e.Code {
-	case 6, 8, 10, 11, 1026: // usage and definition errors SPEC writes as `✗ <message>`
+	case 6, 8, 10, 11, 1026, cPruned: // errors SPEC writes as `✗ <message>` (2015: R-OUT-007)
 		return e.Error(), true
 	case 1020:
 		if e.Args["option"] == "build definition" && e.Location != nil && e.Args["reason"] != "" {

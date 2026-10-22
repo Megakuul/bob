@@ -42,16 +42,27 @@ func TestDraftCarriesEveryField(t *testing.T) {
 func checkDir(t *testing.T, dir string) int {
 	t.Helper()
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	pkgs := map[string]map[string]*ast.File{} // package name -> file name -> file
+	for _, name := range names {
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pkgs[f.Name.Name] == nil {
+			pkgs[f.Name.Name] = map[string]*ast.File{}
+		}
+		pkgs[f.Name.Name][name] = f
+	}
 	n := 0
-	for _, pkg := range pkgs {
+	for _, files := range pkgs {
 		records := map[string]*ast.StructType{}
 		inTest := map[string]bool{}
 		drafts := map[string]*ast.CompositeLit{}
-		for fname, f := range pkg.Files {
+		for fname, f := range files {
 			ast.Inspect(f, func(node ast.Node) bool {
 				switch x := node.(type) {
 				case *ast.TypeSpec:

@@ -111,4 +111,12 @@ var (
 	// CallerDir returns the label directory a node created now would get (the calling
 	// bob.go's directory); ok is false outside a bob.go of this build.
 	CallerDir func() (dir string, ok bool)
+	// Elsewhere evaluates the running definition again for platform (same variant) in a
+	// nested configuration and returns that configuration (a *bob.P).
+	Elsewhere func(p any, platform string) any
+	// Nested reports whether p (a *bob.P) is a configuration made by Elsewhere.
+	Nested func(p any) bool
+	// Record stores v under key in the configuration p; Recorded reads it back.
+	Record   func(p any, key string, v any)
+	Recorded func(p any, key string) (any, bool)
 )

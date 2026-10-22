@@ -68,7 +68,10 @@ type Options struct {
 	// DryRun stops after planning (bob build --dry-run, R-RS-005, ruling G24): nothing is
 	// fetched, imported or built; Result.Planned lists the derivations.
 	DryRun bool
-	Events func(Event)
+	// Version is the release version (bob build --version, R-OUT-022); "" builds releases as
+	// 0.0.0-dev with a note. Only release derivations depend on it (engine.PlanRequest.Version).
+	Version string
+	Events  func(Event)
 }
 
 // Event is one typed event of a run. Names: the SPEC §02.4 events (run.start, package.start,

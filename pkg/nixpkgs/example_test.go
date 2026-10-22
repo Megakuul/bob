@@ -28,3 +28,9 @@ func ExamplePkg() {
 		return nixpkgs.Pkg(p, "tzdata")
 	})
 }
+
+func ExampleExe() {
+	_ = bob.Define(func(p *bob.P) bob.Executable {
+		return nixpkgs.Exe(p, "curl", "bin/curl")
+	})
+}

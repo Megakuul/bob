@@ -72,6 +72,10 @@ translate}, pkg/engine, pkg/npm/..., pkg/cli; `tools/ci -only fmt,vet,lint,layer
 layering ok, vet fails only in internal/orchestrator (another unit's WIP: "could not import
 maps"). go test ./pkg/ ./pkg/engine/... ./pkg/npm/... ./pkg/cli/...: all ok except
 pkg/engine/srcs TestImportManyTiming (cold import 15.5 s vs 5 s budget at load ~30; not touched).
+S15 replay goldens: all 56 `tests/faults/*/<nixver>/golden.txt` byte-identical with a
+`-tags bobtest` bob (stdout+stderr of the fault's command, BOB_TEST_NIX_REPLAY, as the runner
+compares them). gofmt -l pkg/ lists only pkg/output/oci/gen/plan.go and pkg/release/bop/bop.go
+(other units' WIP).
 
 ## files
 - new: pkg/engine/materialise/{manifest,materialise,materialise_test}.go,
@@ -151,6 +155,10 @@ pkg/engine/srcs TestImportManyTiming (cold import 15.5 s vs 5 s budget at load ~
    tests/fixtures/repos/npm/ts-lib/bob.go:24, tests/fixtures/repos/codegen/web/bob.go:16,
    tests/eco/npm/repos_test.go:34, build_test.go:151, graphs_test.go:110. They do not compile
    against pkg/npm (function NewApp, type App). Not edited (protected).
+3. tests/errors buildBins builds bob without `-tags bobtest`, so the replay hook (gated by tag +
+   env, A109) is off and every S15 replay entry fails with exit 2 ("got 0" codes). Measured
+   2026-10-22; with a bobtest build all 56 goldens match (above). Suggested fix: add
+   `-tags bobtest` to the go build in buildBins (A109 says the harness always does).
 2. Still open from I-M9a TEST PROBLEM 2 (A127 owner item): root package name rule R2 vs the
    fixtures' root `package npm` / `package root`; the private copy evaluated with `package npm`
    because its directory was named npm.

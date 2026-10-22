@@ -20,6 +20,8 @@ let
     else { ok = false; };
   isDrv = x: try (builtins.isAttrs x && (x.type or null) == "derivation") false;
   licenses = l: if builtins.isList l then l else [ l ];
+  # SPDX ids of meta.license (shortName or the string itself when there is none), for licences.json.
+  licenseIds = l: map (x: if builtins.isAttrs x then toString (x.spdxId or x.shortName or "unknown") else toString x) (licenses l);
   info = attr:
     let
       found = find (split attr) pkgs;
@@ -40,6 +42,8 @@ let
       unfree = try (builtins.any (l: builtins.isAttrs l && (l.free or true) == false) (licenses (meta.license or [ ]))) false;
       available = try (meta.available or true == true) true;
       version = try (toString (p.version or "")) "";
+      pname = try (toString (p.pname or "")) "";
+      licenseIds = try (builtins.deepSeq (licenseIds (meta.license or [ ])) (licenseIds (meta.license or [ ]))) [ ];
       drvPath = if drv.success then drv.value else null;
       inherit outputs;
       evalRefused = !drv.success;

@@ -8,5 +8,9 @@ import (
 	_ "github.com/megakuul/bob/pkg/nixpkgs"
 	_ "github.com/megakuul/bob/pkg/npm/gen"
 	_ "github.com/megakuul/bob/pkg/ocaml/gen"
+	_ "github.com/megakuul/bob/pkg/output/appimage/gen"
+	_ "github.com/megakuul/bob/pkg/output/oci/gen"
+	_ "github.com/megakuul/bob/pkg/output/tarball/gen"
+	_ "github.com/megakuul/bob/pkg/release/gen"
 	_ "github.com/megakuul/bob/pkg/rust/gen"
 )

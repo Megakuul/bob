@@ -15,17 +15,19 @@ import (
 
 // Bounds on what the translator keeps (AGENTS.md §5.4: the stream carries builder output).
 const (
-	logHeadLines  = 2000     // first lines kept per build log (compiler diagnostics come early)
-	logTailLines  = 2000     // last lines kept per build log (excerpts are the tail)
-	maxLogLine    = 4096     // bytes kept of one build log line
-	maxHeadBytes  = 1 << 20  // bytes kept of the head of one build log
-	maxTailBytes  = 1 << 20  // bytes kept of the tail of one build log
-	maxRunLog     = 64 << 20 // bytes of build logs kept for the whole run (F6)
-	keptOnEvict   = 16       // lines a log keeps when the run budget evicts it (excerpts use ≤ 8)
-	maxWarnings   = 10000
-	maxUnknown    = 64 // unknown level-0 messages kept as BOB-E-9999 errors
-	maxRawBytes   = 64 << 10
-	maxDriftItems = 64
+	logHeadLines = 2000     // first lines kept per build log (compiler diagnostics come early)
+	logTailLines = 2000     // last lines kept per build log (excerpts are the tail)
+	maxLogLine   = 4096     // bytes kept of one build log line
+	maxHeadBytes = 1 << 20  // bytes kept of the head of one build log
+	maxTailBytes = 1 << 20  // bytes kept of the tail of one build log
+	maxRunLog    = 64 << 20 // bytes of build logs kept for the whole run (F6)
+	keptOnEvict  = 16       // lines a log keeps when the run budget evicts it (excerpts use ≤ 8)
+	maxWarnings  = 10000
+	// maxBuilderWarnings bounds the bob-builder warnings kept per run.
+	maxBuilderWarnings = 100
+	maxUnknown         = 64 // unknown level-0 messages kept as BOB-E-9999 errors
+	maxRawBytes        = 64 << 10
+	maxDriftItems      = 64
 )
 
 type activity struct {
@@ -128,10 +130,12 @@ type Translator struct {
 	claim    *claim               // the untrusted message being translated (plainError)
 	claims   []*claim             // untrusted messages, settled at Finish
 	warns    []string
-	errs     []*diag.Error
-	fatal    []string // drv-less fatal messages (timeouts, interrupts, plain lines)
-	drift    []string
-	unknown  int
+	// builderWarns are bob-builder's warnings of successful builds (BOB-E-2016).
+	builderWarns []builderWarn
+	errs         []*diag.Error
+	fatal        []string // drv-less fatal messages (timeouts, interrupts, plain lines)
+	drift        []string
+	unknown      int
 
 	// Sink receives live events as they happen (optional). Log lines are sent too; the CLI
 	// forwards them only with --json-log.
@@ -307,6 +311,9 @@ func (t *Translator) result(ev event) {
 		}
 		t.logBytes += l.add(line)
 		t.boundLogs()
+		if r := builderWarning(line); r != "" && len(t.builderWarns) < maxBuilderWarnings {
+			t.builderWarns = append(t.builderWarns, builderWarn{drv: a.drv, reason: r})
+		}
 		if p, ok := t.ctx.Packages[a.drv]; ok && t.Sink != nil {
 			t.emit(Event{Event: "log", Label: p.Label, Line: t.mapPaths(line)})
 		}
@@ -966,6 +973,9 @@ func (t *Translator) mapPaths(s string) string {
 	})
 }
 
+// builderWarn is one bob-builder warning of a build.
+type builderWarn struct{ drv, reason string }
+
 // Finish ends the run with the process outcome and returns the report.
 func (t *Translator) Finish(o Outcome) *Report {
 	valid := map[string]bool{}
@@ -1038,6 +1048,17 @@ func (t *Translator) Finish(o Outcome) *Report {
 			t.hints[e] = cacheHint(e.Code, true)
 			notes = append(notes, e)
 		}
+	}
+	// Warnings bob-builder wrote into the logs of bob packages (R-OUT-019), once each.
+	seenWarn := map[builderWarn]bool{}
+	for _, w := range t.builderWarns {
+		if _, ok := t.ctx.Packages[w.drv]; !ok || seenWarn[w] {
+			continue
+		}
+		seenWarn[w] = true
+		e := t.pkgErr(cBuilderWarning, w.drv, map[string]string{"reason": w.reason})
+		e.Severity = diag.SeverityWarning
+		notes = append(notes, e)
 	}
 	for _, n := range notes {
 		t.emit(Event{Event: "warning", Error: n, Hint: t.hint(n)})

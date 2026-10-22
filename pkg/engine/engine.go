@@ -66,6 +66,10 @@ type PlanRequest struct {
 	// trees it selected itself, realising pinned inputs it must read (planstore.go). nil in
 	// Native and wherever the caller has no store.
 	Store PlanStore
+	// Version is the release version of this build (bob build --version, "0.0.0-dev" without
+	// one). Only release-related derivations may depend on it (R-OUT-022): the release manifest
+	// and the versioned image a release publishes; every other package must ignore it.
+	Version string
 }
 
 // PlanResult is what Plan returns.

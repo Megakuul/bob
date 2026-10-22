@@ -225,6 +225,9 @@ BOB-E-2015 build - exit=1
   message: {label}: prune pattern "{pattern}" removes {file}, which {user} needs
   hint:    narrow the pattern
 
+BOB-E-2016 build - exit=1
+  message: {label}: {reason}
+
 BOB-E-3001 fetch - exit=4
   message: {label}: download does not match bob.lock
   hint:    if the upstream file legitimately changed, run bob lock; otherwise the source was tampered with
