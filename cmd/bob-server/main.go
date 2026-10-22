@@ -23,7 +23,7 @@ const usage = `usage: bob-server <mode>
 modes:
   orchestrator   serve the API and run the controllers
   worker         run builds for the orchestrators
-  admin          administrative commands (create-user)
+  admin          administrative commands: create-user --login <name> [--admin]
 
 Configuration comes from BOB_* environment variables (SPEC §05.11.1).
 `
@@ -47,7 +47,14 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		return 0
 	case server.ModeOrchestrator, server.ModeWorker:
 	case "admin":
-		return report(stderr, diag.NotImplemented("bob-server admin"))
+		// `admin create-user --login <name> --admin` (SPEC §6.3.2) writes UserRecord, the
+		// login index and AdminIndex in the control bucket. Those record formats are identity
+		// work (M15.2), so the command lands with them.
+		if len(args) > 1 && args[1] == "create-user" {
+			return report(stderr, diag.NotImplemented("bob-server admin create-user"))
+		}
+		fmt.Fprint(stderr, "usage: bob-server admin create-user --login <name> [--admin]  (password from stdin)\n")
+		return 2
 	default:
 		fmt.Fprintf(stderr, "bob-server: unknown mode %q\n\n%s", mode, usage)
 		return 2

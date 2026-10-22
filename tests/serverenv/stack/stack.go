@@ -5,14 +5,16 @@
 // Contracts with the bob-server binary (set in the process environment):
 //
 //   - BOB_LISTEN (orchestrator): the address the orchestrator serves API and Attach on.
-//   - BOB_ADMIN_TOKEN (orchestrator): bootstrap admin credential.
+//   - BOB_ADMIN_TOKEN (orchestrator): bootstrap admin credential. bob-server honours it only
+//     when built with -tags bobtest (a release build refuses to start with it set), so the
+//     stack always builds bob-server with -tags bobtest.
 //   - BOB_ORCHESTRATOR_ADDRS (worker): comma-separated http://host:port list, entry i is the
 //     attach proxy front of orchestrator-i (tests/serverenv/attachproxy). Workers must reach
 //     orchestrators only through these addresses so tests can block, count and redirect Attach.
 //   - BOB_TEST_CLOCK_OFFSET (orchestrator, only set when Options.ClockOffset != 0): a Go
 //     duration (may be negative, e.g. "90s") added to the orchestrator's wall clock. It must
-//     be honoured only by servers built with -tags bobtest, which devstack uses when it builds
-//     bob-server itself and ClockOffset is set. A release build ignores the variable.
+//     be honoured only by servers built with -tags bobtest, which devstack uses whenever it
+//     builds bob-server itself. A release build ignores the variable.
 //   - BOB_WORKER_SLOTS and the other BOB_* settings of the test process are inherited by every
 //     server process (srvtest.Options.Env sets them with t.Setenv).
 //   - BOB_STORAGE_WORKER_PROBE_CREDENTIAL (orchestrator, R-SEC-102): "<access>:<secret>" of the
@@ -68,9 +70,8 @@ type Options struct {
 	Workers       int    // default 1
 	Offline       bool   // never download pinned tools
 	Strict        bool   // fail when a server process exits during start-up
-	Server        string // bob-server binary; empty builds ./cmd/bob-server into Dir/bin
-	// ClockOffset is passed to the orchestrators as BOB_TEST_CLOCK_OFFSET; when non-zero and
-	// Server is empty, bob-server is built with -tags bobtest.
+	Server        string // bob-server binary (a -tags bobtest build); empty builds ./cmd/bob-server -tags bobtest into Dir/bin
+	// ClockOffset is passed to the orchestrators as BOB_TEST_CLOCK_OFFSET.
 	ClockOffset time.Duration
 	// RolePrefixes maps S3 access-key prefixes to role names for the counting proxy.
 	// Nil means the default (worker-, orchestrator-).
@@ -150,7 +151,7 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 
 	server := o.Server
 	if server == "" {
-		if server, err = buildServer(ctx, dir, o.ClockOffset != 0); err != nil {
+		if server, err = buildServer(ctx, dir); err != nil {
 			return fail(err)
 		}
 	}
@@ -294,17 +295,15 @@ func (s *Stack) spawn(server, mode, name, dir string, creds s3sig.Creds, env ...
 	return pr, nil
 }
 
-func buildServer(ctx context.Context, dir string, bobtest bool) (string, error) {
+// buildServer builds bob-server with -tags bobtest: the stack's bootstrap admin token and the
+// test clock exist only in that build.
+func buildServer(ctx context.Context, dir string) (string, error) {
 	root, err := serverenv.Root()
 	if err != nil {
 		return "", err
 	}
 	out := filepath.Join(dir, "bin", "bob-server")
-	args := []string{"build", "-o", out}
-	if bobtest {
-		args = append(args, "-tags", "bobtest")
-	}
-	cmd := exec.CommandContext(ctx, "go", append(args, "./cmd/bob-server")...)
+	cmd := exec.CommandContext(ctx, "go", "build", "-tags", "bobtest", "-o", out, "./cmd/bob-server")
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("devstack: build bob-server: %w\n%s: %w", err, b, serverenv.ErrHarness)

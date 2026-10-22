@@ -109,3 +109,20 @@ func TestConfigFromEnv(t *testing.T) {
 		}
 	}
 }
+
+// TestAdminTokenOnlyInTestBuilds: BOB_ADMIN_TOKEN is refused by release builds and accepted by
+// -tags bobtest builds (run the package both ways).
+func TestAdminTokenOnlyInTestBuilds(t *testing.T) {
+	env := map[string]string{"BOB_STORAGE_ENDPOINT": "http://127.0.0.1:9000", "BOB_SERVER_NAME": "o1",
+		"BOB_ADMIN_TOKEN": strings.Repeat("a", 32)}
+	c, err := ConfigFromEnv(ModeOrchestrator, func(k string) string { return env[k] })
+	if bootstrapToken {
+		if err != nil || c.AdminToken == "" {
+			t.Errorf("bobtest build: %v", err)
+		}
+		return
+	}
+	if !IsConfigError(err) || !strings.Contains(err.Error(), "bob-server admin create-user") {
+		t.Errorf("release build accepted BOB_ADMIN_TOKEN: %v", err)
+	}
+}

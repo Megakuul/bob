@@ -58,12 +58,17 @@
 - D-IB3-2 buf.gen.yaml uses local plugins (Go tools of tools/go.mod; protoc-gen-es from PATH)
   instead of remote BSR plugins: offline, pinned, no BSR account. Running it needs the
   workspace (`go tool` resolves through go.work) and protoc-gen-es 2.16.0 on PATH.
-- D-IB3-3 BOB_ADMIN_TOKEN (HARNESS §13.2 contract) is honoured in every build as a bootstrap
-  API credential, principal `sa:bootstrap`, binding admin@*, scope api; at least 32 chars; a
-  warning is logged while it is set. SPEC §6.3.2 names `bob-server admin create-user` as the
-  only way to the first admin: this env credential is a product addition the devstack/auth
-  suites rely on (they build bob-server without -tags bobtest). **Owner item** (keep, or gate
-  behind -tags bobtest and have devstack build with it).
+- D-IB3-3 (coordinator ruling 2026-10-22, supersedes the first version) BOB_ADMIN_TOKEN is
+  honoured ONLY by -tags bobtest builds (internal/server/bootstrap{,_bobtest}.go): principal
+  `sa:bootstrap`, binding admin@*, scope api, at least 32 chars, warning logged. A release build
+  with the variable set refuses to start (ConfigError, exit 78): "BOB_ADMIN_TOKEN is honoured
+  only by test builds (-tags bobtest); unset it and create the first admin with `bob-server
+  admin create-user --login <name> --admin`". tests/serverenv/stack (and so tools/devstack)
+  now always builds bob-server with -tags bobtest (before: only when ClockOffset was set); the
+  tag also enables the test clock. Test: TestAdminTokenOnlyInTestBuilds (run with and without
+  -tags bobtest). `bob-server admin create-user` stays a documented BOB-E-9008 stub: it writes
+  UserRecord, the login index and AdminIndex, whose formats are M15.2 identity work (SPEC
+  §05.4.2 rows exist, no store records yet); `bob-server admin` without it prints its usage.
 - D-IB3-4 Listen address: `server.listen` = BOB_SERVER_LISTEN (SPEC mapping), with BOB_LISTEN
   (harness contract) as alias; default :8443. Admin listener 127.0.0.1:9090 by default; when the
   default address is busy (several orchestrators on one host) it is skipped with a warning; an
@@ -120,6 +125,13 @@
   53 MB `/tmp/bob-harness-bin-*` per test process (580 of them from all agents), authenv leaves
   `/tmp/bob-auth-devstack-*`. I removed such dirs older than 60 min (2026-10-22). The harness
   should build into one cached dir or clean up (protected tests: owner/coordinator item).
+
+- Coordinator ruling (2026-10-22): the srvtest / R-API-001 test problems below are tracked in
+  plan/test-corrections.md item 12 (wave 2); tests not edited. Harness temp dir leak: the
+  non-test side (tools/devstack, tests/serverenv/stack) has none: the stack builds into its own
+  state dir (`<dir>/bin`) and devstack takes -dir; the leaks are tests/harness
+  (`/tmp/bob-harness-bin-*`) and tests/auth/authenv (`/tmp/bob-auth-devstack-*`, `bob-auth-stack-*`),
+  item 12.
 
 ## TEST PROBLEM
 - tests/server/srvtest/srvtest.go `Env.Call` posts to `<api_url>/<service>/<method>` without

@@ -31,8 +31,8 @@ type Config struct {
 	Listen      string // server.listen: BOB_SERVER_LISTEN, or BOB_LISTEN (harness contract); default :8443
 	AdminListen string // server.admin_listen: BOB_SERVER_ADMIN_LISTEN; default 127.0.0.1:9090; "off" disables
 	BaseURL     string // server.base_url: BOB_SERVER_BASE_URL; optional
-	// AdminToken (BOB_ADMIN_TOKEN) is a bootstrap API credential bound to admin@*. It exists
-	// for the all-in-one dev stack and first setup; unset in production (D-IB3-3).
+	// AdminToken (BOB_ADMIN_TOKEN) is the bootstrap API credential (admin@*) of the test
+	// stacks; only -tags bobtest builds accept it, release builds refuse to start (D-IB3-3).
 	AdminToken string
 
 	// Worker.
@@ -88,6 +88,9 @@ func ConfigFromEnv(mode string, getenv func(string) string) (Config, error) {
 			}
 		}
 		c.AdminToken = getenv("BOB_ADMIN_TOKEN")
+		if c.AdminToken != "" && !bootstrapToken {
+			return c, configErr("BOB_ADMIN_TOKEN is honoured only by test builds (-tags bobtest); unset it and create the first admin with `bob-server admin create-user --login <name> --admin`")
+		}
 		if c.AdminToken != "" && len(c.AdminToken) < minAdminToken {
 			return c, configErr("BOB_ADMIN_TOKEN must have at least %d characters", minAdminToken)
 		}
