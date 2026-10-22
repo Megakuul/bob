@@ -553,7 +553,7 @@ type RepoOpts struct {
 	// Nixpkgs is a channel name ("nixos-26.05") or "<channel>@<40-hex rev>". bob.lock pins the
 	// revision; `bob lock --update nixpkgs` moves it to the channel's current revision.
 	Nixpkgs string
-	Variants []NamedVariant // see §1.9
+	Variants []Named // see §1.9
 }
 
 // Pipeline registers a pipeline (R-FW-040). Trigger semantics on the server are SPEC §06.
@@ -873,9 +873,9 @@ type Variant struct {
 	Named    []string             // named variants that produced this variant
 }
 
-// NamedVariant is a reusable variant referred to by name from the CLI and pipelines.
+// Named is a reusable variant (type Named; constructor NamedVariant, A66) referred to by name from the CLI and pipelines.
 //   bob.NamedVariant("asan", bob.WithSanitize(bob.ASan, bob.UBSan), bob.WithProfile(bob.Debug))
-func NamedVariant(name string, mods ...VariantMod) NamedVariant
+func NamedVariant(name string, mods ...VariantMod) Named
 type VariantMod func(*Variant)
 func WithProfile(p Profile) VariantMod
 func WithSanitize(s ...Sanitizer) VariantMod
