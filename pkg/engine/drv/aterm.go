@@ -3,7 +3,10 @@ package drv
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -58,11 +61,7 @@ func (d *Derivation) aterm(inputs []InputDrv) ([]byte, error) {
 	b.WriteString(",[")
 	writeStrings(&b, d.Args...)
 	b.WriteString("],[")
-	keys := make([]string, 0, len(env))
-	for k := range env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(env))
 	for i, k := range keys {
 		if i > 0 {
 			b.WriteByte(',')
@@ -89,9 +88,7 @@ func (d *Derivation) atermEnv() (map[string]string, error) {
 		return nil, fmt.Errorf("derivation %s: structured attributes: %w", d.Name, err)
 	}
 	env := make(map[string]string, len(d.Env)+1)
-	for k, v := range d.Env {
-		env[k] = v
-	}
+	maps.Copy(env, d.Env)
 	env["__json"] = string(js)
 	return env, nil
 }
@@ -112,16 +109,7 @@ func mergeInputs(in []InputDrv) []InputDrv {
 
 // sortedSet returns the sorted distinct elements of s (a new slice).
 func sortedSet(s []string) []string {
-	out := append([]string(nil), s...)
-	sort.Strings(out)
-	n := 0
-	for i, v := range out {
-		if i == 0 || v != out[n-1] {
-			out[n] = v
-			n++
-		}
-	}
-	return out[:n]
+	return slices.Compact(slices.Sorted(slices.Values(s)))
 }
 
 func writeStrings(b *bytes.Buffer, s ...string) {
@@ -378,7 +366,7 @@ func (p *parser) derivation() (*Derivation, error) {
 	}
 	d.Name = parsedName(d)
 	if d.Name == "" {
-		return nil, fmt.Errorf("derivation has no name")
+		return nil, errors.New("derivation has no name")
 	}
 	return d, nil
 }

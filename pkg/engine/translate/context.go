@@ -15,6 +15,9 @@ type Context struct {
 	// Chains maps a failing non-bob drv to the path from a direct nixpkgs input down to it
 	// (S15 §5.7: the build pipeline computes it lazily for failing drvs).
 	Chains map[string][]string `json:"chains,omitempty"`
+	// ChainOf computes a missing Chains entry when a nixpkgs drv fails (the pipeline walks the
+	// input derivations only then); the result is recorded in Chains. Optional.
+	ChainOf func(drv string) []string `json:"-"`
 }
 
 // Pkg is what bob knows about one derivation it generated.

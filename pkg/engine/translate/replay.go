@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -163,9 +164,7 @@ func (ce CapturedError) diag() (*diag.Error, string) {
 		code = cUnknown
 	}
 	args := map[string]string{}
-	for k, v := range ce.Args {
-		args[k] = v
-	}
+	maps.Copy(args, ce.Args)
 	e := newErr(code, args)
 	if ce.Label != "" {
 		e.Label = ce.Label

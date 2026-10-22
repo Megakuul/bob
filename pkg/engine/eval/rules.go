@@ -9,9 +9,11 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -126,14 +128,6 @@ type ruleCheck struct {
 	fwPkgs map[string]bool
 }
 
-// rootDirName is how the root directory appears in rule messages.
-func showDir(dir string) string {
-	if dir == "." {
-		return "."
-	}
-	return dir
-}
-
 // check returns the rule violations (sorted by path) and the directories that need the R5
 // stub.
 func (c *ruleCheck) check() (ir.Errors, []string) {
@@ -156,11 +150,10 @@ func (c *ruleCheck) check() (ir.Errors, []string) {
 	var stubs []string
 	for _, dir := range c.scan.bobDirs {
 		f := c.own[dir]
-		d := showDir(dir)
 		// R1
 		first, _, _ := bytes.Cut(f.src, []byte("\n"))
 		if string(bytes.TrimSuffix(first, []byte("\r"))) != "//go:build bob" {
-			add(f.shown, 0, ir.Errors{ir.RuleError("R1", "dir", d)})
+			add(f.shown, 0, ir.Errors{ir.RuleError("R1", "dir", dir)})
 		}
 		if f.parse != nil {
 			for _, e := range syntaxErrors(f.parse) {
@@ -175,11 +168,11 @@ func (c *ruleCheck) check() (ir.Errors, []string) {
 			want = g.name
 		}
 		if f.pkg != want {
-			add(f.shown, 0, ir.Errors{ir.RuleError("R2", "dir", d, "have", f.pkg, "want", want)})
+			add(f.shown, 0, ir.Errors{ir.RuleError("R2", "dir", dir, "have", f.pkg, "want", want)})
 		}
 		// R4
 		if g != nil {
-			c.checkR4(f, d, g, func(line int, es ir.Errors) { add(f.shown, line, es) })
+			c.checkR4(f, dir, g, func(line int, es ir.Errors) { add(f.shown, line, es) })
 		}
 		// R5
 		for _, n := range c.scan.goDirs[dir] {
@@ -189,7 +182,7 @@ func (c *ruleCheck) check() (ir.Errors, []string) {
 			}
 		}
 		for _, imp := range f.imports {
-			c.checkImport(f, d, imp, realOf, func(es ir.Errors) { add(f.shown, imp.pos.Line, es) })
+			c.checkImport(f, dir, imp, realOf, func(es ir.Errors) { add(f.shown, imp.pos.Line, es) })
 		}
 	}
 	sort.SliceStable(vs, func(i, j int) bool {
@@ -224,12 +217,12 @@ func (c *ruleCheck) checkImport(f *bobFile, d string, imp bobImport, realOf func
 			return
 		}
 		if target.pkg == "main" {
-			add(ir.Errors{ir.RuleError("R3", "dir", d, "maindir", showDir(dir))})
+			add(ir.Errors{ir.RuleError("R3", "dir", d, "maindir", dir)})
 			return
 		}
 		// R6: the imported directory's real Go code reaches this directory.
 		if c.reaches(dir, f.dir, realOf) {
-			add(ir.Errors{ir.RuleError("R6", "dir", d, "dir2", showDir(dir))})
+			add(ir.Errors{ir.RuleError("R6", "dir", d, "dir2", dir)})
 		}
 		return
 	}
@@ -310,11 +303,7 @@ func (c *ruleCheck) checkR4(f *bobFile, d string, g *goPkg, add func(int, ir.Err
 		}
 	}
 	names := topLevel(f.file)
-	keys := make([]string, 0, len(names))
-	for n := range names {
-		keys = append(keys, n)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(names))
 	for _, n := range keys {
 		at, ok := other[n]
 		if !ok {

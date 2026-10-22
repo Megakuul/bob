@@ -1,6 +1,7 @@
 package srcs
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -126,16 +128,12 @@ func serialise(s Source) ([]byte, error) {
 	if files == nil {
 		files = []string{}
 	}
-	var b narBuf
+	var b bytes.Buffer
 	if err := nar.Write(&b, s.Tree.Root, files); err != nil {
 		return nil, fmt.Errorf("srcs: %s: %w", s.Name, err)
 	}
-	return b.b, nil
+	return b.Bytes(), nil
 }
-
-type narBuf struct{ b []byte }
-
-func (n *narBuf) Write(p []byte) (int, error) { n.b = append(n.b, p...); return len(p), nil }
 
 // parallel runs f(0..n-1) on GOMAXPROCS workers and returns the first error. Panics in f become
 // errors (AGENTS.md §5.3).
@@ -144,7 +142,7 @@ func parallel(ctx context.Context, n int, f func(i int) error) error {
 	next := make(chan int)
 	errs := make(chan error, workers)
 	var wg sync.WaitGroup
-	for w := 0; w < workers; w++ {
+	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -163,7 +161,7 @@ func parallel(ctx context.Context, n int, f func(i int) error) error {
 	}
 	var err error
 feed:
-	for i := 0; i < n; i++ {
+	for i := range n {
 		select {
 		case next <- i:
 		case err = <-errs:
@@ -263,7 +261,7 @@ func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]
 			if err != nil {
 				return err
 			}
-			rules = append(rules[:len(rules):len(rules)], r...)
+			rules = append(slices.Clip(rules), r...)
 		}
 		ents, err := os.ReadDir(abs)
 		if err != nil {

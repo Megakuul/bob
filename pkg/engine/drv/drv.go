@@ -3,7 +3,9 @@ package drv
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -81,9 +83,7 @@ func (d *Derivation) clone() *Derivation {
 	c := *d
 	c.Outputs = append([]Output(nil), d.Outputs...)
 	c.Env = make(map[string]string, len(d.Env))
-	for k, v := range d.Env {
-		c.Env[k] = v
-	}
+	maps.Copy(c.Env, d.Env)
 	return &c
 }
 
@@ -312,7 +312,7 @@ func specOutputs(v any) ([]string, error) {
 	}
 	list, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("spec outputs is not a list")
+		return nil, errors.New("spec outputs is not a list")
 	}
 	if len(list) == 0 {
 		return []string{"out"}, nil

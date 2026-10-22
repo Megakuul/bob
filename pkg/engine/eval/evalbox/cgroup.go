@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ func ownCgroup() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, l := range strings.Split(string(b), "\n") {
+	for l := range strings.SplitSeq(string(b), "\n") {
 		if p, ok := strings.CutPrefix(l, "0::"); ok {
 			return filepath.Join("/sys/fs/cgroup", p), nil
 		}
@@ -47,11 +48,7 @@ func ownCgroup() (string, error) {
 func hasControllers(dir string, want ...string) bool {
 	have := strings.Fields(readTrim(filepath.Join(dir, "cgroup.subtree_control")))
 	for _, w := range want {
-		found := false
-		for _, h := range have {
-			found = found || h == w
-		}
-		if !found {
+		if !slices.Contains(have, w) {
 			return false
 		}
 	}
@@ -184,5 +181,5 @@ func readTrim(p string) string {
 	return strings.TrimSpace(string(b))
 }
 
-// cgroupFD is the descriptor clone3(CLONE_INTO_CGROUP) needs.
+// fd is the cgroup descriptor clone3(CLONE_INTO_CGROUP) needs.
 func (c *cgroup) fd() int { return int(c.f.Fd()) }

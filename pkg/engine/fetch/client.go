@@ -109,7 +109,7 @@ func (c *client) download(ctx context.Context, p *prepared, file, algo string) (
 	var last *attemptError
 	var final error
 	for _, u := range p.URLs {
-		for i := 0; i < attempts; i++ {
+		for i := range attempts {
 			if i > 0 {
 				t := time.NewTimer(backoff(i - 1))
 				select {

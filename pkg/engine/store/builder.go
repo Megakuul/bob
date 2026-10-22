@@ -2,6 +2,7 @@ package store
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -94,7 +95,7 @@ func embeddedBuilder(want string) (ExportItem, error) {
 
 // builderNAR is the NAR of the tree bin/bob-builder (an executable).
 func builderNAR(bin []byte) []byte {
-	var out narBuf
+	var out bytes.Buffer
 	e := &enc{w: &out}
 	for _, t := range []string{"nix-archive-1", "(", "type", "directory", "entry", "(", "name", "bin", "node",
 		"(", "type", "directory", "entry", "(", "name", "bob-builder", "node",
@@ -105,5 +106,5 @@ func builderNAR(bin []byte) []byte {
 	for range 5 {
 		e.str(")")
 	}
-	return out.b
+	return out.Bytes()
 }

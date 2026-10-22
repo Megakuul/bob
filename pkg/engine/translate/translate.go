@@ -2,7 +2,9 @@ package translate
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,7 +105,7 @@ func New(ctx *Context) *Translator {
 		logs: map[string]*buildLog{}, hookLogs: map[string][]string{}, from: map[string]string{},
 		pkgs: map[string]*PkgState{}, failed: map[string]bool{}, skipped: map[string]bool{},
 		upstream: map[string]bool{}, hints: map[*diag.Error]string{}}
-	for _, d := range sortedKeys(ctx.Packages) {
+	for _, d := range slices.Sorted(maps.Keys(ctx.Packages)) {
 		p := ctx.Packages[d]
 		if p.Role != "" {
 			continue
@@ -115,15 +117,6 @@ func New(ctx *Context) *Translator {
 	}
 	sort.Strings(t.order)
 	return t
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	ks := make([]string, 0, len(m))
-	for k := range m {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-	return ks
 }
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07`)
@@ -172,10 +165,8 @@ func (t *Translator) driftOnce(s string) {
 	if len(s) > 200 {
 		s = s[:200]
 	}
-	for _, d := range t.drift {
-		if d == s {
-			return
-		}
+	if slices.Contains(t.drift, s) {
+		return
 	}
 	if len(t.drift) < maxDriftItems {
 		t.drift = append(t.drift, s)
@@ -367,7 +358,7 @@ func (t *Translator) nixError(text string) {
 		d := t.ctx.Outputs[m[1]]
 		t.failed[d] = true
 		var refs []string
-		for _, r := range strings.Fields(m[2]) {
+		for r := range strings.FieldsSeq(m[2]) {
 			refs = append(refs, t.describePath(r))
 		}
 		e := t.pkgErr(cForbiddenRef, d, map[string]string{"ref": strings.Join(refs, ", ")})
@@ -569,6 +560,14 @@ func (t *Translator) cannotBuild(drv, reason, raw string) {
 
 func (t *Translator) upstreamFailed(drv, reason, raw string) {
 	chain := t.ctx.Chains[drv]
+	if chain == nil && t.ctx.ChainOf != nil {
+		if chain = t.ctx.ChainOf(drv); len(chain) > 0 {
+			if t.ctx.Chains == nil {
+				t.ctx.Chains = map[string][]string{}
+			}
+			t.ctx.Chains[drv] = chain
+		}
+	}
 	attr, users := drvName(drv), []string(nil)
 	if len(chain) > 0 {
 		if a, ok := t.ctx.Nixpkgs[chain[0]]; ok {
@@ -747,7 +746,7 @@ func (t *Translator) mapPaths(s string) string {
 	if !strings.Contains(s, "/nix/store/") {
 		return s
 	}
-	srcs := sortedKeys(t.ctx.Sources)
+	srcs := slices.Sorted(maps.Keys(t.ctx.Sources))
 	sort.SliceStable(srcs, func(i, j int) bool { return len(srcs[i]) > len(srcs[j]) })
 	for _, sp := range srcs {
 		s = strings.ReplaceAll(s, sp, t.ctx.Sources[sp])
@@ -868,13 +867,17 @@ func (t *Translator) structuralSuccess(o Outcome, valid map[string]bool) bool {
 		return false
 	}
 	for _, l := range t.order {
-		st := t.pkgs[l]
-		touched := st.Status == StBuilding || st.Status == StCached || slicesContains(t.ctx.Requested, l)
-		if touched && !valid[st.drv] {
+		if st := t.pkgs[l]; t.touched(l, st) && !valid[st.drv] {
 			return false
 		}
 	}
 	return true
+}
+
+// touched reports whether Nix built or downloaded package l in this run, or the user requested
+// it: such a package must end with a valid output.
+func (t *Translator) touched(l string, st *PkgState) bool {
+	return st.Status == StBuilding || st.Status == StCached || slices.Contains(t.ctx.Requested, l)
 }
 
 // invalidOutputs reports packages whose output is not valid although Nix exited 0 and said
@@ -882,8 +885,7 @@ func (t *Translator) structuralSuccess(o Outcome, valid map[string]bool) bool {
 func (t *Translator) invalidOutputs(valid map[string]bool) {
 	for _, l := range t.order {
 		st := t.pkgs[l]
-		touched := st.Status == StBuilding || st.Status == StCached || slicesContains(t.ctx.Requested, l)
-		if !touched || valid[st.drv] {
+		if !t.touched(l, st) || valid[st.drv] {
 			continue
 		}
 		t.failed[st.drv] = true
@@ -911,7 +913,7 @@ func (t *Translator) packageResults(r *Report, valid map[string]bool, anyValid b
 		case st.Status == StBuilding:
 			// Started but its output is not valid (R-NIX-018): never a success.
 			st.Status = StFailed
-		case !valid[d] && anyValid && slicesContains(t.ctx.Requested, l):
+		case !valid[d] && anyValid && slices.Contains(t.ctx.Requested, l):
 			st.Status = StSkipped
 		}
 		if st.Status == StPending {
@@ -941,15 +943,6 @@ func (t *Translator) packageResults(r *Report, valid map[string]bool, anyValid b
 	})
 }
 
-func slicesContains(xs []string, s string) bool {
-	for _, x := range xs {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
 func allUnknown(errs []*diag.Error) bool {
 	for _, e := range errs {
 		if e.Code != cUnknown {
@@ -960,8 +953,8 @@ func allUnknown(errs []*diag.Error) bool {
 }
 
 func (t *Translator) failedHelper(label string) bool {
-	for _, d := range sortedKeys(t.ctx.Packages) {
-		if p := t.ctx.Packages[d]; p.Label == label && p.Role != "" && t.failed[d] {
+	for d, p := range t.ctx.Packages {
+		if p.Label == label && p.Role != "" && t.failed[d] {
 			return true
 		}
 	}
@@ -971,7 +964,7 @@ func (t *Translator) failedHelper(label string) bool {
 func (t *Translator) fatalErr(f string, o Outcome, valid map[string]bool) {
 	// candidates: bob builds that stopped, have no output and no error of their own
 	var cands []string
-	for _, d := range sortedKeys(t.builds) {
+	for _, d := range slices.Sorted(maps.Keys(t.builds)) {
 		a := t.builds[d]
 		if a.stopped && !valid[d] && !t.failed[d] && !t.skipped[d] {
 			cands = append(cands, d)

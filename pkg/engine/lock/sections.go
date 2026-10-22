@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob"
@@ -341,7 +342,7 @@ func (s *RustSection) validate() error {
 			if !ok || !crateRe.MatchString(n) || !semverRe.MatchString(v) {
 				return fmt.Errorf("crate %s: dependency %q is not name@version", c.Name, clip(d.Crate))
 			}
-			if !contains([]string{"", "build", "dev"}, d.Kind) {
+			if !slices.Contains([]string{"", "build", "dev"}, d.Kind) {
 				return fmt.Errorf("crate %s: dependency kind %q is invalid", c.Name, clip(d.Kind))
 			}
 			if d.Target != "" {
@@ -366,7 +367,7 @@ func (s *RustSection) validate() error {
 			}
 		}
 		m := c.Meta
-		if !contains(editions, m.Edition) {
+		if !slices.Contains(editions, m.Edition) {
 			return fmt.Errorf("crate %s: edition %q is invalid", c.Name, clip(m.Edition))
 		}
 		if m.LibName != "" && !crateRe.MatchString(m.LibName) {
@@ -543,7 +544,7 @@ func (s *CCSection) validate() error {
 
 func (f *NixpkgsFacts) validate() error {
 	for sys, attrs := range *f {
-		if !contains([]string{"aarch64-linux", "x86_64-linux"}, sys) {
+		if !slices.Contains([]string{"aarch64-linux", "x86_64-linux"}, sys) {
 			return fmt.Errorf("nixpkgsFacts: unknown system %q", clip(sys))
 		}
 		for a, fact := range attrs {

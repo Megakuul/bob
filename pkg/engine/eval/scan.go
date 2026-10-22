@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -93,7 +94,7 @@ type indexEntry struct {
 	SHA256 string `json:"sha256"`
 }
 
-// readContents fills s.content and returns the per-file hashes. Files whose size and mtime
+// hashes fills s.content and returns the per-file hashes. Files whose size and mtime
 // match the previous index are not read unless need is true; their content stays nil.
 func (s *repoScan) hashes(root string, prev map[string]indexEntry, need bool) (map[string]indexEntry, error) {
 	next := make(map[string]indexEntry, len(s.content))
@@ -138,11 +139,7 @@ func (s *repoScan) load(root string) error {
 // go.sum, bob's version (with the framework's own hash: a source build keeps its version),
 // the Go version and GOARCH.
 func evalKey(files map[string]indexEntry, bobVersion, frameworkH1, goVersion, goarch string) string {
-	names := make([]string, 0, len(files))
-	for n := range files {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(files))
 	h := sha256.New()
 	for _, x := range []string{keyVersion, bobVersion, frameworkH1, goVersion, goarch} {
 		h.Write([]byte(x + "\x00"))

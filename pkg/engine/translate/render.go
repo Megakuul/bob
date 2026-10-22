@@ -137,7 +137,7 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 	}
 	if s.Verbose {
 		for _, r := range e.Raw {
-			for _, l := range strings.Split(r, "\n") {
+			for l := range strings.SplitSeq(r, "\n") {
 				if l = strings.TrimRight(l, " "); l != "" {
 					fmt.Fprintf(w, "  %s %s\n", s.c(cDim, "nix:"), l)
 				}

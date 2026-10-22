@@ -254,7 +254,7 @@ func (u *unpacker) rel(name string) (string, bool, string) {
 		return "", false, "NUL byte in name"
 	}
 	var parts []string
-	for _, p := range strings.Split(name, "/") {
+	for p := range strings.SplitSeq(name, "/") {
 		switch p {
 		case "", ".":
 		case "..":

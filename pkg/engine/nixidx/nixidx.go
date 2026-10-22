@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -286,9 +287,7 @@ func (i *Index) resolve(ctx context.Context, attrs []string, names bool) (map[st
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		for a, e := range g {
-			out[a] = e
-		}
+		maps.Copy(out, g)
 		bad = append(bad, b...)
 	}
 	return out, nm, bad, nil
@@ -396,7 +395,7 @@ func (i *Index) internal(raw string) error {
 
 func rawLines(s string) []string {
 	var out []string
-	for _, l := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
+	for l := range strings.SplitSeq(strings.TrimRight(s, "\n"), "\n") {
 		if strings.TrimSpace(l) != "" {
 			out = append(out, l)
 		}
@@ -557,7 +556,7 @@ func substituters(home string) []substituter {
 		if !ok || strings.TrimSpace(k) != "substituters" {
 			continue
 		}
-		for _, f := range strings.Fields(v) {
+		for f := range strings.FieldsSeq(v) {
 			u, err := url.Parse(f)
 			if err != nil || (u.Scheme != "https" && u.Scheme != "http" && u.Scheme != "file") {
 				continue

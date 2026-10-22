@@ -1,6 +1,7 @@
 package translate
 
 import (
+	"encoding/json"
 	"path"
 	"regexp"
 	"strconv"
@@ -26,6 +27,8 @@ var (
 	reNetwork    = regexp.MustCompile(`Network is unreachable|Could not resolve host|Temporary failure in name resolution|Name or service not known`)
 	reDLFailed   = regexp.MustCompile(`error: unable to download '([^']+)': (.*)$`)
 	reBobBuilder = regexp.MustCompile(`^bob-builder: `)
+	reBobDiag    = regexp.MustCompile(`^bob:: (\{.*\})\s*$`)
+	reDiagTimout = regexp.MustCompile(`^(\S+) timed out after (\d+)s$`)
 )
 
 // classifyLog explains a builder that exited non-zero, from its own log.
@@ -63,6 +66,9 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 		}
 	}
 	if e := t.testFailure(drv, lines); e != nil {
+		return e
+	}
+	if e := t.builderDiag(drv, p, lines); e != nil {
 		return e
 	}
 	for _, l := range lines {
@@ -294,6 +300,52 @@ func diagnostics(lines []string, i int) []string {
 		}
 		out = append(out, block(lines, j, 4)...)
 		n++
+	}
+	return out
+}
+
+// builderDiag explains a failure bob-builder diagnosed itself: the last error diagnostic it
+// wrote (`bob:: {"type":"diag","severity":"error",…}`, R-NIX-017), e.g. a bob.Run output that
+// was not created, a step timeout or a test service that did not become ready. The message is
+// bob's own text; its first line is the cause, further lines (or the log before it) the excerpt.
+func (t *Translator) builderDiag(drv string, p Pkg, lines []string) *diag.Error {
+	msg, at := "", -1
+	for i, l := range lines {
+		m := reBobDiag.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		var d struct{ Type, Severity, Msg string }
+		if json.Unmarshal([]byte(m[1]), &d) == nil && d.Type == "diag" && d.Severity == "error" && d.Msg != "" {
+			msg, at = d.Msg, i
+		}
+	}
+	if at < 0 {
+		return nil
+	}
+	first, rest, _ := strings.Cut(msg, "\n")
+	if m := reDiagTimout.FindStringSubmatch(first); m != nil && m[1] == p.Label {
+		e := t.pkgErr(cTimeout, drv, map[string]string{"seconds": m[2]})
+		e.Excerpt = lastN(plainLog(lines[:at]), 5)
+		return e
+	}
+	e := t.pkgErr(cBuildFailed, drv, nil)
+	e.Cause = first
+	if rest != "" {
+		e.Excerpt = lastN(strings.Split(strings.TrimRight(rest, "\n"), "\n"), 12)
+	} else {
+		e.Excerpt = lastN(plainLog(lines[:at]), 10)
+	}
+	return e
+}
+
+// plainLog drops bob-builder's own lines (diagnostics, the failure line) from a log.
+func plainLog(lines []string) []string {
+	var out []string
+	for _, l := range lines {
+		if !reBobBuilder.MatchString(l) && !strings.HasPrefix(l, "bob:: ") {
+			out = append(out, l)
+		}
 	}
 	return out
 }

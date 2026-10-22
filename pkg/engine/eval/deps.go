@@ -33,7 +33,7 @@ type goMod struct {
 func parseGoMod(b []byte) goMod {
 	m := goMod{require: map[string]string{}, replace: map[string]string{}}
 	block := ""
-	for _, raw := range strings.Split(string(b), "\n") {
+	for raw := range strings.SplitSeq(string(b), "\n") {
 		line := raw
 		if i := strings.Index(line, "//"); i >= 0 {
 			line = line[:i]

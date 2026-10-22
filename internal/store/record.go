@@ -279,7 +279,7 @@ func getCached[T any](ctx context.Context, b *Bucket, c *Cache[T], key string) (
 		v := have.v
 		return &v, false, nil
 	case notModified:
-		return nil, false, fmt.Errorf("unexpected 304 without a cached value")
+		return nil, false, errors.New("unexpected 304 without a cached value")
 	}
 	v, err := decodeAt[T](o, key)
 	if err != nil {

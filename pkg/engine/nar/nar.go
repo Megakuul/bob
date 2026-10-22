@@ -32,7 +32,7 @@ func newFilter(files []string) (*filter, error) {
 			return nil, fmt.Errorf("nar: file %q is not a relative path inside the root", f)
 		}
 		n := root
-		for _, part := range strings.Split(clean, "/") {
+		for part := range strings.SplitSeq(clean, "/") {
 			c := n.children[part]
 			if c == nil {
 				c = &filter{children: map[string]*filter{}}

@@ -147,3 +147,11 @@ func Name(parts ...string) string {
 	}
 	return s
 }
+
+// Placeholder is Nix's hash placeholder of output name ("/" + nixbase32(sha256("nix-output:"
+// + name))). Inside a structured-attributes derivation Nix replaces it with the output's path,
+// so jobs name their outputs with it (D-M4a-3).
+func Placeholder(output string) string {
+	h := sha256.Sum256([]byte("nix-output:" + output))
+	return "/" + base32(h[:])
+}

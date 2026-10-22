@@ -299,7 +299,7 @@ func (s *Store) Invalid(ctx context.Context, paths []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, l := range strings.Split(string(so), "\n") {
+		for l := range strings.SplitSeq(string(so), "\n") {
 			if l = strings.TrimSpace(l); l != "" {
 				out = append(out, l)
 			}

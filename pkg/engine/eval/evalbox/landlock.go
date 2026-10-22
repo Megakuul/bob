@@ -1,6 +1,7 @@
 package evalbox
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -80,7 +81,7 @@ type landlockRule struct {
 func applyLandlock(rules []landlockRule) error {
 	abi := LandlockABI()
 	if abi < 1 {
-		return fmt.Errorf("landlock is not available")
+		return errors.New("landlock is not available")
 	}
 	handled := uint64(llExecute | llRead | llWrite)
 	if abi >= 2 {

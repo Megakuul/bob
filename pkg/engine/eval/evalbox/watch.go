@@ -36,7 +36,7 @@ func sandboxUsage(pid int) usage {
 		tids, _ := os.ReadDir(base + "/task")
 		for _, t := range tids {
 			b, _ := os.ReadFile(base + "/task/" + t.Name() + "/children")
-			for _, c := range strings.Fields(string(b)) {
+			for c := range strings.FieldsSeq(string(b)) {
 				if n, err := strconv.Atoi(c); err == nil {
 					queue = append(queue, n)
 				}
@@ -59,7 +59,7 @@ func statusUsage(path string) (uint64, int) {
 	}
 	var mem uint64
 	threads := 0
-	for _, l := range strings.Split(string(b), "\n") {
+	for l := range strings.SplitSeq(string(b), "\n") {
 		k, v, ok := strings.Cut(l, ":")
 		if !ok {
 			continue

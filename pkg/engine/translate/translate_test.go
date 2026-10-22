@@ -414,3 +414,53 @@ func FuzzFeed(f *testing.F) {
 		}
 	})
 }
+
+// A failure bob-builder diagnosed itself (a bob.Run output that was not created, a step
+// timeout) shows its own text: the diag message is the cause, a timeout is BOB-E-2007.
+func TestBuilderDiagnostics(t *testing.T) {
+	logRun := func(lines ...string) *Report {
+		in := []string{nixLine(t, map[string]any{"action": "start", "id": 1, "type": 105, "fields": []any{fooDrv, "", 1, 1}})}
+		for _, l := range lines {
+			in = append(in, nixLine(t, map[string]any{"action": "result", "id": 1, "type": 101, "fields": []any{l}}))
+		}
+		in = append(in, nixLine(t, msg{Action: "msg", Msg: "Cannot build '" + fooDrv + "'.\n Reason: builder failed with exit code 4."}))
+		return run(t, fooCtx(), Outcome{ExitCode: 1}, in...)
+	}
+	r := logRun("hi", `bob:: {"type":"diag","severity":"error","file":"","line":0,"col":0,"msg":"//a:foo: step finished but did not create promised.txt"}`,
+		"bob-builder: step 4 check-files /nix/store/x failed")
+	if len(r.Errors) != 1 || r.Errors[0].Code != 2000 || r.Errors[0].Cause != "//a:foo: step finished but did not create promised.txt" || r.ExitCode != 1 {
+		t.Fatalf("missing output: exit %d %+v", r.ExitCode, r.Errors)
+	}
+	if out := human(r, Style{}); !strings.Contains(out, "cause: //a:foo: step finished but did not create promised.txt") {
+		t.Errorf("human output lacks the cause:\n%s", out)
+	}
+	r = logRun("working", `bob:: {"type":"diag","severity":"error","file":"","line":0,"col":0,"msg":"//a:foo timed out after 5s"}`)
+	if len(r.Errors) != 1 || r.Errors[0].Code != 2007 || r.Errors[0].Args["seconds"] != "5" {
+		t.Fatalf("timeout: %+v", r.Errors)
+	}
+}
+
+// A failing nixpkgs derivation that is not a direct input gets its chain from ChainOf.
+func TestChainOf(t *testing.T) {
+	direct := "/nix/store/0123456789abcdfghijklmnpqrsvwxyz1-openssl-3.drv"
+	deep := "/nix/store/0123456789abcdfghijklmnpqrsvwxyz2-perl-5.drv"
+	ctx := fooCtx()
+	ctx.Nixpkgs = map[string]string{direct: "openssl"}
+	ctx.Users = map[string][]string{direct: {"//a:foo"}}
+	asked := 0
+	ctx.ChainOf = func(d string) []string {
+		asked++
+		if d == deep {
+			return []string{direct, deep}
+		}
+		return nil
+	}
+	r := run(t, ctx, Outcome{ExitCode: 1}, nixLine(t, msg{Action: "msg", Msg: "Cannot build '" + deep + "'.\n Reason: builder failed with exit code 2."}))
+	if asked == 0 || len(r.Errors) == 0 {
+		t.Fatalf("ChainOf asked %d times, errors %+v", asked, r.Errors)
+	}
+	e := r.Errors[0]
+	if e.Code != 5001 || e.Args["attr"] != "openssl" || e.Label != "//a:foo" || len(e.Excerpt) == 0 || !strings.Contains(e.Excerpt[0], "openssl-3 → ") || !strings.Contains(e.Excerpt[0], "perl-5") {
+		t.Errorf("error %+v excerpt %v", e, e.Excerpt)
+	}
+}

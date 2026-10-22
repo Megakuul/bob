@@ -370,10 +370,7 @@ func (r *run) wait(ctx context.Context) (*Outcome, error) {
 	if ctx.Err() != nil && !r.timedOut.Load() {
 		return nil, ctx.Err()
 	}
-	if err := r.classify(exitCode(waitErr), st, out.Stderr); err != nil {
-		return out, err
-	}
-	return out, nil
+	return out, r.classify(exitCode(waitErr), st, out.Stderr)
 }
 
 // watch enforces the wall clock and, without a cgroup, the memory limit; it also records the

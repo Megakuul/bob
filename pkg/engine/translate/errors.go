@@ -1,6 +1,7 @@
 package translate
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -59,7 +60,7 @@ func newErr(code diag.Code, args map[string]string) *diag.Error {
 		code = cUnknown
 	}
 	kv := make([]string, 0, 2*len(args))
-	for _, k := range sortedKeys(args) {
+	for _, k := range slices.Sorted(maps.Keys(args)) {
 		kv = append(kv, k, args[k])
 	}
 	for _, v := range ent.Variants {

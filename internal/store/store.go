@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -383,9 +384,7 @@ func (s *ShardSet[E]) All(ctx context.Context) (map[string]E, error) {
 			if err != nil {
 				return nil, wrap(k, err)
 			}
-			for id, e := range sh.M {
-				out[id] = e
-			}
+			maps.Copy(out, sh.M)
 		}
 		return out, nil
 	})

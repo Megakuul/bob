@@ -250,25 +250,17 @@ func (g *Graph) validate() error {
 		}
 		byID[n.ID] = n
 	}
-	resolve := func(ref string) (*Node, bool) {
-		n, ok := byID[ref]
-		return n, ok
-	}
 	for _, n := range g.Nodes {
-		for i, d := range n.Deps {
-			dn, ok := resolve(d)
-			if !ok {
+		for _, d := range n.Deps {
+			if _, ok := byID[d]; !ok {
 				return diag.New(1007, "label", name(n), "dep", d)
 			}
-			n.Deps[i] = dn.ID
 		}
 	}
-	for i, r := range g.Roots {
-		rn, ok := resolve(r)
-		if !ok {
+	for _, r := range g.Roots {
+		if _, ok := byID[r]; !ok {
 			return invalid("root %s is not a node", r)
 		}
-		g.Roots[i] = rn.ID
 	}
 	return g.acyclic(byID)
 }

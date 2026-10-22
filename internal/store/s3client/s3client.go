@@ -32,7 +32,7 @@ type Options struct {
 // New returns a client for o.
 func New(ctx context.Context, o Options) (*s3.Client, error) {
 	if o.Endpoint == "" {
-		return nil, fmt.Errorf("s3client: no endpoint configured (storage.endpoint)")
+		return nil, errors.New("s3client: no endpoint configured (storage.endpoint)")
 	}
 	opts := []func(*config.LoadOptions) error{
 		config.WithHTTPClient(&http.Client{Transport: &http.Transport{

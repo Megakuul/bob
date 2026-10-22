@@ -53,6 +53,9 @@ type Result struct {
 	IR     []byte // the IR JSON the evaluator wrote to fd 3, canonical (SPEC §1.6)
 	Cached bool   // the eval key matched .bob/eval/key, so go build did not run
 	Stderr []byte // evaluator diagnostics, capped at 1 MiB
+	// Scan is the time of the repository scan and eval key (R-FW-002 walk, hashes): the
+	// "scan" stage of R-FW-049; the rest of Evaluate is the "eval" stage.
+	Scan time.Duration
 }
 
 // Sandbox paths of the evaluation (S13 §5.2).
@@ -96,6 +99,7 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 		return nil, err
 	}
 	gen := filepath.Join(root, genDir)
+	scanStart := time.Now()
 	scan, err := scanRepo(root)
 	if err != nil {
 		return nil, err
@@ -106,6 +110,7 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 		return nil, err
 	}
 	key := evalKey(index, fw.version, fw.h1, tc.version, runtime.GOARCH)
+	scanTime := time.Since(scanStart)
 	// Concurrent evaluations of one repository (a build and an editor's shim): one generates and
 	// compiles at a time (the GOCACHE upper layer can be mounted only once); runs share.
 	if err := os.MkdirAll(gen, 0o755); err != nil {
@@ -144,7 +149,7 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 		// R-FW-044: only a broken R-FW-043.4 can get here.
 		return nil, ir.Errors{ir.EvaluatorBug("the evaluator is bob %s, this is bob %s", v, fw.version)}
 	}
-	return &Result{IR: out.Graph, Cached: cached, Stderr: out.Stderr}, nil
+	return &Result{IR: out.Graph, Cached: cached, Stderr: out.Stderr, Scan: scanTime}, nil
 }
 
 // compile checks the rules, generates the evaluator's sources and compiles them in the sandbox

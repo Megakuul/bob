@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -178,7 +179,7 @@ func topoOrder(items map[string]ExportItem) ([]ExportItem, error) {
 		}
 	}
 	if len(out) != len(items) {
-		return nil, fmt.Errorf("store: derivations reference each other in a cycle")
+		return nil, errors.New("store: derivations reference each other in a cycle")
 	}
 	return out, nil
 }

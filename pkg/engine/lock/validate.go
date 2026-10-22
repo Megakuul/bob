@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -43,7 +44,7 @@ var sriSizes = map[string]int{"sha1": 20, "sha256": 32, "sha512": 64}
 func checkSRI(what, s string, algos ...string) error {
 	algo, b64, ok := strings.Cut(s, "-")
 	size, known := sriSizes[algo]
-	if !ok || !known || !contains(algos, algo) {
+	if !ok || !known || !slices.Contains(algos, algo) {
 		return fmt.Errorf("%s %q is not an SRI hash (%s-<base64>)", what, clip(s), strings.Join(algos, "|"))
 	}
 	d, err := base64.StdEncoding.Strict().DecodeString(b64)
@@ -116,15 +117,6 @@ func checkText(what, s string) error {
 		return fmt.Errorf("%s %q is invalid", what, clip(s))
 	}
 	return nil
-}
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // clip shortens hostile strings for error messages.

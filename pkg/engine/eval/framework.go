@@ -10,13 +10,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/debug"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -87,11 +88,7 @@ func newFramework(version string, files map[string][]byte) (*framework, error) {
 	}
 	fw := &framework{version: version, goDir: goVersion(gomod), files: files}
 	prefix := frameworkModule + "@" + version + "/"
-	names := make([]string, 0, len(files))
-	for n := range files {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(files))
 	var sum strings.Builder
 	for _, n := range names {
 		fmt.Fprintf(&sum, "%x  %s\n", sha256.Sum256(files[n]), prefix+n)
@@ -139,7 +136,9 @@ func frameworkFiles(src fs.FS) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	files := map[string][]byte{"go.mod": []byte("module " + frameworkModule + "\n\ngo " + goVersion(gomod) + "\n")}
+	// Only the language version ("1.26"): the framework needs the language, not a patch
+	// release, so the pinned nixpkgs go (whose patch level may lag bob's own) can compile it.
+	files := map[string][]byte{"go.mod": []byte("module " + frameworkModule + "\n\ngo " + langVersion(goVersion(gomod)) + "\n")}
 	for _, top := range frameworkDirs {
 		err := fs.WalkDir(src, top, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -174,11 +173,7 @@ func frameworkFiles(src fs.FS) (map[string][]byte, error) {
 
 // zipFramework writes files as a deterministic zip (sorted, fixed time).
 func zipFramework(files map[string][]byte) ([]byte, error) {
-	names := make([]string, 0, len(files))
-	for n := range files {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(files))
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for _, n := range names {
@@ -290,10 +285,15 @@ func (fw *framework) packages() []string {
 			seen[frameworkModule+"/"+path.Dir(n)] = true
 		}
 	}
-	out := make([]string, 0, len(seen))
-	for p := range seen {
-		out = append(out, p)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(seen))
 	return out
+}
+
+// langVersion is the language version of a go directive: "1.26.9" → "1.26".
+func langVersion(v string) string {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 {
+		return v
+	}
+	return parts[0] + "." + parts[1]
 }

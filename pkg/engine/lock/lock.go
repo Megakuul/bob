@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -112,7 +113,7 @@ func Parse(data []byte) (*File, error) {
 				return nil, bad(err)
 			}
 		default:
-			if !contains(sectionKeys, m.key) {
+			if !slices.Contains(sectionKeys, m.key) {
 				return nil, unreadable(fmt.Sprintf("unknown member %q", clip(m.key)), m.line)
 			}
 			if _, err := DecodeSection(m.key, m.raw); err != nil {

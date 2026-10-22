@@ -377,10 +377,7 @@ func stage2(cfg *stageConfig) (int, error) {
 		if err := cmd.Run(); err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-					return 128 + int(ws.Signal()), nil
-				}
-				return ee.ExitCode(), nil
+				return exitCode(err), nil
 			}
 			return 1, err // e.g. the step's program is missing: an evaluation failure
 		}

@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"unicode/utf8"
 )
@@ -68,11 +69,7 @@ func writeJSON(b *bytes.Buffer, v any) error {
 		}
 		b.WriteByte(']')
 	case map[string]any:
-		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(x))
 		b.WriteByte('{')
 		for i, k := range keys {
 			if i > 0 {

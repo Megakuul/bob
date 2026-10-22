@@ -2,6 +2,7 @@ package store
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -102,19 +103,15 @@ func (e *enc) str(s string) { e.bytes([]byte(s)) }
 
 // flatNAR is the NAR of a single non-executable regular file with contents b.
 func flatNAR(b []byte) []byte {
-	var out narBuf
+	var out bytes.Buffer
 	e := &enc{w: &out}
 	for _, s := range []string{"nix-archive-1", "(", "type", "regular", "contents"} {
 		e.str(s)
 	}
 	e.bytes(b)
 	e.str(")")
-	return out.b
+	return out.Bytes()
 }
-
-type narBuf struct{ b []byte }
-
-func (n *narBuf) Write(p []byte) (int, error) { n.b = append(n.b, p...); return len(p), nil }
 
 // DrvExport is the export item of a finalised derivation: the .drv file with the input
 // derivations and sources as references.

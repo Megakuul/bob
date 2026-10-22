@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -147,10 +148,8 @@ func excludeFromGit(root, rel string) error {
 	if begin < 0 || end < 0 {
 		lines = append(lines, excludeBegin, entry, excludeEnd)
 	} else {
-		for _, l := range lines[begin+1 : end] {
-			if l == entry {
-				return nil
-			}
+		if slices.Contains(lines[begin+1:end], entry) {
+			return nil
 		}
 		lines = append(lines[:end], append([]string{entry}, lines[end:]...)...)
 	}
