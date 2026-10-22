@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,18 +58,30 @@ func TestRCLI008LocalLog(t *testing.T) {
 	if !strings.Contains(l.Stdout, "foo.cpp") || !strings.Contains(l.Stdout, "error") {
 		t.Errorf("the log lacks the gcc diagnostic:\n%s", l.Stdout)
 	}
+	// "its last 10 lines match the excerpt": the excerpt (at most its last 10 lines) equals the
+	// last lines of the log, line for line and in order. Store paths are rewritten (`…/`) in the
+	// excerpt and raw in the log, so such a line matches with the rewritten part as a wildcard.
 	ll := lines(l.Stdout)
-	tail := ll[max(0, len(ll)-12):]
-	for _, e := range excerpt {
-		if strings.Contains(e, "…/") {
-			continue // store paths are rewritten in the excerpt, raw in the log
+	for len(ll) > 0 && strings.TrimSpace(ll[len(ll)-1]) == "" {
+		ll = ll[:len(ll)-1]
+	}
+	if len(excerpt) > 10 {
+		excerpt = excerpt[len(excerpt)-10:]
+	}
+	if len(ll) < len(excerpt) {
+		t.Fatalf("the log has %d lines, fewer than the %d excerpt lines:\n%s", len(ll), len(excerpt), l.Stdout)
+	}
+	tail := ll[len(ll)-len(excerpt):]
+	for i, e := range excerpt {
+		x := strings.TrimRight(tail[i], " ")
+		e = strings.TrimRight(e, " ")
+		parts := strings.Split(e, "…/")
+		for j := range parts {
+			parts[j] = regexp.QuoteMeta(parts[j])
 		}
-		found := false
-		for _, x := range tail {
-			found = found || strings.TrimRight(x, " ") == strings.TrimRight(e, " ") || strings.HasSuffix(x, e)
-		}
-		if !found {
-			t.Errorf("excerpt line %q is not among the last lines of the log:\n%s", e, strings.Join(tail, "\n"))
+		re := regexp.MustCompile(`(?:^|\s)` + strings.Join(parts, `\S*`) + `$`)
+		if x != e && !re.MatchString(x) {
+			t.Errorf("excerpt line %d %q does not match log line %q; last log lines:\n%s", i+1, e, x, strings.Join(ll[max(0, len(ll)-10):], "\n"))
 		}
 	}
 	if b2 := bob(t, dir, env, "log", "//libs/foo:nosuch"); b2.Exit == 0 {

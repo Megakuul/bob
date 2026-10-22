@@ -206,9 +206,7 @@ func TestROUT015FileFormatAndRuntime(t *testing.T) {
 		t.Errorf("the runtime is not a Go binary: %v", err)
 	} else {
 		for _, d := range bi.Deps {
-			if !strings.HasPrefix(d.Path, "golang.org/x/") {
-				t.Errorf("runtime depends on module %s; only BSD-licensed golang.org/x modules are allowed (no LGPL/GPL)", d.Path)
-			}
+			checkRuntimeLicence(t, d.Path, d.Version)
 		}
 		if bi.Settings != nil {
 			for _, s := range bi.Settings {
@@ -406,5 +404,50 @@ func TestROUT019FidelityWarnings(t *testing.T) {
 	env := []string{"HOME=" + home, "XDG_CACHE_HOME=" + home, "BOB_ENTRY=deploy"}
 	if rr := userNamespacesBlocked(t, env, onlyFile(t, out, "*.AppImage")); rr.Exit != 127 || !strings.Contains(rr.Stderr, "bobrun: this bundle needs user namespaces") {
 		t.Errorf("UsernsOnly bundle without namespaces: exit %d, stderr %q, want 127 and `bobrun: this bundle needs user namespaces`", rr.Exit, rr.Stderr)
+	}
+}
+
+// checkRuntimeLicence is the licence check on the runtime's Go module graph (R-OUT-015): the
+// golang.org/x modules are BSD-3-Clause; any other module's LICENSE/COPYING file (found in the
+// module cache of this repository's build) must not be a GPL, LGPL or AGPL licence. A module
+// whose licence text cannot be found cannot be shown to be clean and fails the check.
+func checkRuntimeLicence(t *testing.T, path, version string) {
+	t.Helper()
+	if strings.HasPrefix(path, "golang.org/x/") {
+		return
+	}
+	out, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	if err != nil {
+		t.Errorf("harness: go env GOMODCACHE: %v", err)
+		return
+	}
+	var esc strings.Builder
+	for _, c := range path {
+		if c >= 'A' && c <= 'Z' {
+			esc.WriteString("!" + strings.ToLower(string(c)))
+		} else {
+			esc.WriteRune(c)
+		}
+	}
+	dir := filepath.Join(strings.TrimSpace(string(out)), esc.String()+"@"+version)
+	var texts []string
+	for _, pat := range []string{"LICEN[CS]E*", "COPYING*", "COPYRIGHT*", "UNLICENSE*"} {
+		m, _ := filepath.Glob(filepath.Join(dir, pat))
+		for _, f := range m {
+			if b, err := os.ReadFile(f); err == nil {
+				texts = append(texts, strings.ToUpper(string(b)))
+			}
+		}
+	}
+	if len(texts) == 0 {
+		t.Errorf("runtime depends on module %s@%s whose licence text was not found in %s; cannot show it is not LGPL/GPL", path, version, dir)
+		return
+	}
+	for _, txt := range texts {
+		for _, bad := range []string{"GNU GENERAL PUBLIC LICENSE", "GNU LESSER GENERAL PUBLIC LICENSE", "GNU AFFERO GENERAL PUBLIC LICENSE", "GNU LIBRARY GENERAL PUBLIC LICENSE"} {
+			if strings.Contains(txt, bad) {
+				t.Errorf("runtime depends on module %s@%s licensed under %s (no LGPL/GPL runtime code allowed)", path, version, bad)
+			}
+		}
 	}
 }

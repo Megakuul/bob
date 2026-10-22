@@ -280,8 +280,8 @@ func TestRCLI007Colour(t *testing.T) {
 	if !strings.Contains(out, "\x1b[") {
 		t.Errorf("pty with BOB_COLOR=always has no colour sequences:\n%q", out)
 	}
-	if !strings.Contains(out, "\x1b[1;31m") && !strings.Contains(out, "\x1b[31;1m") {
-		t.Errorf("error is not red bold (ESC[1;31m): %q", out)
+	if !errorRedBold(out) {
+		t.Errorf("no `error` label is rendered red and bold (any SGR spelling): %q", out)
 	}
 	out, _ = runPTY(t, exits, with("TERM=xterm-256color"), args...)
 	if !strings.Contains(out, "\x1b[") {
@@ -307,4 +307,43 @@ func TestRCLI007Colour(t *testing.T) {
 	if strings.Contains(r.Combined(), "\x1b[") {
 		t.Errorf("NO_COLOR must win over --color=always:\n%q", r.Combined())
 	}
+}
+
+var sgrRE = regexp.MustCompile(`\x1b\[([0-9;]*)m`)
+
+// errorRedBold reports whether some occurrence of "error" in out is drawn with the bold and red
+// attributes active, however the SGR codes are spelled (1;31, 31;1, 1 then 31, 91, 38;5;1, …).
+func errorRedBold(out string) bool {
+	bold, red := false, false
+	pos := 0
+	for _, m := range sgrRE.FindAllStringSubmatchIndex(out, -1) {
+		if bold && red && strings.Contains(out[pos:m[0]], "error") {
+			return true
+		}
+		pos = m[1]
+		codes := strings.Split(out[m[2]:m[3]], ";")
+		for i := 0; i < len(codes); i++ {
+			switch c := codes[i]; c {
+			case "", "0":
+				bold, red = false, false
+			case "1":
+				bold = true
+			case "22":
+				bold = false
+			case "31", "91":
+				red = true
+			case "39":
+				red = false
+			case "38":
+				if i+2 < len(codes) && codes[i+1] == "5" {
+					red = codes[i+2] == "1" || codes[i+2] == "9" || codes[i+2] == "196"
+					i += 2
+				} else if i+4 < len(codes) && codes[i+1] == "2" {
+					red = codes[i+2] == "255" && codes[i+3] == "0" && codes[i+4] == "0"
+					i += 4
+				}
+			}
+		}
+	}
+	return bold && red && strings.Contains(out[pos:], "error")
 }

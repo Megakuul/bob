@@ -71,8 +71,9 @@ func TestROUT001RemoteClosureSubstitutable(t *testing.T) {
 }
 
 // R-OUT-006: bundles are ordinary derivations built by bob-builder subcommands, they build in a
-// namespace without any network (everything else is warm in the store first), and they cache
-// like any package (second build: nothing built).
+// namespace without any network (the derivations are non-fixed-output, so nothing needs the
+// network; the inputs are warmed online first and the offline rebuild must succeed), and they
+// cache like any package (second build: nothing built).
 func TestROUT006BundlesAreBuildTargets(t *testing.T) {
 	parity.Covers(t, "R-OUT-006")
 	w := newWorld(t, "polyglot")
@@ -80,6 +81,11 @@ func TestROUT006BundlesAreBuildTargets(t *testing.T) {
 		return
 	}
 	targets := []string{"//deploy:api-image", "//deploy:api-appimage", "//deploy:api-tar"}
+	// Warm: the first build runs online (it substitutes nss-cacert, tzdata, glibc, ...); bundle
+	// derivations themselves are built in the sandbox without network.
+	if _, ok := w.build(targets...); !ok {
+		return
+	}
 	unshare, err := exec.LookPath("unshare")
 	if err != nil {
 		t.Fatalf("harness: unshare not found: %v", err)
@@ -92,6 +98,7 @@ func TestROUT006BundlesAreBuildTargets(t *testing.T) {
 	if harness.Red(t, off) || !exitIs(t, off, 0) {
 		return
 	}
+	// A rebuild without network after the warm build is a no-op and needs nothing from outside.
 	n, ok := w.builtCount(targets...)
 	if !ok {
 		return

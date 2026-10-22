@@ -15,7 +15,7 @@ import (
 )
 
 // noNix runs `bash -c script` as an unprivileged user (uid 1000) in a mount namespace where /nix
-// is an empty tmpfs: the host has no /nix, no Go and no Nix for bob (HARNESS §7.1 uses distro
+// is an empty tmpfs and any nix binary is hidden: the host has no /nix, no Go and no Nix for bob (HARNESS §7.1 uses distro
 // rootfs images through bwrap for the full matrix; this is the same condition on this host).
 func (e env) noNix(t testing.TB, script string) harness.Result {
 	t.Helper()
@@ -23,7 +23,13 @@ func (e env) noNix(t testing.TB, script string) harness.Result {
 	if err != nil {
 		t.Fatalf("harness error: unshare not found: %v", err)
 	}
-	inner := "mount -t tmpfs none /nix && exec unshare --user --map-user=1000 --map-group=1000 -- bash -c " + shellQuote(script)
+	// Distro nix binaries (this host has /usr/bin/nix) are whited out with overlayfs so that the
+	// precondition `! command -v nix` holds without loosening it.
+	hide := `d=$(mktemp -d) && mount -t tmpfs none "$d" && n=0 && for dir in /usr/bin /usr/local/bin /usr/sbin /usr/local/sbin; do ` +
+		`test -d "$dir" && ! test -L "$dir" || continue; n=$((n+1)); mkdir -p "$d/u$n" "$d/w$n"; ` +
+		`for f in $(ls "$dir" | grep -E '^nix(-|$)'); do mknod "$d/u$n/$f" c 0 0 || exit 1; done; ` +
+		`mount -t overlay overlay -o "lowerdir=$dir,upperdir=$d/u$n,workdir=$d/w$n" "$dir" || exit 1; done`
+	inner := hide + " && mount -t tmpfs none /nix && exec unshare --user --map-user=1000 --map-group=1000 -- bash -c " + shellQuote(script)
 	return harness.RunPath(t, unshare, harness.Spec{Dir: t.TempDir(), Env: e.vars, Timeout: 4 * time.Minute},
 		"--user", "--map-root-user", "--mount", "sh", "-c", inner)
 }

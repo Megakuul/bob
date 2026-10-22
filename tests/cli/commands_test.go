@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -226,23 +230,82 @@ func TestRCLI010Lock(t *testing.T) {
 		}
 	}
 
-	// --update <name>: only that name's entries change.
+	// --update <name>: only that module's entries (plus the transitive ones it requires) change.
+	// The scenario is built here: a file:// GOPROXY first offers golang.org/x/net v0.1.0 (needs
+	// x/text v0.1.0) and golang.org/x/crypto v0.5.0; `bob lock` pins that state; then the proxy
+	// publishes x/net v0.2.0 (needs x/text v0.2.0). A plain `bob lock` must keep the old pins,
+	// `--update golang.org/x/net` must move exactly x/net and x/text and leave x/crypto alone.
+	proxy := t.TempDir()
+	goProxyAdd(t, proxy, "golang.org/x/text", "v0.1.0", "module golang.org/x/text\n\ngo 1.20\n")
+	goProxyAdd(t, proxy, "golang.org/x/net", "v0.1.0", "module golang.org/x/net\n\ngo 1.20\n\nrequire golang.org/x/text v0.1.0\n")
+	goProxyAdd(t, proxy, "golang.org/x/crypto", "v0.5.0", "module golang.org/x/crypto\n\ngo 1.20\n")
 	gofix := harness.Fixture(t, "go")
-	if r := bob(t, gofix, env, "lock"); r.Exit != 0 {
-		t.Fatalf("lock on go fixture: exit %d\n%s", r.Exit, r.Combined())
-	}
-	before := read(t, filepath.Join(gofix, "bob.lock"))
-	r = bob(t, gofix, env, "lock", "--update", "golang.org/x/sync")
-	if r.Exit != 0 {
-		t.Fatalf("bob lock --update golang.org/x/sync: exit %d\n%s", r.Exit, r.Combined())
-	}
-	for _, l := range lines(r.Stdout)[1:] {
-		if !strings.HasPrefix(strings.TrimSpace(l), "~") || !regexp.MustCompile(`^\s+~ go\s`).MatchString(l) {
-			t.Errorf("--update golang.org/x/sync listed a change outside the go ecosystem or not an update: %q", l)
+	for _, d := range []string{"api", "lib", "native", "proto"} {
+		if err := os.RemoveAll(filepath.Join(gofix, d)); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if len(lines(r.Stdout)) == 1 && read(t, filepath.Join(gofix, "bob.lock")) != before {
-		t.Errorf("--update reported no change but bob.lock differs")
+	toolsGo := filepath.Join(gofix, "tools", "bob.go")
+	src = read(t, toolsGo)
+	oldReq := `golang.Require("golang.org/x/sync", "v0.20.0")`
+	if !strings.Contains(src, oldReq) {
+		t.Fatalf("fixture go/tools/bob.go changed: no %s", oldReq)
+	}
+	if err := os.WriteFile(toolsGo, []byte(strings.Replace(src, oldReq, `golang.Require("golang.org/x/net", "v0.1.0"), golang.Require("golang.org/x/crypto", "v0.5.0")`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gofix, "tools", "cmd", "stamp", "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	penv := append(home(t), "BOB_GOPROXY=file://"+proxy)
+	if r := bob(t, gofix, penv, "lock"); r.Exit != 0 {
+		t.Fatalf("lock on the go scenario: exit %d\n%s", r.Exit, r.Combined())
+	}
+	pinned := goLockModules(t, filepath.Join(gofix, "bob.lock"))
+	for p, v := range map[string]string{"golang.org/x/net": "v0.1.0", "golang.org/x/text": "v0.1.0", "golang.org/x/crypto": "v0.5.0"} {
+		if got, _ := pinned[p]["version"].(string); got != v {
+			t.Fatalf("scenario setup: %s pinned at %q, want %s (lock: %v)", p, got, v, pinned)
+		}
+	}
+	goProxyAdd(t, proxy, "golang.org/x/text", "v0.2.0", "module golang.org/x/text\n\ngo 1.20\n")
+	goProxyAdd(t, proxy, "golang.org/x/net", "v0.2.0", "module golang.org/x/net\n\ngo 1.20\n\nrequire golang.org/x/text v0.2.0\n")
+	lockPath := filepath.Join(gofix, "bob.lock")
+	before := read(t, lockPath)
+	if r := bob(t, gofix, penv, "lock"); r.Exit != 0 || strings.TrimSpace(r.Stdout) != "bob.lock: no changes" || read(t, lockPath) != before {
+		t.Errorf("plain bob lock must not update existing pins: exit %d, output %q", r.Exit, r.Combined())
+	}
+	r = bob(t, gofix, penv, "lock", "--update", "golang.org/x/net")
+	if r.Exit != 0 {
+		t.Fatalf("bob lock --update golang.org/x/net: exit %d\n%s", r.Exit, r.Combined())
+	}
+	changed := map[string]string{}
+	var nchange int
+	for _, l := range lines(r.Stdout)[1:] {
+		m := regexp.MustCompile(`^  ([~+-]) go +(\S+) +(.*)$`).FindStringSubmatch(l)
+		if m == nil {
+			t.Errorf("--update golang.org/x/net: change line %q is not `  <~|+|-> go <module> …`", l)
+			continue
+		}
+		nchange++
+		changed[m[2]] = m[1] + " " + m[3]
+	}
+	if len(changed) != 2 || !strings.HasPrefix(changed["golang.org/x/net"], "~ v0.1.0 \u2192 v0.2.0") || !strings.HasPrefix(changed["golang.org/x/text"], "~ v0.1.0 \u2192 v0.2.0") {
+		t.Errorf("--update golang.org/x/net must list exactly x/net and its requirement x/text as v0.1.0 → v0.2.0, got %v\n%s", changed, r.Stdout)
+	}
+	if want := fmt.Sprintf("bob.lock: %d change", nchange); !strings.HasPrefix(r.Stdout, want) {
+		t.Errorf("header does not match the %d listed changes:\n%s", nchange, r.Stdout)
+	}
+	updated := goLockModules(t, lockPath)
+	for p, v := range map[string]string{"golang.org/x/net": "v0.2.0", "golang.org/x/text": "v0.2.0"} {
+		if got, _ := updated[p]["version"].(string); got != v {
+			t.Errorf("after --update: %s at %q, want %s", p, got, v)
+		}
+	}
+	if !reflect.DeepEqual(updated["golang.org/x/crypto"], pinned["golang.org/x/crypto"]) {
+		t.Errorf("--update golang.org/x/net changed the unrelated x/crypto entry: %v → %v", pinned["golang.org/x/crypto"], updated["golang.org/x/crypto"])
+	}
+	if len(updated) != len(pinned) {
+		t.Errorf("--update golang.org/x/net added or removed entries: %d → %d", len(pinned), len(updated))
 	}
 
 	// --offline with an uncached need: exit 4, BOB-E-3002 (fresh HOME: nothing cached).
@@ -308,6 +371,9 @@ func TestRCLI011Graph(t *testing.T) {
 		return m
 	}
 	jf := bob(t, dir, env, "graph", "--format", "json")
+	if jf.Exit != 0 {
+		t.Fatalf("graph --format json: exit %d\n%s", jf.Exit, jf.Combined())
+	}
 	var g graph
 	if err := json.Unmarshal([]byte(jf.Stdout), &g); err != nil {
 		t.Fatalf("graph --format json is not JSON: %v\n%s", err, jf.Stdout)
@@ -420,4 +486,56 @@ func TestRCLI012PipelineRun(t *testing.T) {
 	if r.Exit != 2 || !strings.Contains(r.Combined(), "BOB-E-0001") {
 		t.Errorf("unknown pipeline: exit %d, want 2 with BOB-E-0001\n%s", r.Exit, r.Combined())
 	}
+}
+
+// goProxyAdd adds one module version to a file:// GOPROXY directory (layout of §03.2.5:
+// <path>/@v/{list,<v>.info,<v>.mod,<v>.zip}); `list` accumulates the versions.
+func goProxyAdd(t testing.TB, root, path, version, goMod string) {
+	t.Helper()
+	v := filepath.Join(root, filepath.FromSlash(path), "@v")
+	if err := os.MkdirAll(v, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var zb bytes.Buffer
+	zw := zip.NewWriter(&zb)
+	for name, body := range map[string]string{"go.mod": goMod, "pkg.go": "package pkg\n"} {
+		w, err := zw.Create(path + "@" + version + "/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(body))
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	prev, _ := os.ReadFile(filepath.Join(v, "list"))
+	for name, body := range map[string][]byte{
+		"list":            append(prev, []byte(version+"\n")...),
+		version + ".info": []byte(`{"Version":"` + version + `","Time":"2026-01-01T00:00:00Z"}`),
+		version + ".mod":  []byte(goMod),
+		version + ".zip":  zb.Bytes(),
+	} {
+		if err := os.WriteFile(filepath.Join(v, name), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// goLockModules returns the go.modules entries of a bob.lock by module path.
+func goLockModules(t testing.TB, lock string) map[string]map[string]any {
+	t.Helper()
+	var f struct {
+		Go struct {
+			Modules []map[string]any `json:"modules"`
+		} `json:"go"`
+	}
+	if err := json.Unmarshal([]byte(read(t, lock)), &f); err != nil {
+		t.Fatalf("%s is not valid JSON: %v", lock, err)
+	}
+	out := map[string]map[string]any{}
+	for _, m := range f.Go.Modules {
+		p, _ := m["path"].(string)
+		out[p] = m
+	}
+	return out
 }
