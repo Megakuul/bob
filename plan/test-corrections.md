@@ -247,3 +247,8 @@ access and the primitive constructors change.
 34. APPLIED 2026-10-22 I-P3 (A137). I-M6a TEST PROBLEM 2: tests/devenv/shim_test.go `findTool`
    indexed `strings.Fields(c + " ")[0]`, which panics for every process with an empty
    /proc/<pid>/cmdline (kernel threads, zombies); such processes are now skipped.
+29. APPLIED (I-M8b). `tests/eco/rust/helpers_test.go` noLeak leak-checked `--print-paths --json`
+   output including package.finish `paths`, which are host store paths by contract (§02.4);
+   every outputPaths call failed ("shows raw Nix text: store path"). Same correction as A116 for
+   TestRFW051: the package.finish `paths` field is removed before the leak check; everything else
+   (stderr, other events, other fields) is still checked.

@@ -32,7 +32,7 @@ type Options struct {
 	// which is how the LIST accounting attributes them (R-STORE-101).
 	Sweep string
 	// Retries is the SDK's attempt count per request (standard retryer, no client-side rate
-	// limit); 0 or 1 = no retries.
+	// limit, backoff ≤ 100 ms); 0 or 1 = no retries.
 	Retries int
 	// APIOptions are added to the client's middleware stack.
 	APIOptions []func(*middleware.Stack) error
@@ -72,6 +72,7 @@ func New(ctx context.Context, o Options) (*s3.Client, error) {
 			so.Retryer = retry.NewStandard(func(r *retry.StandardOptions) {
 				r.MaxAttempts = o.Retries
 				r.RateLimiter = ratelimit.None
+				r.MaxBackoff = 100 * time.Millisecond // a retry is for a lost answer, not a busy server
 			})
 		}
 		so.APIOptions = append(so.APIOptions, o.APIOptions...)
