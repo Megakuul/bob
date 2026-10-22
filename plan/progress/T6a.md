@@ -9,3 +9,4 @@ DONE R-AUTH-004 → tests/auth/oidc_test.go::TestRAUTH004MappingsReevaluated
 DONE R-AUTH-005 → tests/auth/sa_test.go::TestRAUTH005ServiceAccounts
 DONE R-AUTH-007 → tests/auth/tokens_test.go::TestRAUTH007ServerIssuedTokens (needs BOB_TEST_CLOCK_FILE hook in bobtest build)
 DONE R-AUTH-150 → tests/auth/tokens_test.go::TestRAUTH150OAuthFlows
+DONE R-AUTH-151 → tests/auth/hygiene_test.go::TestRAUTH151CredentialHygiene + zz_logs_test.go::TestRAUTH151LogsStaySecretFree
