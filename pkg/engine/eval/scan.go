@@ -235,4 +235,3 @@ func writeIfChanged(p string, content []byte) error {
 
 // errNoGoMod is a repository root without go.mod.
 var errNoGoMod = errors.New("the repository has no go.mod")
-

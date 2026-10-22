@@ -256,7 +256,8 @@ const (
 
 // stage uploads what the runner left in <work>/out (SPEC §6.6.4 layout, outside the container,
 // with the worker's credentials): the evaluation report, the NARs and narinfo claims of the
-// closure paths that cache.nixos.org does not serve, and COMPLETE.json last. It fills the
+// closure paths that cache.nixos.org does not serve, the OCI images and release assets of the
+// outputs (R-OUT-013), and COMPLETE.json last. It fills the
 // outcome's staging fields; a staging failure is infrastructure.
 func (p *Process) stage(ctx context.Context, c Claim, spec store.JobSpec, work string, o *Outcome) {
 	if len(o.LogLast) > maxLogLast {
@@ -298,6 +299,16 @@ func (p *Process) stage(ctx context.Context, c Claim, spec store.JobSpec, work s
 		Paths: []string{}, Images: []promote.Image{}, Assets: []promote.Asset{}, Skipped: []string{}}
 	if err := p.stagePaths(ctx, staging, work, res.Paths, &done); err != nil {
 		*o = Outcome{Status: "infra", Error: "staging: " + err.Error(), LogLast: o.LogLast, EvalSHA: o.EvalSHA}
+		return
+	}
+	if err := p.stageOutputs(ctx, staging, spec.Project, res, &done); err != nil {
+		// an upload error is infrastructure (a new attempt retries it); anything else is an
+		// image or release output that is not what bob builds: the job's own failure
+		status := "failed"
+		if ue := (*uploadError)(nil); errors.As(err, &ue) {
+			status = "infra"
+		}
+		*o = Outcome{Status: status, Error: "staging images and release assets: " + err.Error(), LogLast: o.LogLast, EvalSHA: o.EvalSHA}
 		return
 	}
 	body, err := json.Marshal(done)

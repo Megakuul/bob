@@ -76,12 +76,69 @@ error rendering in pkg/engine/translate. Eval R7 fix: pkg/engine/eval/rules.go.
   lock and at build; bob gen materialises (conflicts 1016, --force backup); bob test lint +
   breaking pass/fail with buf's messages.
 
+- Unit tests: pkg/connect/gen/gen_test.go (job decodes strictly into bspec.RunArgs/ExecArgs, M
+  options, cutoff + materialisation, failure fallback, TS plugin, module required),
+  pkg/proto/gen/gen_test.go (library sources, lint = test-run unit), pkg/engine/translate/
+  codegen_test.go (codegen head, repeated Nix failure once, 1021 head), eval nested-module tests,
+  pkg/proto + pkg/bob/ext example tests. polyglot and go fixtures (with the tools/tar overlay of
+  tests/outputs) evaluate (`bob graph`) with the private build.
+- Golden candidates: out/golden-candidates/gen/{proto-syntax-error,runtime-mismatch-f5}.txt
+  (made on the scratch repo, line numbers set to the fixture's svc/bob.go:22, web/bob.go:26).
+- framework.zip regenerated (23:25; includes I-M10b's WIP API packages present at that time).
+- No pkg/builder change: BuilderVersion stays 11.
+- Checks: gofmt clean, vet + staticcheck clean on touched packages; tools/ci fmt + layering ok;
+  vet fails only on out/uicheck (R-ARCH-001, not mine), lint only on internal/worker/zz_debug.go
+  (other unit). go test ./pkg/...: only budget tests under load ~26-38 fail (srcs
+  TestImportManyTiming 41 s, store TestBuilderChain100Overhead 16 s; not touched).
+
 ## next
-- unit tests (proto/connect gen), golden candidates, CI stages, framework.zip, fixtures on
-  polyglot/go evaluation.
+- nothing in this chain beyond NEEDS.
+
+## not run (and why)
+- tests/eco/gen acceptance: the shared tree's cmd/bob does not compile now (pkg/cli
+  cmd_install_profile.go: e.defaultBinDir undefined, another unit's WIP), the codegen fixture
+  needs I-M10b's gqlgen/openapi, and the offline registry mirror is empty (I-M9b NEEDS 1). The
+  same flows were run by hand on the scratch repo (see above).
 
 ## DECISIONS
+- D-M10a-1 proto checks (Lint, Breaking) are test units (bob-builder test-run): `bob test` and
+  pipelines run them, `bob build //...` leaves them out (R-GEN-005 counts exactly the 2 codegen
+  rebuilds although the fixture declares //proto/greet/v1:lint). Labels //<dir>:lint|breaking;
+  library label //<dir>:proto.
+- D-M10a-2 Breaking reads the baseline .proto files with `git ls-tree`/`git cat-file` at plan
+  time (revision validated, `--end-of-options`, ≤ 2000 files / 64 MiB) and imports them as a
+  source path; buf 1.73 cannot apply --path to the against input, so imported libraries are
+  excluded with --exclude-path instead.
+- D-M10a-3 codegen jobs use the core "run" kind (no new bop kind, no BuilderVersion bump); buf.yaml
+  and buf.gen.yaml are passed as --config/--template JSON data.
+- D-M10a-4 connect.Go/TS realise the imported libraries as their own recipes (default dirs,
+  labels gen-proto-common-v1 …), as S6 did; label = "gen-" + owned dir without leading "gen/"
+  (SPEC example; text amended). The package is defined at the recipe call (ext.Here/NewAt).
+- D-M10a-5 generator runtime versions come from the pin at lock time (placeholder
+  "nixpkgs:<attr>" resolved by the Go/npm lock with the nixpkgs index); explicit pins are checked
+  there (Go: protobuf/connect at least the generator version, gqlgen exact via
+  GeneratorRuntime(…, true); npm: the range must admit the generator version). The mismatch
+  uses BOB-E-1021's existing template with the SPEC sentence as reason and a `✗ <label>: <reason>`
+  head; the hint stays the code's ("align the versions named above"): a new hint with arguments
+  would change codes.lock (append-only) and the protected codes golden.
+- D-M10a-6 a consumer reads generated files only from the content-addressed copy; a failed build
+  can leave an empty, invalid output directory, so without a copy the Go consumer plans a blocked
+  derivation that depends on the failing codegen (the build reports the generator's error).
+- D-M10a-7 bob.go may import a bob.go package of a bob-generated nested Go module by that
+  module's path; the evaluator compiles it as the root module's package of that directory (import
+  literal rewritten in an overlay copy, same line).
 
 ## NEEDS
+1. I-M10b: TestRGEN002aUndefinedTypeInSchema expects `│ …` excerpts; bob prints `|` outside a
+   terminal (§02.5) — same correction as item 40 of plan/test-corrections.md.
+2. coordinator: TestAPISurface already failed before this unit (pkg/bob/ext New/NewIn both return
+   bob.Node, R-FW-014); ext.NewAt adds a third. Needs a specSharedResults row for pkg/bob/ext
+   (owner/test correction) or a different extension API.
+3. M5.6: bob's own proto/ generation moves into bob only with self-hosting (not done, as asked).
+4. bob dev: regeneration on .proto edits (R-FW-067 budget) and gopls/tsserver checks through the
+   shims were not verified here (I-M6a / dev owner).
 
-## TEST PROBLEM
+## TEST PROBLEM (corrections applied, owner-approved evidence-based class; test-corrections 38-40)
+- proto.Library func/type clash → proto.NewLibrary (fixtures + SPEC).
+- TestAPISurface: pkg/proto *Check shared by Lint and Breaking (SPEC API).
+- TestRGEN001aProtoSyntaxError: buf's real message for the injection, `|` excerpt prefix.

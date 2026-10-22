@@ -494,15 +494,6 @@ func joinPath(mod, dir string) string {
 	return mod + "/" + dir
 }
 
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
 // result collects the build lists and the module entries: every loaded go.mod and every
 // selected module (go.sum needs the go.mod hash of both), with zips for the modules that
 // provide packages at their selected version.

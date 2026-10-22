@@ -20,6 +20,7 @@ import (
 	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
+	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/store"
 )
 
@@ -41,6 +42,15 @@ const (
 type RunResult struct {
 	Failed []string   `json:"failed,omitempty"` // failing labels
 	Paths  []PathInfo `json:"paths,omitempty"`  // the closure of the built outputs
+	// Outputs are the outputs of the built (or cached) requested packages: the worker process
+	// stages the OCI images and releases among them (R-OUT-013, §6.8).
+	Outputs []Output `json:"outputs,omitempty"`
+}
+
+// Output is one output of a requested package.
+type Output struct {
+	Label string `json:"label"`
+	Path  string `json:"path"`
 }
 
 // PathInfo is one store path of the closure, as Nix reports it.
@@ -92,7 +102,7 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 	}
 	ev := &events{out: out, start: map[string]time.Time{}}
 	o := build.Options{Root: filepath.Join(work, workSrc), Store: st, Untrusted: true, Strict: true,
-		Variants: sel.Variants, JSONLog: true, Events: ev.handle}
+		Variants: sel.Variants, JSONLog: true, Events: ev.handle, Version: sel.Version}
 	if p, _, _ := strings.Cut(spec.Class, "."); p != "" && p != jobspec.HostPlatform() {
 		o.Platform = p
 	}
@@ -102,6 +112,7 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 	if sel.Test {
 		targets, tests = nil, sel.Labels
 	}
+	var releases []string // release labels of the matched release pipelines (built, not reported as targets)
 	if sel.RunsPipelines() {
 		eo := o
 		eo.Patterns = []string{"//..."}
@@ -122,6 +133,7 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 		}
 		rep.Matched = append(rep.Matched, matched...)
 		targets, tests = jobspec.Targets(rep.Pipelines, matched)
+		releases = releaseLabels(g, rep.Pipelines, matched)
 	}
 	rep.Targets = append(rep.Targets, targets...)
 	rep.Tests = append(rep.Tests, tests...)
@@ -131,7 +143,7 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 	for _, step := range []struct {
 		cmd      build.Command
 		patterns []string
-	}{{build.CmdBuild, targets}, {build.CmdTest, tests}} {
+	}{{build.CmdBuild, union(targets, releases)}, {build.CmdTest, tests}} {
 		if len(step.patterns) == 0 {
 			continue
 		}
@@ -144,7 +156,10 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 		for _, p := range result.Packages {
 			rep.Packages = append(rep.Packages, jobspec.PackageReport{Label: p.Label, Status: p.Status, Outputs: sortedValues(p.Outputs)})
 			if p.Status == "built" || p.Status == "cached" {
-				outputs = append(outputs, sortedValues(p.Outputs)...)
+				for _, path := range sortedValues(p.Outputs) {
+					outputs = append(outputs, path)
+					res.Outputs = append(res.Outputs, Output{Label: p.Label, Path: path})
+				}
 			}
 			if p.Status == "failed" {
 				res.Failed = append(res.Failed, p.Label)
@@ -174,6 +189,42 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 		}
 	}
 	return r.finish(work, rep, res, outcome)
+}
+
+// releaseLabels returns the labels of the releases the matched pipelines publish: an entry
+// is a label ("//rel:api") or a release name ("api", the name of a release.release node).
+// An entry without a node is left to the build controller, which fails the build with
+// "release <entry> of pipeline <p> was not built".
+func releaseLabels(g *ir.Graph, ps []jobspec.Pipeline, matched []string) []string {
+	var out []string
+	for _, p := range ps {
+		if !slices.Contains(matched, p.Name) {
+			continue
+		}
+		for _, entry := range p.Releases {
+			for _, n := range g.Nodes {
+				if n.Kind != build.KindRelease {
+					continue
+				}
+				_, name, _ := strings.Cut(n.Label, ":")
+				if n.Label == entry || !strings.HasPrefix(entry, "//") && name == entry {
+					out = union(out, []string{n.Label})
+				}
+			}
+		}
+	}
+	return out
+}
+
+// union returns a followed by the entries of b it does not contain.
+func union(a, b []string) []string {
+	out := slices.Clone(a)
+	for _, x := range b {
+		if !slices.Contains(out, x) {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // finish writes out/eval.json and out/result.json and returns o (infra when they cannot be

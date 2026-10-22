@@ -57,7 +57,6 @@ const (
 	buildHome = "/build/home" // HOME and buf's cache
 )
 
-
 // Plan plans one codegen derivation per node and builds it while planning (early cutoff).
 func (Ecosystem) Plan(ctx context.Context, req engine.PlanRequest) (res engine.PlanResult, err error) {
 	defer func() { // a planner bug must not crash bob

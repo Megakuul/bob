@@ -38,6 +38,7 @@ const (
 //	@pipeline:<name>       (run these pipelines regardless of their triggers)
 //	@test                  (Labels are tests)
 //	@variant:<name>        @upload:<sha256 hex>
+//	@version:<v>           (release version: the tag without "v", or bob build --remote --version)
 type Selection struct {
 	Event     string   // push | tag | pull_request; "" = no forge event
 	Ref       string   // branch name (push) or tag name (tag)
@@ -46,6 +47,7 @@ type Selection struct {
 	Test      bool
 	Variants  []string
 	Upload    string // sha256 of the uploaded source snapshot ("" = git source)
+	Version   string // release version the build passes to its releases (R-OUT-022); "" = none
 }
 
 // MaxTargets bounds JobSpec.Targets (SPEC §05.4.3).
@@ -76,6 +78,12 @@ func (s Selection) Encode() ([]string, error) {
 	if s.Upload != "" {
 		out = append(out, "@upload:"+s.Upload)
 	}
+	if s.Version != "" {
+		if !ValidVersion(s.Version) {
+			return nil, fmt.Errorf("selection: invalid release version %q", s.Version)
+		}
+		out = append(out, "@version:"+s.Version)
+	}
 	for _, l := range s.Labels {
 		if strings.HasPrefix(l, "@") || l == "" {
 			return nil, fmt.Errorf("selection: %q is not a label", l)
@@ -88,7 +96,24 @@ func (s Selection) Encode() ([]string, error) {
 	return out, nil
 }
 
-var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var (
+	sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// versionRE is the release version syntax of R-OUT-023 (pkg/engine/build.CheckVersion).
+	versionRE = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$`)
+)
+
+// ValidVersion reports whether v is a release version bob builds with (R-OUT-023).
+func ValidVersion(v string) bool { return versionRE.MatchString(v) }
+
+// TagVersion is the release version of a git tag: the tag without a leading "v" ("v1.4.2" →
+// "1.4.2", SPEC §6.8), or "" when that is not a valid release version.
+func TagVersion(tag string) string {
+	v := strings.TrimPrefix(tag, "v")
+	if !ValidVersion(v) {
+		return ""
+	}
+	return v
+}
 
 // ParseSelection reads JobSpec.Targets (hostile only in the sense of a forged spec, which the
 // worker refuses by signature before; still validated).
@@ -130,6 +155,12 @@ func ParseSelection(targets []string) (Selection, error) {
 				return s, fmt.Errorf("selection: upload %q is not a sha256", h)
 			}
 			s.Upload = h
+		case strings.HasPrefix(t, "@version:"):
+			v := strings.TrimPrefix(t, "@version:")
+			if !ValidVersion(v) || s.Version != "" {
+				return s, fmt.Errorf("selection: release version %q", v)
+			}
+			s.Version = v
 		case strings.HasPrefix(t, "@"), t == "":
 			return s, fmt.Errorf("selection: unknown selector %q", t)
 		default:

@@ -16,3 +16,12 @@ func ExampleNew() {
 		return &Thing{Node: ext.New(p, "example.thing", "thing", nil, nil, struct{}{})}
 	})
 }
+
+// A recipe made in one call (ext.Here) becomes a package later, defined at the recipe's line.
+func ExampleNewAt() {
+	ext.Register(ext.Kind{Name: "example.recipe"})
+	at := ext.Here()
+	_ = bob.Define(func(p *bob.P) *Thing {
+		return &Thing{Node: ext.NewAt(p, at, "example.recipe", "gen-thing", nil, nil, struct{}{})}
+	})
+}

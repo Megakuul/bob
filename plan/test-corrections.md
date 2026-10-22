@@ -290,3 +290,18 @@ access and the primitive constructors change.
    text `✗ invalid release version "<v>"` (no label) cannot be produced by that code. The version
    comes from the command line, so the label is the flag: the test now expects
    `✗ --version: invalid release version "<v>"` (exit 3 unchanged).
+38. APPLIED (I-M10a). proto.Library: the fixtures call `proto.Library(p, …)` returning
+   `*proto.Library`; a Go function and a type cannot share a name (same class as A66/A108/A123).
+   The constructor is `proto.NewLibrary`; fixtures codegen/proto/{greet,common}/v1, go/proto/msg/v1,
+   polyglot/proto/greeting/v1 and SPEC §03.6.1 (spec/03 + SPEC.md) changed.
+39. APPLIED (I-M10a). tests/core/api_test.go specSharedResults: SPEC §03.6.1 declares proto.Lint
+   and proto.Breaking both returning `*proto.Check` (two check packages of one kind), the class the
+   table exists for: `"pkg/proto": {"*Check": {"Breaking", "Lint"}}`.
+40. APPLIED (I-M10a). tests/eco/gen TestRGEN001aProtoSyntaxError: buf 1.73.0 (the pin's, the same
+   as S6) prints for the test's injection ("message GreetRequest {}", "", "}") `9:1:encountered
+   unmatched `}` delimiter` + `9:1:unexpected `}` in file scope`; S6's text came from fault F1
+   (the `;` of `string name = 1;` removed) and uses backticks. Excerpt lines start with `|`
+   outside a terminal (§02.5 rule 2). The test now injects F1 and expects
+   ``| proto/greet/v1/greet.proto:9:1:unexpected `}` after definition`` (measured with the pinned
+   buf through bob); SPEC R-GEN-001a acceptance text amended. The same `│` problem exists in
+   TestRGEN002aUndefinedTypeInSchema (`│ failed to load schema…`, I-M10b's area; not changed).

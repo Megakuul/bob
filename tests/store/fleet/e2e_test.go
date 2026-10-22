@@ -65,6 +65,7 @@ func TestRFLEET001ZeroSetupRegistration(t *testing.T) {
 		t.Fatalf("harness gap: devstack.json has no worker_access_key/worker_secret_key")
 	}
 	env.Wait(30*time.Second, func() bool { return activeWorkers(t, x) >= 1 })
+	harness.Bin(t, "bob-server") // the first call builds bob, bob-server and bob-builder: not part of a measurement
 	var took []time.Duration
 	for i := 0; i < 20; i++ {
 		before := activeWorkers(t, x)
