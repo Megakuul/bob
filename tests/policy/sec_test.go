@@ -245,6 +245,10 @@ func TestRSEC102PositivePathAndRefusal(t *testing.T) {
 	p := env.ExtraOrchestrator(t, ps.s, "orchestrator-probe", probe)
 	select {
 	case <-p.Exited():
+		if b, err := os.ReadFile(p.Log); err == nil && strings.Contains(string(b), "BOB-E-9008") {
+			harness.RedFeature(t, "bob-server orchestrator start-up self-check (R-SEC-102): "+strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0]))
+			return
+		}
 		t.Fatalf("orchestrator with a correct policy set exited: %v (%s)", p.Err(), p.Log)
 	case <-time.After(5 * time.Second):
 	}

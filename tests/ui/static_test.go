@@ -116,6 +116,10 @@ func get(t *testing.T, url string) reply {
 // absent: the test is red as "not implemented" and the return value is empty.
 func devstackAPI(t *testing.T, root string) string {
 	t.Helper()
+	if r := harness.RunPath(t, harness.Bin(t, "bob-server"), harness.Spec{Timeout: time.Minute}, "orchestrator"); r.IsNotImplemented() {
+		harness.RedFeature(t, "bob-server orchestrator: "+strings.TrimSpace(strings.SplitN(r.Combined(), "\n", 2)[0]))
+		return ""
+	}
 	bin := filepath.Join(t.TempDir(), "devstack")
 	build := exec.Command("go", "build", "-o", bin, "./tools/devstack")
 	build.Dir = root

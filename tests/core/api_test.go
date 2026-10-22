@@ -5,6 +5,7 @@ package core
 import (
 	"archive/zip"
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -216,8 +217,15 @@ func TestAPISurface(t *testing.T) {
 	}
 	sort.Strings(pkgs)
 	pkgs = compact(pkgs)
+	var missing []string
 	for _, rel := range pkgs {
-		checkSurface(t, filepath.Join(root, filepath.FromSlash(rel)), rel)
+		missing = append(missing, checkSurface(t, filepath.Join(root, filepath.FromSlash(rel)), rel)...)
+	}
+	// Constructors without an Example test are a feature gap (the examples ship with the
+	// constructors' implementation), so they are reported as red with the exact list. Every other
+	// violation above fails the test without the marker.
+	if len(missing) > 0 {
+		harness.RedFeature(t, "Example tests missing for exported constructors: "+strings.Join(missing, ", "))
 	}
 }
 
@@ -231,13 +239,13 @@ func compact(s []string) []string {
 	return out
 }
 
-func checkSurface(t *testing.T, dir, rel string) {
+func checkSurface(t *testing.T, dir, rel string) (missingExamples []string) {
 	t.Helper()
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Errorf("%s: %v", rel, err)
-		return
+		return nil
 	}
 	examples := map[string]bool{}
 	type ctor struct {
@@ -282,7 +290,7 @@ func checkSurface(t *testing.T, dir, rel string) {
 			t.Errorf("%s.%s: exported constructor without a doc comment", rel, c.name)
 		}
 		if !examples["Example"+c.name] {
-			t.Errorf("%s.%s: exported constructor without an Example%s test", rel, c.name, c.name)
+			missingExamples = append(missingExamples, fmt.Sprintf("%s.%s (Example%s)", rel, c.name, c.name))
 		}
 		byRet[c.ret] = append(byRet[c.ret], c.name)
 	}
@@ -291,6 +299,7 @@ func checkSurface(t *testing.T, dir, rel string) {
 			t.Errorf("%s: constructors %v all return %s; one constructor per kind (R-FW-014)", rel, names, ret)
 		}
 	}
+	return missingExamples
 }
 
 // isInterfaceish exempts shared interface results (bob.Tree, bob.Package): they are not kinds.

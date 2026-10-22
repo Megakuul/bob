@@ -215,6 +215,10 @@ func TestRDEV004CacheSetupAfterLogin(t *testing.T) {
 // while the server is a stub the info line lacks them and the test is red.
 func stackInfo(t *testing.T) (api, token, stackDir string, ok bool) {
 	t.Helper()
+	if r := harness.RunPath(t, harness.Bin(t, "bob-server"), harness.Spec{Timeout: time.Minute}, "orchestrator"); r.IsNotImplemented() {
+		harness.RedFeature(t, "bob-server orchestrator: "+strings.TrimSpace(strings.SplitN(r.Combined(), "\n", 2)[0]))
+		return "", "", "", false
+	}
 	root := harness.Root(t)
 	bin := filepath.Join(t.TempDir(), "devstack")
 	build := exec.Command("go", "build", "-o", bin, "./tools/devstack")

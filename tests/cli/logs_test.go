@@ -231,14 +231,18 @@ func TestRCLI008ServerLog(t *testing.T) {
 	}
 	dir := repo(t, "lines")
 	env := home(t)
-	if r := harness.Run(t, "bob", harness.Spec{Dir: dir, Env: env, Stdin: token + "\n"}, "login", "--token-stdin", url); r.Exit != 0 {
+	r := harness.Run(t, "bob", harness.Spec{Dir: dir, Env: env, Stdin: token + "\n"}, "login", "--token-stdin", url)
+	if harness.Red(t, r) {
+		return
+	}
+	if r.Exit != 0 {
 		t.Fatalf("bob login: exit %d\n%s", r.Exit, r.Combined())
 	}
 	id := submit(t, dir, env, "//x:y")
 	if id == "" {
 		return
 	}
-	r := bob(t, dir, env, "log", "--build", id, "//x:y")
+	r = bob(t, dir, env, "log", "--build", id, "//x:y")
 	if r.Exit != 0 {
 		t.Fatalf("bob log --build %s //x:y: exit %d\n%s", id, r.Exit, r.Combined())
 	}

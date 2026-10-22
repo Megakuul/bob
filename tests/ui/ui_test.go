@@ -250,7 +250,6 @@ func TestFirstLoadBudget(t *testing.T) {
 		}
 		sizes[filepath.Ext(ref)] += n
 	}
-	t.Logf("first load: js %d B gz, css %d B gz", sizes[".js"], sizes[".css"])
 	if sizes[".js"] > maxJSGzip {
 		t.Errorf("R-UI-007: initial JS %d B gzip > %d", sizes[".js"], maxJSGzip)
 	}
@@ -266,6 +265,7 @@ func TestFirstLoadBudget(t *testing.T) {
 	if NotImplemented([]byte(html0), "overview") {
 		t.Fatalf("not implemented: / renders no data-page=\"overview\"; the paint of a skeleton proves nothing")
 	}
+	t.Logf("first load: js %d B gz, css %d B gz", sizes[".js"], sizes[".css"])
 	fcp, err := chromedp.Run(tb.ctx, chromedp.Evaluate[float64](
 		`(performance.getEntriesByName('first-contentful-paint')[0] || {startTime: -1}).startTime`))
 	if err != nil {

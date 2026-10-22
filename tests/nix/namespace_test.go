@@ -67,15 +67,15 @@ func TestRNIX021NamespaceProbes(t *testing.T) {
 	if _, err := os.Stat("/nix"); err != nil {
 		t.Fatalf("harness: bind mode needs /nix on the host: %v", err)
 	}
-	if os.Getuid() == 0 {
-		t.Log("note: running as root; the rootless matrix (tests/rootless) covers the non-root case")
-	}
 	e := newBobEnv(t)
 	dir := synthRepo(t, probeFiles())
 	e.fixtures["probe"] = dir
 	p, r := e.buildPath(t, "probe", "//probe:probe")
 	if harness.Red(t, r) {
 		return
+	}
+	if os.Getuid() == 0 {
+		t.Log("note: running as root; the rootless matrix (tests/rootless) covers the non-root case")
 	}
 	read := func(f string) string { return strings.TrimSpace(string(mustRead(t, filepath.Join(e.Home, p, f)))) }
 	if got := read("uid"); got != "1000" {
