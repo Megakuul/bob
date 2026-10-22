@@ -80,17 +80,21 @@ func (s saService) CreateServiceAccount(ctx context.Context, req *connect.Reques
 	sa := store.ServiceAccountKey(in.GetId())
 	sa.Description, sa.Disabled, sa.Created = store.Set(in.GetDescription()), store.Set(in.GetDisabled()), store.Set(s.id.now())
 	if _, err := store.CAS(ctx, s.id.control, store.SAIndexKey(), func(cur *store.SAIndex) (*store.SAIndex, error) {
+		var vals []string
 		if cur == nil {
 			cur = store.SAIndexKey()
+		} else {
+			vals = cur.IDs.Value()
 		}
-		if slices.Contains(cur.IDs.Value(), sa.ID.Value()) {
+		if slices.Contains(vals, sa.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs.Value()) >= maxSAs {
+		if len(vals) >= maxSAs {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d service accounts", maxSAs))
 		}
-		cur.IDs = store.Set(append(cur.IDs.Value(), sa.ID.Value()))
-		slices.Sort(cur.IDs.Value())
+		vals = append(vals, sa.ID.Value())
+		slices.Sort(vals)
+		cur.IDs = store.Set(vals)
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)

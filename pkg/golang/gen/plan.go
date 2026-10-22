@@ -51,32 +51,15 @@ type planner struct {
 	bp      map[string]*build.Package  // configuration + directory → package read
 	modulo  map[string][32]byte        // drv path → hashDerivationModulo (own derivations)
 	out     engine.PlanResult
+	// realiser is set in the export-data cutoff mode (R-GO-005): groups are built level by
+	// level while planning and importers compile against their export data by content.
+	realiser engine.PlanRealiser
 }
 
 func newPlanner(ctx context.Context, req engine.PlanRequest) *planner {
 	return &planner{ctx: ctx, req: req, trees: map[string]string{}, storeOf: map[string]string{},
 		own: map[string]*drv.Derivation{}, byName: map[string]string{}, srcPath: map[string]string{},
 		bp: map[string]*build.Package{}, modulo: map[string][32]byte{}, out: engine.PlanResult{Nodes: map[string]engine.Resolved{}}}
-}
-
-// cutoffEnv switches on the export-data cutoff mode (R-GO-005; off by default in v1).
-const cutoffEnv = "BOB_GO_CUTOFF"
-
-// cutoffStore is what the cutoff mode needs from the engine besides PlanStore (§03.6.3,
-// I-M5a NEEDS 6): build the derivations planned so far while planning goes on and return the
-// host paths of their outputs, so that the export data of a package (compile -linkobj split)
-// can be added to the store by content and its importers planned against that path.
-type cutoffStore interface {
-	RealiseNow(ctx context.Context, drvs map[string]*drv.Derivation) (map[string]map[string]string, error)
-}
-
-// cutoff is the cutoff mode's entry: it needs the engine's realise-during-planning, which no
-// PlanStore offers yet, and the go-compile -linkobj output of the builder.
-func (pl *planner) cutoff() error {
-	if _, ok := pl.req.Store.(cutoffStore); !ok {
-		return diag.NotImplemented("Go export-data cutoff (" + cutoffEnv + "=1, R-GO-005): building derivations while planning")
-	}
-	return diag.NotImplemented("Go export-data cutoff (" + cutoffEnv + "=1, R-GO-005): compile -linkobj split in go-compile")
 }
 
 // Modulo resolves the derivations planned here first, then the engine's.
@@ -99,7 +82,8 @@ func (pl *planner) Modulo(p string) ([32]byte, error) {
 
 func (pl *planner) plan() (engine.PlanResult, error) {
 	if os.Getenv(cutoffEnv) == "1" {
-		return pl.out, pl.cutoff()
+		// The cutoff needs builds while planning; without them it plans as usual.
+		pl.realiser, _ = pl.req.Store.(engine.PlanRealiser)
 	}
 	if err := pl.workspace(); err != nil {
 		return pl.out, err
@@ -536,6 +520,10 @@ type group struct {
 	drv  string
 	d    *drv.Derivation
 	out  string
+	// Cutoff mode (R-GO-005): split compiles with export data in $out/export, and per package
+	// the content-addressed store path holding that export data (filled after the build).
+	split   bool
+	exports map[string]string // import path → store path of the export data's tree
 }
 
 // archive is the path of ip's archive in a group output.
@@ -971,6 +959,12 @@ func (pl *planner) compileClosure(t *target, cl *closure, tests map[string]bool)
 		return nil, err
 	}
 	res.groups, res.byPkg = groups, byPkg
+	if pl.realiser != nil {
+		done, err := pl.cutoffGroups(t, cl, res, srcPaths, tests)
+		if err != nil || done {
+			return res, err
+		}
+	}
 	for _, g := range groups {
 		if err := pl.groupDrv(t, cl, res, g, srcPaths, tests); err != nil {
 			return nil, err
@@ -1065,6 +1059,9 @@ func (pl *planner) pkgJob(t *target, cl *closure, res *compiled, g *group, p *pk
 	j := pkgJob{ImportPath: p.ip, Name: bp.Name, Flags: compileFlags(pflag, pl.lang(p, t.mod)), Dir: src,
 		GoFiles: sortedUnique(bp.GoFiles), CgoFiles: bp.CgoFiles, CFiles: bp.CFiles, SFiles: bp.SFiles,
 		SysoFiles: bp.SysoFiles, Imports: map[string]string{}, Trim: trim(p), Out: archive(self, p.ip)}
+	if g.split {
+		j.Export = exportFile(self, p.ip)
+	}
 	if p.embeds != nil && len(bp.EmbedPatterns) > 0 {
 		pats := map[string][]string{}
 		files := map[string]bool{}
@@ -1090,10 +1087,12 @@ func (pl *planner) pkgJob(t *target, cl *closure, res *compiled, g *group, p *pk
 		}
 		if dg == g {
 			j.Imports[imp] = archive(self, imp)
+			if g.split {
+				j.Imports[imp] = exportFile(self, imp)
+			}
 			continue
 		}
-		in.addDrv(dg.d, dg.drv)
-		j.Imports[imp] = archive(dg.out, imp)
+		j.Imports[imp] = res.compileImport(dg, imp, in)
 	}
 	return j, nil
 }

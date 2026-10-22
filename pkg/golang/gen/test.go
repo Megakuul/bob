@@ -106,6 +106,15 @@ func (pl *planner) planTest(n *ir.Node) error {
 		in.addDrv(g.d, g.drv)
 		return archive(g.out, q), nil
 	}
+	// importOf is what a compile of the test job reads for q: its archive, or in the cutoff
+	// mode its export data by content (the link still takes the archive).
+	importOf := func(q string) (string, error) {
+		g := res.byPkg[q]
+		if g == nil {
+			return "", internal(n, "%s has no compiled archive", q)
+		}
+		return res.compileImport(g, q, in), nil
+	}
 	internalArchive := testBuild + "/" + ip + ".a"
 	lang := pl.lang(under, t.mod)
 
@@ -128,7 +137,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 		if _, ok := deps.pkgs[imp]; !ok || imp == ip {
 			continue
 		}
-		a, err := archiveOf(imp)
+		a, err := importOf(imp)
 		if err != nil {
 			return err
 		}
@@ -167,7 +176,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 			if _, ok := deps.pkgs[imp]; !ok {
 				continue
 			}
-			a, err := archiveOf(imp)
+			a, err := importOf(imp)
 			if err != nil {
 				return err
 			}

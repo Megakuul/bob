@@ -38,14 +38,18 @@ func isAdmin(ro []store.RoleBindingEntry, disabled bool) bool {
 // adminAdd records principal in AdminIndex (idempotent).
 func (id *Identity) adminAdd(ctx context.Context, principal string) error {
 	_, err := store.CAS(ctx, id.control, store.AdminIndexKey(), func(cur *store.AdminIndex) (*store.AdminIndex, error) {
+		var vals []string
 		if cur == nil {
 			cur = store.AdminIndexKey()
+		} else {
+			vals = cur.Principals.Value()
 		}
-		if slices.Contains(cur.Principals.Value(), principal) {
+		if slices.Contains(vals, principal) {
 			return nil, store.ErrNoChange
 		}
-		cur.Principals = store.Set(append(cur.Principals.Value(), principal))
-		slices.Sort(cur.Principals.Value())
+		vals = append(vals, principal)
+		slices.Sort(vals)
+		cur.Principals = store.Set(vals)
 		return cur, nil
 	})
 	return storageError(err)
@@ -75,13 +79,17 @@ func (id *Identity) adminRemove(ctx context.Context, principal string) error {
 // failure is logged; DeleteRole re-checks the members' records.
 func (id *Identity) addMember(ctx context.Context, role, principal string) {
 	_, err := store.CAS(ctx, id.control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
+		var vals []string
 		if cur == nil {
 			cur = store.RoleMembersKey(role)
+		} else {
+			vals = cur.Principals.Value()
 		}
-		if slices.Contains(cur.Principals.Value(), principal) {
+		if slices.Contains(vals, principal) {
 			return nil, store.ErrNoChange
 		}
-		cur.Principals = store.Set(append(cur.Principals.Value(), principal))
+		vals = append(vals, principal)
+		cur.Principals = store.Set(vals)
 		return cur, nil
 	})
 	if err != nil {
@@ -173,17 +181,21 @@ func (s roleService) CreateRole(ctx context.Context, req *connect.Request[access
 	r := store.RoleKey(in.GetId())
 	r.Description, r.Permissions, r.Created = store.Set(in.GetDescription()), store.Set(perms), store.Set(s.id.now())
 	if _, err := store.CAS(ctx, s.id.control, store.RolesIndexKey(), func(cur *store.IDList) (*store.IDList, error) {
+		var vals []string
 		if cur == nil {
 			cur = store.RolesIndexKey()
+		} else {
+			vals = cur.IDs.Value()
 		}
-		if slices.Contains(cur.IDs.Value(), r.ID.Value()) {
+		if slices.Contains(vals, r.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs.Value()) >= maxRoles {
+		if len(vals) >= maxRoles {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d roles", maxRoles))
 		}
-		cur.IDs = store.Set(append(cur.IDs.Value(), r.ID.Value()))
-		slices.Sort(cur.IDs.Value())
+		vals = append(vals, r.ID.Value())
+		slices.Sort(vals)
+		cur.IDs = store.Set(vals)
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)

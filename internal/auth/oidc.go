@@ -153,15 +153,16 @@ func (id *Identity) oidcStart(w http.ResponseWriter, r *http.Request) {
 	}
 	state, nonce, verifier := newToken(""), newToken(""), oauth2.GenerateVerifier()
 	st := store.OidcStateKey(state.reveal())
+	redirect := id.baseURL(r) + "/auth/oidc/callback"
 	st.Provider, st.Nonce, st.Verifier = store.Set(pid), store.Set(nonce.reveal()), store.Set(verifier)
-	st.Next, st.Redirect = store.Set(safeNext(r.URL.Query().Get("next"))), store.Set(id.baseURL(r)+"/auth/oidc/callback")
+	st.Next, st.Redirect = store.Set(safeNext(r.URL.Query().Get("next"))), store.Set(redirect)
 	st.Expires = store.Set(id.now().Add(oidcStateTTL))
 	if err := store.Create(ctx, id.control, st); err != nil {
 		id.httpFail(w, r, err)
 		return
 	}
-	cfg := id.oauthConfig(p, disc, st.Redirect.Value())
-	http.Redirect(w, r, cfg.AuthCodeURL(state.reveal(), oidc.Nonce(st.Nonce.Value()), oauth2.S256ChallengeOption(verifier)), http.StatusFound)
+	cfg := id.oauthConfig(p, disc, redirect)
+	http.Redirect(w, r, cfg.AuthCodeURL(state.reveal(), oidc.Nonce(nonce.reveal()), oauth2.S256ChallengeOption(verifier)), http.StatusFound)
 }
 
 // oidcCallback: GET /auth/oidc/callback?code&state. Every failure answers a 4xx page and
@@ -426,17 +427,21 @@ func (s oidcService) CreateOidcProvider(ctx context.Context, req *connect.Reques
 	p.DisplayName, p.Issuer, p.ClientID, p.ClientSecret = store.Set(in.GetDisplayName()), store.Set(in.GetIssuerUrl()), store.Set(in.GetClientId()), store.Set(in.GetClientSecret())
 	p.Scopes, p.UsernameClaim, p.RequireMapping, p.Created = store.Set(in.GetScopes()), store.Set(in.GetUsernameClaim()), store.Set(in.GetRequireMapping()), store.Set(s.id.now())
 	if _, err := store.CAS(ctx, s.id.control, store.OidcProviderIndexKey(), func(cur *store.OidcProviderIndex) (*store.OidcProviderIndex, error) {
+		var vals []string
 		if cur == nil {
 			cur = store.OidcProviderIndexKey()
+		} else {
+			vals = cur.IDs.Value()
 		}
-		if slices.Contains(cur.IDs.Value(), p.ID.Value()) {
+		if slices.Contains(vals, p.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs.Value()) >= maxProviders {
+		if len(vals) >= maxProviders {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d OIDC providers", maxProviders))
 		}
-		cur.IDs = store.Set(append(cur.IDs.Value(), p.ID.Value()))
-		slices.Sort(cur.IDs.Value())
+		vals = append(vals, p.ID.Value())
+		slices.Sort(vals)
+		cur.IDs = store.Set(vals)
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)
@@ -562,10 +567,11 @@ func (s oidcService) DeleteOidcProvider(ctx context.Context, req *connect.Reques
 			return nil, store.ErrNoChange
 		}
 		n := len(cur.Mappings.Value())
-		cur.Mappings = store.Set(slices.DeleteFunc(cur.Mappings.Value(), func(m store.OidcMappingEntry) bool { return m.Provider == p.ID.Value() }))
-		if n == len(cur.Mappings.Value()) {
+		kept := slices.DeleteFunc(cur.Mappings.Value(), func(m store.OidcMappingEntry) bool { return m.Provider == p.ID.Value() })
+		if n == len(kept) {
 			return nil, store.ErrNoChange
 		}
+		cur.Mappings = store.Set(kept)
 		return cur, nil
 	}); err != nil {
 		s.id.log.Warn("mappings of a deleted OIDC provider not removed", "provider", p.ID.Value(), "err", err.Error())
@@ -645,11 +651,12 @@ func (s oidcService) DeleteOidcMapping(ctx context.Context, req *connect.Request
 			return nil, store.ErrNoChange
 		}
 		n := len(cur.Mappings.Value())
-		cur.Mappings = store.Set(slices.DeleteFunc(cur.Mappings.Value(), func(m store.OidcMappingEntry) bool { return m.ID == req.Msg.GetId() }))
-		found = n != len(cur.Mappings.Value())
+		kept := slices.DeleteFunc(cur.Mappings.Value(), func(m store.OidcMappingEntry) bool { return m.ID == req.Msg.GetId() })
+		found = n != len(kept)
 		if !found {
 			return nil, store.ErrNoChange
 		}
+		cur.Mappings = store.Set(kept)
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)

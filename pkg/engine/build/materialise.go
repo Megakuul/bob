@@ -112,7 +112,9 @@ func uniqueMaterialisations(ms []engine.Materialisation) []engine.Materialisatio
 			out = append(out, m)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Dir < out[j].Dir || out[i].Dir == out[j].Dir && out[i].Output < out[j].Output })
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Dir < out[j].Dir || out[i].Dir == out[j].Dir && out[i].Output < out[j].Output
+	})
 	return out
 }
 

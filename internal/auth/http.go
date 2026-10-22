@@ -446,12 +446,13 @@ func (id *Identity) deviceCode(w http.ResponseWriter, r *http.Request) {
 	dev := newToken("")
 	rec := store.DeviceCodeKey(dev.reveal())
 	rec.State, rec.Client, rec.Interval = store.Set[string]("pending"), store.Set[string](clientID), store.Set[int](deviceInterval)
-	rec.UserAgent, rec.Expires = store.Set(truncate(r.UserAgent(), 200)), store.Set(now.Add(deviceTTL))
+	expires := now.Add(deviceTTL)
+	rec.UserAgent, rec.Expires = store.Set(truncate(r.UserAgent(), 200)), store.Set(expires)
 	var userCode string
 	for range 5 {
 		userCode = newUserCode()
 		u := store.DeviceUserKey(userCode)
-		u.Hash, u.Expires = store.Set(rec.Hash.Value()), store.Set(rec.Expires.Value())
+		u.Hash, u.Expires = store.Set(rec.Hash.Value()), store.Set(expires)
 		err := store.Create(ctx, id.control, u)
 		if errors.Is(err, store.ErrExists) {
 			// A user code still in use (or left behind): take it over only when expired.
