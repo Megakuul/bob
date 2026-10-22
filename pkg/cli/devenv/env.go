@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/engine"
 )
@@ -93,8 +94,8 @@ type Spec struct {
 const storeDir = "/nix/store"
 
 var (
-	toolName  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
-	storeTool = regexp.MustCompile(`^/nix/store/[^/]+/bin/([^/]+)$`)
+	toolName  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`) })
+	storeTool = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^/nix/store/[^/]+/bin/([^/]+)$`) })
 )
 
 // Compose turns s into env.json. read maps a store path to where this process can read it (the
@@ -124,7 +125,7 @@ func Compose(s Spec, read func(string) string) *File {
 		path = append(path, bin)
 		for _, e := range ents {
 			name := e.Name()
-			if _, ok := f.Tools[name]; ok || !toolName.MatchString(name) {
+			if _, ok := f.Tools[name]; ok || !toolName().MatchString(name) {
 				continue
 			}
 			if !executable(read(bin + "/" + name)) {
@@ -134,7 +135,7 @@ func Compose(s Spec, read func(string) string) *File {
 		}
 	}
 	for name, p := range s.Tools {
-		if _, ok := f.Tools[name]; ok || !toolName.MatchString(name) {
+		if _, ok := f.Tools[name]; ok || !toolName().MatchString(name) {
 			continue
 		}
 		f.Tools[name] = Tool{Path: p}
@@ -161,7 +162,7 @@ func Compose(s Spec, read func(string) string) *File {
 			continue // the dev shell's PATH is bob's
 		}
 		f.Inside[k] = v
-		switch m := storeTool.FindStringSubmatch(v); {
+		switch m := storeTool().FindStringSubmatch(v); {
 		case !strings.Contains(v, storeDir):
 			f.Outside.Set[k] = v
 		case m != nil && f.Tools[m[1]].Path != "":

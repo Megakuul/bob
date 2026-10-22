@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"sync"
 )
 
 type repoDecl struct {
@@ -91,7 +92,7 @@ type PipelineOpts struct {
 	Releases    []string    // release names to publish; non-empty = release pipeline (proto releases=true)
 }
 
-var pipelineName = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
+var pipelineName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`) })
 
 // pipelineJSON is the IR form of a pipeline (SPEC §06 consumes it).
 type pipelineJSON struct {
@@ -111,7 +112,7 @@ func checkPipelines(r *registry) ([]pipelineJSON, []diagnostic) {
 		bad := func(format string, args ...any) {
 			errs = append(errs, diagnostic{pos: d.pos, msg: fmt.Sprintf("%s: pipeline %q: ", d.pos, d.name) + fmt.Sprintf(format, args...)})
 		}
-		if !pipelineName.MatchString(d.name) {
+		if !pipelineName().MatchString(d.name) {
 			bad("the name must match [a-z0-9][a-z0-9_.-]{0,63}")
 			continue
 		}
@@ -198,7 +199,7 @@ type DevShell struct {
 	Servers  []Package         // dev-server packages started by bob dev
 }
 
-var shellName = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+var shellName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9-]{1,32}$`) })
 
 // shellSpec is the IR payload of kind bob.devshell; deps are the Packages (first Packages
 // entries, PATH order) followed by the Servers.
@@ -216,7 +217,7 @@ func NewShell(p *P, s DevShell) *Shell {
 		name = "default"
 	}
 	var problems []string
-	if !shellName.MatchString(name) {
+	if !shellName().MatchString(name) {
 		problems = append(problems, fmt.Sprintf("Name %q must match [a-z0-9-]{1,32}", s.Name))
 		name = "default"
 	}

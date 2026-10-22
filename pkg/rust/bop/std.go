@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/builder"
 )
@@ -23,7 +24,7 @@ type RustStdArgs struct {
 	Triple string `json:"triple"` // "x86_64-unknown-linux-gnu"
 }
 
-var tripleRe = regexp.MustCompile(`^[a-z0-9_]+(-[a-z0-9_]+){2,3}$`)
+var tripleRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9_]+(-[a-z0-9_]+){2,3}$`) })
 
 // maxManifest caps the manifest bob reads (the real one is 55 lines).
 const maxManifest = 1 << 20
@@ -33,7 +34,7 @@ func rustStdKind(c *builder.Ctx, raw json.RawMessage) error {
 	if err := decode(raw, &a); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(a.From) || filepath.Clean(a.From) != a.From || !tripleRe.MatchString(a.Triple) {
+	if !filepath.IsAbs(a.From) || filepath.Clean(a.From) != a.From || !tripleRe().MatchString(a.Triple) {
 		return builder.Invalidf("rust-std job: from must be a clean absolute path and triple a target triple")
 	}
 	o, err := out(c)

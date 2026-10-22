@@ -115,7 +115,7 @@ func TestRCLI004Scripts(t *testing.T) {
 			case "bash":
 				cmd = exec.Command(path, "--norc", "--noprofile", "-c", "set -e; source "+script)
 			case "zsh":
-				cmd = exec.Command(path, "-f", "-c", "autoload -Uz compinit && compinit -u -d /dev/null; source "+script)
+				cmd = exec.Command(path, zshSourceArgs(script)...)
 			default:
 				cmd = exec.Command(path, "--no-config", "-c", "source "+script)
 			}

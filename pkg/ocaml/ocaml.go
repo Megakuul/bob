@@ -10,6 +10,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
@@ -164,7 +165,7 @@ func program(p *bob.P, o ExeOpts, kind, typ string) (bob.Node, string) {
 	t := mlspec.Target{Type: typ, Main: main, Flags: []string{}, Dune: o.Dune}
 	srcs := defaultSrcs(o.Srcs)
 	b := newBuilder(p, &t, o.Name)
-	if !moduleName.MatchString(main) {
+	if !moduleName().MatchString(main) {
 		b.problems = append(b.problems, fmt.Sprintf("Main %q is not a module name (a .ml file name without the extension)", main))
 	}
 	b.deps(o.Deps)
@@ -177,10 +178,10 @@ func program(p *bob.P, o ExeOpts, kind, typ string) (bob.Node, string) {
 
 var (
 	// libName is a findlib/OCaml library name (also the module namespace when capitalised).
-	libName    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-	moduleName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_']{0,127}$`)
-	opamName   = regexp.MustCompile(`^[A-Za-z0-9_+][A-Za-z0-9_+-]{0,127}$`)
-	findlib    = regexp.MustCompile(`^[A-Za-z0-9_+-]+(\.[A-Za-z0-9_+-]+)*$`)
+	libName    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`) })
+	moduleName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_']{0,127}$`) })
+	opamName   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_+][A-Za-z0-9_+-]{0,127}$`) })
+	findlib    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_+-]+(\.[A-Za-z0-9_+-]+)*$`) })
 )
 
 // builder collects a node's deps and spec while checking the options.
@@ -200,7 +201,7 @@ func newBuilder(p *bob.P, t *mlspec.Target, name string) *builder {
 			name = "main"
 		}
 	}
-	if !libName.MatchString(name) {
+	if !libName().MatchString(name) {
 		b.problems = append(b.problems, fmt.Sprintf("Name %q is not a lower-case OCaml library name ([a-z][a-z0-9_]*)", name))
 	}
 	t.Name = name
@@ -236,7 +237,7 @@ func (b *builder) deps(ds []Dep) {
 				b.problems = append(b.problems, fmt.Sprintf("Deps[%d] is nil", i))
 				continue
 			}
-			if !findlib.MatchString(d.lib) {
+			if !findlib().MatchString(d.lib) {
 				b.problems = append(b.problems, fmt.Sprintf("Deps[%d]: %q is not a findlib library name", i, d.lib))
 				continue
 			}
@@ -256,7 +257,7 @@ func (b *builder) deps(ds []Dep) {
 
 func (b *builder) opam(o *OpamPkg, lib string) {
 	switch {
-	case !opamName.MatchString(o.name):
+	case !opamName().MatchString(o.name):
 		b.problems = append(b.problems, fmt.Sprintf("%q is not an opam package name", o.name))
 		return
 	case strings.ContainsAny(o.req, "\n\x00") || len(o.req) > 256:
@@ -286,7 +287,7 @@ func (b *builder) options(opts []Option) {
 		if !ok {
 			continue
 		}
-		if !strings.HasPrefix(c.opam, "conf-") || !opamName.MatchString(c.opam) {
+		if !strings.HasPrefix(c.opam, "conf-") || !opamName().MatchString(c.opam) {
 			b.problems = append(b.problems, fmt.Sprintf("Conf %q is not an opam conf-* package name", c.opam))
 			continue
 		}

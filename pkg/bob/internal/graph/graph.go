@@ -27,7 +27,7 @@ type Kind struct {
 	Host bool
 }
 
-var kindName = regexp.MustCompile(`^[a-z0-9]+(\.[a-z0-9]+)*$`)
+var kindName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9]+(\.[a-z0-9]+)*$`) })
 
 // The registry is written by init functions (ext.Register) and read during evaluation and by
 // the engine; the mutex makes concurrent init-time registration from tests safe.
@@ -42,7 +42,7 @@ var (
 func Register(k Kind) {
 	mu.Lock()
 	defer mu.Unlock()
-	if !kindName.MatchString(k.Name) {
+	if !kindName().MatchString(k.Name) {
 		problems = append(problems, fmt.Sprintf("ext.Register: kind name %q must match [a-z0-9]+(.[a-z0-9]+)*", k.Name))
 		return
 	}

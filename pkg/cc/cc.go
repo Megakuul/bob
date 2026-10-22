@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
@@ -253,7 +254,7 @@ func list(s []string) []string {
 func isEmpty(s bob.Sources) bool { return reflect.ValueOf(s).IsZero() }
 
 var (
-	defineName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\([A-Za-z0-9_, ]*\))?$`)
+	defineName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\([A-Za-z0-9_, ]*\))?$`) })
 	stds       = []Std{C11, C17, C23, CXX17, CXX20, CXX23}
 )
 
@@ -268,7 +269,7 @@ func check(srcs bob.Sources, std Std, flags, linkOpts []string, defs map[string]
 		out = append(out, fmt.Sprintf("Std %q is not one of cc.C11, cc.C17, cc.C23, cc.CXX17, cc.CXX20, cc.CXX23", std))
 	}
 	for _, k := range slices.Sorted(maps.Keys(defs)) {
-		if !defineName.MatchString(k) {
+		if !defineName().MatchString(k) {
 			out = append(out, fmt.Sprintf("Defines key %q is not a macro name", k))
 		}
 		if strings.ContainsAny(defs[k], "\n\x00") {

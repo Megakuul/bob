@@ -272,12 +272,12 @@ func (s *GoSection) validate() error {
 		if err := checkGoPath(ws); err != nil {
 			return fmt.Errorf("workspace: %w", err)
 		}
-		if !goVerRe.MatchString(bl.Go) {
+		if !goVerRe().MatchString(bl.Go) {
 			return fmt.Errorf("workspace %s: go version %q is invalid", ws, clip(bl.Go))
 		}
 		for _, m := range bl.Modules {
 			p, v, ok := strings.Cut(m, "@")
-			if !ok || !goSemverRe.MatchString(v) {
+			if !ok || !goSemverRe().MatchString(v) {
 				return fmt.Errorf("workspace %s: module %q is not path@version", ws, clip(m))
 			}
 			if err := checkGoPath(p); err != nil {
@@ -289,7 +289,7 @@ func (s *GoSection) validate() error {
 		if err := checkGoPath(m.Path); err != nil {
 			return err
 		}
-		if !goSemverRe.MatchString(m.Version) {
+		if !goSemverRe().MatchString(m.Version) {
 			return fmt.Errorf("module %s: version %q is not a semantic version", m.Path, clip(m.Version))
 		}
 		if err := checkH1("module "+m.Path+" modH1", m.ModH1); err != nil {
@@ -305,7 +305,7 @@ func (s *GoSection) validate() error {
 				return err
 			}
 		}
-		if m.Go != "" && !goVerRe.MatchString(m.Go) {
+		if m.Go != "" && !goVerRe().MatchString(m.Go) {
 			return fmt.Errorf("module %s: go version %q is invalid", m.Path, clip(m.Go))
 		}
 	}
@@ -333,10 +333,10 @@ func (s *RustSection) validate() error {
 
 // validateCrate checks one locked crate (registry metadata: hostile input).
 func validateCrate(c Crate) error {
-	if !crateRe.MatchString(c.Name) {
+	if !crateRe().MatchString(c.Name) {
 		return fmt.Errorf("crate name %q is invalid", clip(c.Name))
 	}
-	if !semverRe.MatchString(c.Version) {
+	if !semverRe().MatchString(c.Version) {
 		return fmt.Errorf("crate %s: version %q is not a semantic version", c.Name, clip(c.Version))
 	}
 	if err := checkSRI("crate "+c.Name+" checksum", c.Checksum, "sha256"); err != nil {
@@ -345,15 +345,15 @@ func validateCrate(c Crate) error {
 	if err := checkSRI("crate "+c.Name+" narHash", c.NarHash, "sha256"); err != nil {
 		return err
 	}
-	if c.Links != "" && !crateRe.MatchString(c.Links) {
+	if c.Links != "" && !crateRe().MatchString(c.Links) {
 		return fmt.Errorf("crate %s: links %q is invalid", c.Name, clip(c.Links))
 	}
 	for _, d := range c.Deps {
-		if !crateRe.MatchString(d.Name) {
+		if !crateRe().MatchString(d.Name) {
 			return fmt.Errorf("crate %s: dependency name %q is invalid", c.Name, clip(d.Name))
 		}
 		n, v, ok := strings.Cut(d.Crate, "@")
-		if !ok || !crateRe.MatchString(n) || !semverRe.MatchString(v) {
+		if !ok || !crateRe().MatchString(n) || !semverRe().MatchString(v) {
 			return fmt.Errorf("crate %s: dependency %q is not name@version", c.Name, clip(d.Crate))
 		}
 		if !slices.Contains([]string{"", "build", "dev"}, d.Kind) {
@@ -365,17 +365,17 @@ func validateCrate(c Crate) error {
 			}
 		}
 		for _, f := range d.Features {
-			if !featureRe.MatchString(f) {
+			if !featureRe().MatchString(f) {
 				return fmt.Errorf("crate %s: feature %q is invalid", c.Name, clip(f))
 			}
 		}
 	}
 	for f, fs := range c.Features {
-		if !featureRe.MatchString(f) {
+		if !featureRe().MatchString(f) {
 			return fmt.Errorf("crate %s: feature %q is invalid", c.Name, clip(f))
 		}
 		for _, x := range fs {
-			if !featureRe.MatchString(x) {
+			if !featureRe().MatchString(x) {
 				return fmt.Errorf("crate %s: feature %q enables invalid %q", c.Name, f, clip(x))
 			}
 		}
@@ -384,7 +384,7 @@ func validateCrate(c Crate) error {
 	if !slices.Contains(editions, m.Edition) {
 		return fmt.Errorf("crate %s: edition %q is invalid", c.Name, clip(m.Edition))
 	}
-	if m.LibName != "" && !crateRe.MatchString(m.LibName) {
+	if m.LibName != "" && !crateRe().MatchString(m.LibName) {
 		return fmt.Errorf("crate %s: libName %q is invalid", c.Name, clip(m.LibName))
 	}
 	for _, p := range []string{m.LibPath, m.Build} {
@@ -427,10 +427,10 @@ func validateNpm(registry string, importers map[string]NpmImporter, packages map
 		if err := checkText("package key", key); err != nil {
 			return err
 		}
-		if len(p.Name) > 214 || !npmNameRe.MatchString(p.Name) {
+		if len(p.Name) > 214 || !npmNameRe().MatchString(p.Name) {
 			return fmt.Errorf("package %s: name %q is invalid", clip(key), clip(p.Name))
 		}
-		if !semverRe.MatchString(p.Version) {
+		if !semverRe().MatchString(p.Version) {
 			return fmt.Errorf("package %s: version %q is not a semantic version", clip(key), clip(p.Version))
 		}
 		if err := checkSRI("package "+clip(key)+" integrity", p.Integrity, "sha512", "sha256", "sha1"); err != nil {
@@ -446,14 +446,14 @@ func validateNpm(registry string, importers map[string]NpmImporter, packages map
 		}
 		for _, list := range [][]string{p.Peers, p.Bundled} {
 			for _, n := range list {
-				if len(n) > 214 || !npmNameRe.MatchString(n) {
+				if len(n) > 214 || !npmNameRe().MatchString(n) {
 					return fmt.Errorf("package %s: name %q is invalid", clip(key), clip(n))
 				}
 			}
 		}
 		for _, list := range [][]string{p.OS, p.CPU, p.Libc} {
 			for _, w := range list {
-				if !npmWordRe.MatchString(w) {
+				if !npmWordRe().MatchString(w) {
 					return fmt.Errorf("package %s: platform value %q is invalid", clip(key), clip(w))
 				}
 			}
@@ -473,7 +473,7 @@ func validateNpm(registry string, importers map[string]NpmImporter, packages map
 // checkNpmDeps validates alias → instance key (or "link:<dir>" when links are allowed).
 func checkNpmDeps(what string, deps map[string]string, links bool) error {
 	for alias, target := range deps {
-		if len(alias) > 214 || !npmNameRe.MatchString(alias) {
+		if len(alias) > 214 || !npmNameRe().MatchString(alias) {
 			return fmt.Errorf("%s: dependency name %q is invalid", what, clip(alias))
 		}
 		if dir, ok := strings.CutPrefix(target, "link:"); ok && links {
@@ -497,17 +497,17 @@ func (s *OpamSection) validate() error {
 	if err := checkText("repository url", r.URL); err != nil {
 		return err
 	}
-	if !hex40Re.MatchString(r.Commit) {
+	if !hex40Re().MatchString(r.Commit) {
 		return fmt.Errorf("repository commit %q is not 40 hex digits", clip(r.Commit))
 	}
 	if err := checkSRI("repository narHash", r.NarHash, "sha256"); err != nil {
 		return err
 	}
 	for name, p := range s.Packages {
-		if len(name) > maxName || !opamNameRe.MatchString(name) {
+		if len(name) > maxName || !opamNameRe().MatchString(name) {
 			return fmt.Errorf("opam package name %q is invalid", clip(name))
 		}
-		if len(p.Version) > maxName || !opamVerRe.MatchString(p.Version) {
+		if len(p.Version) > maxName || !opamVerRe().MatchString(p.Version) {
 			return fmt.Errorf("opam package %s: version %q is invalid", name, clip(p.Version))
 		}
 		if p.URL != "" || p.Hash != "" { // virtual packages (base-bytes) and conf-* have no source
@@ -518,11 +518,11 @@ func (s *OpamSection) validate() error {
 				return err
 			}
 		}
-		if !hex64Re.MatchString(p.Opam) {
+		if !hex64Re().MatchString(p.Opam) {
 			return fmt.Errorf("opam package %s: opam digest %q is not sha256 hex", name, clip(p.Opam))
 		}
 		for _, d := range p.Deps {
-			if len(d) > maxName || !opamNameRe.MatchString(d) {
+			if len(d) > maxName || !opamNameRe().MatchString(d) {
 				return fmt.Errorf("opam package %s: dependency %q is invalid", name, clip(d))
 			}
 		}

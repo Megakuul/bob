@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 )
@@ -160,7 +161,7 @@ func New(ctx *Context) *Translator {
 	return t
 }
 
-var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07`)
+var ansiRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07`) })
 
 func (t *Translator) emit(e Event) {
 	if t.Sink != nil {
@@ -264,7 +265,7 @@ func (t *Translator) start(ev event) {
 		}
 	case atBuildWaiting:
 		// "waiting for lock on '<out>'": another process builds the same path.
-		if m := quotedPath.FindStringSubmatch(a.text); m != nil {
+		if m := quotedPath().FindStringSubmatch(a.text); m != nil {
 			if d, ok := t.ctx.Outputs[m[1]]; ok {
 				t.emit(Event{Event: "package.wait", Label: t.ctx.Packages[d].Label, Reason: "another bob process is building it"})
 			}
@@ -272,7 +273,7 @@ func (t *Translator) start(ev event) {
 	}
 }
 
-var quotedPath = regexp.MustCompile(`'(/nix/store/[^']+)'`)
+var quotedPath = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`'(/nix/store/[^']+)'`) })
 
 // drvName returns the name part of a store path ("/nix/store/<hash>-name.drv" → "name").
 func drvName(d string) string {
@@ -467,60 +468,86 @@ func capRaw(s string) string {
 // Level-0 message patterns of Nix 2.34 (identical on 2.34.8 and 2.34.9, S15 §3.3). Each is
 // anchored; a message that matches none is BOB-E-9999.
 var (
-	reCannotBuild   = regexp.MustCompile(`(?s)^Cannot build '(/nix/store/[^']+\.drv)'\.\s*\n\s*Reason: (.*?)(\n\s*Output paths:.*)?$`)
-	reExit          = regexp.MustCompile(`^builder failed with exit code (\d+)\.?$`)
-	reSignal        = regexp.MustCompile(`^builder failed due to signal (\d+) \(([^)]*)\)\.?$`)
-	reDepsFailed    = regexp.MustCompile(`^(\d+) dependenc(y|ies) failed\.?$`)
-	rePlatform      = regexp.MustCompile(`(?s)^platform mismatch\s*\n\s*Required system: '([^']*)'.*Current system: '([^']*)'`)
-	reNoLocal       = regexp.MustCompile(`^local builds are disabled`)
-	reHashFOD       = regexp.MustCompile(`(?s)^hash mismatch in fixed-output derivation '(/nix/store/[^']+\.drv)':\s*specified:\s*(\S+)\s*got:\s*(\S+)`)
-	reTimedOut      = regexp.MustCompile(`^timed out after (\d+) seconds`)
-	reInterrupted   = regexp.MustCompile(`^interrupted by the user`)
-	reNoChroot      = regexp.MustCompile(`^derivation '(/nix/store/[^']+\.drv)' has '__noChroot' set`)
-	reNoOutput      = regexp.MustCompile(`^builder for '(/nix/store/[^']+\.drv)' failed to produce output path for output '([^']+)'`)
-	reDisallowed    = regexp.MustCompile(`(?s)^output '(/nix/store/[^']+)' is not allowed to refer to the following paths:\s*(.*)$`)
-	reLogLimit      = regexp.MustCompile(`^building derivation '(/nix/store/[^']+\.drv)' killed after writing more than (\d+) bytes of log output`)
-	reHookFailed    = regexp.MustCompile(`^program "([^"]+)" failed with exit code (\d+)`)
-	reLockPerm      = regexp.MustCompile(`^opening lock file "([^"]+)": (Permission denied|Read-only file system)`)
-	reMissingPath   = regexp.MustCompile(`^getting (attributes|status) of (path )?["']?(/[^"']+)["']?: No such file or directory`)
-	reDiskFull      = regexp.MustCompile(`(No space left on device|database or disk is full)`)
-	reHashImport    = regexp.MustCompile(`(?s)^hash mismatch importing path '(/nix/store/[^']+)';\s*specified:\s*(\S+)\s*got:\s*(\S+)`)
-	reNoSubstituter = regexp.MustCompile(`^path '(/nix/store/[^']+)' is required, but there is no substituter that can build it`)
-	reSomeSubst     = regexp.MustCompile(`^some substitutes for the outputs of derivation '(/nix/store/[^']+\.drv)' failed`)
-	reBuildOf       = regexp.MustCompile(`^build of '.*' failed$`)
-	reIgnored       = regexp.MustCompile(`^error \(ignored\): `)
-	reSQLiteBusy    = regexp.MustCompile(`SQLite database '([^']+)' is busy`)
+	reCannotBuild = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(?s)^Cannot build '(/nix/store/[^']+\.drv)'\.\s*\n\s*Reason: (.*?)(\n\s*Output paths:.*)?$`)
+	})
+	reExit   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^builder failed with exit code (\d+)\.?$`) })
+	reSignal = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^builder failed due to signal (\d+) \(([^)]*)\)\.?$`)
+	})
+	reDepsFailed = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(\d+) dependenc(y|ies) failed\.?$`) })
+	rePlatform   = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(?s)^platform mismatch\s*\n\s*Required system: '([^']*)'.*Current system: '([^']*)'`)
+	})
+	reNoLocal = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^local builds are disabled`) })
+	reHashFOD = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(?s)^hash mismatch in fixed-output derivation '(/nix/store/[^']+\.drv)':\s*specified:\s*(\S+)\s*got:\s*(\S+)`)
+	})
+	reTimedOut    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^timed out after (\d+) seconds`) })
+	reInterrupted = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^interrupted by the user`) })
+	reNoChroot    = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^derivation '(/nix/store/[^']+\.drv)' has '__noChroot' set`)
+	})
+	reNoOutput = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^builder for '(/nix/store/[^']+\.drv)' failed to produce output path for output '([^']+)'`)
+	})
+	reDisallowed = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(?s)^output '(/nix/store/[^']+)' is not allowed to refer to the following paths:\s*(.*)$`)
+	})
+	reLogLimit = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^building derivation '(/nix/store/[^']+\.drv)' killed after writing more than (\d+) bytes of log output`)
+	})
+	reHookFailed = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^program "([^"]+)" failed with exit code (\d+)`) })
+	reLockPerm   = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^opening lock file "([^"]+)": (Permission denied|Read-only file system)`)
+	})
+	reMissingPath = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^getting (attributes|status) of (path )?["']?(/[^"']+)["']?: No such file or directory`)
+	})
+	reDiskFull   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(No space left on device|database or disk is full)`) })
+	reHashImport = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(?s)^hash mismatch importing path '(/nix/store/[^']+)';\s*specified:\s*(\S+)\s*got:\s*(\S+)`)
+	})
+	reNoSubstituter = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^path '(/nix/store/[^']+)' is required, but there is no substituter that can build it`)
+	})
+	reSomeSubst = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^some substitutes for the outputs of derivation '(/nix/store/[^']+\.drv)' failed`)
+	})
+	reBuildOf    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^build of '.*' failed$`) })
+	reIgnored    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^error \(ignored\): `) })
+	reSQLiteBusy = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`SQLite database '([^']+)' is busy`) })
 )
 
 func (t *Translator) nixError(text string) {
-	if m := reCannotBuild.FindStringSubmatch(text); m != nil {
+	if m := reCannotBuild().FindStringSubmatch(text); m != nil {
 		t.cannotBuild(m[1], strings.TrimSpace(m[2]), text)
 		return
 	}
 	switch {
-	case reHashFOD.MatchString(text):
-		m := reHashFOD.FindStringSubmatch(text)
+	case reHashFOD().MatchString(text):
+		m := reHashFOD().FindStringSubmatch(text)
 		t.fail(m[1])
 		p := t.ctx.Packages[m[1]]
 		e := t.pkgErr(cHashMismatch, m[1], nil)
 		e.Excerpt = []string{"url:        " + p.URL, "bob.lock:   " + m[2], "downloaded: " + m[3]}
 		e.Cause = "the downloaded file has a different sha256 than bob.lock pins"
 		t.add(e, text)
-	case reTimedOut.MatchString(text), reInterrupted.MatchString(text):
+	case reTimedOut().MatchString(text), reInterrupted().MatchString(text):
 		t.fatal = append(t.fatal, text)
-	case reNoChroot.MatchString(text):
-		m := reNoChroot.FindStringSubmatch(text)
+	case reNoChroot().MatchString(text):
+		m := reNoChroot().FindStringSubmatch(text)
 		t.fail(m[1])
 		t.add(t.pkgErr(cBadStep, m[1], map[string]string{"reason": "it asks to run outside the sandbox"}), text)
-	case reNoOutput.MatchString(text):
-		m := reNoOutput.FindStringSubmatch(text)
+	case reNoOutput().MatchString(text):
+		m := reNoOutput().FindStringSubmatch(text)
 		t.fail(m[1])
 		e := t.pkgErr(cNoOutput, m[1], nil)
 		e.Cause = "the build step finished successfully but did not create its output"
 		e.Excerpt = t.tail(m[1], 5)
 		t.add(e, text)
-	case reDisallowed.MatchString(text):
-		m := reDisallowed.FindStringSubmatch(text)
+	case reDisallowed().MatchString(text):
+		m := reDisallowed().FindStringSubmatch(text)
 		d := t.ctx.Outputs[m[1]]
 		t.fail(d)
 		var refs []string
@@ -530,37 +557,37 @@ func (t *Translator) nixError(text string) {
 		e := t.pkgErr(cForbiddenRef, d, map[string]string{"ref": strings.Join(refs, ", ")})
 		t.hints[e] = "this is a bob bug (missing fixup); please report it"
 		t.add(e, text)
-	case reLogLimit.MatchString(text):
-		m := reLogLimit.FindStringSubmatch(text)
+	case reLogLimit().MatchString(text):
+		m := reLogLimit().FindStringSubmatch(text)
 		t.fail(m[1])
 		e := t.pkgErr(cLogLimit, m[1], map[string]string{"bytes": m[2]})
 		e.Excerpt = t.tail(m[1], 5)
 		t.add(e, text)
-	case reHookFailed.MatchString(text):
+	case reHookFailed().MatchString(text):
 		t.hookFailed(text)
-	case reLockPerm.MatchString(text):
-		m := reLockPerm.FindStringSubmatch(text)
+	case reLockPerm().MatchString(text):
+		m := reLockPerm().FindStringSubmatch(text)
 		t.add(newErr(cStoreAccess, map[string]string{"reason": strings.ToLower(m[2]) + " (" + m[1] + ")"}), text)
-	case reMissingPath.MatchString(text):
-		m := reMissingPath.FindStringSubmatch(text)
+	case reMissingPath().MatchString(text):
+		m := reMissingPath().FindStringSubmatch(text)
 		what := t.describePath(storeSuffix(m[3])) + " is registered but missing on disk"
 		t.add(newErr(cStoreDamaged, map[string]string{"what": what}), text)
-	case reHashImport.MatchString(text):
-		m := reHashImport.FindStringSubmatch(text)
+	case reHashImport().MatchString(text):
+		m := reHashImport().FindStringSubmatch(text)
 		e := newErr(cCacheCorrupt, map[string]string{"cache": t.cacheName(t.from[m[1]]), "what": t.describePath(m[1])})
 		e.Excerpt = []string{"expected: " + m[2], "received: " + m[3]}
 		t.add(e, text)
-	case reNoSubstituter.MatchString(text), reBuildOf.MatchString(text):
+	case reNoSubstituter().MatchString(text), reBuildOf().MatchString(text):
 		// follow-up messages of an error that was already reported
-	case reSomeSubst.MatchString(text):
-		t.fail(reSomeSubst.FindStringSubmatch(text)[1])
-	case reIgnored.MatchString(text):
-		if reDiskFull.MatchString(text) {
+	case reSomeSubst().MatchString(text):
+		t.fail(reSomeSubst().FindStringSubmatch(text)[1])
+	case reIgnored().MatchString(text):
+		if reDiskFull().MatchString(text) {
 			t.diskFull(text)
 		}
-	case reDiskFull.MatchString(text):
+	case reDiskFull().MatchString(text):
 		t.diskFull(text)
-	case reSQLiteBusy.MatchString(text):
+	case reSQLiteBusy().MatchString(text):
 		t.add(newErr(cStoreBusy, nil), text)
 	default:
 		t.unknownError(text)
@@ -581,11 +608,13 @@ func (t *Translator) unknownError(text string) {
 // leakRe matches Nix vocabulary that must never reach default output (R-NIX-010). A cause
 // line taken from an unrecognised message is shown only when it is free of it; the raw text
 // is always available with -v.
-var leakRe = regexp.MustCompile(`(?i)/nix/store/|\.drv\b|derivation|Cannot build|Reason:|builder for|substituter|@nix |while evaluating|\.nix:|^\s*error:|max-jobs|sandbox|__`)
+var leakRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`(?i)/nix/store/|\.drv\b|derivation|Cannot build|Reason:|builder for|substituter|@nix |while evaluating|\.nix:|^\s*error:|max-jobs|sandbox|__`)
+})
 
 func (t *Translator) safeCause(s string) string {
 	s = strings.TrimSpace(s)
-	if len(s) > 200 || leakRe.MatchString(s) {
+	if len(s) > 200 || leakRe().MatchString(s) {
 		return ""
 	}
 	return s
@@ -694,18 +723,18 @@ func (t *Translator) cacheName(url string) string {
 func (t *Translator) cannotBuild(drv, reason, raw string) {
 	p, mine := t.ctx.Packages[drv]
 	switch {
-	case reDepsFailed.MatchString(reason):
+	case reDepsFailed().MatchString(reason):
 		t.skip(drv)
 		return
-	case rePlatform.MatchString(reason):
-		m := rePlatform.FindStringSubmatch(reason)
+	case rePlatform().MatchString(reason):
+		m := rePlatform().FindStringSubmatch(reason)
 		t.fail(drv)
 		e := t.pkgErr(cNixpkgsUnbuildable, drv, map[string]string{"system": m[1]})
 		e.Log = ""
 		e.Cause = "this machine is " + m[2]
 		t.add(e, raw)
 		return
-	case reNoLocal.MatchString(reason):
+	case reNoLocal().MatchString(reason):
 		t.fail(drv)
 		t.add(t.cacheOnlyMiss(drv), raw)
 		return
@@ -716,7 +745,7 @@ func (t *Translator) cannotBuild(drv, reason, raw string) {
 		return
 	}
 	var e *diag.Error
-	if m := reSignal.FindStringSubmatch(reason); m != nil {
+	if m := reSignal().FindStringSubmatch(reason); m != nil {
 		if m[1] == "9" {
 			e = t.pkgErr(cOOM, drv, map[string]string{"what": p.Label})
 			e.Cause = "the build step was killed with SIGKILL; on Linux this is almost always the out-of-memory killer"
@@ -724,7 +753,7 @@ func (t *Translator) cannotBuild(drv, reason, raw string) {
 			e = t.pkgErr(cKilled, drv, map[string]string{"what": p.Label, "signal": m[2]})
 		}
 		e.Excerpt = t.tail(drv, 5)
-	} else if m := reExit.FindStringSubmatch(reason); m != nil {
+	} else if m := reExit().FindStringSubmatch(reason); m != nil {
 		e = t.classifyLog(drv, p, m[1])
 	} else {
 		e = t.pkgErr(cUnknown, drv, nil)
@@ -789,10 +818,16 @@ func (t *Translator) cacheOnlyMiss(drv string) *diag.Error {
 }
 
 var (
-	reUnableDL   = regexp.MustCompile(`(?s)^unable to download '([^']+)': (.*?)(; retrying in \d+ ms \(attempt (\d+)/(\d+)\))?$`)
-	reNotInCache = regexp.MustCompile(`^file '([^']+)' does not exist in binary cache '([^']+)'`)
-	reUntrusted  = regexp.MustCompile(`^ignoring substitute for '([^']+)' from '([^']+)', as it's not signed`)
-	reHTTP       = regexp.MustCompile(`HTTP error (\d+)`)
+	reUnableDL = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(?s)^unable to download '([^']+)': (.*?)(; retrying in \d+ ms \(attempt (\d+)/(\d+)\))?$`)
+	})
+	reNotInCache = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^file '([^']+)' does not exist in binary cache '([^']+)'`)
+	})
+	reUntrusted = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^ignoring substitute for '([^']+)' from '([^']+)', as it's not signed`)
+	})
+	reHTTP = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`HTTP error (\d+)`) })
 )
 
 // cacheHint returns the hint of a cache error, more specific than the table's default hint
@@ -822,25 +857,25 @@ func cacheHint(c diag.Code, workedAround bool) string {
 func (t *Translator) cacheWarning(w string) *diag.Error {
 	var e *diag.Error
 	switch {
-	case reUnableDL.MatchString(w):
-		m := reUnableDL.FindStringSubmatch(w)
+	case reUnableDL().MatchString(w):
+		m := reUnableDL().FindStringSubmatch(w)
 		base := cacheBase(m[1])
 		if !t.isSubstituter(base) {
 			return nil
 		}
 		cache := t.cacheName(base)
-		if h := reHTTP.FindStringSubmatch(m[2]); h != nil && (h[1] == "401" || h[1] == "403") {
+		if h := reHTTP().FindStringSubmatch(m[2]); h != nil && (h[1] == "401" || h[1] == "403") {
 			e = newErr(cCacheAuth, map[string]string{"cache": cache})
 			e.Cause = "the cache answered HTTP " + h[1] + " to " + m[1]
 		} else {
 			e = newErr(cCacheUnreachable, map[string]string{"cache": cache, "reason": netReason(m[2])})
 		}
-	case reNotInCache.MatchString(w):
-		m := reNotInCache.FindStringSubmatch(w)
+	case reNotInCache().MatchString(w):
+		m := reNotInCache().FindStringSubmatch(w)
 		e = newErr(cCacheMissing, map[string]string{"cache": t.cacheName(m[2]), "what": "a package", "status": "404"})
 		e.Cause = m[1] + " is missing"
-	case reUntrusted.MatchString(w):
-		m := reUntrusted.FindStringSubmatch(w)
+	case reUntrusted().MatchString(w):
+		m := reUntrusted().FindStringSubmatch(w)
 		e = newErr(cCacheUntrusted, map[string]string{"cache": t.cacheName(m[2]), "what": t.describePath(m[1])})
 	default:
 		return nil
@@ -887,7 +922,7 @@ func netReason(s string) string {
 	case strings.Contains(s, "SSL"), strings.Contains(s, "certificate"):
 		return "TLS error"
 	}
-	if h := reHTTP.FindStringSubmatch(s); h != nil {
+	if h := reHTTP().FindStringSubmatch(s); h != nil {
 		return "server error (HTTP " + h[1] + ")"
 	}
 	return firstLine(s)
@@ -913,7 +948,7 @@ func (t *Translator) tail(drv string, n int) []string {
 	return out
 }
 
-var storePathRe = regexp.MustCompile(`/nix/store/[0-9a-z]{32}-[^/\s'"]+`)
+var storePathRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`/nix/store/[0-9a-z]{32}-[^/\s'"]+`) })
 
 // mapPaths rewrites store paths (SPEC §02.5 rule 3): a path inside an imported source becomes
 // its repo path; any other store path becomes "…/<name>".
@@ -926,7 +961,7 @@ func (t *Translator) mapPaths(s string) string {
 	for _, sp := range srcs {
 		s = strings.ReplaceAll(s, sp, t.ctx.Sources[sp])
 	}
-	return storePathRe.ReplaceAllStringFunc(s, func(m string) string {
+	return storePathRe().ReplaceAllStringFunc(s, func(m string) string {
 		return "…/" + m[len("/nix/store/")+33:]
 	})
 }
@@ -1153,8 +1188,8 @@ func (t *Translator) fatalErr(f string, o Outcome, valid map[string]bool) {
 		}
 	}
 	switch {
-	case reTimedOut.MatchString(f):
-		secs, _ := strconv.Atoi(reTimedOut.FindStringSubmatch(f)[1])
+	case reTimedOut().MatchString(f):
+		secs, _ := strconv.Atoi(reTimedOut().FindStringSubmatch(f)[1])
 		code := cTimeout
 		if secs == t.ctx.Limits.MaxSilentS && secs != t.ctx.Limits.TimeoutS {
 			code = cSilent
@@ -1172,7 +1207,7 @@ func (t *Translator) fatalErr(f string, o Outcome, valid map[string]bool) {
 			e.Excerpt = t.tail(d, 5)
 			t.add(e, f)
 		}
-	case reInterrupted.MatchString(f):
+	case reInterrupted().MatchString(f):
 		e := newErr(cCancelled, nil)
 		if !o.Interrupt {
 			e.Cause = "Nix received a termination signal from outside bob (for example a service manager, a container runtime or an OOM policy)"

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // This file is a port of node-semver (ISC, used by npm 11) as far as npm's resolution needs it:
@@ -44,23 +45,37 @@ var (
 		return s
 	}()
 
-	reFull            = regexp.MustCompile(`^` + reSrc["FULLPLAIN"] + `$`)
-	reLoose           = regexp.MustCompile(`^` + reSrc["LOOSEPLAIN"] + `$`)
-	reXRangeLoose     = regexp.MustCompile(`^` + reSrc["GTLT"] + `\s*` + reSrc["XRANGEPLAINLOOSE"] + `$`)
-	reTildeTrim       = regexp.MustCompile(`(\s*)` + reSrc["LONETILDE"] + `\s+`)
-	reTildeLoose      = regexp.MustCompile(`^` + reSrc["LONETILDE"] + reSrc["XRANGEPLAINLOOSE"] + `$`)
-	reCaretTrim       = regexp.MustCompile(`(\s*)` + reSrc["LONECARET"] + `\s+`)
-	reCaretLoose      = regexp.MustCompile(`^` + reSrc["LONECARET"] + reSrc["XRANGEPLAINLOOSE"] + `$`)
-	reComparatorLoose = regexp.MustCompile(`^` + reSrc["GTLT"] + `\s*(` + reSrc["LOOSEPLAIN"] + `)$|^$`)
-	reComparatorFull  = regexp.MustCompile(`^` + reSrc["GTLT"] + `\s*(` + reSrc["FULLPLAIN"] + `)$|^$`)
-	reComparatorTrim  = regexp.MustCompile(`(\s*)` + reSrc["GTLT"] + `\s*(` + reSrc["LOOSEPLAIN"] + `|` + reSrc["XRANGEPLAIN"] + `)`)
-	reHyphenLoose     = regexp.MustCompile(`^\s*(` + reSrc["XRANGEPLAINLOOSE"] + `)\s+-\s+(` + reSrc["XRANGEPLAINLOOSE"] + `)\s*$`)
-	reStar            = regexp.MustCompile(`(<|>)?=?\s*\*`)
-	reGTE0            = regexp.MustCompile(`^\s*>=\s*0\.0\.0\s*$`)
-	reGTE0Pre         = regexp.MustCompile(`^\s*>=\s*0\.0\.0-0\s*$`)
-	reBuild           = regexp.MustCompile(reSrc["BUILD"])
-	reSpaces          = regexp.MustCompile(`\s+`)
-	reDigits          = regexp.MustCompile(`^[0-9]+$`)
+	reFull        = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^` + reSrc["FULLPLAIN"] + `$`) })
+	reLoose       = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^` + reSrc["LOOSEPLAIN"] + `$`) })
+	reXRangeLoose = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^` + reSrc["GTLT"] + `\s*` + reSrc["XRANGEPLAINLOOSE"] + `$`)
+	})
+	reTildeTrim  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(\s*)` + reSrc["LONETILDE"] + `\s+`) })
+	reTildeLoose = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^` + reSrc["LONETILDE"] + reSrc["XRANGEPLAINLOOSE"] + `$`)
+	})
+	reCaretTrim  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(\s*)` + reSrc["LONECARET"] + `\s+`) })
+	reCaretLoose = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^` + reSrc["LONECARET"] + reSrc["XRANGEPLAINLOOSE"] + `$`)
+	})
+	reComparatorLoose = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^` + reSrc["GTLT"] + `\s*(` + reSrc["LOOSEPLAIN"] + `)$|^$`)
+	})
+	reComparatorFull = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^` + reSrc["GTLT"] + `\s*(` + reSrc["FULLPLAIN"] + `)$|^$`)
+	})
+	reComparatorTrim = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`(\s*)` + reSrc["GTLT"] + `\s*(` + reSrc["LOOSEPLAIN"] + `|` + reSrc["XRANGEPLAIN"] + `)`)
+	})
+	reHyphenLoose = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^\s*(` + reSrc["XRANGEPLAINLOOSE"] + `)\s+-\s+(` + reSrc["XRANGEPLAINLOOSE"] + `)\s*$`)
+	})
+	reStar    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(<|>)?=?\s*\*`) })
+	reGTE0    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*>=\s*0\.0\.0\s*$`) })
+	reGTE0Pre = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*>=\s*0\.0\.0-0\s*$`) })
+	reBuild   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(reSrc["BUILD"]) })
+	reSpaces  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\s+`) })
+	reDigits  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9]+$`) })
 )
 
 // Version is a parsed semantic version (node-semver SemVer).
@@ -87,9 +102,9 @@ func ParseVersion(s string, loose bool) (*Version, error) {
 	if len(s) > maxVersionLength {
 		return nil, fmt.Errorf("%w: longer than %d characters", errVersion, maxVersionLength)
 	}
-	re := reFull
+	re := reFull()
 	if loose {
-		re = reLoose
+		re = reLoose()
 	}
 	m := re.FindStringSubmatch(s)
 	if m == nil {
@@ -105,7 +120,7 @@ func ParseVersion(s string, loose bool) (*Version, error) {
 	}
 	if m[4] != "" {
 		for _, id := range strings.Split(m[4], ".") {
-			if reDigits.MatchString(id) {
+			if reDigits().MatchString(id) {
 				n, err := strconv.ParseUint(id, 10, 64)
 				if err == nil && n <= maxSafeInteger {
 					id = strconv.FormatUint(n, 10)
@@ -132,7 +147,7 @@ func cmpUint(a, b uint64) int {
 
 // numericID reports whether a prerelease identifier is numeric and its value.
 func numericID(s string) (uint64, bool) {
-	if !reDigits.MatchString(s) {
+	if !reDigits().MatchString(s) {
 		return 0, false
 	}
 	n, err := strconv.ParseUint(s, 10, 64)
@@ -226,9 +241,9 @@ func (c comparator) test(v *Version) bool {
 
 func parseComparator(s string, loose bool) (comparator, error) {
 	s = strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
-	re := reComparatorFull
+	re := reComparatorFull()
 	if loose {
-		re = reComparatorLoose
+		re = reComparatorLoose()
 	}
 	m := re.FindStringSubmatch(s)
 	if m == nil {
@@ -266,7 +281,7 @@ func parseRange(raw string, o rangeOpts) (*Range, error) {
 	if len(raw) > 64<<10 {
 		return nil, fmt.Errorf("invalid range: longer than 64 KiB")
 	}
-	raw = reSpaces.ReplaceAllString(strings.TrimSpace(raw), " ")
+	raw = reSpaces().ReplaceAllString(strings.TrimSpace(raw), " ")
 	r := &Range{includePrerelease: o.includePrerelease}
 	for _, part := range strings.Split(raw, "||") {
 		cs, err := parseRangePart(strings.TrimSpace(part), o)
@@ -327,24 +342,24 @@ func replaceAnchored(re *regexp.Regexp, s string, f func(m []string) string) str
 }
 
 func parseRangePart(rng string, o rangeOpts) ([]comparator, error) {
-	rng = reBuild.ReplaceAllString(rng, "")
-	rng = replaceAnchored(reHyphenLoose, rng, func(m []string) string { return hyphenReplace(m, o.includePrerelease) })
-	rng = replaceAll(reComparatorTrim, rng, "${1}${2}${3}")
-	rng = replaceAll(reTildeTrim, rng, "${1}~")
-	rng = replaceAll(reCaretTrim, rng, "${1}^")
+	rng = reBuild().ReplaceAllString(rng, "")
+	rng = replaceAnchored(reHyphenLoose(), rng, func(m []string) string { return hyphenReplace(m, o.includePrerelease) })
+	rng = replaceAll(reComparatorTrim(), rng, "${1}${2}${3}")
+	rng = replaceAll(reTildeTrim(), rng, "${1}~")
+	rng = replaceAll(reCaretTrim(), rng, "${1}^")
 
 	var comps []string
 	for _, c := range strings.Split(rng, " ") {
 		comps = append(comps, parseComparatorString(c, o))
 	}
 	var list []string
-	for _, c := range reSpaces.Split(strings.Join(comps, " "), -1) {
+	for _, c := range reSpaces().Split(strings.Join(comps, " "), -1) {
 		list = append(list, replaceGTE0(c, o))
 	}
 	if o.loose {
 		var kept []string
 		for _, c := range list {
-			if reComparatorLoose.MatchString(c) {
+			if reComparatorLoose().MatchString(c) {
 				kept = append(kept, c)
 			}
 		}
@@ -376,7 +391,7 @@ func parseRangePart(rng string, o rangeOpts) ([]comparator, error) {
 }
 
 func parseComparatorString(comp string, o rangeOpts) string {
-	comp = reBuild.ReplaceAllString(comp, "")
+	comp = reBuild().ReplaceAllString(comp, "")
 	comp = replaceEach(comp, func(c string) string { return replaceCaret(c, o) })
 	comp = replaceEach(comp, func(c string) string { return replaceTilde(c, o) })
 	comp = replaceEachRaw(comp, func(c string) string { return replaceXRange(c, o) })
@@ -385,7 +400,7 @@ func parseComparatorString(comp string, o rangeOpts) string {
 }
 
 func reStarFirst(s string) string {
-	loc := reStar.FindStringIndex(s)
+	loc := reStar().FindStringIndex(s)
 	if loc == nil {
 		return s
 	}
@@ -394,7 +409,7 @@ func reStarFirst(s string) string {
 
 // replaceEach is node-semver's comp.trim().split(/\s+/).map(f).join(' ').
 func replaceEach(comp string, f func(string) string) string {
-	parts := reSpaces.Split(strings.TrimSpace(comp), -1)
+	parts := reSpaces().Split(strings.TrimSpace(comp), -1)
 	for i, p := range parts {
 		parts[i] = f(p)
 	}
@@ -403,7 +418,7 @@ func replaceEach(comp string, f func(string) string) string {
 
 // replaceEachRaw is comp.split(/\s+/).map(f).join(' ') (no trim, as replaceXRanges).
 func replaceEachRaw(comp string, f func(string) string) string {
-	parts := reSpaces.Split(comp, -1)
+	parts := reSpaces().Split(comp, -1)
 	for i, p := range parts {
 		parts[i] = f(p)
 	}
@@ -434,7 +449,7 @@ func replaceTilde(comp string, o rangeOpts) string {
 	if o.includePrerelease {
 		z = "-0"
 	}
-	return replaceAnchored(reTildeLoose, comp, func(m []string) string {
+	return replaceAnchored(reTildeLoose(), comp, func(m []string) string {
 		M, mi, p, pr := m[1], m[2], m[3], m[4]
 		switch {
 		case isX(M):
@@ -455,7 +470,7 @@ func replaceCaret(comp string, o rangeOpts) string {
 	if o.includePrerelease {
 		z = "-0"
 	}
-	return replaceAnchored(reCaretLoose, comp, func(m []string) string {
+	return replaceAnchored(reCaretLoose(), comp, func(m []string) string {
 		M, mi, p, pr := m[1], m[2], m[3], m[4]
 		switch {
 		case isX(M):
@@ -488,7 +503,7 @@ func replaceCaret(comp string, o rangeOpts) string {
 
 func replaceXRange(comp string, o rangeOpts) string {
 	comp = strings.TrimSpace(comp)
-	return replaceAnchored(reXRangeLoose, comp, func(m []string) string {
+	return replaceAnchored(reXRangeLoose(), comp, func(m []string) string {
 		ret, gtlt, M, mi, p := m[0], m[1], m[2], m[3], m[4]
 		if (isX(M) && !isX(mi)) || (isX(mi) && p != "" && !isX(p)) {
 			return comp
@@ -549,10 +564,10 @@ func replaceXRange(comp string, o rangeOpts) string {
 
 func replaceGTE0(comp string, o rangeOpts) string {
 	comp = strings.TrimSpace(comp)
-	if !o.includePrerelease && reGTE0.MatchString(comp) {
+	if !o.includePrerelease && reGTE0().MatchString(comp) {
 		return ""
 	}
-	if o.includePrerelease && reGTE0Pre.MatchString(comp) {
+	if o.includePrerelease && reGTE0Pre().MatchString(comp) {
 		return ""
 	}
 	return comp

@@ -328,7 +328,7 @@ const (
 	buildSrc = "/build/src"
 )
 
-var varRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+var varRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`) })
 
 // planRun turns a bob.Run step into one bob-builder "run" job: create $out, copy the sources
 // writable to /build/src, exec the command there with the declared tools' bin/ on PATH.
@@ -375,7 +375,7 @@ func (p *planner) planRun(n *ir.Node) error {
 	fixed := map[string]string{"HOME": "/homeless-shelter", "TMPDIR": "/build/tmp", "SOURCE_DATE_EPOCH": "1", "TZ": "UTC", "LC_ALL": "C"}
 	argv := make([]string, len(s.Cmd))
 	for i, a := range s.Cmd {
-		argv[i] = varRe.ReplaceAllStringFunc(a, func(m string) string {
+		argv[i] = varRe().ReplaceAllStringFunc(a, func(m string) string {
 			k := m[2 : len(m)-1]
 			if v, ok := env[k]; ok {
 				return v

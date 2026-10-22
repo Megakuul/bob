@@ -12,11 +12,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/builder"
 )
 
-var libNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+var libNameRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`) })
 
 // compileKind is kind ml-compile: one local library into <out>/lib/<name>.
 func compileKind(c *builder.Ctx, raw json.RawMessage) error {
@@ -24,7 +25,7 @@ func compileKind(c *builder.Ctx, raw json.RawMessage) error {
 	if err := decode(raw, &a); err != nil {
 		return err
 	}
-	if !libNameRe.MatchString(a.Name) || !filepath.IsAbs(a.Out) {
+	if !libNameRe().MatchString(a.Name) || !filepath.IsAbs(a.Out) {
 		return builder.Invalidf("ml-compile: name %q / out %q is invalid", a.Name, a.Out)
 	}
 	if err := checkCommon(a.Src, a.Dir, a.Modules, a.Stubs); err != nil {
@@ -411,7 +412,7 @@ func duneExecutable(c *builder.Ctx, r *runner, a LinkArgs, work, prog string) er
 }
 
 // storeRef matches a store path reference: the hash and the name.
-var storeRef = regexp.MustCompile(`([0-9a-df-np-sv-z]{32})-([A-Za-z0-9+._?=-]+)`)
+var storeRef = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`([0-9a-df-np-sv-z]{32})-([A-Za-z0-9+._?=-]+)`) })
 
 // scrubFile replaces the hash of every store path reference in p whose name matches one of
 // the patterns with e's (a path that never exists), so the program's runtime closure does not
@@ -433,7 +434,7 @@ func scrubFile(p, storeDir string, patterns []*regexp.Regexp) error {
 		}
 		at := i + j + len(prefix)
 		i = at
-		m := storeRef.FindSubmatchIndex(b[at:min(len(b), at+256)])
+		m := storeRef().FindSubmatchIndex(b[at:min(len(b), at+256)])
 		if m == nil || m[0] != 0 {
 			continue
 		}

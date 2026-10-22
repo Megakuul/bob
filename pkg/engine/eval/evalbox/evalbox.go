@@ -411,7 +411,9 @@ func (r *run) watch(ctx context.Context, stop <-chan struct{}) {
 
 // eagain matches what a program prints when fork or thread creation fails with EAGAIN, which
 // without a cgroup means RLIMIT_NPROC (the pids limit) was hit.
-var eagain = regexp.MustCompile(`resource temporarily unavailable|failed to create new OS thread|errno=11\b`)
+var eagain = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`resource temporarily unavailable|failed to create new OS thread|errno=11\b`)
+})
 
 // classify maps the end of a run to the S13 §5.2 errors, in the S13 order: timeout, memory,
 // output cap, pids, sandbox setup, other.
@@ -430,7 +432,7 @@ func (r *run) classify(code int, st cgroupStats, stderr []byte) error {
 			Hint: "a build definition should need far less; look for unbounded loops or huge in-memory data"}
 	case r.tooBig.Load():
 		return &Error{Exit: code, Msg: fmt.Sprintf("evaluating bob.go produced more than %s of graph output and was stopped", mib(l.IROutput))}
-	case code != 0 && (st.pidsMax > 0 || r.cg == nil && (r.tasksPeak.Load() >= int64(l.Pids) || eagain.Match(stderr))):
+	case code != 0 && (st.pidsMax > 0 || r.cg == nil && (r.tasksPeak.Load() >= int64(l.Pids) || eagain().Match(stderr))):
 		return &Error{Exit: code, Msg: fmt.Sprintf("evaluating bob.go failed after trying to start more than %d processes or threads (exit %d)", l.Pids, code),
 			Hint: "bob.go must not start processes"}
 	case code == exitStage1 || code == exitStage2:

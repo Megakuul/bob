@@ -242,14 +242,23 @@ func TestRDEV008ExecAndShims(t *testing.T) {
 		}
 	}
 
-	// Exit status passes through a shell.
+	// Exit status passes through a shell. `go run` itself reports a failing program as "exit
+	// status 5" and exits 1 (cmd/go, pinned go 1.26.8; test correction 33), so the shim's status
+	// must be go's 1; jq's halt_error(5) checks a status other than 1 unchanged.
 	r = run(runOpts{}, "/bin/sh", "-c", ".bob/bin/go run ./x; echo $?")
+	if exitIs(t, r, 0) && (strings.TrimSpace(r.Stdout) != "1" || !strings.Contains(r.Stderr, "exit status 5")) {
+		t.Errorf("go run ./x through the shim: status %q, stderr %q, want 1 and \"exit status 5\"", strings.TrimSpace(r.Stdout), r.Stderr)
+	}
+	r = run(runOpts{}, "/bin/sh", "-c", `.bob/bin/jq -n '"" | halt_error(5)'; echo $?`)
 	if exitIs(t, r, 0) && strings.TrimSpace(r.Stdout) != "5" {
 		t.Errorf("exit status through the shim = %q, want 5", strings.TrimSpace(r.Stdout))
 	}
 	// A failing tool's status is the shim's own status.
-	if r = run(runOpts{}, shim("go"), "run", "./x"); r.Exit != 5 {
-		t.Errorf("go run ./x through the shim exited %d, want 5", r.Exit)
+	if r = run(runOpts{}, shim("go"), "run", "./x"); r.Exit != 1 {
+		t.Errorf("go run ./x through the shim exited %d, want go's own 1", r.Exit)
+	}
+	if r = run(runOpts{}, shim("jq"), "-n", `"" | halt_error(5)`); r.Exit != 5 {
+		t.Errorf("jq halt_error(5) through the shim exited %d, want 5", r.Exit)
 	}
 
 	// stdin and stdout are the tool's.
@@ -357,7 +366,8 @@ func findTool(needle string, root int) int {
 		cmdline[pid] = strings.ReplaceAll(string(b), "\x00", " ")
 	}
 	for pid, c := range cmdline {
-		if !strings.Contains(strings.Fields(c + " ")[0], needle) {
+		// Kernel threads and zombies have an empty command line.
+		if f := strings.Fields(c); len(f) == 0 || !strings.Contains(f[0], needle) {
 			continue
 		}
 		for p := pid; p > 1; p = parent[p] {

@@ -19,6 +19,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -49,12 +50,12 @@ var frameworkDirs = []string{
 //go:embed framework.zip
 var frameworkZip []byte
 
-var semverRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$`)
+var semverRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$`) })
 
 // BobVersion is this bob's version as a Go module version: the module version it was installed
 // at, or v0.0.0-dev for a source build. The evaluator's IR must carry the same (R-FW-044).
 func BobVersion() string {
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Path == frameworkModule && semverRe.MatchString(bi.Main.Version) {
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Path == frameworkModule && semverRe().MatchString(bi.Main.Version) {
 		return bi.Main.Version
 	}
 	return devVersion

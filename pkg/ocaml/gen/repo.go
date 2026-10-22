@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/engine/fetch"
@@ -49,7 +50,7 @@ const (
 	maxOpamTotal     = 512 << 20
 )
 
-var hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
+var hex40 = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9a-f]{40}$`) })
 
 // snapshot is one opam-repository commit and where its tarball is downloaded from.
 type snapshot struct {
@@ -66,7 +67,7 @@ func snapshotFor(commit string) (snapshot, error) {
 			return snapshot{}, fmt.Errorf("%s=%q is not an http(s) URL", repoEnv, u)
 		}
 		c := strings.TrimSuffix(path.Base(pu.Path), ".tar.gz")
-		if !hex40.MatchString(c) {
+		if !hex40().MatchString(c) {
 			return snapshot{}, fmt.Errorf("%s=%q does not name a <commit>.tar.gz snapshot", repoEnv, u)
 		}
 		return snapshot{commit: c, url: u}, nil

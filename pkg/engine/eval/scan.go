@@ -16,8 +16,9 @@ import (
 )
 
 // The repository scan of R-FW-002: every bob.go below the root, skipping directories whose name
-// starts with "." or "_", node_modules, testdata and directories with their own go.mod, unless
-// bob generated that go.mod (a Go module of this repository, A103).
+// starts with "." or "_", node_modules, testdata, directories with their own bob.lock (a nested
+// bob repository, whose root go.mod bob generates too) and directories with their own go.mod,
+// unless bob generated that go.mod (a Go module of this repository, A103).
 // The eval key (R-FW-043.1) is computed from the scan; a size+mtime index skips re-reading
 // unchanged files.
 
@@ -70,6 +71,9 @@ func scanRepo(root string) (*repoScan, error) {
 			return err
 		}
 		if dir != "." {
+			if slices.ContainsFunc(ents, func(e os.DirEntry) bool { return e.Name() == "bob.lock" }) {
+				return nil // a nested repository (its own root)
+			}
 			for _, e := range ents {
 				if e.Name() != "go.mod" {
 					continue

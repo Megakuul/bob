@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/builder"
 	"github.com/megakuul/bob/pkg/builder/bspec"
@@ -491,7 +492,9 @@ func step(c *builder.Ctx, s Step) error {
 // npmRef matches the hash part of store paths of bob's npm derivations (package instances,
 // node_modules, libraries). Bundlers keep them in comments and module keys; they would put
 // every package into the runtime closure (S4-8).
-var npmRef = regexp.MustCompile(`/nix/store/[0-9a-df-np-sv-z]{32}-(npm-|node_modules-)`)
+var npmRef = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`/nix/store/[0-9a-df-np-sv-z]{32}-(npm-|node_modules-)`)
+})
 
 // scrub replaces the hash part of npm store paths in the files below root with e's.
 func scrub(c *builder.Ctx, root string) error {
@@ -508,7 +511,7 @@ func scrub(c *builder.Ctx, root string) error {
 		if err != nil {
 			return err
 		}
-		nb := npmRef.ReplaceAllFunc(b, func(m []byte) []byte {
+		nb := npmRef().ReplaceAllFunc(b, func(m []byte) []byte {
 			return append([]byte(fake), m[len(fake):]...)
 		})
 		if bytes.Equal(b, nb) {

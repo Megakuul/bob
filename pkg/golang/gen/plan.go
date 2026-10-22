@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -165,7 +166,7 @@ type toolchain struct {
 	minor   int    // 26
 }
 
-var goStoreName = regexp.MustCompile(`-go-(1\.([0-9]+)(\.[0-9]+)?)$`)
+var goStoreName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`-go-(1\.([0-9]+)(\.[0-9]+)?)$`) })
 
 // toolchainOf returns the toolchain of module m and checks it against the module's Go.
 func (pl *planner) toolchainOf(m *wsModule) (*toolchain, error) {
@@ -177,7 +178,7 @@ func (pl *planner) toolchainOf(m *wsModule) (*toolchain, error) {
 		return nil, internal(pl.cur, "toolchain of %s is not planned", m.spec.Path)
 	}
 	out := rv.Outputs["out"]
-	mm := goStoreName.FindStringSubmatch(out)
+	mm := goStoreName().FindStringSubmatch(out)
 	if mm == nil {
 		return nil, pl.invalid("Go toolchain", fmt.Sprintf("%s is not a Go toolchain (want a store path named go-<version>)", path.Base(out)))
 	}
@@ -293,11 +294,11 @@ func (pl *planner) loadTarget(t *target, roots []string, tests map[string]bool) 
 	return pl.load(t.ctx, roots, tests)
 }
 
-var importCRe = regexp.MustCompile(`(?m)^\s*import\s+(\(\s*)?"C"`)
+var importCRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?m)^\s*import\s+(\(\s*)?"C"`) })
 
 func importsC(file string) bool {
 	b, err := os.ReadFile(file)
-	return err == nil && importCRe.Match(b)
+	return err == nil && importCRe().Match(b)
 }
 
 func sortedKeys[V any](m map[string]V) []string {

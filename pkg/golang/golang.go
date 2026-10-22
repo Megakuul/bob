@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob"
@@ -69,13 +70,15 @@ type Module struct {
 }
 
 var (
-	goVersion  = regexp.MustCompile(`^1\.(0|[1-9][0-9]*)$`)
-	semver     = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+incompatible)?$`)
-	modElem    = regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`)
-	buildTag   = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
-	labelName  = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,127}$`)
-	xSymbol    = regexp.MustCompile(`^[^\s=]+\.[A-Za-z_][A-Za-z0-9_]*$`)
-	genDirElem = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	goVersion = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^1\.(0|[1-9][0-9]*)$`) })
+	semver    = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+incompatible)?$`)
+	})
+	modElem    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`) })
+	buildTag   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_.]+$`) })
+	labelName  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,127}$`) })
+	xSymbol    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[^\s=]+\.[A-Za-z_][A-Za-z0-9_]*$`) })
+	genDirElem = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_.-]+$`) })
 )
 
 // NewModule declares the module whose root is the directory of the calling bob.go.
@@ -91,7 +94,7 @@ var (
 func NewModule(p *bob.P, o ModuleOpts) *Module {
 	m := &Module{p: p}
 	tc := o.Toolchain
-	if tc == nil && goVersion.MatchString(o.Go) {
+	if tc == nil && goVersion().MatchString(o.Go) {
 		tc = nixpkgs.Tool(p, "go_"+strings.ReplaceAll(o.Go, ".", "_"))
 	}
 	m.spec = gospec.Module{Path: o.Path, Go: o.Go, Tags: sortedSet(o.Tags), Require: []gospec.Requirement{},
@@ -139,7 +142,7 @@ func checkModule(o ModuleOpts, noToolchain bool) []string {
 	if err := checkModulePath(o.Path); err != nil {
 		out = append(out, fmt.Sprintf("golang.ModuleOpts.Path: %v", err))
 	}
-	if !goVersion.MatchString(o.Go) {
+	if !goVersion().MatchString(o.Go) {
 		out = append(out, fmt.Sprintf(`golang.ModuleOpts.Go is %q; write the Go version as "1.26"`, o.Go))
 	} else if noToolchain {
 		out = append(out, "golang.ModuleOpts: no Go toolchain")
@@ -149,7 +152,7 @@ func checkModule(o ModuleOpts, noToolchain bool) []string {
 		if err := checkModulePath(r.Path); err != nil {
 			out = append(out, fmt.Sprintf("golang.Require(%q, %q): %v", r.Path, r.Version, err))
 		}
-		if !semver.MatchString(r.Version) {
+		if !semver().MatchString(r.Version) {
 			out = append(out, fmt.Sprintf(`golang.Require(%q, %q): the version must be exact, e.g. "v1.6.0" (ranges and "latest" are not allowed)`, r.Path, r.Version))
 		}
 		if seen[r.Path] {
@@ -158,7 +161,7 @@ func checkModule(o ModuleOpts, noToolchain bool) []string {
 		seen[r.Path] = true
 	}
 	for _, t := range o.Tags {
-		if !buildTag.MatchString(t) {
+		if !buildTag().MatchString(t) {
 			out = append(out, fmt.Sprintf("golang.ModuleOpts.Tags: %q is not a build tag", t))
 		}
 	}
@@ -173,7 +176,7 @@ func checkModulePath(p string) error {
 		return fmt.Errorf("the module path is longer than 512 bytes")
 	}
 	for _, e := range strings.Split(p, "/") {
-		if !modElem.MatchString(e) || e == "." || e == ".." || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") {
+		if !modElem().MatchString(e) || e == "." || e == ".." || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") {
 			return fmt.Errorf("%q is not a valid module path", p)
 		}
 	}
@@ -189,7 +192,7 @@ func validRel(d string) bool {
 		return false
 	}
 	for _, e := range strings.Split(d, "/") {
-		if !genDirElem.MatchString(e) {
+		if !genDirElem().MatchString(e) {
 			return false
 		}
 	}
@@ -326,17 +329,17 @@ func (m *Module) mainPackage(dir string, o BinaryOpts, mode string) (string, gos
 			name = path.Base(m.spec.Path)
 		}
 	}
-	if !labelName.MatchString(name) {
+	if !labelName().MatchString(name) {
 		problems = append(problems, fmt.Sprintf("binary name %q is not a valid package name (lower case letters, digits, '_', '-', '.'); set BinaryOpts.Name", name))
 		name = "invalid"
 	}
 	for k := range o.X {
-		if !xSymbol.MatchString(k) {
+		if !xSymbol().MatchString(k) {
 			problems = append(problems, fmt.Sprintf("BinaryOpts.X: %q is not importpath.name", k))
 		}
 	}
 	for _, t := range o.Tags {
-		if !buildTag.MatchString(t) {
+		if !buildTag().MatchString(t) {
 			problems = append(problems, fmt.Sprintf("BinaryOpts.Tags: %q is not a build tag", t))
 		}
 	}
@@ -428,7 +431,7 @@ func (m *Module) Tests(pattern string, o TestOpts) *TestSet {
 		problems = append(problems, fmt.Sprintf("test pattern %q is not \"./...\", \"./dir/...\" or \"./dir\"", pattern))
 		d = "."
 	}
-	if o.Name != "" && !labelName.MatchString(o.Name) {
+	if o.Name != "" && !labelName().MatchString(o.Name) {
 		problems = append(problems, fmt.Sprintf("TestOpts.Name %q is not a valid package name", o.Name))
 		o.Name = ""
 	}

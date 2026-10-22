@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob"
@@ -21,7 +22,7 @@ type Options struct {
 	Databases []string
 }
 
-var version = regexp.MustCompile(`^[0-9]{1,3}$`)
+var version = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9]{1,3}$`) })
 
 // Service is PostgreSQL as a loopback service of a test (R-FW-025). The test sees
 // POSTGRES_ADDR, PGHOST, PGPORT, PGUSER (postgres, trust authentication) and DATABASE_URL
@@ -31,7 +32,7 @@ var version = regexp.MustCompile(`^[0-9]{1,3}$`)
 //	golang.TestOpts{Services: []bob.Service{postgres.Service(p, postgres.Options{Version: "17", Databases: []string{"app"}})}}
 func Service(p *bob.P, o Options) bob.Service {
 	attr := "postgresql"
-	if version.MatchString(o.Version) {
+	if version().MatchString(o.Version) {
 		attr += "_" + o.Version
 	}
 	return spec(o, tools(p, attr))

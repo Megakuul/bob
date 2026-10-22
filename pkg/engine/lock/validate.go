@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -25,21 +26,29 @@ const (
 )
 
 var (
-	hex40Re    = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	hex64Re    = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	goSemverRe = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
-	semverRe   = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
-	goVerRe    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?((rc|beta)[1-9][0-9]*)?$`)
-	goElemRe   = regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`)
-	crateRe    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
+	hex40Re    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9a-f]{40}$`) })
+	hex64Re    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9a-f]{64}$`) })
+	goSemverRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	})
+	semverRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	})
+	goVerRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?((rc|beta)[1-9][0-9]*)?$`)
+	})
+	goElemRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`) })
+	crateRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`) })
 	// '?' appears in weak dependency features ("memchr?/std", Cargo's dep?/feature).
-	featureRe  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+./:?-]{0,127}$`)
-	npmNameRe  = regexp.MustCompile(`^(@[a-z0-9-~][a-z0-9-._~]*/)?[a-z0-9-~][a-z0-9-._~]*$`)
-	opamNameRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+-]*$`)
-	opamVerRe  = regexp.MustCompile(`^[A-Za-z0-9_+.~-]+$`)
-	npmWordRe  = regexp.MustCompile(`^!?[A-Za-z0-9_.-]{1,64}$`)
-	storeName  = regexp.MustCompile(`^[A-Za-z0-9+_?=-][A-Za-z0-9+._?=-]*$`)
-	channelRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+	featureRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+./:?-]{0,127}$`) })
+	npmNameRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(@[a-z0-9-~][a-z0-9-._~]*/)?[a-z0-9-~][a-z0-9-._~]*$`)
+	})
+	opamNameRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+-]*$`) })
+	opamVerRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_+.~-]+$`) })
+	npmWordRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^!?[A-Za-z0-9_.-]{1,64}$`) })
+	storeName  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9+_?=-][A-Za-z0-9+._?=-]*$`) })
+	channelRe  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`) })
 )
 
 // sriSizes are the digest sizes of the SRI algorithms bob.lock may hold.
@@ -70,7 +79,7 @@ func checkH1(what, s string) error {
 
 // checkInputs validates a section's "inputs" (sha256 hex, R-FW-004).
 func checkInputs(s string) error {
-	if !hex64Re.MatchString(s) {
+	if !hex64Re().MatchString(s) {
 		return fmt.Errorf("inputs %q is not a sha256 hex digest", clip(s))
 	}
 	return nil
@@ -100,7 +109,7 @@ func checkGoPath(p string) error {
 		return fmt.Errorf("module path %q does not start with a domain name", clip(p))
 	}
 	for _, e := range elems {
-		if e == "" || e == "." || e == ".." || !goElemRe.MatchString(e) || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") {
+		if e == "" || e == "." || e == ".." || !goElemRe().MatchString(e) || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") {
 			return fmt.Errorf("module path %q has an invalid element %q", clip(p), clip(e))
 		}
 	}

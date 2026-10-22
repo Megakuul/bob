@@ -67,7 +67,7 @@ func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (prep en
 	tc := mods[0].tc
 	out := tc.Outputs["out"]
 	version := ""
-	if m := goStoreName.FindStringSubmatch(out); m != nil {
+	if m := goStoreName().FindStringSubmatch(out); m != nil {
 		version = m[1]
 	}
 	prep.Packages = append(prep.Packages, engine.DevPackage{Name: "go", Version: version, Path: out, Drv: tc.Drv})

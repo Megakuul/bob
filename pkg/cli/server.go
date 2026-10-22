@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -145,7 +146,9 @@ func expiry(expiresIn int64) string {
 
 // nixKey is a Nix public key "name:base64"; a hostile server must not be able to write other
 // nix.conf settings through WhoAmI.nix.
-var nixKey = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,128}:[A-Za-z0-9+/]{1,128}={0,2}$`)
+var nixKey = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^[A-Za-z0-9._+-]{1,128}:[A-Za-z0-9+/]{1,128}={0,2}$`)
+})
 
 // cleanNix keeps the parts of a server's cache configuration that are safe to write into
 // nix.conf: an http(s) substituter URL without spaces and well-formed keys. nil when nothing
@@ -161,7 +164,7 @@ func cleanNix(server string, n remote.NixInfo) *remote.NixInfo {
 		out.Substituter = strings.TrimRight(sub, "/")
 	}
 	for _, k := range n.PublicKeys {
-		if nixKey.MatchString(k) {
+		if nixKey().MatchString(k) {
 			out.PublicKeys = append(out.PublicKeys, k)
 		}
 	}

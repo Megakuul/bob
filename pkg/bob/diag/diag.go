@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Code is a stable error number, e.g. 2003 for "header not found". Codes are never reused.
@@ -98,13 +99,13 @@ func Codes() []Code {
 	return cs
 }
 
-var argRe = regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`)
+var argRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`) })
 
 // TemplateArgs returns the argument names of a template, sorted and unique.
 func TemplateArgs(tmpl string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, m := range argRe.FindAllStringSubmatch(tmpl, -1) {
+	for _, m := range argRe().FindAllStringSubmatch(tmpl, -1) {
 		if !seen[m[1]] {
 			seen[m[1]] = true
 			out = append(out, m[1])
@@ -115,7 +116,7 @@ func TemplateArgs(tmpl string) []string {
 }
 
 func fill(tmpl string, args map[string]string) string {
-	return argRe.ReplaceAllStringFunc(tmpl, func(s string) string { return args[s[1:len(s)-1]] })
+	return argRe().ReplaceAllStringFunc(tmpl, func(s string) string { return args[s[1:len(s)-1]] })
 }
 
 func hasAll(tmpl string, args map[string]string) bool {

@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -31,7 +32,7 @@ const (
 	stopGrace     = 5 * time.Second
 )
 
-var serviceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+var serviceName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`) })
 
 // testRunKind is kind "test-run" (SPEC §03.0.5, R-FW-024, R-FW-025): it starts the services in
 // list order, waits for each one's probe, runs the test binary once with HOME=$TMPDIR, stops
@@ -181,7 +182,7 @@ func checkTestRun(a bspec.TestRunArgs) error {
 	}
 	seen := map[string]bool{}
 	for _, s := range a.Services {
-		if !serviceName.MatchString(s.Name) {
+		if !serviceName().MatchString(s.Name) {
 			return Invalidf("service name %q is invalid", s.Name)
 		}
 		if seen[addrVar(s.Name)] {
@@ -424,7 +425,7 @@ func lastLines(path string, n int) []string {
 }
 
 // goResult matches the result line of a Go test or subtest in -test.v output.
-var goResult = regexp.MustCompile(`^\s*--- (PASS|FAIL|SKIP): (\S+) \(([0-9.]+)s\)`)
+var goResult = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*--- (PASS|FAIL|SKIP): (\S+) \(([0-9.]+)s\)`) })
 
 // goCases parses `go test -v` style output into cases. A failing case carries the output that
 // followed its "=== RUN" line (capped at 64 KiB).
@@ -451,7 +452,7 @@ func goCases(logPath string) ([]bspec.TestCase, error) {
 			current = strings.TrimSpace(name)
 			continue
 		}
-		if m := goResult.FindStringSubmatch(line); m != nil {
+		if m := goResult().FindStringSubmatch(line); m != nil {
 			d, _ := strconv.ParseFloat(m[3], 64)
 			tc := bspec.TestCase{Name: m[2], Result: strings.ToLower(m[1]), Duration: d}
 			if tc.Result == "fail" && outputs[m[2]] != nil {
@@ -475,7 +476,9 @@ func goCases(logPath string) ([]bspec.TestCase, error) {
 }
 
 // tapResult matches a TAP test line: "ok 1 - name", "not ok 2 name # SKIP reason".
-var tapResult = regexp.MustCompile(`^(not )?ok\b(?:\s+([0-9]+))?(?:\s*-)?\s*([^#]*?)\s*(?:#\s*(\S+).*)?$`)
+var tapResult = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^(not )?ok\b(?:\s+([0-9]+))?(?:\s*-)?\s*([^#]*?)\s*(?:#\s*(\S+).*)?$`)
+})
 
 // tapCases parses TAP output (a log that starts with "TAP version") into cases; any other
 // output is one case named after the unit (the name of its label), passed when the program
@@ -507,7 +510,7 @@ func tapCases(logPath, label string, passed bool, seconds float64) ([]bspec.Test
 			}
 			continue
 		}
-		m := tapResult.FindStringSubmatch(strings.TrimRight(line, "\r"))
+		m := tapResult().FindStringSubmatch(strings.TrimRight(line, "\r"))
 		if m == nil {
 			continue
 		}

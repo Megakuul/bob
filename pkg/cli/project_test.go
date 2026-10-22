@@ -21,7 +21,7 @@ func TestProjectSlug(t *testing.T) {
 		if got != want {
 			t.Errorf("slug(%q) = %q, want %q", in, got, want)
 		}
-		if got != "" && !projectSlug.MatchString(got) {
+		if got != "" && !projectSlug().MatchString(got) {
 			t.Errorf("slug(%q) = %q is not a project id", in, got)
 		}
 	}

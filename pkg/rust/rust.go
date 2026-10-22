@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob"
@@ -189,9 +190,11 @@ type crate struct {
 }
 
 var (
-	crateName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
-	feature   = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+.-]{0,127}$`)
-	featRef   = regexp.MustCompile(`^(dep:[A-Za-z0-9_-]+|[A-Za-z0-9_][A-Za-z0-9_+.-]*|[A-Za-z0-9_-]+\??/[A-Za-z0-9_][A-Za-z0-9_+.-]*)$`)
+	crateName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`) })
+	feature   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+.-]{0,127}$`) })
+	featRef   = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(dep:[A-Za-z0-9_-]+|[A-Za-z0-9_][A-Za-z0-9_+.-]*|[A-Za-z0-9_-]+\??/[A-Za-z0-9_][A-Za-z0-9_+.-]*)$`)
+	})
 )
 
 // Library is an rlib, usable as Dep. Label //<dir>:<Name>.
@@ -299,12 +302,12 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 		problems = append(problems, "Headers is only for StaticLib and CDylib")
 	}
 	for f, vs := range o.Features {
-		if !feature.MatchString(f) {
+		if !feature().MatchString(f) {
 			problems = append(problems, fmt.Sprintf("feature name %q is invalid", f))
 			continue
 		}
 		for _, v := range vs {
-			if !featRef.MatchString(v) {
+			if !featRef().MatchString(v) {
 				problems = append(problems, fmt.Sprintf("feature %q enables %q, which is not a feature, \"dep:x\", \"x/f\" or \"x?/f\"", f, v))
 			}
 		}
@@ -335,7 +338,7 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 		if !ok {
 			continue
 		}
-		if !crateName.MatchString(u.crate) {
+		if !crateName().MatchString(u.crate) {
 			problems = append(problems, fmt.Sprintf("rust.Uses(%q): not a crate name", u.crate))
 			continue
 		}
@@ -376,7 +379,7 @@ func (c *crate) finish(problems []string) {
 		}
 		c.spec.Name = base
 	}
-	if !crateName.MatchString(c.spec.Name) {
+	if !crateName().MatchString(c.spec.Name) {
 		problems = append(problems, fmt.Sprintf("crate name %q is invalid (letters, digits, '_', '-'); set Name", c.spec.Name))
 		c.spec.Name = "invalid"
 	}
@@ -414,7 +417,7 @@ func (c *crate) convertDeps(ds []Dep, field string) ([]rsspec.Dep, []string) {
 			if d.o.rename != "" {
 				name = d.o.rename
 			}
-			if !crateName.MatchString(d.name) || !crateName.MatchString(name) {
+			if !crateName().MatchString(d.name) || !crateName().MatchString(name) {
 				problems = append(problems, fmt.Sprintf("%s: rust.Crate(%q): not a valid crate name", field, d.name))
 				continue
 			}

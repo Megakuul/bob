@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -202,11 +203,11 @@ func lineAt(data []byte, off int) int {
 	return bytes.Count(data[:off], []byte("\n")) + 1
 }
 
-var markerRe = regexp.MustCompile(`(?m)^(<{7}|={7}|>{7}|\|{7})(?:[ \t].*)?\r?$`)
+var markerRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?m)^(<{7}|={7}|>{7}|\|{7})(?:[ \t].*)?\r?$`) })
 
 // conflictMarker returns the line (1-based) and text of the first merge conflict marker.
 func conflictMarker(data []byte) (int, string) {
-	loc := markerRe.FindSubmatchIndex(data)
+	loc := markerRe().FindSubmatchIndex(data)
 	if loc == nil {
 		return 0, ""
 	}
@@ -226,12 +227,12 @@ func (f *File) Stale(key, inputs string) bool {
 	return json.Unmarshal(raw, &s) != nil || s.Inputs != inputs
 }
 
-var revRe = regexp.MustCompile(`"rev"\s*:\s*"([0-9a-f]{40})"`)
+var revRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`"rev"\s*:\s*"([0-9a-f]{40})"`) })
 
 // SalvageNixpkgsRev returns the first nixpkgs revision found in a bob.lock that cannot be
 // parsed (bob lock --rebuild keeps nixpkgs.rev, R-FW-048), or "".
 func SalvageNixpkgsRev(data []byte) string {
-	if m := revRe.FindSubmatch(data); m != nil {
+	if m := revRe().FindSubmatch(data); m != nil {
 		return string(m[1])
 	}
 	return ""
@@ -323,10 +324,10 @@ func WriteBytes(path string, data []byte) (bool, error) {
 }
 
 func (p NixpkgsPin) validate() error {
-	if !channelRe.MatchString(p.Channel) {
+	if !channelRe().MatchString(p.Channel) {
 		return fmt.Errorf("nixpkgs: channel %q is invalid", clip(p.Channel))
 	}
-	if !hex40Re.MatchString(p.Rev) {
+	if !hex40Re().MatchString(p.Rev) {
 		return fmt.Errorf("nixpkgs: rev %q is not 40 hex digits", clip(p.Rev))
 	}
 	if err := checkHTTPURL("nixpkgs url", p.URL, ""); err != nil {
@@ -352,7 +353,7 @@ func validateSources(srcs map[string]Source) error {
 		if err := checkSRI("source "+id+" hash", s.Hash, "sha256", "sha512"); err != nil {
 			return err
 		}
-		if len(s.Name) > 211 || !storeName.MatchString(s.Name) {
+		if len(s.Name) > 211 || !storeName().MatchString(s.Name) {
 			return fmt.Errorf("source %s: store name %q is invalid", id, clip(s.Name))
 		}
 		if s.Strip < 0 || s.Strip > maxStrip {

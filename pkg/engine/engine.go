@@ -126,7 +126,7 @@ var (
 	problems []string
 )
 
-var ecosystemName = regexp.MustCompile(`^[a-z0-9]+$`)
+var ecosystemName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9]+$`) })
 
 // Register registers an ecosystem. Generator packages call it from init. Its Name is the
 // bob.lock section key and the first element of its node kinds ("<name>.<kind>"). An invalid or
@@ -141,7 +141,7 @@ func Register(e Ecosystem) {
 	}
 	name := e.Name()
 	switch {
-	case !ecosystemName.MatchString(name):
+	case !ecosystemName().MatchString(name):
 		problems = append(problems, fmt.Sprintf("engine.Register: ecosystem name %q must match [a-z0-9]+", name))
 		return
 	case registry[name] != nil:

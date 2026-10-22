@@ -98,13 +98,15 @@ func (r *runner) run(dir string, argv ...string) error {
 	return nil
 }
 
-var gccDiag = regexp.MustCompile(`^([^\s:][^:]*):([0-9]+):([0-9]+): (?:fatal )?error: (.*)$`)
+var gccDiag = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^([^\s:][^:]*):([0-9]+):([0-9]+): (?:fatal )?error: (.*)$`)
+})
 
 // diags reports the compiler's error lines (at most 20) as structured diagnostics.
 func (r *runner) diags(out []byte) {
 	n := 0
 	for _, line := range strings.Split(string(out), "\n") {
-		m := gccDiag.FindStringSubmatch(line)
+		m := gccDiag().FindStringSubmatch(line)
 		if m == nil || n == 20 {
 			continue
 		}

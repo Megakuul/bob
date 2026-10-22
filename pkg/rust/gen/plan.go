@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -173,7 +174,7 @@ type toolchain struct {
 	sysroot engine.Resolved // rust-std-<triple>
 }
 
-var rustcName = regexp.MustCompile(`-rustc(?:-wrapper)?-([0-9]+\.[0-9]+\.[0-9]+)[^/]*$`)
+var rustcName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`-rustc(?:-wrapper)?-([0-9]+\.[0-9]+\.[0-9]+)[^/]*$`) })
 
 // toolchainOf returns the rustc of crate node n (its Toolchain dep).
 func (pl *planner) rustcOf(n *ir.Node, s rsspec.Crate) (engine.Resolved, string, error) {
@@ -184,7 +185,7 @@ func (pl *planner) rustcOf(n *ir.Node, s rsspec.Crate) (engine.Resolved, string,
 	if !ok {
 		return engine.Resolved{}, "", fmt.Errorf("%s: its Rust toolchain is not planned", n.Label)
 	}
-	m := rustcName.FindStringSubmatch(rv.Outputs["out"])
+	m := rustcName().FindStringSubmatch(rv.Outputs["out"])
 	if m == nil {
 		return engine.Resolved{}, "", invalid(n, "Toolchain", fmt.Sprintf("%s is not a rustc (want a store path named rustc-<version>)", path.Base(rv.Outputs["out"])))
 	}
@@ -250,7 +251,7 @@ func (pl *planner) newToolchain(n *ir.Node, s rsspec.Crate) (*toolchain, error) 
 	if err != nil {
 		return nil, err
 	}
-	if m := rustcName.FindStringSubmatch(std.Outputs["out"]); m == nil || m[1] != version {
+	if m := rustcName().FindStringSubmatch(std.Outputs["out"]); m == nil || m[1] != version {
 		e := diag.New(1021, "label", n.Label, "reason", fmt.Sprintf("the standard library for %s comes from %s, but the crate compiles with rustc %s; cross-compiling needs the default rustc of the nixpkgs pin",
 			plat, path.Base(std.Outputs["out"]), version))
 		e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}

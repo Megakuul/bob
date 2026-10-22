@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // specType is the npm-package-arg type of a registry dependency spec.
@@ -26,10 +27,10 @@ type spec struct {
 }
 
 var (
-	reURLSpec  = regexp.MustCompile(`(?i)^(?:git[+])?[a-z]+:`)
-	reFileType = regexp.MustCompile(`(?i)[.](?:tgz|tar\.gz|tar)$`)
-	reFileSpec = regexp.MustCompile(`^(?:[.]|~[/]|[/]|[a-zA-Z]:)`)
-	reGitSpec  = regexp.MustCompile(`(?i)^[^@]+@[^:.]+\.[^:]+:.+$`)
+	reURLSpec  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?i)^(?:git[+])?[a-z]+:`) })
+	reFileType = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?i)[.](?:tgz|tar\.gz|tar)$`) })
+	reFileSpec = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(?:[.]|~[/]|[/]|[a-zA-Z]:)`) })
+	reGitSpec  = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?i)^[^@]+@[^:.]+\.[^:]+:.+$`) })
 )
 
 // ValidName reports whether name is an npm package name bob accepts: npm's rules for old
@@ -105,11 +106,11 @@ func parseSpec(name, raw string) (spec, error) {
 		raw = "*"
 	}
 	switch {
-	case reFileSpec.MatchString(raw) || strings.HasPrefix(strings.ToLower(raw), "file:"):
+	case reFileSpec().MatchString(raw) || strings.HasPrefix(strings.ToLower(raw), "file:"):
 		return spec{}, fmt.Errorf("%s@%s: file and directory dependencies are not supported", name, raw)
-	case reURLSpec.MatchString(raw) || reGitSpec.MatchString(raw):
+	case reURLSpec().MatchString(raw) || reGitSpec().MatchString(raw):
 		return spec{}, fmt.Errorf("%s@%s: git and URL dependencies are not supported", name, raw)
-	case strings.ContainsAny(raw, `/\`) || reFileType.MatchString(raw):
+	case strings.ContainsAny(raw, `/\`) || reFileType().MatchString(raw):
 		return spec{}, fmt.Errorf("%s@%s: git, file and URL dependencies are not supported", name, raw)
 	}
 	s := spec{name: name, fetch: strings.TrimSpace(raw)}

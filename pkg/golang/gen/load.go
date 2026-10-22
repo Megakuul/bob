@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/drv"
@@ -131,7 +132,7 @@ func (pl *planner) diskModule(importPath string) *wsModule {
 // packages are not built by the Go ecosystem.
 func (pl *planner) rootModule() string { return pl.req.Graph.Module }
 
-var moduleLine = regexp.MustCompile(`(?m)^module\s+"?([^\s"]+)"?\s*$`)
+var moduleLine = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`(?m)^module\s+"?([^\s"]+)"?\s*$`) })
 
 func modulePathOf(p string) string {
 	f, err := os.Open(p)
@@ -141,7 +142,7 @@ func modulePathOf(p string) string {
 	defer f.Close()
 	b := make([]byte, maxGoModRead)
 	n, _ := f.Read(b)
-	if m := moduleLine.FindSubmatch(b[:n]); m != nil {
+	if m := moduleLine().FindSubmatch(b[:n]); m != nil {
 		return string(m[1])
 	}
 	return ""

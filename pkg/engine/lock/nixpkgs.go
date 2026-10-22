@@ -26,10 +26,10 @@ func ParseNixpkgs(s string) (NixpkgsSpec, error) {
 		return NixpkgsSpec{Channel: DefaultChannel}, nil
 	}
 	ch, rev, hasRev := strings.Cut(s, "@")
-	if !channelRe.MatchString(ch) {
+	if !channelRe().MatchString(ch) {
 		return NixpkgsSpec{}, fmt.Errorf("nixpkgs channel %q is invalid (e.g. %q)", clip(ch), DefaultChannel)
 	}
-	if hasRev && !hex40Re.MatchString(rev) {
+	if hasRev && !hex40Re().MatchString(rev) {
 		return NixpkgsSpec{}, fmt.Errorf("nixpkgs revision %q is not a 40-digit commit id", clip(rev))
 	}
 	return NixpkgsSpec{Channel: ch, Rev: rev}, nil
@@ -50,7 +50,7 @@ func NixpkgsRequest(p NixpkgsPin) fetch.Request {
 // ChannelRev returns the current revision of a nixpkgs channel from
 // https://channels.nixos.org/<channel>/git-revision.
 func ChannelRev(ctx context.Context, channel string) (string, error) {
-	if !channelRe.MatchString(channel) {
+	if !channelRe().MatchString(channel) {
 		return "", fmt.Errorf("nixpkgs channel %q is invalid", clip(channel))
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -72,7 +72,7 @@ func ChannelRev(ctx context.Context, channel string) (string, error) {
 		return "", fmt.Errorf("nixpkgs channel %s: %w", channel, err)
 	}
 	rev := strings.TrimSpace(string(b))
-	if !hex40Re.MatchString(rev) {
+	if !hex40Re().MatchString(rev) {
 		return "", fmt.Errorf("nixpkgs channel %s: the server returned %q, not a commit id", channel, clip(rev))
 	}
 	return rev, nil
@@ -94,7 +94,7 @@ func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPi
 		return NixpkgsPin{}, err
 	}
 	rev := spec.Rev
-	if rev == "" && !update && old.Channel == spec.Channel && hex40Re.MatchString(old.Rev) {
+	if rev == "" && !update && old.Channel == spec.Channel && hex40Re().MatchString(old.Rev) {
 		rev = old.Rev
 	}
 	if rev == "" {

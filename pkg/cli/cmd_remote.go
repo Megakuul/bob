@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -25,20 +26,20 @@ import (
 
 // projectSlug is the syntax of a server project id (decision D-IB12-1: 1-40 characters a-z,
 // 0-9 and '-', a letter first, no '-' last).
-var projectSlug = regexp.MustCompile(`^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$`)
+var projectSlug = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$`) })
 
 // project is the server project of the repository at root: BOB_SERVER_PROJECT, else the slug
 // of the root directory's name (decision D-IC1-5). A server creates the project on its first
 // upload build when it does not exist yet (decision D-IB13-1).
 func (e *env) project(root string) (string, error) {
 	if p := e.getenv("BOB_SERVER_PROJECT"); p != "" {
-		if !projectSlug.MatchString(p) {
+		if !projectSlug().MatchString(p) {
 			return "", diag.New(4, "flag", "BOB_SERVER_PROJECT", "what", "a project id (lower-case letters, digits and -, a letter first)")
 		}
 		return p, nil
 	}
 	p := slug(filepath.Base(root))
-	if !projectSlug.MatchString(p) {
+	if !projectSlug().MatchString(p) {
 		return "", diag.New(4, "flag", "BOB_SERVER_PROJECT", "what", "a project id (the repository directory name is not one)")
 	}
 	return p, nil

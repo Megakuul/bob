@@ -18,3 +18,11 @@
 ## notes
 - tests/errors builds its own bob/bob-server (errors_test.go:58) with the caller's GOFLAGS; not
   changed (not harness-built).
+
+## verification
+pkg/engine/fetch and tests/nix TestRNIX014* pass with and without -tags bobtest; tests/harness
+passes; tests/errors quick tests pass; tests/platforms, tests/eco/* compile (vet clean).
+tests/cli (harness-built bob with bobtest) could not be confirmed green: runs exit 3 / time out
+because the repo's deploy/bob.go fails evaluation (`unknown node kind "release"`, another
+unit's state) and the host is overloaded (load 25-35, disk 94%); no failure points at the
+loopback or tags change. tests/errors TestFaults timed out at 20m under the same load.

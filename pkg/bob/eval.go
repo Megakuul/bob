@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -87,10 +88,12 @@ func (ev *evaluation) misuse(msg string) {
 
 // misusePosRe matches the "<file>.go:<line>: " position and the optional "//<dir>:<name>: "
 // label at the start of a misuse message.
-var misusePosRe = regexp.MustCompile(`^([^\s:]+\.go):([0-9]+): (?:(//[^\s:]*:[^\s:]+): )?`)
+var misusePosRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^([^\s:]+\.go):([0-9]+): (?:(//[^\s:]*:[^\s:]+): )?`)
+})
 
 func misusePos(msg string) (Position, string) {
-	m := misusePosRe.FindStringSubmatch(msg)
+	m := misusePosRe().FindStringSubmatch(msg)
 	if m == nil {
 		return Position{}, ""
 	}
@@ -503,7 +506,7 @@ func keys(m map[*definition]bool) []*definition {
 	return out
 }
 
-var varLine = regexp.MustCompile(`^\s*(?:var\s+)?([\pL_][\pL\pN_]*)\b[^=]*=`)
+var varLine = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*(?:var\s+)?([\pL_][\pL\pN_]*)\b[^=]*=`) })
 
 // varName reads the variable name of a definition from its bob.go line ("var Lib = bob.Define(").
 func varName(d *definition) string {
@@ -522,7 +525,7 @@ func varName(d *definition) string {
 	if d.pos.Line < 1 || d.pos.Line > len(lines) {
 		return ""
 	}
-	if m := varLine.FindSubmatch(lines[d.pos.Line-1]); m != nil {
+	if m := varLine().FindSubmatch(lines[d.pos.Line-1]); m != nil {
 		return string(m[1])
 	}
 	return ""

@@ -53,7 +53,7 @@ func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (prep en
 		return prep, fmt.Errorf("the Rust toolchain of %s is not resolved", m.node.Label)
 	}
 	version := ""
-	if v := rustcName.FindStringSubmatch(tc.Outputs["out"]); v != nil {
+	if v := rustcName().FindStringSubmatch(tc.Outputs["out"]); v != nil {
 		version = v[1]
 	}
 	prep.Packages = append(prep.Packages, engine.DevPackage{Name: "rustc", Version: version, Path: tc.Outputs["out"], Drv: tc.Drv})

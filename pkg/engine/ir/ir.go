@@ -126,7 +126,7 @@ func KnownKind(kind string) bool {
 	return ecosystems[eco]
 }
 
-var kindName = regexp.MustCompile(`^[a-z0-9]+(\.[a-z0-9]+)*$`)
+var kindName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9]+(\.[a-z0-9]+)*$`) })
 
 // invalid is the structured error for IR that breaks the format (internal class: the evaluator
 // bob generated wrote it).
@@ -247,7 +247,7 @@ func (g *Graph) validate() error {
 		if _, dup := byID[n.ID]; dup {
 			return invalid("node id %s appears twice", n.ID)
 		}
-		if !kindName.MatchString(n.Kind) || !KnownKind(n.Kind) {
+		if !kindName().MatchString(n.Kind) || !KnownKind(n.Kind) {
 			return invalid("node %s has the unknown kind %q", n.ID, n.Kind)
 		}
 		byID[n.ID] = n

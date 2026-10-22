@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 )
@@ -61,7 +62,7 @@ type diagLine struct {
 // maxChain bounds the dependency chain shown with an error (hostile evaluator output).
 const maxChain = 64
 
-var codeRe = regexp.MustCompile(`^BOB-E-([0-9]{4})$`)
+var codeRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^BOB-E-([0-9]{4})$`) })
 
 // Diagnostics parses the evaluator's stderr. It returns the errors of its bob:: lines (file
 // names passed through file, which maps evaluator positions to what the user sees) and the
@@ -97,7 +98,7 @@ func Diagnostics(stderr []byte, file func(string) string) (Errors, []string) {
 // evalDiag maps one diagnostic line: a known code becomes that error with its template
 // arguments recovered from the message; anything else is a definition error at its position.
 func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
-	if m := codeRe.FindStringSubmatch(d.Code); m != nil {
+	if m := codeRe().FindStringSubmatch(d.Code); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		if args, ok := templateArgs(diag.Code(n), d.Msg); ok {
 			if d.Label != "" && args["label"] == "" {
@@ -151,14 +152,14 @@ func templateArgs(code diag.Code, msg string) (map[string]string, bool) {
 	return nil, false
 }
 
-var templateArgRe = regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`)
+var templateArgRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`) })
 
 func templateRegexp(tmpl string) (*regexp.Regexp, []string, error) {
 	var b strings.Builder
 	var names []string
 	b.WriteString("^")
 	last := 0
-	for _, loc := range templateArgRe.FindAllStringSubmatchIndex(tmpl, -1) {
+	for _, loc := range templateArgRe().FindAllStringSubmatchIndex(tmpl, -1) {
 		b.WriteString(regexp.QuoteMeta(tmpl[last:loc[0]]))
 		b.WriteString("(.*?)")
 		names = append(names, tmpl[loc[2]:loc[3]])

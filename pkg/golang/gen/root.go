@@ -119,7 +119,7 @@ func explainRoot(module string, want map[string]string) func([]byte) []engine.Dr
 // bob.go files of the repository at root (string literals only; the highest version wins when
 // several files import one module). Directories are walked as the evaluator scans them: names
 // starting with "." or "_", testdata, vendor and node_modules are skipped, and so are other Go
-// modules (a go.mod bob did not generate).
+// modules (a go.mod bob did not generate) and nested repositories (their own bob.lock).
 func BobImports(root string) ([]resolve.Module, error) {
 	if root == "" {
 		return nil, nil
@@ -140,6 +140,9 @@ func BobImports(root string) ([]resolve.Module, error) {
 			n := d.Name()
 			if strings.HasPrefix(n, ".") || strings.HasPrefix(n, "_") || n == "testdata" || n == "vendor" || n == "node_modules" {
 				return filepath.SkipDir
+			}
+			if _, err := os.Lstat(filepath.Join(p, "bob.lock")); err == nil {
+				return filepath.SkipDir // a nested repository (R-FW-002 scan)
 			}
 			if gm, err := os.ReadFile(filepath.Join(p, "go.mod")); err == nil && !bytes.HasPrefix(gm, []byte(goModHeader)) {
 				return filepath.SkipDir

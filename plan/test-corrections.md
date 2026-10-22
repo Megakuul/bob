@@ -236,3 +236,14 @@ access and the primitive constructors change.
 32. APPLIED. tests/server/logs_forged_test.go: `&store.JobRecord{ID: j.ID}` →
    `&store.JobRecord{ID: store.ID(j.ID)}`; `victim.ID` / `victim.Epoch` / `victim.Owner` →
    `.Value()`.
+33. APPLIED 2026-10-22 I-P3 (owner approval relayed by the coordinator; A137). I-M6a TEST
+   PROBLEM 1: tests/devenv/shim_test.go TestRDEV008ExecAndShims expected `.bob/bin/go run ./x`
+   (program `os.Exit(5)`) to exit 5. `go run` itself exits 1 and prints "exit status 5"
+   (verified 2026-10-22 with the pinned /nix/store/x1qs…-go-1.26.8/bin/go and go 1.26.9, no
+   shim involved). The test now expects go's own 1 plus "exit status 5" on stderr, and keeps the
+   pass-through assertion with a tool whose status is not 1: `.bob/bin/jq -n '"" |
+   halt_error(5)'` must exit 5 directly and via `sh -c '…; echo $?'` (jq 1.8.1/1.8.2 verified
+   to exit 5). SPEC R-DEV-008 acceptance text updated alike (spec/02-cli-dev.md + SPEC.md).
+34. APPLIED 2026-10-22 I-P3 (A137). I-M6a TEST PROBLEM 2: tests/devenv/shim_test.go `findTool`
+   indexed `strings.Fields(c + " ")[0]`, which panics for every process with an empty
+   /proc/<pid>/cmdline (kernel threads, zombies); such processes are now skipped.

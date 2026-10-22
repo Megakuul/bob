@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/engine/ir"
 )
@@ -20,9 +21,9 @@ import (
 // of dependency bob repositories are mapped back to the files they came from.
 
 // compileLineRe is one go build diagnostic: file:line[:col]: message.
-var compileLineRe = regexp.MustCompile(`^(\S+?\.go):(\d+)(?::(\d+))?: (.*)$`)
+var compileLineRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(\S+?\.go):(\d+)(?::(\d+))?: (.*)$`) })
 
-var bobmainRe = regexp.MustCompile(`\bbobmain[0-9]+\b`)
+var bobmainRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\bbobmain[0-9]+\b`) })
 
 // compileErrors maps the go build output of a failed evaluator build.
 func compileErrors(stderr []byte, g *generated, deps *depSet) error {
@@ -42,7 +43,7 @@ func compileErrors(stderr []byte, g *generated, deps *depSet) error {
 			}
 			continue
 		}
-		m := compileLineRe.FindStringSubmatch(line)
+		m := compileLineRe().FindStringSubmatch(line)
 		if m == nil {
 			other = append(other, line)
 			continue
@@ -107,7 +108,7 @@ func mapPaths(s string, g *generated, deps *depSet) string {
 	for _, m := range deps.sorted() {
 		s = strings.ReplaceAll(s, srcDir+"/"+genDir+"/mods/"+m.copyDir(), m.path+"@"+m.version)
 	}
-	s = bobmainRe.ReplaceAllString(s, "main")
+	s = bobmainRe().ReplaceAllString(s, "main")
 	return strings.ReplaceAll(s, srcDir+"/", "")
 }
 

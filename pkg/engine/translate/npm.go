@@ -25,7 +25,7 @@ func Program(label string, stderr []string) *diag.Error {
 	}
 	e := newErr(f.code, f.args(label))
 	for _, l := range f.excerpt {
-		e.Excerpt = append(e.Excerpt, storePathRe.ReplaceAllStringFunc(l, func(m string) string {
+		e.Excerpt = append(e.Excerpt, storePathRe().ReplaceAllStringFunc(l, func(m string) string {
 			return "…/" + m[len("/nix/store/")+33:]
 		}))
 	}

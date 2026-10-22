@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/megakuul/bob/pkg/engine/ir"
@@ -74,12 +75,16 @@ func tooLarge(shown string, max int64) error {
 
 var (
 	// modElemRe is the character set of a module path element (cmd/go's module.CheckPath).
-	modElemRe = regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
+	modElemRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9._~-]+$`) })
 	// modVersionRe is a Go module version: canonical semver with optional pre-release and build
 	// metadata (pseudo-versions and +incompatible included).
-	modVersionRe = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	modVersionRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	})
 	// goLineRe is the version of a go directive ("1.26", "1.26.0", "1.27rc1").
-	goLineRe = regexp.MustCompile(`^[1-9][0-9]*(\.(0|[1-9][0-9]*)){1,2}((rc|beta)[1-9][0-9]*)?$`)
+	goLineRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^[1-9][0-9]*(\.(0|[1-9][0-9]*)){1,2}((rc|beta)[1-9][0-9]*)?$`)
+	})
 )
 
 // checkModulePath validates a module path from a go.mod: the rules of cmd/go's
@@ -95,7 +100,7 @@ func checkModulePath(p string, main bool) error {
 		return fmt.Errorf("module path %q does not start with a domain name", clip(p))
 	}
 	for _, e := range elems {
-		if e == "" || !modElemRe.MatchString(e) || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") {
+		if e == "" || !modElemRe().MatchString(e) || strings.HasPrefix(e, ".") || strings.HasSuffix(e, ".") {
 			return fmt.Errorf("module path %q has an invalid element %q", clip(p), clip(e))
 		}
 	}
@@ -104,7 +109,7 @@ func checkModulePath(p string, main bool) error {
 
 // checkVersion validates a required module version.
 func checkVersion(mp, v string) error {
-	if !modVersionRe.MatchString(v) || len(v) > 256 {
+	if !modVersionRe().MatchString(v) || len(v) > 256 {
 		return fmt.Errorf("module %s: version %q is not a valid module version", mp, clip(v))
 	}
 	return nil
@@ -112,7 +117,7 @@ func checkVersion(mp, v string) error {
 
 // checkGoLine validates the version of a go directive.
 func checkGoLine(v string) error {
-	if v != "" && !goLineRe.MatchString(v) {
+	if v != "" && !goLineRe().MatchString(v) {
 		return fmt.Errorf("go version %q is not valid", clip(v))
 	}
 	return nil

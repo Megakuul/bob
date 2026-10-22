@@ -204,5 +204,5 @@ func stripANSI(s string) string {
 	if !strings.ContainsRune(s, 0x1b) {
 		return s
 	}
-	return ansiRe.ReplaceAllString(s, "")
+	return ansiRe().ReplaceAllString(s, "")
 }

@@ -5,6 +5,7 @@ import (
 	"maps"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob"
@@ -27,7 +28,7 @@ type Service struct {
 // defaultServiceTimeout is the readiness timeout of a service that sets none (R-FW-025).
 const defaultServiceTimeout = 30 * time.Second
 
-var serviceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+var serviceName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`) })
 
 // Services returns the IR form of a test's services and deps with the services' tools
 // appended. Problems (a nil service, no start command, not exactly one probe, two services
@@ -48,7 +49,7 @@ func Services(services []bob.Service, deps []bob.Package) ([]Service, []bob.Pack
 		problem := ""
 		port, cmd := sp.Ready.Port(), sp.Ready.Argv()
 		switch {
-		case !serviceName.MatchString(sp.Name):
+		case !serviceName().MatchString(sp.Name):
 			problem = fmt.Sprintf("service %d has the invalid name %q (letters, digits, '.', '_', '-')", i, sp.Name)
 		case len(sp.Start) == 0 || sp.Start[0] == "":
 			problem = fmt.Sprintf("service %s has no start command", sp.Name)

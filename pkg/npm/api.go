@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
@@ -147,7 +148,7 @@ func (*Lib) npmImporter() {}
 func (*Lib) npmDep()      {}
 
 // labelName matches bob's package names.
-var labelName = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,127}$`)
+var labelName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,127}$`) })
 
 // Library compiles with tsc into dist/ (+ .d.ts) and is linked into consumers' node_modules
 // under Name (R-NPM-006). Label //<dir>:<last element of Name>.
@@ -171,7 +172,7 @@ func Library(p *bob.P, o LibOpts) *Lib {
 	if o.Name == "" {
 		b.problems = append(b.problems, "npm.LibOpts.Name is required (the package name, e.g. \"@demo/ui\")")
 		label = "lib"
-	} else if !labelName.MatchString(label) {
+	} else if !labelName().MatchString(label) {
 		label = "lib"
 	}
 	srcs := o.Srcs
@@ -457,14 +458,14 @@ func (b *importer) tool(pk bob.Package) int {
 // defaultName is the label name: the given one or the directory's name.
 func (b *importer) defaultName(name, fallback string) string {
 	if name != "" {
-		if !labelName.MatchString(name) {
+		if !labelName().MatchString(name) {
 			b.problems = append(b.problems, fmt.Sprintf("name %q is not a valid package name (lower case letters, digits, '_', '-', '.')", name))
 			return fallback
 		}
 		return name
 	}
 	dir, _ := ext.CallerDir()
-	if base := path.Base(dir); dir != "" && labelName.MatchString(base) {
+	if base := path.Base(dir); dir != "" && labelName().MatchString(base) {
 		return base
 	}
 	return fallback

@@ -883,8 +883,9 @@ for moved bob binaries; the recorded path is the absolute `os.Executable()` at g
     `.bob/bin/go version` prints the pinned Go version and exits 0.
   - `.bob/bin/go` subprocesses started by gopls run in bob's mount namespace (S1 method:
     uid_map `0 <uid> 1`, mntns ≠ host).
-  - `sh -c '.bob/bin/go run ./x; echo $?'` with `os.Exit(5)` prints 5; SIGTERM to the shim
-    reaches the tool.
+  - The shim's exit status is the tool's: `sh -c '.bob/bin/jq -n "\"\" | halt_error(5)"; echo $?'`
+    prints 5, and `sh -c '.bob/bin/go run ./x; echo $?'` with `os.Exit(5)` prints go's own 1
+    (`go run` reports "exit status 5" and exits 1); SIGTERM to the shim reaches the tool.
   - Shim start overhead for `/bin/true` ≤ 15 ms p95 [8c/15G] and ≤ 20 ms [2c/4G] **[proposal;
     S1 measured 6.8–7.8 ms, 20 runs × 5 rounds, bobtest, indicative]**.
   - A shim whose root has no `.bob/env.json` exits 7 with `BOB-E-7006`.

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 )
@@ -13,22 +14,28 @@ import (
 // Build-log patterns (ADR 0017 Decision 4, step 3). They come from compilers and tools, not
 // from Nix, so they drift with toolchain versions, not with the Nix version.
 var (
-	reCDiag      = regexp.MustCompile(`^(\S+?\.(?:c|cc|cpp|cxx|h|hpp|hh|go|m|S)):(\d+):(\d+): (?:(fatal error|error): )?(.*)$`)
-	reRustDiag   = regexp.MustCompile(`^error(\[E\d+\])?: (.*)$`)
-	reRustLoc    = regexp.MustCompile(`^\s*--> (\S+):(\d+):(\d+)`)
-	reUndefRef   = regexp.MustCompile("undefined reference to `([^']+)'")
-	reNoLib      = regexp.MustCompile(`cannot find -l(\S+?)(:|$)`)
-	reNoHeader   = regexp.MustCompile(`fatal error: ([^:]+): No such file or directory`)
-	reGoTooOld   = regexp.MustCompile(`go: (\S+) requires go >= (\S+) \(running go (\S+);`)
-	reGoTestFail = regexp.MustCompile(`^--- FAIL: (\S+)`)
-	reRustCrate  = regexp.MustCompile("(?:unresolved module or unlinked crate|can't find crate for) `([^`]+)`")
-	reExecFail   = regexp.MustCompile(`^error: executing '([^']+)': (.*)$`)
-	reShSyntax   = regexp.MustCompile(`^(?:bash|sh): (?:-c: )?line \d+: syntax error`)
-	reNetwork    = regexp.MustCompile(`Network is unreachable|Could not resolve host|Temporary failure in name resolution|Name or service not known`)
-	reDLFailed   = regexp.MustCompile(`error: unable to download '([^']+)': (.*)$`)
-	reBobBuilder = regexp.MustCompile(`^bob-builder: `)
-	reBobDiag    = regexp.MustCompile(`^bob:: (\{.*\})\s*$`)
-	reDiagTimout = regexp.MustCompile(`^(\S+) timed out after (\d+)s$`)
+	reCDiag = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^(\S+?\.(?:c|cc|cpp|cxx|h|hpp|hh|go|m|S)):(\d+):(\d+): (?:(fatal error|error): )?(.*)$`)
+	})
+	reRustDiag   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^error(\[E\d+\])?: (.*)$`) })
+	reRustLoc    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s*--> (\S+):(\d+):(\d+)`) })
+	reUndefRef   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile("undefined reference to `([^']+)'") })
+	reNoLib      = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`cannot find -l(\S+?)(:|$)`) })
+	reNoHeader   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`fatal error: ([^:]+): No such file or directory`) })
+	reGoTooOld   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`go: (\S+) requires go >= (\S+) \(running go (\S+);`) })
+	reGoTestFail = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^--- FAIL: (\S+)`) })
+	reRustCrate  = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile("(?:unresolved module or unlinked crate|can't find crate for) `([^`]+)`")
+	})
+	reExecFail = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^error: executing '([^']+)': (.*)$`) })
+	reShSyntax = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(?:bash|sh): (?:-c: )?line \d+: syntax error`) })
+	reNetwork  = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`Network is unreachable|Could not resolve host|Temporary failure in name resolution|Name or service not known`)
+	})
+	reDLFailed   = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`error: unable to download '([^']+)': (.*)$`) })
+	reBobBuilder = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^bob-builder: `) })
+	reBobDiag    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^bob:: (\{.*\})\s*$`) })
+	reDiagTimout = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(\S+) timed out after (\d+)s$`) })
 )
 
 // classifyLog explains a builder that exited non-zero, from its own log.
@@ -49,17 +56,17 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 	}
 	// bob's own builder is broken (a bob bug)
 	for _, l := range lines {
-		if m := reExecFail.FindStringSubmatch(l); m != nil {
+		if m := reExecFail().FindStringSubmatch(l); m != nil {
 			return t.pkgErr(cBuilderBroken, drv, map[string]string{"reason": "cannot execute " + describeExe(m[1]) + ": " + m[2]})
 		}
-		if reShSyntax.MatchString(l) {
+		if reShSyntax().MatchString(l) {
 			e := t.pkgErr(cBuilderBroken, drv, map[string]string{"reason": "its build script has a syntax error"})
 			e.Excerpt = []string{l}
 			return e
 		}
 	}
 	for _, l := range lines {
-		if reNetwork.MatchString(l) {
+		if reNetwork().MatchString(l) {
 			e := t.pkgErr(cNetwork, drv, nil)
 			e.Excerpt = []string{l}
 			return e
@@ -77,7 +84,7 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 		return e
 	}
 	for _, l := range lines {
-		if m := reGoTooOld.FindStringSubmatch(l); m != nil {
+		if m := reGoTooOld().FindStringSubmatch(l); m != nil {
 			e := t.pkgErr(cGoTooOld, drv, map[string]string{"module": m[1], "want": m[2], "have": m[3]})
 			e.Excerpt = []string{l}
 			return e
@@ -85,21 +92,21 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 	}
 	// link errors before compile diagnostics: "collect2: error" is a link error
 	for _, l := range lines {
-		if m := reUndefRef.FindStringSubmatch(l); m != nil {
+		if m := reUndefRef().FindStringSubmatch(l); m != nil {
 			e := t.pkgErr(cUndefinedSymbol, drv, map[string]string{"symbol": m[1]})
-			e.Excerpt = grep(lines, func(s string) bool { return reUndefRef.MatchString(s) || strings.Contains(s, ": in function") }, 6)
+			e.Excerpt = grep(lines, func(s string) bool { return reUndefRef().MatchString(s) || strings.Contains(s, ": in function") }, 6)
 			return e
 		}
-		if m := reNoLib.FindStringSubmatch(l); m != nil {
+		if m := reNoLib().FindStringSubmatch(l); m != nil {
 			e := t.pkgErr(cLibMissing, drv, map[string]string{"lib": m[1]})
 			e.Excerpt = []string{shortTool(l)}
 			return e
 		}
 	}
 	for i, l := range lines {
-		if m := reNoHeader.FindStringSubmatch(l); m != nil {
+		if m := reNoHeader().FindStringSubmatch(l); m != nil {
 			e := t.pkgErr(cHeaderMissing, drv, map[string]string{"header": m[1]})
-			if d := reCDiag.FindStringSubmatch(l); d != nil {
+			if d := reCDiag().FindStringSubmatch(l); d != nil {
 				e.Location = t.location(p, d[1], d[2], d[3])
 			}
 			e.Excerpt = block(lines, i, 4)
@@ -113,7 +120,7 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 	e.Cause = "the build step exited with status " + exit
 	var tail []string
 	for _, l := range lines {
-		if !reBobBuilder.MatchString(l) {
+		if !reBobBuilder().MatchString(l) {
 			tail = append(tail, l)
 		}
 	}
@@ -123,14 +130,14 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 
 func (t *Translator) testFailure(drv string, lines []string) *diag.Error {
 	for i, l := range lines {
-		m := reGoTestFail.FindStringSubmatch(l)
+		m := reGoTestFail().FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}
 		e := t.pkgErr(cTestsFailed, drv, nil)
 		e.Cause = "test " + m[1] + " failed"
 		for _, x := range lines[i:] {
-			if strings.HasPrefix(x, "ok ") || strings.HasPrefix(x, "?") || reBobBuilder.MatchString(x) {
+			if strings.HasPrefix(x, "ok ") || strings.HasPrefix(x, "?") || reBobBuilder().MatchString(x) {
 				continue
 			}
 			e.Excerpt = append(e.Excerpt, x)
@@ -145,7 +152,7 @@ func (t *Translator) testFailure(drv string, lines []string) *diag.Error {
 
 func (t *Translator) compileError(drv string, p Pkg, lines []string) *diag.Error {
 	for i, l := range lines {
-		if m := reCDiag.FindStringSubmatch(l); m != nil && (m[4] != "" || strings.HasSuffix(m[1], ".go")) {
+		if m := reCDiag().FindStringSubmatch(l); m != nil && (m[4] != "" || strings.HasSuffix(m[1], ".go")) {
 			if strings.HasPrefix(m[5], "note:") || strings.HasPrefix(m[5], "warning:") {
 				continue
 			}
@@ -155,9 +162,9 @@ func (t *Translator) compileError(drv string, p Pkg, lines []string) *diag.Error
 			e.Excerpt = diagnostics(lines, i)
 			return e
 		}
-		if m := reRustDiag.FindStringSubmatch(l); m != nil && !strings.HasPrefix(m[2], "aborting due to") {
+		if m := reRustDiag().FindStringSubmatch(l); m != nil && !strings.HasPrefix(m[2], "aborting due to") {
 			loc := t.rustLoc(p, lines, i)
-			if c := reRustCrate.FindStringSubmatch(strings.Join(lines[i:min(len(lines), i+6)], "\n")); c != nil {
+			if c := reRustCrate().FindStringSubmatch(strings.Join(lines[i:min(len(lines), i+6)], "\n")); c != nil {
 				e := t.pkgErr(cRustCrate, drv, map[string]string{"crate": c[1]})
 				e.Excerpt = block(lines, i, 6)
 				e.Location = loc
@@ -184,7 +191,7 @@ func (t *Translator) location(p Pkg, file, line, col string) *diag.Pos {
 
 func (t *Translator) rustLoc(p Pkg, lines []string, i int) *diag.Pos {
 	for _, l := range lines[i:min(len(lines), i+3)] {
-		if m := reRustLoc.FindStringSubmatch(l); m != nil {
+		if m := reRustLoc().FindStringSubmatch(l); m != nil {
 			return t.location(p, m[1], m[2], m[3])
 		}
 	}
@@ -222,11 +229,11 @@ func (t *Translator) fetchFailed(drv string, p Pkg, lines []string) *diag.Error 
 		}
 	}
 	for _, l := range lines {
-		m := reDLFailed.FindStringSubmatch(l)
+		m := reDLFailed().FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}
-		if h := reHTTP.FindStringSubmatch(m[2]); h != nil {
+		if h := reHTTP().FindStringSubmatch(m[2]); h != nil {
 			if code, _ := strconv.Atoi(h[1]); code == 404 || code == 403 || code == 410 {
 				e := t.pkgErr(cDownloadNotFound, drv, map[string]string{"status": h[1]})
 				e.Excerpt = []string{"url: " + p.URL}
@@ -299,7 +306,7 @@ func diagnostics(lines []string, i int) []string {
 	var out []string
 	n := 0
 	for j := i; j < len(lines) && n < 3 && len(out) < 12; j++ {
-		m := reCDiag.FindStringSubmatch(lines[j])
+		m := reCDiag().FindStringSubmatch(lines[j])
 		if m == nil || strings.HasPrefix(m[5], "note:") || strings.HasPrefix(m[5], "warning:") {
 			continue
 		}
@@ -316,7 +323,7 @@ func diagnostics(lines []string, i int) []string {
 func (t *Translator) builderDiag(drv string, p Pkg, lines []string) *diag.Error {
 	msg, at := "", -1
 	for i, l := range lines {
-		m := reBobDiag.FindStringSubmatch(l)
+		m := reBobDiag().FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}
@@ -329,7 +336,7 @@ func (t *Translator) builderDiag(drv string, p Pkg, lines []string) *diag.Error 
 		return nil
 	}
 	first, rest, _ := strings.Cut(msg, "\n")
-	if m := reDiagTimout.FindStringSubmatch(first); m != nil && m[1] == p.Label {
+	if m := reDiagTimout().FindStringSubmatch(first); m != nil && m[1] == p.Label {
 		e := t.pkgErr(cTimeout, drv, map[string]string{"seconds": m[2]})
 		e.Excerpt = lastN(plainLog(lines[:at]), 5)
 		return e
@@ -353,7 +360,7 @@ const maxServiceTail = 20
 func plainLog(lines []string) []string {
 	var out []string
 	for _, l := range lines {
-		if !reBobBuilder.MatchString(l) && !strings.HasPrefix(l, "bob:: ") {
+		if !reBobBuilder().MatchString(l) && !strings.HasPrefix(l, "bob:: ") {
 			out = append(out, l)
 		}
 	}

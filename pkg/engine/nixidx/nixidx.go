@@ -86,10 +86,14 @@ type cacheFile struct {
 }
 
 var (
-	revRe    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
-	systemRe = regexp.MustCompile(`^(aarch64|x86_64)-linux$`)
-	attrRe   = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_'+-]*(\.[A-Za-z0-9_][A-Za-z0-9_'+-]*)*$`)
-	pathRe   = regexp.MustCompile(`^/nix/store/[0-9a-df-np-sv-z]{32}-[A-Za-z0-9+._?=-]+$`)
+	revRe    = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`) })
+	systemRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^(aarch64|x86_64)-linux$`) })
+	attrRe   = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_'+-]*(\.[A-Za-z0-9_][A-Za-z0-9_'+-]*)*$`)
+	})
+	pathRe = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^/nix/store/[0-9a-df-np-sv-z]{32}-[A-Za-z0-9+._?=-]+$`)
+	})
 )
 
 // Open opens the index; results are cached in <home>/cache/nixpkgs/<rev>-<system>.json.
@@ -97,7 +101,7 @@ func Open(ctx context.Context, st *store.Store, c Config) (*Index, error) {
 	if st == nil {
 		return nil, errors.New("nixidx: no store")
 	}
-	if !revRe.MatchString(c.Rev) || !systemRe.MatchString(c.System) || c.Source == "" || !filepath.IsAbs(c.Source) {
+	if !revRe().MatchString(c.Rev) || !systemRe().MatchString(c.System) || c.Source == "" || !filepath.IsAbs(c.Source) {
 		return nil, fmt.Errorf("nixidx: invalid config (rev %q, system %q, source %q)", c.Rev, c.System, c.Source)
 	}
 	for _, s := range c.PermittedInsecure {
@@ -152,7 +156,7 @@ func (i *Index) load() cacheFile {
 		c.Attrs, c.Allow = map[string]Entry{}, empty.Allow
 	}
 	for a, e := range c.Attrs {
-		if !attrRe.MatchString(a) || !e.valid() {
+		if !attrRe().MatchString(a) || !e.valid() {
 			delete(c.Attrs, a)
 		}
 	}
@@ -171,11 +175,11 @@ func (i *Index) save() error {
 
 // valid checks the shape of an entry read from disk or from resolve.nix.
 func (e Entry) valid() bool {
-	if e.DrvPath != "" && (!pathRe.MatchString(e.DrvPath) || !strings.HasSuffix(e.DrvPath, ".drv")) {
+	if e.DrvPath != "" && (!pathRe().MatchString(e.DrvPath) || !strings.HasSuffix(e.DrvPath, ".drv")) {
 		return false
 	}
 	for name, p := range e.Outputs {
-		if name == "" || len(name) > 64 || !pathRe.MatchString(p) {
+		if name == "" || len(name) > 64 || !pathRe().MatchString(p) {
 			return false
 		}
 	}
@@ -190,7 +194,7 @@ func (i *Index) Lookup(ctx context.Context, attrs []string) (map[string]Entry, e
 	sort.Strings(want)
 	want = slices.Compact(want)
 	for _, a := range want {
-		if len(a) > 256 || !attrRe.MatchString(a) {
+		if len(a) > 256 || !attrRe().MatchString(a) {
 			return nil, fmt.Errorf("nixidx: invalid attribute name %q", a)
 		}
 	}
@@ -376,14 +380,16 @@ func refusalReason(e Entry) string {
 // (shown only with -v), the abort message (if any) is the cause.
 func (i *Index) refused(attr, raw string) error {
 	e := diag.New(1017, "attr", attr, "system", i.cfg.System)
-	if m := abortRe.FindStringSubmatch(raw); m != nil {
+	if m := abortRe().FindStringSubmatch(raw); m != nil {
 		e.Cause = m[1]
 	}
 	e.Raw = rawLines(raw)
 	return e
 }
 
-var abortRe = regexp.MustCompile(`evaluation aborted with the following error message: '([^'\n]{1,500})'`)
+var abortRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`evaluation aborted with the following error message: '([^'\n]{1,500})'`)
+})
 
 // internal is BOB-E-9999: resolve.nix produced something bob does not understand.
 func (i *Index) internal(raw string) error {
@@ -437,7 +443,7 @@ func (i *Index) RecordModulo(hashes map[string]string) error {
 	defer i.mu.Unlock()
 	changed := false
 	for p, h := range hashes {
-		if !pathRe.MatchString(p) || len(h) != 64 {
+		if !pathRe().MatchString(p) || len(h) != 64 {
 			continue
 		}
 		if i.cache.Modulo == nil {
@@ -463,7 +469,7 @@ type substituter struct {
 // <substituter>/<hash>.narinfo per substituter until one has it, remembered for the run. A
 // substituter that cannot be reached counts as not having it (and is asked again next time).
 func (i *Index) Cached(ctx context.Context, outPath string) (bool, error) {
-	if !pathRe.MatchString(outPath) {
+	if !pathRe().MatchString(outPath) {
 		return false, fmt.Errorf("nixidx: %q is not a store path", outPath)
 	}
 	hash := strings.TrimPrefix(outPath, "/nix/store/")[:32]

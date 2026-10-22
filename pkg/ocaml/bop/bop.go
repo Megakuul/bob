@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/builder"
 )
@@ -155,8 +156,12 @@ func shebang(p string) ([]string, error) {
 }
 
 var (
-	ocamlLoc = regexp.MustCompile(`^File "([^"]+)", lines? ([0-9]+)(?:-[0-9]+)?, characters ([0-9]+)-`)
-	gccDiag  = regexp.MustCompile(`^([^\s:][^:]*):([0-9]+):([0-9]+): (?:fatal )?error: (.*)$`)
+	ocamlLoc = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^File "([^"]+)", lines? ([0-9]+)(?:-[0-9]+)?, characters ([0-9]+)-`)
+	})
+	gccDiag = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^([^\s:][^:]*):([0-9]+):([0-9]+): (?:fatal )?error: (.*)$`)
+	})
 )
 
 // diags reports compiler errors (at most 20) as structured diagnostics with repository paths.
@@ -164,19 +169,19 @@ func (r *runner) diags(out []byte) {
 	n := 0
 	lines := strings.Split(string(out), "\n")
 	for i := 0; i < len(lines) && n < 20; i++ {
-		if m := gccDiag.FindStringSubmatch(lines[i]); m != nil {
+		if m := gccDiag().FindStringSubmatch(lines[i]); m != nil {
 			ln, _ := strconv.Atoi(m[2])
 			col, _ := strconv.Atoi(m[3])
 			r.c.Diag("error", r.repoPath(m[1]), ln, col, m[4])
 			n++
 			continue
 		}
-		m := ocamlLoc.FindStringSubmatch(lines[i])
+		m := ocamlLoc().FindStringSubmatch(lines[i])
 		if m == nil {
 			continue
 		}
 		for j := i + 1; j < len(lines) && j < i+40; j++ {
-			if ocamlLoc.MatchString(lines[j]) {
+			if ocamlLoc().MatchString(lines[j]) {
 				break
 			}
 			if msg, ok := strings.CutPrefix(lines[j], "Error: "); ok {
