@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base32"
 	"errors"
+	"fmt"
+	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,21 +35,33 @@ type OrchKeyRecord struct {
 	NotAfter time.Time `cbor:"na,omitzero"`
 }
 
-// KeyID is the kid of a public key: "k" + base32 of the first 10 bytes of its SHA-256 (the
-// scheme of fleetsrv).
-func KeyID(pub ed25519.PublicKey) string {
-	h := sha256.Sum256(pub)
-	return "k" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(h[:10]))
+// rotatedKid is the kid of the n-th rotated key: "k" + 6 digits. The key controller derives
+// the next kid from the published ones, so a pass that crashed between okey/<kid> and
+// fleet/cfg.k meets its own record again (Create → exists) and publishes it: no orphan seed.
+func rotatedKid(n int) string { return fmt.Sprintf("k%06d", n) }
+
+// kidSeq is n of a rotated kid; 0 for any other kid (fleetsrv's start-up keys).
+func kidSeq(kid string) int {
+	d, ok := strings.CutPrefix(kid, "k")
+	if !ok || len(d) != 6 {
+		return 0
+	}
+	n, err := strconv.Atoi(d)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // Keys is the key controller.
 //
-// Write order: okey/<kid> (the record) is created before its public key is published in
-// fleet/cfg.k (the index), so a published key always has its seed. A crash in between leaves
-// an unpublished okey/<kid> that nothing uses; the next pass creates another key.
+// Write order: okey/<kid> (the seed) is created before its public key is published in
+// fleet/cfg.k, so a published key always has its seed (a published key without one could
+// never sign). A crash in between is finished by the next pass (same kid, see rotatedKid).
 type Keys struct {
 	Control, Fleet *store.Bucket
 	Now            func() time.Time
+	Log            *slog.Logger
 }
 
 // Pass is the key controller pass (hourly): when no published key is valid beyond now +
@@ -78,15 +91,15 @@ func (k *Keys) Rotate(ctx context.Context, now time.Time) ([]store.FleetKey, err
 	retire := func(fk store.FleetKey) bool { return fk.NotAfter.Add(keyRetire).Before(now) }
 	var add *store.FleetKey
 	if !slices.ContainsFunc(keys, fresh) {
-		pub, priv, err := ed25519.GenerateKey(rand.Reader)
+		top := 0
+		for _, fk := range keys {
+			top = max(top, kidSeq(fk.Kid))
+		}
+		rec, err := k.next(ctx, top, now)
 		if err != nil {
 			return nil, err
 		}
-		rec := &OrchKeyRecord{Kid: KeyID(pub), Seed: priv.Seed(), Created: now, NotAfter: now.Add(KeyLifetime)}
-		if err := store.Create(ctx, k.Control, rec); err != nil {
-			return nil, err
-		}
-		add = &store.FleetKey{Kid: rec.Kid, Pub: pub, NotAfter: rec.NotAfter}
+		add = &store.FleetKey{Kid: rec.Kid, Pub: ed25519.NewKeyFromSeed(rec.Seed).Public().(ed25519.PublicKey), NotAfter: rec.NotAfter}
 	}
 	if add == nil && !slices.ContainsFunc(keys, retire) {
 		return keys, nil
@@ -114,8 +127,32 @@ func (k *Keys) Rotate(ctx context.Context, now time.Time) ([]store.FleetKey, err
 	return got.Keys, nil
 }
 
+// next creates okey/<kid> for the first rotated kid after top, or adopts the record an
+// earlier (crashed) pass or another orchestrator created under that kid. A record that is not
+// fresh (keys retired from fleet/cfg.k while the fleet was down) is skipped: kids only grow.
+func (k *Keys) next(ctx context.Context, top int, now time.Time) (*OrchKeyRecord, error) {
+	for n := top + 1; n <= top+1000; n++ {
+		seed := make([]byte, ed25519.SeedSize)
+		if _, err := rand.Read(seed); err != nil {
+			return nil, err
+		}
+		rec := &OrchKeyRecord{Kid: rotatedKid(n), Seed: seed, Created: now, NotAfter: now.Add(KeyLifetime)}
+		err := store.Create(ctx, k.Control, rec)
+		if errors.Is(err, store.ErrExists) {
+			rec, err = store.Get(ctx, k.Control, &OrchKeyRecord{Kid: rotatedKid(n)})
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(rec.Seed) == ed25519.SeedSize && rec.NotAfter.After(now.Add(KeyRotateBefore)) {
+			return rec, nil
+		}
+	}
+	return nil, errors.New("orchestrator: no usable key id within 1000 of the published ones")
+}
+
 // Controller returns the key controller (hourly, lease ctl/key).
 func (k *Keys) Controller(owner string, skew time.Duration) *Controller {
 	return &Controller{ID: CtlKey, Fleet: k.Fleet, Owner: owner, Interval: time.Hour, Skew: skew,
-		Now: k.Now, Persist: true, Pass: k.Pass}
+		Now: k.Now, Persist: true, Pass: k.Pass, Log: k.Log}
 }

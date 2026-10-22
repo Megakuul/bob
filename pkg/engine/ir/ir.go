@@ -67,13 +67,15 @@ type Node struct {
 	Nix       *Nix                       `json:"nix,omitempty"`
 }
 
-// Pos is a module-relative bob.go position.
+// Pos is a module-relative bob.go position. Col is the 1-based byte column of the constructor
+// call (0 when unknown); error messages show file:line, bob graph file:line:col.
 type Pos struct {
 	File string `json:"file"`
 	Line int    `json:"line"`
+	Col  int    `json:"col,omitempty"`
 }
 
-// String returns "libs/foo/bob.go:12".
+// String returns "libs/foo/bob.go:12" (without the column: the form of error messages).
 func (p Pos) String() string { return fmt.Sprintf("%s:%d", p.File, p.Line) }
 
 // Srcs is one Sources value, resolved by bob (not by the evaluator).

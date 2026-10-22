@@ -131,6 +131,19 @@ func New(p *bob.P, kind, name string, deps []bob.Package, srcs []bob.Sources, sp
 	return n
 }
 
+// NewIn is New for a package whose label directory is dir (relative to the repository or, in a
+// dependency repo, to its module root; "" is the root) instead of the directory of the calling
+// bob.go: packages an ecosystem places below the declaring definition, such as a Go binary
+// //<module dir>/<dir>:<name> declared in the module's bob.go (SPEC §03.2.1). An invalid dir
+// is a definition error and gives a zero Node.
+func NewIn(p *bob.P, kind, dir, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node {
+	if graph.NewNodeIn == nil {
+		return bob.Node{}
+	}
+	n, _ := graph.NewNodeIn(p, kind, dir, name, deps, srcs, spec).(bob.Node)
+	return n
+}
+
 // Restrict limits the platforms n may be built for, from a kind's `Platforms []bob.Platform`
 // option (SPEC R-FW-030, R-PLAT-006); an empty list allows every platform. Requesting n,
 // directly or as a dependency, for another platform fails the evaluation with BOB-E-0006
@@ -150,4 +163,13 @@ func ConfigOf(n *bob.Node) Config {
 		return Config{}
 	}
 	return Config{c: graph.ConfigOf(n)}
+}
+
+// Errorf records a definition error of the running constructor, for example an invalid option
+// of an ecosystem constructor. Evaluation goes on; it fails at the end with every error. Start
+// the message with the position it concerns ("api/bob.go:12: …", from Node.DefinedAt).
+func Errorf(format string, a ...any) {
+	if graph.Misuse != nil {
+		graph.Misuse(fmt.Sprintf(format, a...))
+	}
 }

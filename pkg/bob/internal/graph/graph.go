@@ -97,6 +97,9 @@ var (
 	// NewNode creates a node: p is a *bob.P, deps a []bob.Package, srcs a []bob.Sources; the
 	// result is a bob.Node.
 	NewNode func(p any, kind, name string, deps, srcs, spec any) any
+	// NewNodeIn is NewNode with the label directory dir (repository- or module-relative)
+	// instead of the calling bob.go's directory.
+	NewNodeIn func(p any, kind, dir, name string, deps, srcs, spec any) any
 	// ConfigOf returns the configuration of n, a *bob.Node.
 	ConfigOf func(n any) Config
 	// Misuse records a definition error caused by a constructor (for example reading an axis

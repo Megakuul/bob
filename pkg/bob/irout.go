@@ -58,6 +58,7 @@ type irNode struct {
 type irPos struct {
 	File string `json:"file"`
 	Line int    `json:"line"`
+	Col  int    `json:"col,omitempty"`
 }
 
 type irSrcs struct {
@@ -101,7 +102,7 @@ func (ev *evaluation) encode(repo RepoOpts, pipes []pipelineJSON, targets []targ
 			return
 		}
 		seen[n] = true
-		in := irNode{ID: n.id, Kind: n.kind.Name, Label: n.label.String(), DefinedAt: irPos{n.pos.File, n.pos.Line},
+		in := irNode{ID: n.id, Kind: n.kind.Name, Label: n.label.String(), DefinedAt: irPos{n.pos.File, n.pos.Line, ev.column(n.pos)},
 			Proj: n.proj.json(), Deps: []string{}, Srcs: []irSrcs{}, Spec: n.spec, Nix: n.nix}
 		for _, d := range n.deps {
 			in.Deps = append(in.Deps, d.id)

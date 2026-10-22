@@ -6,24 +6,24 @@ require (
 	connectrpc.com/connect v1.21.1
 	github.com/chromedp/cdproto v0.157.8
 	github.com/chromedp/chromedp v0.21.0
+	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/klauspost/compress v1.20.3
+	github.com/megakuul/lake v0.5.3
 	github.com/ulikunitz/xz v0.5.17
+	golang.org/x/crypto v0.58.0
+	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.12
 )
 
 require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
-	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/megakuul/lake v0.5.3 // indirect
 	github.com/parquet-go/bitpack v1.0.0 // indirect
 	github.com/parquet-go/jsonlite v1.5.2 // indirect
 	github.com/parquet-go/parquet-go v0.30.2-0.20260721183652-ef5d53accfc9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 )
 
@@ -45,7 +45,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.31.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.36.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.43.3 // indirect
-	github.com/aws/smithy-go v1.27.2 // indirect
+	github.com/aws/smithy-go v1.27.2
 	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1

@@ -107,12 +107,18 @@ func bobSite() site {
 	var pcs [64]uintptr
 	n := runtime.Callers(2, pcs[:])
 	frames := runtime.CallersFrames(pcs[:n])
+	callee := "" // the function the bob.go frame called (its column is in the IR)
 	for {
 		f, more := frames.Next()
 		if e.isBobFile(f.File) {
 			mod, file, dir, ok := e.locate(f.File)
-			return site{mod: mod, dir: dir, pos: Position{File: file, Line: f.Line}, ok: ok, file: f.File}
+			pos := Position{File: file, Line: f.Line}
+			if ev := active; ev != nil && ok && mod == "" {
+				ev.noteCall(pos, callee)
+			}
+			return site{mod: mod, dir: dir, pos: pos, ok: ok, file: f.File}
 		}
+		callee = f.Function
 		if !more {
 			return site{}
 		}

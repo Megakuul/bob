@@ -37,7 +37,7 @@ func controllerParts(env *server.Env, parts *server.OrchestratorParts) *controll
 	owner, ctl, fl := env.Config.Name, env.Storage.Control, env.Storage.Fleet
 	cs.Membership = &orchestrator.Membership{Fleet: fl, ID: owner, Endpoint: endpoint(env.Config), Version: server.Version(),
 		Now: env.Now, Log: env.Log}
-	cs.Keys = &orchestrator.Keys{Control: ctl, Fleet: fl, Now: env.Now}
+	cs.Keys = &orchestrator.Keys{Control: ctl, Fleet: fl, Now: env.Now, Log: env.Log}
 	repair := &orchestrator.IndexRepair{Control: ctl, Fleet: fl, JobShards: cs.JobShards, Log: env.Log}
 	retention := &orchestrator.Retention{Control: ctl, Fleet: fl, Log: env.Log,
 		Logs: setting(env, "BOB_RETENTION_LOGS", 0), Analytics: setting(env, "BOB_RETENTION_ANALYTICS", 0),

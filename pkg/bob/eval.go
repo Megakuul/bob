@@ -36,6 +36,8 @@ type evaluation struct {
 	stack        []frame
 	nodes        map[string]*node
 	diags        []diagnostic
+	calls        map[Position]string // bob.go position → function called there (column.go)
+	lines        map[string][][]byte // bob.go file → its lines, read for columns
 }
 
 type frame struct {
