@@ -18,3 +18,9 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    reject an unregistered kind (R-FW-047); the toy-kind test must therefore link the toy
    ecosystem: blank-import `github.com/megakuul/bob/tests/core/toyeco` in tests/core (non-test
    file or helpers_test.go), registering the toy kinds in the test binary.
+5. A70 `tests/sandbox` layer-removal build `-tags bob_noseccomp`, case `sockets`: `AF_VSOCK socket`
+   leaks with seccomp removed. No other layer can refuse socket families (Landlock has no socket
+   family control, checked in kernel headers; vsock is loaded on the host); S13 never ran this case
+   without seccomp. Ruling: seccomp is the only layer for socket families, so the layer-removal
+   expectation for that one check must be "leaks when seccomp is removed" (the other layers still
+   hold for the rest of the case). Evidence: plan/progress/I-M3b.md TEST PROBLEM.

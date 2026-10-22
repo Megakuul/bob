@@ -2,9 +2,18 @@ package eval
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/megakuul/bob/pkg/engine/eval/evalbox"
 )
+
+// DisabledLayer names the evaluator sandbox layer a test build removed (HARNESS.md §7.4
+// layer-removal runs, build tags bob_nolandlock and bob_noseccomp). Empty in real builds.
+const DisabledLayer = evalbox.DisabledLayer
 
 // Request is one evaluation of a repository's bob.go files (SPEC §1.2, R-FW-043).
 type Request struct {
@@ -14,7 +23,8 @@ type Request struct {
 }
 
 // Limits bound one evaluation inside the evaluator sandbox (R-FW-045, S13 §5.3). Wall clock,
-// IR output and stderr caps always apply; Pids and MemoryBytes need a delegated cgroup.
+// IR output, stderr and memory limits always apply; with a delegated cgroup they are enforced
+// by it (and Pids only there, otherwise by RLIMIT_NPROC).
 type Limits struct {
 	WallClock   time.Duration // default 120 s
 	IROutput    int64         // bytes written to fd 3, default 64 MiB
@@ -31,14 +41,69 @@ type Result struct {
 	Stderr []byte // evaluator diagnostics, capped at 1 MiB
 }
 
-// Evaluate generates (or reuses) the evaluator of r.Root and runs it in the evaluator sandbox
-// (R-FW-045).
-func Evaluate(ctx context.Context, r Request) (*Result, error) {
-	return nil, notImplemented("eval.Evaluate")
-}
+// Sandbox paths of the evaluation (S13 §5.2).
+const (
+	srcDir       = "/src"
+	frameworkDir = "/fw"
+	evalBinary   = "/work/bob-eval"
+)
 
-// notImplemented is BOB-E-9008. Layer E3 may not import pkg/bob/diag (R-ARCH-003 table), so
-// the stub carries the code in its text.
-func notImplemented(feature string) error {
-	return fmt.Errorf("error[BOB-E-9008]: %s is not implemented yet", feature)
+// Evaluate generates (or reuses) the evaluator of r.Root and runs it in the evaluator sandbox
+// (R-FW-045): go build and the evaluator both run inside it.
+func Evaluate(ctx context.Context, r Request) (*Result, error) {
+	root, err := filepath.Abs(r.Root)
+	if err != nil {
+		return nil, err
+	}
+	tc, err := findToolchain(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fw, fwGo, err := findFramework()
+	if err != nil {
+		return nil, err
+	}
+	if err := generate(root, fwGo); err != nil {
+		return nil, fmt.Errorf("generating the evaluator: %w", err)
+	}
+	seed, err := ensureSeed(ctx, tc, fw, fwGo)
+	if err != nil {
+		return nil, err
+	}
+	// The evaluator's request (pkg/bob Main protocol, R-FW-043.6): one JSON argument.
+	req, err := json.Marshal(struct {
+		Targets []string `json:"targets"`
+	}{r.Patterns})
+	if err != nil {
+		return nil, err
+	}
+	l := r.Limits
+	env := tc.env()
+	build := evalbox.Step{
+		Args: []string{tc.goroot + "/bin/go", "build", "-tags=bob", "-trimpath",
+			"-modfile=" + srcDir + "/" + genDir + "/go.mod", "-overlay=" + srcDir + "/" + genDir + "/overlay.json",
+			"-o", evalBinary, "./" + mainDir},
+		Env: append(env[:len(env):len(env)], "GOWORK=off"),
+	}
+	out, err := evalbox.Run(ctx, evalbox.Spec{
+		Binds: []evalbox.Bind{
+			{Host: tc.goroot, Sandbox: tc.goroot, Exec: true},
+			{Host: root, Sandbox: srcDir},
+			{Host: fw, Sandbox: frameworkDir},
+		},
+		Seed:  seed,
+		Dir:   srcDir,
+		Steps: []evalbox.Step{build, {Args: []string{evalBinary, string(req)}, Env: env}},
+		Limits: evalbox.Limits{WallClock: l.WallClock, IROutput: l.IROutput, StderrKept: l.StderrKept,
+			Pids: l.Pids, MemoryBytes: l.MemoryBytes, WorkBytes: l.WorkBytes},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(out.Graph) == 0 {
+		// The evaluator ran to the end but wrote no graph: its diagnostics say why.
+		// R-FW-043 maps them to bob errors; until then they are shown as they are.
+		return nil, &evalbox.Error{Msg: "evaluating bob.go failed", Detail: strings.TrimSpace(string(out.Stderr))}
+	}
+	return &Result{IR: out.Graph, Stderr: out.Stderr}, nil
 }
