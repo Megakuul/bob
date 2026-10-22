@@ -13,7 +13,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -102,60 +101,6 @@ func eventsNamed(evs []event, name string) []event {
 	return out
 }
 
-// bobError is the error object of an error event.
-type bobError struct {
-	Code    string   `json:"code"`
-	Message string   `json:"message"`
-	Label   string   `json:"label"`
-	Hint    string   `json:"hint"`
-	Excerpt []string `json:"excerpt"`
-}
-
-// errorWithCode returns the first error event of r with code, failing t when there is none.
-func errorWithCode(t *testing.T, r harness.Result, code string) (bobError, bool) {
-	t.Helper()
-	var all []bobError
-	for _, e := range eventsNamed(events(t, r), "error") {
-		b, _ := json.Marshal(e["error"])
-		var be bobError
-		if err := json.Unmarshal(b, &be); err != nil {
-			continue
-		}
-		if be.Code == code {
-			return be, true
-		}
-		all = append(all, be)
-	}
-	t.Errorf("bob %s: no error event with code %s; errors: %+v\nstderr:\n%s", strings.Join(r.Args, " "), code, all, r.Stderr)
-	return bobError{}, false
-}
-
-// builtCount is counts.built of the run.finish event: the number of derivations bob built.
-func builtCount(t *testing.T, r harness.Result) int {
-	t.Helper()
-	fin := eventsNamed(events(t, r), "run.finish")
-	if len(fin) != 1 {
-		t.Errorf("bob %s: want one run.finish event, got %d", strings.Join(r.Args, " "), len(fin))
-		return -1
-	}
-	counts, _ := fin[0]["counts"].(map[string]any)
-	n, _ := counts["built"].(float64)
-	return int(n)
-}
-
-// builtLabels lists the labels with a package.finish status "built", sorted.
-func builtLabels(t *testing.T, r harness.Result) []string {
-	t.Helper()
-	var out []string
-	for _, e := range eventsNamed(events(t, r), "package.finish") {
-		if e.str("status") == "built" {
-			out = append(out, e.str("label"))
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
 // outputPaths builds args with --print-paths and returns label → output paths.
 func outputPaths(t *testing.T, dir, home string, args ...string) (map[string][]string, bool) {
 	t.Helper()
@@ -208,39 +153,6 @@ func treeDigest(t *testing.T, path string) string {
 		t.Fatalf("harness: digest %s: %v", path, err)
 	}
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-// treeHash summarises every file of dir except .git and .bob (path, mode, content).
-func treeHash(t *testing.T, dir string) string {
-	t.Helper()
-	var b strings.Builder
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, p)
-		if d.IsDir() && (rel == ".git" || rel == ".bob") {
-			return filepath.SkipDir
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		b.WriteString(rel + " " + info.Mode().String())
-		if info.Mode().IsRegular() {
-			c, err := os.ReadFile(p)
-			if err != nil {
-				return err
-			}
-			b.WriteString(" " + strconv.Itoa(len(c)) + " " + string(c))
-		}
-		b.WriteString("\n")
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("harness: %v", err)
-	}
-	return b.String()
 }
 
 func readFile(t *testing.T, path string) string {
@@ -335,16 +247,6 @@ func noNetwork(t *testing.T, dir, home string, args ...string) harness.Result {
 	r := runCmd(t, cmd, args)
 	noLeak(t, r, args)
 	return r
-}
-
-// hostPlatform is the bob platform of this machine; otherPlatform the one bob cross-builds for.
-func hostPlatform(t *testing.T) bob.Platform {
-	t.Helper()
-	p, _, ok := platforms(t)
-	if !ok {
-		t.Fatalf("harness: unsupported host architecture")
-	}
-	return p
 }
 
 func platforms(t *testing.T) (host, other bob.Platform, ok bool) {
@@ -502,25 +404,7 @@ func gitIn(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// finishPaths returns label → output paths of the package.finish events of r.
-func finishPaths(t *testing.T, r harness.Result) map[string][]string {
-	t.Helper()
-	out := map[string][]string{}
-	for _, e := range eventsNamed(events(t, r), "package.finish") {
-		ps, _ := e["paths"].([]any)
-		for _, p := range ps {
-			s, _ := p.(string)
-			out[e.str("label")] = append(out[e.str("label")], s)
-		}
-	}
-	return out
-}
-
-// replaceOnce returns s with the first old replaced; t fails when old is absent.
-func replaceOnce(t *testing.T, s, old, new string) string {
-	t.Helper()
-	if !strings.Contains(s, old) {
-		t.Fatalf("harness: %q not found", old)
-	}
-	return strings.Replace(s, old, new, 1)
+func toString(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
 }

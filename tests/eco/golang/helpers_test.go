@@ -316,37 +316,6 @@ func runEnvI(t *testing.T, binary string, args ...string) harness.Result {
 	return runCmd(t, cmd, append([]string{binary}, args...))
 }
 
-// noNetwork runs bob in new user and network namespaces without any route, so every network
-// request fails (§03.0.3 harness rule); home is the bob home (caches warmed before).
-func noNetwork(t *testing.T, dir, home string, args ...string) harness.Result {
-	t.Helper()
-	cmd := exec.Command(harness.Bin(t, "bob"), args...)
-	cmd.Dir = dir
-	h := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(h, 0o755); err != nil {
-		t.Fatalf("harness: %v", err)
-	}
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + h, "BOB_HOME=" + home, "TZ=UTC", "LC_ALL=C"}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
-		UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
-		GidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}},
-	}
-	r := runCmd(t, cmd, args)
-	noLeak(t, r, args)
-	return r
-}
-
-// hostPlatform is the bob platform of this machine; otherPlatform the one bob cross-builds for.
-func hostPlatform(t *testing.T) bob.Platform {
-	t.Helper()
-	p, _, ok := platforms(t)
-	if !ok {
-		t.Fatalf("harness: unsupported host architecture")
-	}
-	return p
-}
-
 func platforms(t *testing.T) (host, other bob.Platform, ok bool) {
 	t.Helper()
 	switch runtime.GOARCH {

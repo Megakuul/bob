@@ -13,7 +13,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -130,32 +129,6 @@ func errorWithCode(t *testing.T, r harness.Result, code string) (bobError, bool)
 	return bobError{}, false
 }
 
-// builtCount is counts.built of the run.finish event: the number of derivations bob built.
-func builtCount(t *testing.T, r harness.Result) int {
-	t.Helper()
-	fin := eventsNamed(events(t, r), "run.finish")
-	if len(fin) != 1 {
-		t.Errorf("bob %s: want one run.finish event, got %d", strings.Join(r.Args, " "), len(fin))
-		return -1
-	}
-	counts, _ := fin[0]["counts"].(map[string]any)
-	n, _ := counts["built"].(float64)
-	return int(n)
-}
-
-// builtLabels lists the labels with a package.finish status "built", sorted.
-func builtLabels(t *testing.T, r harness.Result) []string {
-	t.Helper()
-	var out []string
-	for _, e := range eventsNamed(events(t, r), "package.finish") {
-		if e.str("status") == "built" {
-			out = append(out, e.str("label"))
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
 // outputPaths builds args with --print-paths and returns label → output paths.
 func outputPaths(t *testing.T, dir, home string, args ...string) (map[string][]string, bool) {
 	t.Helper()
@@ -208,39 +181,6 @@ func treeDigest(t *testing.T, path string) string {
 		t.Fatalf("harness: digest %s: %v", path, err)
 	}
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-// treeHash summarises every file of dir except .git and .bob (path, mode, content).
-func treeHash(t *testing.T, dir string) string {
-	t.Helper()
-	var b strings.Builder
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, p)
-		if d.IsDir() && (rel == ".git" || rel == ".bob") {
-			return filepath.SkipDir
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		b.WriteString(rel + " " + info.Mode().String())
-		if info.Mode().IsRegular() {
-			c, err := os.ReadFile(p)
-			if err != nil {
-				return err
-			}
-			b.WriteString(" " + strconv.Itoa(len(c)) + " " + string(c))
-		}
-		b.WriteString("\n")
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("harness: %v", err)
-	}
-	return b.String()
 }
 
 func readFile(t *testing.T, path string) string {
@@ -314,27 +254,6 @@ func runEnvI(t *testing.T, binary string, args ...string) harness.Result {
 	cmd.Env = []string{}
 	cmd.Dir = t.TempDir()
 	return runCmd(t, cmd, append([]string{binary}, args...))
-}
-
-// noNetwork runs bob in new user and network namespaces without any route, so every network
-// request fails (§03.0.3 harness rule); home is the bob home (caches warmed before).
-func noNetwork(t *testing.T, dir, home string, args ...string) harness.Result {
-	t.Helper()
-	cmd := exec.Command(harness.Bin(t, "bob"), args...)
-	cmd.Dir = dir
-	h := filepath.Join(t.TempDir(), "home")
-	if err := os.MkdirAll(h, 0o755); err != nil {
-		t.Fatalf("harness: %v", err)
-	}
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + h, "BOB_HOME=" + home, "TZ=UTC", "LC_ALL=C"}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
-		UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
-		GidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}},
-	}
-	r := runCmd(t, cmd, args)
-	noLeak(t, r, args)
-	return r
 }
 
 // hostPlatform is the bob platform of this machine; otherPlatform the one bob cross-builds for.
@@ -491,36 +410,4 @@ func bobDrvs(all map[string]*drv.Derivation) map[string]*drv.Derivation {
 		}
 	}
 	return out
-}
-
-func gitIn(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if b, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("harness: git %v: %v: %s", args, err, b)
-	}
-}
-
-// finishPaths returns label → output paths of the package.finish events of r.
-func finishPaths(t *testing.T, r harness.Result) map[string][]string {
-	t.Helper()
-	out := map[string][]string{}
-	for _, e := range eventsNamed(events(t, r), "package.finish") {
-		ps, _ := e["paths"].([]any)
-		for _, p := range ps {
-			s, _ := p.(string)
-			out[e.str("label")] = append(out[e.str("label")], s)
-		}
-	}
-	return out
-}
-
-// replaceOnce returns s with the first old replaced; t fails when old is absent.
-func replaceOnce(t *testing.T, s, old, new string) string {
-	t.Helper()
-	if !strings.Contains(s, old) {
-		t.Fatalf("harness: %q not found", old)
-	}
-	return strings.Replace(s, old, new, 1)
 }
