@@ -248,6 +248,11 @@ func TestPIPE005CancelRetryRerunConcurrency(t *testing.T) {
 		t.Errorf("(3) retry build trigger %+v attempt %v, want RETRY of %s, attempt 2", retry.Build.Trigger, retry.Build.Attempt, failedBuild.ID)
 	}
 	rb := e.WaitBuild(retry.Build.ID, 20*time.Minute, regenv.Terminal)
+	// the failing package really re-ran (it fails again, the commit is still broken) and its dependents
+	// are still skipped: a retry that re-runs nothing has Failed == 0
+	if failedBuild.Counts.Failed < 1 || rb.Counts.Failed != failedBuild.Counts.Failed || rb.Counts.Skipped != failedBuild.Counts.Skipped || rb.State != "BUILD_STATE_FAILED" {
+		t.Errorf("(3) retry %s counts %+v, original %+v: the failing package must run again and fail again, its dependents stay skipped", rb.State, rb.Counts, failedBuild.Counts)
+	}
 	if rb.Counts.Cached < failedBuild.Counts.Built+failedBuild.Counts.Cached || rb.Counts.Built != 0 {
 		t.Errorf("(3) retry counts %+v after %+v: the succeeded packages must be cache hits and nothing but the failing ones rebuilt", rb.Counts, failedBuild.Counts)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -81,6 +82,29 @@ func PutRaw(t testing.TB, s *stack.Stack, bucket, key string, body []byte) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("raw PUT %s/%s = %d", bucket, key, resp.StatusCode)
 	}
+}
+
+// GetRaw reads one object directly on RustFS as the root; a missing object returns nil.
+func GetRaw(t testing.TB, s *stack.Stack, bucket, key string) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := rustfs.Do(ctx, s.Info.S3URL, RootCreds(s), http.MethodGet, "/"+bucket+"/"+key, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("raw GET %s/%s = %d", bucket, key, resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // ExtraOrchestrator starts one more bob-server orchestrator against the stack's proxy (same

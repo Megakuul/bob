@@ -168,6 +168,21 @@ func TestRSTORE104KeySegmentBuilders(t *testing.T) {
 			t.Fatalf("Segment(%.30q) accepted an invalid segment: %q, %v", in, seg, err)
 		}
 	}
+	// sh2 of a 26-char Crockford ULID (the SPEC's id type) is always a valid shard equal to the formula
+	const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	ur := rand.New(rand.NewPCG(1041, 7))
+	for i := 0; i < 5000; i++ {
+		b := make([]byte, 26)
+		for j := range b {
+			b[j] = crockford[ur.IntN(len(crockford))]
+		}
+		for _, shards := range []int{1, 16, 64} {
+			sh, err := store.Sh2(string(b), shards)
+			if err != nil || !sh2RE.MatchString(sh) || sh != refSh2(string(b), shards) {
+				t.Fatalf("Sh2(ULID %s, %d) = %q, %v; want %q", b, shards, sh, err, refSh2(string(b), shards))
+			}
+		}
+	}
 	for i := uint64(0); i < 1000; i++ {
 		a, err1 := store.Num10(i * 7919)
 		b, err2 := store.Seq20(i * 7919)

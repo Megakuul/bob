@@ -4,6 +4,9 @@ package soak
 
 import (
 	"context"
+	"regexp"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +15,7 @@ import (
 	"github.com/megakuul/bob/tests/parity"
 	"github.com/megakuul/bob/tests/server/srvtest"
 	"github.com/megakuul/bob/tests/serverenv/s3count"
+	store "github.com/megakuul/bob/tests/store/env"
 )
 
 // idsOf lists the ids of a paged list RPC.
@@ -31,6 +35,34 @@ func idsOf(ctx context.Context, e *srvtest.Env, service, method, field string, r
 		}
 	}
 	return out, nil
+}
+
+var ulidRE = regexp.MustCompile(`[0-9A-HJKMNP-TV-Z]{26}`)
+
+// danglingEntries reads every raw object under prefix of bucket (the harness's own root GET, not bob's)
+// and returns the ULIDs that appear in them but have no record object recPrefix+<ULID>, and whether
+// any record id was found in the pages at all (false: the raw encoding hides ids from this scan).
+func danglingEntries(t *testing.T, e *srvtest.Env, bucket, prefix, recBucket, recPrefix string) (dangling []string, sawRecords bool) {
+	t.Helper()
+	have := map[string]bool{}
+	for _, k := range store.ListKeys(t, e.Stack, recBucket, recPrefix) {
+		have[strings.TrimPrefix(k, recPrefix)] = true
+	}
+	seen := map[string]bool{}
+	for _, k := range store.ListKeys(t, e.Stack, bucket, prefix) {
+		for _, id := range ulidRE.FindAllString(string(store.GetRaw(t, e.Stack, bucket, k)), -1) {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if have[id] {
+				sawRecords = true
+			} else {
+				dangling = append(dangling, id)
+			}
+		}
+	}
+	return dangling, sawRecords
 }
 
 // TestRSRV101IntentFirst kills the writer between each pair of writes (index entry first, record second)
@@ -62,6 +94,11 @@ func TestRSRV101IntentFirst(t *testing.T) {
 		t.Fatalf("CreateUser: %v", err)
 	}
 
+	// a control build and project written before any fault: record -> index (reverse check)
+	ctrl, err := e.Submit(repo, "//i2:t")
+	if err != nil {
+		t.Fatalf("control build: %v", err)
+	}
 	injected := func(n int) string {
 		return srvtest.Eventually(60*time.Second, func() string {
 			c, err := e.Counts()
@@ -118,6 +155,20 @@ func TestRSRV101IntentFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The faults left dangling entries (the index write landed, the record write failed): the raw pages
+	// bpage/ (builds) and jact/ (jobs) name ids that have no record. Readers skip them (checked below);
+	// index-repair removes them after 5 min.
+	rawBuilds, sawB := danglingEntries(t, e, "bob-control", "bpage/", "bob-control", "build/")
+	rawJobs, sawJ := danglingEntries(t, e, "bob-fleet", "jact/", "bob-fleet", "job/")
+	if !sawB {
+		t.Logf("raw check of bpage/ unavailable: no record id found in the pages (encoding)")
+	} else if len(rawBuilds) == 0 {
+		t.Errorf("the build-create fault left no dangling bpage entry: the index is not written before the record")
+	}
+	if sawJ && len(rawJobs) == 0 {
+		t.Logf("no dangling jact entry after the job-enqueue faults")
+	}
+
 	type index struct{ name, service, method, field, getSvc, getMethod string }
 	indexes := []index{
 		{"builds", "bob.build.v1.BuildService", "ListBuilds", "builds", "bob.build.v1.BuildService", "GetBuild"},
@@ -156,6 +207,21 @@ func TestRSRV101IntentFirst(t *testing.T) {
 	for time.Now().Before(deadline) {
 		check(e.Via(1))
 		time.Sleep(5 * time.Second)
+	}
+	// after index-repair no page names a record that does not exist
+	if sawB {
+		if d, _ := danglingEntries(t, e, "bob-control", "bpage/", "bob-control", "build/"); len(d) != 0 {
+			t.Errorf("index-repair left %d dangling bpage entries after 16 min (e.g. %s)", len(d), d[0])
+		}
+	}
+	if sawJ {
+		if d, _ := danglingEntries(t, e, "bob-fleet", "jact/", "bob-fleet", "job/"); len(d) != 0 {
+			t.Errorf("index-repair left %d dangling jact entries after 16 min (e.g. %s)", len(d), d[0])
+		}
+	}
+	// every record is in its index: the control build written before the faults is listed
+	if ids, err := idsOf(ctx, e, "bob.build.v1.BuildService", "ListBuilds", "builds", map[string]any{}); err != nil || !slices.Contains(ids, ctrl) {
+		t.Errorf("build %s exists but the build index does not list it (%v)", ctrl, err)
 	}
 	// every index matches its records after index-repair: the bindings of the user (record: user/<id>)
 	// equal the user's entries in the role index (rmem/admin)

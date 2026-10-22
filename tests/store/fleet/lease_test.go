@@ -384,6 +384,37 @@ func chaos(t *testing.T, leader bool) {
 		}()
 	}
 	defer func() { rcancel(); rwg.Wait() }()
+	// Requeue observer: SPEC bounds the time until the dead worker's job is QUEUED again (the
+	// reconciler's CAS), not until another worker happens to claim it. Poll the held jobs every 50 ms
+	// and record the first moment one is seen queued without an owner after its worker died.
+	requeuedAt := map[string]time.Time{}
+	var rqMu sync.Mutex
+	rwg.Add(1)
+	go func() {
+		defer rwg.Done()
+		for rctx.Err() == nil {
+			mu.Lock()
+			var held []string
+			for j := range killedAt {
+				held = append(held, j)
+			}
+			mu.Unlock()
+			for _, j := range held {
+				rqMu.Lock()
+				_, seen := requeuedAt[j]
+				rqMu.Unlock()
+				if seen {
+					continue
+				}
+				if v := l.view(j); v != nil && v.State == "queued" && v.Owner == "" {
+					rqMu.Lock()
+					requeuedAt[j] = time.Now()
+					rqMu.Unlock()
+				}
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
 	// Three enqueuers.
 	var ewg sync.WaitGroup
 	for e := 0; e < 3; e++ {
@@ -436,8 +467,22 @@ func chaos(t *testing.T, leader bool) {
 		t.Errorf("no late write of a paused worker was rejected (lease-lost); the pause did not outlive the lease")
 	}
 	// Requeue latency of the jobs the dead workers held.
-	bound := ttl + interval + skew + 3*time.Second
+	bound := ttl + interval + skew // SPEC: lease_ttl + reconcile interval + skew
+	rqMu.Lock()
+	observed := 0
 	for job, at := range killedAt {
+		if rq, ok := requeuedAt[job]; ok {
+			observed++
+			if d := rq.Sub(at); d > bound {
+				t.Errorf("job %s: queued again %v after its worker died, want <= %v (lease_ttl + interval + skew)", job, d.Round(50*time.Millisecond), bound)
+			}
+		}
+	}
+	rqMu.Unlock()
+	if observed == 0 {
+		t.Errorf("the requeue of no dead worker's job was observed (%d held jobs)", len(killedAt))
+	}
+	for job := range killedAt {
 		runs := g.of(job)
 		var next time.Time
 		for _, r := range runs {
@@ -447,8 +492,6 @@ func chaos(t *testing.T, leader bool) {
 		}
 		if next.IsZero() {
 			t.Errorf("job %s held by %s was never run by another worker", job, victimOf[job])
-		} else if d := next.Sub(at); d > bound {
-			t.Errorf("job %s: requeued and claimed %v after its worker died, want <= %v (lease_ttl + interval + skew + claim)", job, d.Round(100*time.Millisecond), bound)
 		}
 	}
 	l.be.Proxy.AssertNoList(t, l.fname, l.cname)

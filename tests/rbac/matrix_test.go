@@ -42,13 +42,16 @@ type principal struct {
 }
 
 // check compares one answer with the reference outcome.
-func check(t *testing.T, who string, m ref.Method, project string, got *authenv.Reply, want ref.Outcome, tolerateNotFound bool) {
+func check(t *testing.T, who string, m ref.Method, project string, got *authenv.Reply, want ref.Outcome, tolerateNotFound bool, seeded ...bool) {
 	t.Helper()
 	desc := fmt.Sprintf("%s calls %s on %s: want %v, got %s", who, m.Full(), project, want, got)
 	switch want {
 	case ref.Allow:
 		if got.Code == "unauthenticated" || got.Code == "permission_denied" {
 			t.Errorf("%s", desc)
+		}
+		if len(seeded) > 0 && seeded[0] && got.Code == "not_found" {
+			t.Errorf("%s: an authorized principal got NotFound for an existing resource", desc) // existence leak in reverse
 		}
 		return
 	case ref.Refused:
@@ -140,6 +143,22 @@ func TestRBACMatrix(t *testing.T) {
 		}
 		return p.client()
 	}
+	seed := s.Seed(t)
+	// ids of existing resources per project for the id-resolving methods: the seeded build and one
+	// of its jobs (a release or repository id cannot be seeded from here: those rows keep the
+	// no-existence-leak expectation)
+	resource := map[string]map[string]string{"BUILD": {}, "JOB": {}}
+	for _, pr := range []string{"p1", "p2"} {
+		resource["BUILD"][pr] = seed.Builds[pr]
+		r := s.Admin().Call(t, "bob.build.v1.JobService", "ListJobs", map[string]any{"buildId": seed.Builds[pr]})
+		if r.OK() {
+			if js := authenv.List(r.Body, "jobs"); len(js) > 0 {
+				if m, ok := js[0].(map[string]any); ok {
+					resource["JOB"][pr] = authenv.Str(m, "id")
+				}
+			}
+		}
+	}
 	byName := map[string]string{"role@p1": "mx-p1", "role@p2": "mx-p2", "role@*": "mx-star", "role{M,p1}@*": "mx-exact", "service-account@p1": "sa:mx-sa"}
 	ids := map[string]string{}
 	for _, name := range []string{"mx-p1", "mx-p2", "mx-star", "mx-exact"} {
@@ -177,8 +196,12 @@ func TestRBACMatrix(t *testing.T) {
 				}()
 			}
 			projects := []string{"p1", "p2"}
-			if m.Kind != ref.KindProject || m.Resolve != "" && m.Resolve != "UNSPECIFIED" {
+			resolved := m.Kind == ref.KindProject && m.Resolve != "" && m.Resolve != "UNSPECIFIED"
+			if m.Kind != ref.KindProject || resolved {
 				projects = []string{"p1"}
+			}
+			if resolved && resource[m.Resolve] != nil && resource[m.Resolve]["p1"] != "" && resource[m.Resolve]["p2"] != "" {
+				projects = []string{"p1", "p2"}
 			}
 			for _, p := range ps {
 				for _, project := range projects {
@@ -194,7 +217,16 @@ func TestRBACMatrix(t *testing.T) {
 					}
 					want := ref.Expect(m, p.cred, p.binds2(a, b), project)
 					tolerate := false
+					seeded := false
+					if resolved && resource[m.Resolve] != nil && resource[m.Resolve][project] != "" {
+						// the id names a real resource of this project: the outcome is the plain
+						// SPEC 6.4 evaluation with the resource's project, per principal
+						body[m.ProjectField] = resource[m.Resolve][project]
+						seeded = true
+					}
 					switch {
+					case seeded:
+						// want stays ref.Expect(...)
 					case m.Kind == ref.KindProject && m.Resolve != "" && m.Resolve != "UNSPECIFIED" && p.cred == ref.User:
 						// The handler resolves the id first; an unknown id is NotFound for everybody
 						// (no existence leak) — the harness has no seeded builds/jobs/releases yet.
@@ -209,7 +241,7 @@ func TestRBACMatrix(t *testing.T) {
 						want = ref.Refused // the harness holds no valid worker token (see the principal list)
 					}
 					got := call(t, client(p), m, body)
-					check(t, p.name, m, project, got, want, tolerate)
+					check(t, p.name, m, project, got, want, tolerate, seeded)
 					if sessionKillers[m.Full()] && p.login != "" {
 						p.cl = login(p.login)
 					}

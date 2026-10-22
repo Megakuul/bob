@@ -149,6 +149,69 @@ func jobsHaveLeases(ctx context.Context, e *srvtest.Env, ids []string) []string 
 	return bad
 }
 
+// leaseSampler checks the lease invariants while the chaos runs (not after it settles): every second a
+// rotating window of builds is read; a claimed or running job names its worker and has a claim time, the
+// attempt of a job never decreases, and a terminal job never changes (state, worker, attempt) again, i.e.
+// no second result is accepted for it. It returns the number of in-flight jobs it saw; call stop first.
+func leaseSampler(ctx context.Context, t *testing.T, e *srvtest.Env, ids []string, stop <-chan struct{}) (wait func() int) {
+	type seen struct {
+		attempt int
+		final   string
+	}
+	done := make(chan int, 1)
+	go func() {
+		last := map[string]seen{}
+		inflight, round := 0, 0
+		for {
+			select {
+			case <-stop:
+				done <- inflight
+				return
+			case <-time.After(time.Second):
+			}
+			for k := 0; k < 25; k++ {
+				id := ids[(round*25+k)%len(ids)]
+				if id == "" {
+					continue
+				}
+				var js []srvtest.Job
+				if err := e.ViaAny(func(v *srvtest.Env) error {
+					var err error
+					js, err = v.Jobs(ctx, id)
+					return err
+				}); err != nil {
+					continue // an orchestrator may have just been killed
+				}
+				for _, j := range js {
+					if j.State == "JOB_STATE_CLAIMED" || j.State == "JOB_STATE_RUNNING" {
+						inflight++
+						if j.WorkerID == "" || j.ClaimedAt == "" {
+							t.Errorf("job %s is %s without a lease (worker %q, claimed_at %q)", j.ID, j.State, j.WorkerID, j.ClaimedAt)
+						}
+					}
+					p := last[j.ID]
+					if j.Attempt < p.attempt {
+						t.Errorf("job %s: attempt went from %d back to %d", j.ID, p.attempt, j.Attempt)
+					}
+					fin := ""
+					if j.State == "JOB_STATE_SUCCEEDED" || j.State == "JOB_STATE_FAILED" || j.State == "JOB_STATE_CANCELLED" {
+						fin = fmt.Sprintf("%s/%s/%d", j.State, j.WorkerID, j.Attempt)
+					}
+					if p.final != "" && fin != p.final {
+						t.Errorf("job %s: terminal result %s changed to %q (a stale or second result was accepted)", j.ID, p.final, fin)
+					}
+					if fin == "" {
+						fin = p.final
+					}
+					last[j.ID] = seen{attempt: max(j.Attempt, p.attempt), final: fin}
+				}
+			}
+			round++
+		}
+	}()
+	return func() int { return <-done }
+}
+
 // TestRSRV004OrchestratorKill: 3 orchestrators, kill -9 of a random one every 20 s during a 300-job drain
 // plus 20 build triggers. Every build reaches a terminal state, no job runs without a lease, every
 // controller lease whose holder died is held by a live orchestrator within 3 x its interval, 0 LIST.
@@ -248,9 +311,13 @@ func TestRSRV004OrchestratorKill(t *testing.T) {
 			}
 		}
 	}()
+	sampled := leaseSampler(ctx, t, e, ids, stop)
 	bad := settled(ctx, e, ids, 6*time.Minute)
 	close(stop)
 	wg.Wait()
+	if n := sampled(); n == 0 {
+		t.Errorf("the lease sampler saw no claimed or running job during the run")
+	}
 	for _, b := range bad {
 		t.Errorf("build: %s", b)
 	}
@@ -314,12 +381,42 @@ func TestRNFR007CrashSafety(t *testing.T) {
 		}
 		_ = d.Pause(ctx, d.Choose(ws, 1)[0], 2*5*time.Second+time.Second) // 2 x lease_ttl (5 s) + 1 s
 	}()
+	sampled := leaseSampler(ctx, t, e, ids, stop)
 	bad := settled(ctx, e, ids, 6*time.Minute)
 	close(stop)
 	wg.Wait()
 	e.SetFaults(s3count.Script{})
+	if n := sampled(); n == 0 {
+		t.Errorf("the lease sampler saw no claimed or running job during the run")
+	}
 	for _, b := range bad {
 		t.Errorf("lost accepted work: %s", b)
+	}
+	// 0 stale results accepted: after everything settled, no terminal job changes any more
+	before := map[string]string{}
+	for round := 0; round < 2; round++ {
+		for _, id := range ids {
+			if id == "" {
+				continue
+			}
+			var js []srvtest.Job
+			if err := e.ViaAny(func(v *srvtest.Env) error {
+				var err error
+				js, err = v.Jobs(ctx, id)
+				return err
+			}); err != nil {
+				t.Errorf("jobs of %s: %v", id, err)
+				continue
+			}
+			for _, j := range js {
+				cur := fmt.Sprintf("%s/%s/%d", j.State, j.WorkerID, j.Attempt)
+				if prev, ok := before[j.ID]; ok && prev != cur {
+					t.Errorf("job %s changed from %s to %s after the run settled", j.ID, prev, cur)
+				}
+				before[j.ID] = cur
+			}
+		}
+		time.Sleep(15 * time.Second) // late completions of paused or dead workers arrive
 	}
 	for _, b := range jobsHaveLeases(ctx, e, ids) {
 		t.Errorf("lease: %s", b)

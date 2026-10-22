@@ -124,6 +124,8 @@ func TestRSTORE004ReadPlan(t *testing.T) {
 		{"Overview (3 + classes; one class on this stack)", "bob.analytics.v1.AnalyticsService/GetOverview", map[string]any{}, 3 + 1},
 		{"Projects (1 + pages)", "bob.project.v1.ProjectService/ListProjects", map[string]any{"page_size": 50}, 2},
 		{"Builds of a project (2-3)", "bob.build.v1.BuildService/ListBuilds", map[string]any{"project_id": pid, "page_size": 50}, 3},
+		{"Builds of a branch (2-3)", "bob.build.v1.BuildService/ListBuilds", map[string]any{"project_id": pid, "ref": "refs/heads/main", "page_size": 50}, 3},
+		{"Users of a role (1)", "bob.access.v1.RoleService/ListRoleBindings", map[string]any{"role": "admin", "page_size": 50}, 1},
 		{"Build detail (2 + live jobs; terminal build)", "bob.build.v1.BuildService/GetBuild", map[string]any{"id": bid}, 2},
 		{"Releases of a project (2-3)", "bob.release.v1.ReleaseService/ListReleases", map[string]any{"project_id": pid, "page_size": 50}, 3},
 		{"Registry (2)", "bob.registry.v1.RegistryService/ListRepositories", map[string]any{"page_size": 50}, 2},
@@ -149,5 +151,36 @@ func TestRSTORE004ReadPlan(t *testing.T) {
 		if l := c.Lists("bob-control") + c.Lists("bob-fleet"); l != 0 {
 			t.Errorf("%s: %d LIST requests", r.page, l)
 		}
+	}
+	// Auth of an API call (cache miss) is 2-3 requests: G tok/<hash>, GC user|sa, GC role per role.
+	// A fresh service-account token bound to one role is a guaranteed miss; the miss is the first
+	// call minus the warm call of the same method (its own reads).
+	sa := "r-store-004-sa"
+	for _, c := range []struct {
+		m   string
+		req map[string]any
+	}{
+		{"bob.access.v1.ServiceAccountService/CreateServiceAccount", map[string]any{"serviceAccount": map[string]any{"id": sa}}},
+		{"bob.access.v1.RoleService/CreateRoleBinding", map[string]any{"principalId": "sa:" + sa, "role": "admin", "project": "*"}},
+	} {
+		if r := env.RPC(t, x, c.m, "", c.req); r.Status != 200 {
+			t.Fatalf("%s = %d %s", c.m, r.Status, r.Body)
+		}
+	}
+	var tok struct{ Secret string }
+	if c := env.RPC(t, x, "bob.access.v1.ServiceAccountService/CreateServiceAccountToken", "", map[string]any{"serviceAccountId": sa, "name": "t", "scope": "TOKEN_SCOPE_API", "ttlDays": 1}); c.Status != 200 || json.Unmarshal(c.Body, &tok) != nil || tok.Secret == "" {
+		t.Fatalf("CreateServiceAccountToken = %d %s", c.Status, c.Body)
+	}
+	const probe = "bob.access.v1.RoleService/ListRoles"
+	env.ResetProxy(t, s)
+	if c := env.RPC(t, x, probe, tok.Secret, map[string]any{}); c.Status != 200 {
+		t.Fatalf("API call with a new service-account token = %d %s", c.Status, c.Body)
+	}
+	cold := env.Total(env.ProxyCounts(t, s), "bob-control") + env.Total(env.ProxyCounts(t, s), "bob-fleet")
+	env.ResetProxy(t, s)
+	env.RPC(t, x, probe, tok.Secret, map[string]any{})
+	warm := env.Total(env.ProxyCounts(t, s), "bob-control") + env.Total(env.ProxyCounts(t, s), "bob-fleet")
+	if miss := cold - warm; miss > 3 || miss < 2 {
+		t.Errorf("Auth of an API call (cache miss): %d requests (cold %d, warm %d), the read plan says 2-3", miss, cold, warm)
 	}
 }

@@ -166,15 +166,15 @@ func TestRLOG002LivePull(t *testing.T) {
 	st1 := srvtest.NewStream()
 	var gapMu sync.Mutex
 	var blockedAt time.Time
-	var recovered time.Duration
+	var msgTimes []time.Time // arrival of every message that carried lines or Delayed
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		_ = drain(ctx, f1, st1, func(m srvtest.FollowMsg) {
 			gapMu.Lock()
 			defer gapMu.Unlock()
-			if !blockedAt.IsZero() && recovered == 0 && (len(m.Lines) > 0 || m.Delayed) {
-				recovered = m.At.Sub(blockedAt)
+			if !blockedAt.IsZero() && (len(m.Lines) > 0 || m.Delayed) {
+				msgTimes = append(msgTimes, m.At)
 			}
 		})
 	}()
@@ -184,6 +184,7 @@ func TestRLOG002LivePull(t *testing.T) {
 	gapMu.Unlock()
 	e.AttachProxy(true, 0)
 	time.Sleep(15 * time.Second)
+	cutEnd := time.Now()
 	e.AttachProxy(false, 0)
 	wg.Wait()
 
@@ -202,8 +203,24 @@ func TestRLOG002LivePull(t *testing.T) {
 	}
 	gapMu.Lock()
 	defer gapMu.Unlock()
-	if recovered == 0 || recovered > 3*time.Second {
-		t.Errorf("the follower stalled %v after its worker's Attach stream was cut, want <= 3 s (lake fallback)", recovered)
+	// the maximum gap between consecutive messages from the cut to the end of the cut window
+	// (the in-flight chunk or the next 250 ms chunk must not hide a longer stall)
+	var maxGap time.Duration
+	prev := blockedAt
+	for _, at := range msgTimes {
+		if at.After(cutEnd) {
+			break
+		}
+		if g := at.Sub(prev); g > maxGap {
+			maxGap = g
+		}
+		prev = at
+	}
+	if g := cutEnd.Sub(prev); g > maxGap {
+		maxGap = g
+	}
+	if len(msgTimes) == 0 || maxGap > 3*time.Second {
+		t.Errorf("the follower stalled %v (maximum gap over %d messages) after its worker's Attach stream was cut, want <= 3 s (lake fallback)", maxGap, len(msgTimes))
 	}
 	for _, s := range st1.Errs {
 		t.Errorf("follower after the cut: %s", s)

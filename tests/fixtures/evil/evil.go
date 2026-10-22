@@ -31,7 +31,7 @@ type Case struct {
 	Contained  []Check // attacks that must end in a PASS line (contained cases)
 	StopRe     string  // regexp the evaluation error must match (resource cases)
 	HintRe     string  // regexp of the hint line that must follow in the error text
-	NeedsCG    bool    // only contained with a delegated cgroup (pids/memory limits)
+	NeedsCG    bool    // only contained with a delegated cgroup (the three pids cases; SPEC R-FW-045 allows exactly three skips)
 	ExtraErrRe string  // second regexp the error text must match
 }
 
@@ -79,7 +79,7 @@ func Cases() []Case {
 		{Name: "threadbomb", NeedsCG: true,
 			StopRe: `evaluating bob\.go failed after trying to start more than 128 processes or threads \(exit \d+\)`,
 			HintRe: `hint: bob\.go must not start processes`},
-		{Name: "membomb", NeedsCG: true,
+		{Name: "membomb",
 			StopRe: `evaluating bob\.go used more than 512M of memory and was stopped \(peak \d+ MiB\)`,
 			HintRe: `hint: a build definition should need far less; look for unbounded loops or huge in-memory data`},
 		{Name: "cpuloop",

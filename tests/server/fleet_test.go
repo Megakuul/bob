@@ -30,6 +30,18 @@ func TestRSRV100WorkersWorkWithoutAttach(t *testing.T) {
 	if !e.AttachProxy(true, -1) {
 		return
 	}
+	// the block took effect: no Attach stream is open on any orchestrator (a non-blocking proxy
+	// would make the rest of this test pass trivially)
+	if why := srvtest.Eventually(30*time.Second, func() string {
+		for name, n := range e.AttachStreams() {
+			if n != 0 {
+				return fmt.Sprintf("%s still carries %d Attach streams", name, n)
+			}
+		}
+		return ""
+	}); why != "" {
+		t.Fatalf("all Attach streams are blocked: %s", why)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	ps := make([]srvtest.Pkg, jobs)

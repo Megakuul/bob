@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -13,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -103,8 +106,8 @@ func checkDOM(t *testing.T, e *env, tb *tab, p Page) {
 	}
 
 	// R-UI-006: every .id cell is a link whose target renders the same id.
-	links, err := chromedp.Run(tb.ctx, chromedp.Evaluate[[]struct{ Tag, Href, Text string }](
-		`[...document.querySelectorAll('.id')].map(n => ({Tag: n.tagName, Href: n.getAttribute('href') || '', Text: n.textContent.trim()}))`))
+	links, err := chromedp.Run(tb.ctx, chromedp.Evaluate[[]struct{ Tag, Href, Text, Full string }](
+		`[...document.querySelectorAll('.id')].map(n => ({Tag: n.tagName, Href: n.getAttribute('href') || '', Text: n.textContent.trim(), Full: n.getAttribute('title') || n.getAttribute('data-id') || ''}))`))
 	if err != nil {
 		t.Fatalf("harness: %v", err)
 	}
@@ -114,10 +117,10 @@ func checkDOM(t *testing.T, e *env, tb *tab, p Page) {
 			t.Errorf("R-UI-006: %s: .id %q is a <%s> without href", p.Path, l.Text, strings.ToLower(l.Tag))
 			continue
 		}
-		if seen[l.Href] || len(seen) >= 5 {
-			continue // a handful of distinct targets is enough to catch a broken route
+		if seen[l.Href] {
+			continue
 		}
-		seen[l.Href] = true
+		seen[l.Href] = true // every distinct target is opened (SPEC: every cell with class id)
 		lt := e.newTab(t, "", Sizes[0])
 		if _, err := lt.open(e, l.Href, ""); err != nil {
 			t.Fatalf("harness: open %s: %v", l.Href, err)
@@ -126,8 +129,14 @@ func checkDOM(t *testing.T, e *env, tb *tab, p Page) {
 		if err != nil {
 			t.Fatalf("harness: %v", err)
 		}
-		if !strings.Contains(target, strings.TrimRight(l.Text, "…")) {
-			t.Errorf("R-UI-006: %s: link %s does not render id %q", p.Path, l.Href, l.Text)
+		id := strings.TrimRight(l.Text, "…")
+		if l.Full != "" {
+			id = l.Full // a truncated cell carries the full id in title or data-id
+		} else if id != l.Text && !strings.Contains(l.Href, id) {
+			t.Errorf("R-UI-006: %s: truncated id %q is not part of its link target %s", p.Path, l.Text, l.Href)
+		}
+		if !strings.Contains(target, id) {
+			t.Errorf("R-UI-006: %s: link %s does not render id %q", p.Path, l.Href, id)
 		}
 	}
 
@@ -152,8 +161,15 @@ func checkDOM(t *testing.T, e *env, tb *tab, p Page) {
 		t.Errorf("R-UI-006: %s: filter input[name=query]: %v", p.Path, err)
 		return
 	}
-	if len(after) == 0 || len(after) > len(before) {
-		t.Errorf("R-UI-006: %s: filter %q: %d rows before, %d after", p.Path, p.Filter, len(before), len(after))
+	matching := 0
+	for _, r := range before {
+		if strings.Contains(strings.ToLower(r), strings.ToLower(p.Filter)) {
+			matching++
+		}
+	}
+	// reduces rows TO the matching ones: exactly those that matched before survive
+	if len(after) == 0 || len(after) != matching {
+		t.Errorf("R-UI-006: %s: filter %q: %d rows before (%d matching), %d after", p.Path, p.Filter, len(before), matching, len(after))
 	}
 	for _, r := range after {
 		if !strings.Contains(strings.ToLower(r), strings.ToLower(p.Filter)) {
@@ -220,9 +236,10 @@ func TestBuildShape(t *testing.T) {
 
 // Initial-load caps of R-UI-007 (gzip) and the overview FCP budget on [8c/15G].
 const (
-	maxJSGzip  = 250 << 10
-	maxCSSGzip = 30 << 10
-	maxFCP     = time.Second
+	maxJSGzip   = 250 << 10
+	maxCSSGzip  = 30 << 10
+	maxFCP      = time.Second     // [8c/15G]
+	maxFCPSmall = 2 * time.Second // [2c/4G]
 )
 
 var assetRef = regexp.MustCompile(`(?:href|src)="(/_app/[^"]+\.(?:js|css))"|import\("(/_app/[^"]+\.js)"\)`)
@@ -271,10 +288,63 @@ func TestFirstLoadBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("harness: %v", err)
 	}
-	t.Logf("overview FCP %.0f ms", fcp)
-	if fcp < 0 || time.Duration(fcp*float64(time.Millisecond)) > maxFCP {
-		t.Errorf("R-UI-007: overview first contentful paint %.0f ms, budget %s", fcp, maxFCP)
+	// what the overview really loaded up front (resource timing), not only what the shell references:
+	// every script and stylesheet fetched before the page's load event counts against the budgets
+	names, err := chromedp.Run(tb.ctx, chromedp.Evaluate[string](
+		`JSON.stringify((() => { const nav = performance.getEntriesByType('navigation')[0];
+		  const end = nav ? Math.max(nav.loadEventEnd, nav.domContentLoadedEventEnd) : Infinity;
+		  return performance.getEntriesByType('resource').filter(r => r.responseEnd <= end + 1000 &&
+		    /\.(js|css|mjs)$/.test(new URL(r.name).pathname)).map(r => new URL(r.name).pathname); })())`))
+	if err != nil {
+		t.Fatalf("harness: %v", err)
 	}
+	var loaded []string
+	if err := json.Unmarshal([]byte(names), &loaded); err != nil {
+		t.Fatalf("harness: %v", err)
+	}
+	live := map[string]int{}
+	for _, p := range loaded {
+		rel := strings.TrimPrefix(p, "/")
+		if seen[rel] {
+			continue
+		}
+		seen[rel] = true
+		n, err := gzipSize(filepath.Join(e.build, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Logf("resource %s is not a build file (%v); not counted", p, err)
+			continue
+		}
+		live[filepath.Ext(rel)] += n
+	}
+	if sizes[".js"]+live[".js"] > maxJSGzip {
+		t.Errorf("R-UI-007: JS loaded by the overview %d B gzip (shell %d + loaded later %d) > %d", sizes[".js"]+live[".js"], sizes[".js"], live[".js"], maxJSGzip)
+	}
+	if sizes[".css"]+live[".css"] > maxCSSGzip {
+		t.Errorf("R-UI-007: CSS loaded by the overview %d B gzip (shell %d + loaded later %d) > %d", sizes[".css"]+live[".css"], sizes[".css"], live[".css"], maxCSSGzip)
+	}
+	budget := maxFCPSmall
+	if runtime.NumCPU() >= 8 && memGiB() >= 15 {
+		budget = maxFCP
+	}
+	t.Logf("overview FCP %.0f ms, budget %s", fcp, budget)
+	if fcp < 0 || time.Duration(fcp*float64(time.Millisecond)) > budget {
+		t.Errorf("R-UI-007: overview first contentful paint %.0f ms, budget %s", fcp, budget)
+	}
+}
+
+// memGiB is the host's physical memory in GiB (0 when unknown).
+func memGiB() float64 {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 && f[0] == "MemTotal:" {
+			kb, _ := strconv.ParseFloat(f[1], 64)
+			return kb / (1 << 20)
+		}
+	}
+	return 0
 }
 
 func gzipSize(file string) (int, error) {

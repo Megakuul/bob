@@ -541,7 +541,7 @@ type Build struct {
 	Pipelines []struct{ Name, State, ReleaseID string } `json:"pipelines"`
 	Errors    []struct{ Code, Message string }          `json:"errors"`
 	Counts    struct {
-		Total, Cached, Built, Failed int
+		Total, Cached, Built, Failed, Skipped int
 	} `json:"counts"`
 	Attempt any `json:"attempt"`
 }
@@ -595,6 +595,21 @@ func Terminal(b Build) bool {
 func (e *Env) Jobs(buildID string) []Job {
 	e.T.Helper()
 	var r struct{ Jobs []Job }
+	e.MustCall(e.Admin, "bob.build.v1.JobService/ListJobs", map[string]any{"buildId": buildID}, &r)
+	return r.Jobs
+}
+
+// JobAttempts is a job with its attempt number.
+type JobAttempts struct {
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	Attempt int    `json:"attempt"`
+}
+
+// JobsAttempts lists the jobs of a build with their attempt numbers.
+func (e *Env) JobsAttempts(buildID string) []JobAttempts {
+	e.T.Helper()
+	var r struct{ Jobs []JobAttempts }
 	e.MustCall(e.Admin, "bob.build.v1.JobService/ListJobs", map[string]any{"buildId": buildID}, &r)
 	return r.Jobs
 }

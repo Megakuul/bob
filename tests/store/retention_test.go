@@ -2,7 +2,10 @@ package store
 
 import (
 	"encoding/json"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -80,22 +83,63 @@ func TestRSTORE105StagingCleanup(t *testing.T) {
 	// One worker is killed while builds run (the SPEC drain kills 20 %).
 	done := make(chan harness.Result, 1)
 	go func() { done <- env.RemoteBuild(t, x, harness.Fixture(t, "acme"), "//...") }()
+	// Observe the highest attempt that ever staged anything per job: a failed attempt of the killed
+	// worker is expired by the lifecycle rule or the 7-day sweep (SPEC), only the final, successful
+	// attempt must be cleaned within one pass.
+	var seenMu sync.Mutex
+	finalAttempt := map[string]int{} // staging/<build>/<job> -> highest attempt seen
+	stopObs := make(chan struct{})
+	obsDone := make(chan struct{})
+	go func() {
+		defer close(obsDone)
+		for {
+			for _, k := range env.ListKeys(t, s, "bob-artifacts", "staging/") {
+				p := strings.Split(k, "/") // staging, build, job, attempt, ...
+				if len(p) < 5 || p[1] == "dead-build" {
+					continue
+				}
+				if a, err := strconv.Atoi(p[3]); err == nil {
+					seenMu.Lock()
+					if a > finalAttempt[p[1]+"/"+p[2]] {
+						finalAttempt[p[1]+"/"+p[2]] = a
+					}
+					seenMu.Unlock()
+				}
+			}
+			select {
+			case <-stopObs:
+				return
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+	}()
 	time.Sleep(2 * time.Second)
 	_ = s.Kill("worker-0")
 	r := <-done
+	close(stopObs)
+	<-obsDone
 	if r.Exit != 0 {
 		t.Fatalf("remote build with a killed worker: exit %d\n%s", r.Exit, r.Combined())
 	}
 	// Within one promotion pass (10 s) + margin, nothing of a successful attempt is left.
-	if !env.Wait(30*time.Second, func() bool {
+	leftover := func() []string {
+		var out []string
+		seenMu.Lock()
+		defer seenMu.Unlock()
 		for _, k := range env.ListKeys(t, s, "bob-artifacts", "staging/") {
-			if !strings.HasPrefix(k, "staging/dead-build/") {
-				return false
+			p := strings.Split(k, "/")
+			if p[1] == "dead-build" {
+				continue
 			}
+			if a, err := strconv.Atoi(p[3]); len(p) >= 5 && err == nil && a < finalAttempt[p[1]+"/"+p[2]] {
+				continue // an earlier attempt of a job that later succeeded: lifecycle or sweep
+			}
+			out = append(out, k)
 		}
-		return true
-	}) {
-		t.Errorf("staged objects of successful attempts remain 30 s after the build: %v", env.ListKeys(t, s, "bob-artifacts", "staging/"))
+		return out
+	}
+	if !env.Wait(30*time.Second, func() bool { return len(leftover()) == 0 }) {
+		t.Errorf("staged objects of successful attempts remain 30 s after the build: %v", leftover())
 	}
 	if keyCount(t, s, "bob-artifacts", "staging/dead-build/") != 1 {
 		t.Errorf("a pass before the 7-day mark deleted the abandoned attempt")
@@ -208,6 +252,24 @@ func TestRSTORE150ReleasesAreNeverCollected(t *testing.T) {
 		t.Fatalf("seed data missing: unreleased %d, released %d, assets %d", len(before), len(releasedOnly), len(assets))
 	}
 
+	// The release's id is looked up now: the visibility document of every cache path that a release
+	// lists names it, so "the unreleased build's own paths" are the paths of `before` whose document
+	// does not.
+	var rl struct{ Releases []struct{ ID, Etag string } }
+	if c := env.RPC(t, x, "bob.release.v1.ReleaseService/ListReleases", "", map[string]any{"page_size": 10}); c.Status != 200 || json.Unmarshal(c.Body, &rl) != nil || len(rl.Releases) != 1 {
+		t.Fatalf("ListReleases = %d %s, want one release", c.Status, c.Body)
+	}
+	var unreleasedOnly []string
+	for _, k := range before {
+		hash := strings.TrimSuffix(strings.TrimPrefix(k, "nix/narinfo/"), ".narinfo")
+		if doc := env.GetRaw(t, s, "bob-artifacts", "nix/vis/"+hash+".json"); !strings.Contains(string(doc), rl.Releases[0].ID) {
+			unreleasedOnly = append(unreleasedOnly, k)
+		}
+	}
+	if len(unreleasedOnly) == 0 {
+		t.Fatalf("every path of the unreleased build is also listed by the release; nothing to collect")
+	}
+
 	swapOrchestrator(t, s, "orchestrator-gc", "1h")
 	gone := func(keys []string, bucket, prefix string) int {
 		have := map[string]bool{}
@@ -225,8 +287,13 @@ func TestRSTORE150ReleasesAreNeverCollected(t *testing.T) {
 	// Shared paths (referenced by the release too) must stay; the unreleased build's own
 	// paths go. "before" includes paths the release build reuses, so only require that
 	// something of the unreleased build went and that nothing of the release did.
-	if !env.Wait(passWait, func() bool { return gone(before, "bob-artifacts", "nix/narinfo/") > 0 }) {
-		t.Errorf("GC with cache_unreferenced_days = 0 deleted no path of the unreleased build")
+	if !env.Wait(passWait, func() bool { return gone(unreleasedOnly, "bob-artifacts", "nix/narinfo/") == len(unreleasedOnly) }) {
+		t.Errorf("GC with cache_unreferenced_days = 0 deleted %d of %d paths of the unreleased build", gone(unreleasedOnly, "bob-artifacts", "nix/narinfo/"), len(unreleasedOnly))
+	}
+	for _, k := range before {
+		if !slices.Contains(unreleasedOnly, k) && gone([]string{k}, "bob-artifacts", "nix/narinfo/") != 0 {
+			t.Errorf("GC deleted %s, which the release lists", k)
+		}
 	}
 	if n := gone(releasedOnly, "bob-artifacts", "nix/narinfo/"); n != 0 {
 		t.Errorf("GC deleted %d paths of the release", n)

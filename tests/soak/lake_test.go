@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/megakuul/bob/tests/parity"
 	"github.com/megakuul/bob/tests/server/srvtest"
+	"github.com/megakuul/bob/tests/store/env"
 )
 
 // leaders returns who holds ctl/lake-maintenance according to the orchestrators' leader_of.
@@ -103,8 +105,27 @@ func TestRLOG100LakeWorkarounds(t *testing.T) {
 			t.Fatalf("build %s: %q %v", id, st, err)
 		}
 	}
-	// the partitions were written minutes ago; compaction needs them older than 10 min
-	time.Sleep(11 * time.Minute)
+	// Compaction needs partitions older than 10 min (R-LOG-100): the objects of the log tables are
+	// counted when the builds end, must be unchanged while every partition is younger than that, and
+	// must have been compacted (fewer objects, same lines) once all are older.
+	logObjects := func() int {
+		n := 0
+		for _, k := range env.ListKeys(t, e.Stack, "bob-analytics", "") {
+			if strings.Contains(k, "log_line") {
+				n++
+			}
+		}
+		return n
+	}
+	before := logObjects()
+	if before < 2 {
+		t.Fatalf("the builds left %d log objects, want many small commits", before)
+	}
+	time.Sleep(4 * time.Minute)
+	if n := logObjects(); n < before {
+		t.Errorf("log objects went from %d to %d while all partitions were younger than 10 min; compaction must wait", before, n)
+	}
+	time.Sleep(7 * time.Minute)
 	if l := leaders(ctx, e); len(l) != 1 {
 		t.Errorf("lake-maintenance has %d leaders after 11 min, want exactly 1: %v", len(l), l)
 	}
@@ -126,6 +147,9 @@ func TestRLOG100LakeWorkarounds(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
+	if after := logObjects(); after >= before {
+		t.Errorf("log objects: %d before, %d after the partitions aged past 10 min; compaction did not run", before, after)
+	}
 	if failed.Load() != 0 {
 		t.Errorf("%d of %d queries failed", failed.Load(), queries.Load())
 	}

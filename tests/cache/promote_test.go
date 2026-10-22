@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/megakuul/bob/tests/parity"
 	"github.com/megakuul/bob/tests/serverenv/clients"
 	"github.com/megakuul/bob/tests/serverenv/regenv"
+	"github.com/megakuul/bob/tests/serverenv/s3count"
 )
 
 const artifacts = "bob-artifacts"
@@ -181,7 +183,11 @@ func TestRREG152TwoOrchestratorsPromoteOneJob(t *testing.T) {
 	if e == nil {
 		return
 	}
+	// A promotion that takes longer than one pass interval (10 s) overlaps the other orchestrator's
+	// pass over the same job; staged reads are delayed for that window.
+	e.DelayStaging(12 * time.Second)
 	rel, root := publishP1(t, e)
+	e.SetFaults(s3count.Script{})
 	keys := e.PublicKeys()
 	n := clients.Nix(t)
 	promoted, already := regexp.MustCompile(`promoted (\d+)`), regexp.MustCompile(`alreadyThere (\d+)`)
@@ -217,6 +223,37 @@ func TestRREG152NonReproduciblePathKeepsFirstPublication(t *testing.T) {
 	// Two workers build the same input-addressed path with different bytes (fixture
 	// "nondet": output contains a nonce); both stage before the first promotion.
 	e.DelayStaging(15 * time.Second)
+	// Record the first publication of every narinfo at the moment it first appears (a tight
+	// poll), so "the first publication is unchanged" compares against what was really first.
+	firstSeen := map[string]map[string]string{}
+	var fsMu sync.Mutex
+	stopPoll := make(chan struct{})
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		for {
+			for _, k := range e.S3List("nix/narinfo/") {
+				h := hashOfKey(k)
+				fsMu.Lock()
+				_, ok := firstSeen[h]
+				fsMu.Unlock()
+				if ok {
+					continue
+				}
+				if code, _, body := e.Get(e.API+"/nix/"+h+".narinfo", e.Admin, nil); code == http.StatusOK {
+					fsMu.Lock()
+					firstSeen[h] = narinfoFields(string(body))
+					fsMu.Unlock()
+				}
+			}
+			select {
+			case <-stopPoll:
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}()
+	defer func() { close(stopPoll); <-pollDone }()
 	e.Project("acme", "demo")
 	dir := nondetDir(t)
 	e.Push(dir, "demo", "feature-a")
@@ -239,6 +276,16 @@ func TestRREG152NonReproduciblePathKeepsFirstPublication(t *testing.T) {
 	if first = narinfoFields(string(body)); first["NarHash"] == "" {
 		t.Fatalf("(3) the first publication of %s is not served", path)
 	}
+	fsMu.Lock()
+	rec, recorded := firstSeen[regenv.StoreHash(path)]
+	fsMu.Unlock()
+	if !recorded {
+		t.Fatalf("(3) the poll never saw the first publication of %s appear", path)
+	}
+	if rec["NarHash"] != first["NarHash"] || rec["Sig"] != first["Sig"] {
+		t.Errorf("(3) the narinfo of %s changed after its first publication: first seen %v, served after both builds %v", path, rec, first)
+	}
+	first = rec
 	for _, b := range builds { // a later request must still answer the first publication
 		e.MustCall(e.Admin, "bob.build.v1.BuildService/RerunBuild", map[string]any{"id": b.ID}, nil)
 	}
