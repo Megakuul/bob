@@ -7,8 +7,9 @@
 - **Current task:** M1.8 DONE 2026-10-22 (units T1b–T6c + H1, W1, W2 committed; ledger
   `plan/m1.8-ledger.md`, per-unit `plan/progress/*.md`): 248 of 252 R-ids have red acceptance
   tests, 3 are (manual) (R-PLAT-002, R-SEC-101, R-UI-003), 4 budget-only ids map to budgets.json
-  rows (tests/budgets). `go run ./tools/ci -fast` green (13 stages). Running: M1.10 harness
-  self-validation (`docs/harness-validation.md`) and W3 (policy matrix test-side fixes). Left:
+  rows (tests/budgets). Full `go run ./tools/ci` green (15 stages incl. acceptance, 2026-10-22). M1.10
+  done (`docs/harness-validation.md`: 9 faults caught, 7 deferred with milestone, gaps listed). Running:
+  Gate H test review by 4 fresh-context reviewers (`docs/review/gate-h-*.md`). Left:
   M1.9 quiet-host budget re-measure (28 budget rows have no benchmark yet — benchmarks come with
   the features), then **Gate H self-review (D70)** and handing the SPEC/proto problem list to the owner.
   **Open items for Gate H (owner):** proto problem (UpdateProject/UpdateRelease `project_field`);
