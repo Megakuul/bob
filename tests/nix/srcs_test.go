@@ -166,7 +166,50 @@ func TestRNIX009ImportMissingOnly(t *testing.T) {
 	if err != nil || strings.Join(again, "\n") != strings.Join(want, "\n") {
 		t.Errorf("second srcs.Import = %v (%v), want the same paths", again, err)
 	}
-	// Budget B-076 (10,000 small source dirs in ≤ 5 s) is measured by the budgets stage.
+}
+
+// TestRNIX009Import10000SourceDirs is the budget clause of the acceptance (budget B-076 in
+// tests/budgets/budgets.json): importing 10,000 small source dirs takes <= 5 s [8c/15G].
+func TestRNIX009Import10000SourceDirs(t *testing.T) {
+	parity.Covers(t, "R-NIX-009")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	st, err := store.Open(ctx, store.Config{Home: filepath.Join(t.TempDir(), "bobhome")})
+	if notImplemented(t, err, "store.Open") {
+		return
+	}
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	base := t.TempDir()
+	in := make([]srcs.Source, 0, 10000)
+	for i := 0; i < 10000; i++ {
+		root := filepath.Join(base, fmt.Sprint(i))
+		if err := os.MkdirAll(filepath.Join(root, "src"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for f, body := range map[string]string{"bob.go": fmt.Sprintf("package p%d\n", i), "src/a.c": fmt.Sprintf("int a%d;\n", i)} {
+			if err := os.WriteFile(filepath.Join(root, f), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		in = append(in, srcs.Source{Name: fmt.Sprintf("many-%d-src", i), Tree: srcs.Tree{Root: root, Files: []string{"bob.go", "src/a.c"}}})
+	}
+	start := time.Now()
+	got, err := srcs.Import(ctx, st, in)
+	elapsed := time.Since(start)
+	if notImplemented(t, err, "srcs.Import") {
+		return
+	}
+	if err != nil {
+		t.Fatalf("srcs.Import of 10,000 source dirs: %v", err)
+	}
+	if len(got) != len(in) {
+		t.Errorf("srcs.Import returned %d paths for %d sources", len(got), len(in))
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("importing 10,000 small source dirs took %v, want <= 5 s (B-076)", elapsed)
+	}
 }
 
 // TestRNIX007ExportStreamGolden compares bob's export stream with `nix-store --export` of the

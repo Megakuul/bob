@@ -33,6 +33,12 @@ func s7Repo(t *testing.T) string {
 	t.Helper()
 	dir := harness.Fixture(t, "polyglot")
 	copyTree(t, filepath.Join(harness.Root(t), "tests", "core", "testdata", "repos", "s7extra"), dir)
+	// Named variants that add Rust features (Variant.Features, SPEC §1.9): "shout" for rdemo
+	// (the "feature shout" configurations of S7 §3.3) and "xtra" for the proc-macro rmac.
+	replaceIn(t, filepath.Join(dir, "bob.go"), "Variants: []bob.NamedVariant{\n",
+		"Variants: []bob.NamedVariant{\n"+
+			"\t\tbob.NamedVariant(\"shout\", func(v *bob.Variant) { v.Features = map[bob.Label][]string{{Dir: \"rdemo\", Name: \"rdemo\"}: {\"shout\"}} }),\n"+
+			"\t\tbob.NamedVariant(\"xtra\", func(v *bob.Variant) { v.Features = map[bob.Label][]string{{Dir: \"rmac\", Name: \"rmac\"}: {\"extra\"}} }),\n")
 	git(t, dir, "add", "-A")
 	git(t, dir, "-c", "user.name=bob-harness", "-c", "user.email=harness@bob.invalid", "commit", "-q", "-m", "s7")
 	return dir
@@ -198,59 +204,93 @@ func TestRFW030PlatformRestriction(t *testing.T) {
 	}
 }
 
-// R-FW-031: the matrix over the configurations: the number of distinct derivations equals the
-// golden, and configurations with different projections of one package never share its path.
+// drvBase is the name of a store path without hash prefix and ".drv" suffix.
+func drvBase(storeName string) string {
+	if len(storeName) < 33 {
+		return storeName
+	}
+	return strings.TrimSuffix(storeName[33:], ".drv")
+}
+
+// libfooRe matches the derivation of the C++ library libfoo itself: §01 R-FW-038 names it
+// libs-foo-foo[-tags], §03.1.3 cc-foo[-projection]; the source import (cc-src-…) is not it.
+var libfooRe = regexp.MustCompile(`^(?:libs-foo-foo|cc-foo)(?:-|$)`)
+
+// matrixDrvCount is the number of distinct derivations of the 11 configurations of S7 §3.3
+// (SPEC R-FW-031: "S7: 99, ±0 after the fixture is frozen"; S7 §3.3: 99 instead of 313).
+const matrixDrvCount = 99
+
+// R-FW-031: the matrix over the 11 configurations of S7 §3.3 (matrix.sh): arm64 release, debug,
+// asan, asan+ubsan, race, feature shout; amd64 release, cross libs, debug, asan, feature shout.
+// The number of distinct derivations equals SPEC's 99, and configurations with different
+// projections of one package never share its path.
 func TestRFW031VariantMatrix(t *testing.T) {
 	parity.Covers(t, "R-FW-031")
 	dir := s7Repo(t)
 	home := t.TempDir()
 	host, other := string(hostPlatform(t)), string(otherPlatform(t))
-	configs := []string{
-		"@" + host, "@" + host + "+debug", "@" + host + "+asan", "@" + host + "+asan+ubsan", "@" + host + "+race",
-		"@" + other, "@" + other + "+debug", "@" + other + "+asan",
+	// libfooNew: whether the configuration changes libfoo's projection relative to every
+	// configuration built before it (S7 §3.3 "What is new"): race and feature shout do not.
+	type config struct {
+		name, suffix string
+		libfooNew    bool
+		crossLibs    bool
 	}
-	perConfig := map[string]map[string]bool{}
+	configs := []config{
+		{"arm64 release", "@" + host, true, false},
+		{"arm64 debug", "@" + host + "+debug", true, false},
+		{"arm64 asan", "@" + host + "+asan", true, false},
+		{"arm64 asan+ubsan", "@" + host + "+asan+ubsan", true, false},
+		{"arm64 race", "@" + host + "+race", false, false},
+		{"arm64 feature shout", "@" + host + "+shout", false, false},
+		{"amd64 release", "@" + other, true, false},
+		{"amd64 debug", "@" + other + "+debug", true, false},
+		{"amd64 asan", "@" + other + "+asan", true, false},
+		{"amd64 feature shout", "@" + other + "+shout", false, false},
+		{"amd64 cross libs", "@" + other, true, true},
+	}
+	if len(configs) != 11 {
+		t.Fatalf("harness: %d configurations, S7 §3.3 has 11", len(configs))
+	}
+	prev := map[string]bool{}
 	for _, c := range configs {
-		if r := bobIn(t, dir, home, "build", "//cmd/api:api"+c, "//rdemo:rdemo"+c); harness.Red(t, r) || !exitIs(t, r, 0) {
+		if c.crossLibs {
+			// The package definitions change, not the request: cc.CrossLibs on libfoo (the
+			// cgo/link package follows its dependency), as in R-FW-036.
+			replaceIn(t, filepath.Join(dir, "libs", "foo", "bob.go"), "Std:  cc.CXX20,", "Std:  cc.CXX20,\n\t\tLibs: cc.CrossLibs,")
+		}
+		if r := bobIn(t, dir, home, "build", "//cmd/api:api"+c.suffix, "//rdemo:rdemo"+c.suffix); harness.Red(t, r) || !exitIs(t, r, 0) {
 			return
 		}
 		all, ok := drvStore(t, home)
 		if !ok {
 			return
 		}
-		set := map[string]bool{}
+		fresh, freshLibfoo := 0, 0
 		for n := range bobDrvs(all) {
-			set[n] = true
+			if prev[n] {
+				continue
+			}
+			prev[n] = true
+			fresh++
+			if libfooRe.MatchString(drvBase(n)) {
+				freshLibfoo++
+			}
 		}
-		perConfig[c] = set
+		if fresh == 0 {
+			t.Errorf("configuration %s produced no new derivation (S7 §3.3: every configuration has a different projection of some package)", c.name)
+		}
+		if c.libfooNew && freshLibfoo == 0 {
+			t.Errorf("configuration %s (different projection of libfoo) produced no new libfoo derivation", c.name)
+		}
+		if !c.libfooNew && freshLibfoo != 0 {
+			t.Errorf("configuration %s changes no libfoo projection but produced %d new libfoo derivations", c.name, freshLibfoo)
+		}
 	}
-	// perConfig holds the cumulative store; the drvs of one configuration are the new ones.
-	distinct := len(perConfig[configs[len(configs)-1]])
-	golden.Assert(t, "tests/goldens/outputs/cross-drvcount.txt", []byte(fmt.Sprintf("%d\n", distinct)), golden.Reqs("R-FW-031"))
-	// No two configurations with different projections of one package yield the same path:
-	// the C++ library libfoo differs in platform, profile and asan between these pairs.
-	slug := "libs-foo-foo"
-	prev := map[string]bool{}
-	for _, c := range configs {
-		now := map[string]bool{}
-		for n := range perConfig[c] {
-			if strings.Contains(n, slug) {
-				now[n] = true
-			}
-		}
-		fresh := 0
-		for n := range now {
-			if !prev[n] {
-				fresh++
-			}
-		}
-		if c != configs[0] && c != "@"+host+"+race" && fresh == 0 {
-			t.Errorf("configuration %s (different projection of %s) produced no new derivation for it", c, slug)
-		}
-		if c == "@"+host+"+race" && fresh != 0 {
-			t.Errorf("+race changes no C++ projection but produced %d new libfoo derivations", fresh)
-		}
-		prev = now
+	// The distinct derivations of all configurations (the store is shared, so identical
+	// projections share one path): SPEC's number, S7: 99.
+	if len(prev) != matrixDrvCount {
+		t.Errorf("distinct derivations over the 11 configurations: %d, want %d (R-FW-031, S7 §3.3)", len(prev), matrixDrvCount)
 	}
 }
 
@@ -679,78 +719,141 @@ func TestRFW037CrossSanitiserRunpath(t *testing.T) {
 	}
 }
 
-// projection rows tested by R-FW-038: label slug in the derivation name and which fields
-// (platform, profile, asan, race) must change it.
-var projectionRows = []struct {
-	row, slug, pattern string
-	changes            [4]bool
-}{
-	{"C/C++ library", "libs-foo-foo", "//libs/foo:foo", [4]bool{true, true, true, false}},
-	{"Rust target crate", "crates-rcore-rcore", "//crates/rcore:rcore", [4]bool{true, true, false, false}},
-	{"Rust host unit", "rmac", "//rmac:rmac", [4]bool{false, false, false, false}},
-	{"Rust build-script run", "rdemo-build-run", "//rdemo:rdemo", [4]bool{true, true, false, false}},
+// rustUnitRe matches the store name of a local Rust crate unit (§03.3.3: units are named
+// <name>-<version>[-host][-<projection>], build scripts <name>-<version>[-host]-build-script
+// and -build-run; a local crate's version is "0.0.0", its Cargo.toml version, or "local" in the
+// unit key). §01 R-FW-038 prefixes the dir label, so an optional <dir>- prefix is accepted.
+func rustUnitRe(name, kind string) *regexp.Regexp {
+	pre := `^(?:[a-z0-9_.]+-)?` + regexp.QuoteMeta(name) + `-(?:0\.0\.0|local)`
+	switch kind {
+	case "host":
+		return regexp.MustCompile(pre + `-host(?:-[a-z0-9-]+)?$`)
+	case "run":
+		return regexp.MustCompile(pre + `(?:-host)?-build-run(?:-[a-z0-9-]+)?$`)
+	}
+	return regexp.MustCompile(pre + `(?:-[a-z0-9-]+)?$`)
 }
 
-// R-FW-038: flipping a field marked – leaves the derivation of the package unchanged, flipping a
-// ✔ field changes it; the computed table is golden. Requesting +asan for a Rust-only target
-// prints "note: //rcore:rcore is built without asan (not supported for Rust in v1)".
+// projFlips are the variant fields flipped by R-FW-038, in the column order of the table:
+// platform, profile, ASan, UBSan, Go race, Rust features. The last flip's token is the row's own
+// feature variant (shout for rdemo, xtra for rmac); a row without Rust features flips shout.
+var projFlips = []string{"platform", "profile", "asan", "ubsan", "race", "features"}
+
+// projectionRow is one row of the §04 R-FW-038 table: a pattern whose package kind the row
+// describes, the regexp of the derivations of that kind (store name without hash and .drv) and
+// which flips must change them (✔) or not (–), column order of projFlips.
+type projectionRow struct {
+	row, fixture, pattern string
+	re                    *regexp.Regexp
+	changes               [6]bool
+	featureTok            string // variant token of the features flip
+	all                   bool   // match every derivation of the store (nixpkgs, sources), not only bob's
+}
+
+// The 13 rows of the table (the 14th, OCI/AppImage/tarball/release, is the union of their
+// roots' projections and has no field of its own). Names follow §03 per ecosystem: fetch
+// crate-<name>-<version> (§03.3.3), codegen gen-<label slug> (§03.6.3), Go go-std…,
+// go-<module>-<version>, go-<importpath>, go-link-<name> (§03.2.3), npm app/site <label>
+// (§03.4.3), OCaml ml-<name> (§03.5.3), C/C++ libs-foo-foo (§01 R-FW-038) or cc-foo (§03.1.3).
+var projectionRows = []projectionRow{
+	{row: "fetch / unpack", fixture: "s7", pattern: "//rdemo:rdemo", re: regexp.MustCompile(`^crate-itoa-`), all: true},
+	{row: "codegen (host tool)", fixture: "s7", pattern: "//cmd/api:api", re: regexp.MustCompile(`^gen-`), all: true},
+	{row: "nixpkgs.Tool", fixture: "s7", pattern: "//cmd/api:api", re: regexp.MustCompile(`^protobuf-`), all: true},
+	{row: "nixpkgs.Lib", fixture: "s7", pattern: "//libs/foo:foo", re: regexp.MustCompile(`^openssl-`), all: true,
+		changes: [6]bool{true, false, false, false, false, false}},
+	{row: "C/C++ object/library/binary", fixture: "s7", pattern: "//libs/foo:foo", re: libfooRe,
+		changes: [6]bool{true, true, true, true, false, false}},
+	{row: "Go std, Go package (pure)", fixture: "s7", pattern: "//cmd/api:api", re: regexp.MustCompile(`^go-github\.com-google-uuid-`),
+		changes: [6]bool{true, true, true, false, true, false}},
+	{row: "Go cgo package, Go link", fixture: "s7", pattern: "//cmd/api:api", re: regexp.MustCompile(`^(?:go-link-api|go-example\.com-polyglot-cmd-api)(?:-|$)`),
+		changes: [6]bool{true, true, true, true, true, false}},
+	{row: "Rust target crate", fixture: "s7", pattern: "//rdemo:rdemo", re: rustUnitRe("rdemo", "compile"),
+		changes: [6]bool{true, true, false, false, false, true}, featureTok: "shout"},
+	{row: "Rust host unit", fixture: "s7", pattern: "//rmac:rmac", re: rustUnitRe("rmac", "host"),
+		changes: [6]bool{false, false, false, false, false, true}, featureTok: "xtra"},
+	{row: "Rust build-script run", fixture: "s7", pattern: "//rdemo:rdemo", re: rustUnitRe("rdemo", "run"),
+		changes: [6]bool{true, true, false, false, false, true}, featureTok: "shout"},
+	{row: "npm/TS compile, bundle", fixture: "s7", pattern: "//web:web", re: regexp.MustCompile(`^web-web(?:-|$)`),
+		changes: [6]bool{false, true, false, false, false, false}},
+	{row: "npm app runtime (nodejs Lib)", fixture: "npm", pattern: "//native:native", re: regexp.MustCompile(`^nodejs-`), all: true,
+		changes: [6]bool{true, false, false, false, false, false}},
+	{row: "OCaml", fixture: "ocaml", pattern: "//app:demo", re: regexp.MustCompile(`^ml-demo(?:-|$)`),
+		changes: [6]bool{false, true, false, false, false, false}},
+}
+
+// R-FW-038: for each of the 13 rows, flipping a field marked – leaves the .drv path of the
+// package kind unchanged, flipping a ✔ field changes it; the computed table is golden.
+// Requesting +asan for a Rust-only target prints
+// "note: //crates/rcore:rcore is built without asan (not supported for Rust in v1)".
 func TestRFW038ProjectionTable(t *testing.T) {
 	parity.Covers(t, "R-FW-038")
-	dir := s7Repo(t)
-	host, other := string(hostPlatform(t)), string(otherPlatform(t))
-	flips := []struct{ name, from, to string }{
-		{"platform", "@" + host, "@" + other},
-		{"profile", "@" + host, "@" + host + "+debug"},
-		{"asan", "@" + host, "@" + host + "+asan"},
-		{"race", "@" + host, "@" + host + "+race"},
+	if len(projectionRows) != 13 {
+		t.Fatalf("harness: %d rows, the R-FW-038 table has 13 (plus the union row of OCI/AppImage/tarball/release)", len(projectionRows))
 	}
+	s7 := s7Repo(t)
+	host, other := string(hostPlatform(t)), string(otherPlatform(t))
 	var table strings.Builder
-	table.WriteString("row\tplatform\tprofile\tasan\trace\n")
-	results := map[string][4]string{}
-	for fi, f := range flips {
-		for _, row := range projectionRows {
-			home := t.TempDir()
-			names := func(cfg string) ([]string, bool) {
-				if r := bobIn(t, dir, home, "build", row.pattern+cfg); harness.Red(t, r) || !exitIs(t, r, 0) {
-					return nil, false
-				}
-				all, ok := drvStore(t, home)
-				return drvNamesWith(all, row.slug), ok
+	table.WriteString("row\tplatform\tprofile\tasan\tubsan\trace\tfeatures\n")
+	for _, row := range projectionRows {
+		dir := s7
+		switch row.fixture {
+		case "npm", "ocaml":
+			dir = harness.Fixture(t, row.fixture)
+		}
+		// One store per row: a flipped configuration's derivations are "new" when no earlier
+		// configuration of this row produced them (every flip differs from the base by one field).
+		home := t.TempDir()
+		seen := map[string]bool{}
+		build := func(cfg string) (map[string]bool, bool) {
+			if r := bobIn(t, dir, home, "build", row.pattern+cfg); harness.Red(t, r) || !exitIs(t, r, 0) {
+				return nil, false
 			}
-			a, ok := names(f.from)
+			all, ok := drvStore(t, home)
+			if !ok {
+				return nil, false
+			}
+			fresh := map[string]bool{}
+			for n, d := range all {
+				if !row.all && !strings.HasSuffix(d.Builder, "/bin/bob-builder") {
+					continue
+				}
+				if row.re.MatchString(drvBase(n)) && !seen[n] {
+					fresh[n] = true
+					seen[n] = true
+				}
+			}
+			return fresh, true
+		}
+		base, ok := build("@" + host)
+		if !ok {
+			return
+		}
+		if len(base) == 0 {
+			t.Errorf("%s: no derivation named %v among the store after building %s@%s", row.row, row.re, row.pattern, host)
+			continue
+		}
+		toks := []string{"@" + other, "@" + host + "+debug", "@" + host + "+asan", "@" + host + "+ubsan", "@" + host + "+race", ""}
+		toks[5] = "@" + host + "+shout"
+		if row.featureTok != "" {
+			toks[5] = "@" + host + "+" + row.featureTok
+		}
+		var cells [6]string
+		for fi, cfg := range toks {
+			fresh, ok := build(cfg)
 			if !ok {
 				return
 			}
-			// Only the derivations that are new for the flipped configuration count.
-			before := map[string]bool{}
-			for _, n := range a {
-				before[n] = true
-			}
-			b, ok := names(f.to)
-			if !ok {
-				return
-			}
-			changed := false
-			for _, n := range b {
-				if !before[n] {
-					changed = true
-				}
-			}
-			r := results[row.row]
-			r[fi] = map[bool]string{true: "✔", false: "–"}[changed]
-			results[row.row] = r
+			changed := len(fresh) > 0
+			cells[fi] = map[bool]string{true: "✔", false: "–"}[changed]
 			if changed != row.changes[fi] {
-				t.Errorf("%s: flipping %s: derivation changed=%v, want %v", row.row, f.name, changed, row.changes[fi])
+				t.Errorf("%s: flipping %s (%s): derivation changed=%v, want %v", row.row, projFlips[fi], cfg, changed, row.changes[fi])
 			}
 		}
-	}
-	for _, row := range projectionRows {
-		r := results[row.row]
-		fmt.Fprintf(&table, "%s\t%s\t%s\t%s\t%s\n", row.row, r[0], r[1], r[2], r[3])
+		fmt.Fprintf(&table, "%s\t%s\n", row.row, strings.Join(cells[:], "\t"))
 	}
 	golden.Assert(t, "tests/goldens/outputs/projection-table.txt", []byte(table.String()), golden.Reqs("R-FW-038"))
 	// The note for a dropped field.
-	r := bobRun(t, dir, "build", "//crates/rcore:rcore@"+host+"+asan")
+	r := bobRun(t, s7, "build", "//crates/rcore:rcore@"+host+"+asan")
 	if !exitIs(t, r, 0) {
 		return
 	}

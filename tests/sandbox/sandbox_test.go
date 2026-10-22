@@ -150,11 +150,20 @@ func TestRFW045HostileCases(t *testing.T) {
 	if len(cases) != 15 {
 		t.Fatalf("the hostile suite has %d cases, want the 15 of S13", len(cases))
 	}
+	cgOnly := 0
+	for _, c := range cases {
+		if c.NeedsCG {
+			cgOnly++
+		}
+	}
+	if cgOnly != 3 {
+		t.Fatalf("%d cases are marked cgroup-only, SPEC R-FW-045 allows exactly three skips", cgOnly)
+	}
 	cg := delegated()
 	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
 			if c.NeedsCG && !cg {
-				t.Skip("no delegated cgroup: this case is only contained by pids.max/memory.max (SPEC R-FW-045)")
+				t.Skip("no delegated cgroup: this case is only contained by pids.max (one of the three cgroup-only cases of SPEC R-FW-045)")
 			}
 			runCase(t, c)
 		})

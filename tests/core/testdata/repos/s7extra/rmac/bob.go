@@ -9,5 +9,5 @@ import (
 
 // Macro is the proc-macro crate rmac (label //rmac:rmac); a host unit (R-FW-035).
 var Macro = bob.Define(func(p *bob.P) *rust.Lib {
-	return rust.ProcMacro(p, rust.LibOpts{Deps: []rust.Dep{rust.Crate("itoa", "1")}})
+	return rust.ProcMacro(p, rust.LibOpts{Deps: []rust.Dep{rust.Crate("itoa", "1")}, Features: map[string][]string{"extra": {}}})
 })

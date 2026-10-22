@@ -185,6 +185,35 @@ func TestRARCH005Bootstrap(t *testing.T) {
 	if n := len(regexp.MustCompile(`/nix/store/[0-9a-z]{32}-bob-builder-\d+`).FindAllString(builders, -1)); n < 2 {
 		t.Errorf("pkg/engine/store/builders.go lists %d bob-builder store paths, want one per system", n)
 	}
+	// "A bob built by bob": the final binary lives in bob's own store (a `go build` result would
+	// not), and building //cmd/bob:bob with it yields that very path (bob is reproducible).
+	bobHome := filepath.Join(home, "bob")
+	realFinal, err := filepath.EvalSymlinks(final)
+	if err != nil {
+		t.Fatalf("scripts/bootstrap.sh: last line %q: %v", final, err)
+	}
+	storeDir := filepath.Join(bobHome, "nix", "store") + string(filepath.Separator)
+	if !strings.HasPrefix(realFinal, storeDir) {
+		t.Errorf("the final bob %s is not in bob's store %s: it was not built by bob", realFinal, storeDir)
+	}
+	pr := harness.RunPath(t, final, harness.Spec{Dir: wt, Env: []string{"BOB_HOME=" + bobHome}, Timeout: 10 * time.Minute}, "build", "//cmd/bob:bob", "--print-paths", "--json")
+	if exitIs(t, pr, 0) {
+		found := false
+		for _, e := range eventsNamed(events(t, pr), "package.finish") {
+			if e.str("label") != "//cmd/bob:bob" {
+				continue
+			}
+			ps, _ := e["paths"].([]any)
+			for _, p := range ps {
+				if out, _ := p.(string); out != "" && strings.HasPrefix(realFinal, out) {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Errorf("the final bob %s is not an output of `bob build //cmd/bob:bob`:\n%s", realFinal, pr.Stdout)
+		}
+	}
 	// At first use bob imports its embedded builder and refuses to run when the resulting
 	// store path differs from builders.go (R-NIX-015, BOB-E-9007). A clean doctor run of the
 	// bootstrapped bob therefore proves the paths are equal.

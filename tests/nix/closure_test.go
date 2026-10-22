@@ -137,6 +137,7 @@ const mib = 1 << 20
 // architecture's native rows run on its own hosts).
 func TestRNIX030ClosureBudgets(t *testing.T) {
 	parity.Covers(t, "R-NIX-030")
+	// Budgets B-010 (closure <= 74 MiB, 12 paths) and B-011 (binary <= 5.5 MiB).
 	t.Run("native-closure", func(t *testing.T) {
 		e := newBobEnv(t)
 		p, r := e.buildPath(t, "polyglot", "//cmd/api:api")
@@ -158,6 +159,7 @@ func TestRNIX030ClosureBudgets(t *testing.T) {
 			t.Errorf("api binary is %.2f MiB, budget 5.5 MiB", float64(fi.Size())/mib)
 		}
 	})
+	// Budget B-012 (<= 112 MiB).
 	t.Run("cross-native-libs", func(t *testing.T) {
 		e := newBobEnv(t)
 		p, r := e.buildPath(t, "polyglot", "//cmd/api:api@linux-amd64")
@@ -168,6 +170,7 @@ func TestRNIX030ClosureBudgets(t *testing.T) {
 			t.Errorf("cross //cmd/api:api@linux-amd64 closure is %.1f MiB, budget 112 MiB", float64(size)/mib)
 		}
 	})
+	// Budget B-013 (<= 74 MiB).
 	t.Run("cross-Cross()", func(t *testing.T) {
 		e := newBobEnv(t)
 		foo := filepath.Join(e.dir(t, "polyglot"), "libs", "foo", "bob.go")

@@ -85,7 +85,65 @@ func TestRNIX020EmbeddedStaticNix(t *testing.T) {
 	if b, err := os.ReadFile(log); err == nil && len(b) > 0 {
 		t.Errorf("the host's nix was executed by the second run:\n%s", b)
 	}
-	// Budget B-0xx: first extraction ≤ 500 ms is measured by the budgets stage.
+}
+
+// TestRNIX020FirstExtractionBudget is the budget clause of the acceptance: the first extraction
+// takes <= 500 ms [8c/15G] (measured 294 ms). No row of tests/budgets/budgets.json carries it
+// (B-009 is the namespace entry), so it is asserted here. The temporary entry is the one whose
+// name starts with "." or contains "nix". Extraction writes a temporary entry
+// in <home>/bin and renames it atomically to nix-<12 hex>: the time between the first entry
+// appearing and the final directory appearing, polled every millisecond, is the extraction.
+func TestRNIX020FirstExtractionBudget(t *testing.T) {
+	parity.Covers(t, "R-NIX-020")
+	e := newBobEnv(t)
+	cmd := exec.Command(harness.Bin(t, "bob"), "build", "//...")
+	cmd.Dir = e.dir(t, "cpp-lib")
+	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "TZ=UTC", "LC_ALL=C"}, e.env()...)
+	var out strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &out
+	final := regexp.MustCompile(`^nix-[0-9a-f]{12}$`)
+	binDir := filepath.Join(e.Home, "bin")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("harness: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	var first, last time.Time
+	var werr error
+poll:
+	for {
+		select {
+		case werr = <-done:
+			break poll
+		case <-time.After(time.Millisecond):
+		}
+		ents, err := os.ReadDir(binDir)
+		if err != nil {
+			continue
+		}
+		for _, de := range ents {
+			if final.MatchString(de.Name()) {
+				if last.IsZero() {
+					last = time.Now()
+				}
+			} else if first.IsZero() && (strings.HasPrefix(de.Name(), ".") || strings.Contains(de.Name(), "nix")) {
+				first = time.Now()
+			}
+		}
+	}
+	if strings.Contains(out.String(), "BOB-E-9008") {
+		t.Errorf("red: not implemented yet: bob build //... -> %s", strings.SplitN(out.String(), "\n", 2)[0])
+		return
+	}
+	if werr != nil {
+		t.Fatalf("bob build //...: %v\n%s", werr, out.String())
+	}
+	if last.IsZero() {
+		t.Fatalf("no <home>/bin/nix-<12 hex> appeared during the first bob command")
+	}
+	if !first.IsZero() && last.Sub(first) > 500*time.Millisecond+5*time.Millisecond {
+		t.Errorf("first extraction took %v, want <= 500 ms (R-NIX-020; measured 294 ms)", last.Sub(first))
+	}
 }
 
 // TestRNIX020Attribution: ATTRIBUTION.md lists Nix (LGPL-2.1-or-later) and busybox (GPL-2.0).

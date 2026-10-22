@@ -167,6 +167,26 @@ func TestRFW063FetchesAreImportedNotBuilt(t *testing.T) {
 				}
 			}
 			walk("", lockDoc)
+			// Flat hashes: crate "checksum", npm "integrity", sources/opam "hash" (SRI or hex).
+			var flatHashes []string
+			var walkFlat func(k string, v any)
+			walkFlat = func(k string, v any) {
+				switch x := v.(type) {
+				case map[string]any:
+					for kk, vv := range x {
+						walkFlat(kk, vv)
+					}
+				case []any:
+					for _, vv := range x {
+						walkFlat(k, vv)
+					}
+				case string:
+					if k == "checksum" || k == "integrity" || k == "hash" {
+						flatHashes = append(flatHashes, x)
+					}
+				}
+			}
+			walkFlat("", lockDoc)
 			have := map[string]bool{}
 			for _, e := range ents {
 				have[e.Name()] = true
@@ -193,8 +213,62 @@ func TestRFW063FetchesAreImportedNotBuilt(t *testing.T) {
 					t.Errorf("no store path equals the fixed-output path of lock narHash %s", nh)
 				}
 			}
+			// The same for flat hashes: the source path is drv.FixedOutputPath(algo, hash,
+			// recursive=false, name) (R-FW-063: "flat: --mode flat").
+			for _, fh := range flatHashes {
+				algo, hexSum, ok := splitFlatHash(fh)
+				if !ok {
+					t.Errorf("lock hash %q is neither an SRI string nor a hex digest", fh)
+					continue
+				}
+				found := false
+				for _, n := range names {
+					p, err := drv.FixedOutputPath(algo, hexSum, false, n)
+					if isNotImplemented(err) {
+						harness.RedFeature(t, "drv.FixedOutputPath")
+						return
+					}
+					if err == nil && have[strings.TrimPrefix(p, "/nix/store/")] {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("no store path equals the flat fixed-output path of lock hash %s", fh)
+				}
+			}
 		})
 	}
+}
+
+// splitFlatHash returns the algorithm and the hex digest of an SRI hash ("sha512-<base64>") or a
+// bare hex digest (sha1: 40, sha256: 64, sha512: 128 digits).
+func splitFlatHash(h string) (algo, hexSum string, ok bool) {
+	if i := strings.IndexByte(h, '-'); i > 0 {
+		raw, err := base64.StdEncoding.DecodeString(h[i+1:])
+		if err != nil {
+			return "", "", false
+		}
+		switch h[:i] {
+		case "sha1", "sha256", "sha512":
+			return h[:i], hex.EncodeToString(raw), true
+		}
+		return "", "", false
+	}
+	switch len(h) {
+	case 40:
+		algo = "sha1"
+	case 64:
+		algo = "sha256"
+	case 128:
+		algo = "sha512"
+	default:
+		return "", "", false
+	}
+	if _, err := hex.DecodeString(h); err != nil {
+		return "", "", false
+	}
+	return algo, h, true
 }
 
 // R-FW-063 (c): the Nix log of a build shows no `build` activity for a source: no derivation
@@ -216,7 +290,11 @@ func TestRFW063NoNixBuildActivityForSources(t *testing.T) {
 				hosts = append(hosts, m[1])
 			}
 			building := regexp.MustCompile(`@nix \{[^\n]*"text":"building '/nix/store/([0-9a-z]{32}-[^']+\.drv)'`)
-			for _, m := range building.FindAllStringSubmatch(r.Stderr, -1) {
+			lines := building.FindAllStringSubmatch(r.Stderr, -1)
+			if len(lines) == 0 {
+				t.Errorf("-vv shows no `building '<drv>'` activity of the Nix log for a cold build; the check below would be vacuous:\n%s", r.Stderr)
+			}
+			for _, m := range lines {
 				d, err := drv.Parse([]byte(readFile(t, filepath.Join(home, "nix", "store", m[1]))))
 				if isNotImplemented(err) {
 					harness.RedFeature(t, "drv.Parse")

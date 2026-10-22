@@ -70,10 +70,50 @@ func TestRFW046ProjectionIgnoresUndeclaredAxes(t *testing.T) {
 	if len(b[0].Deps) != 1 || b[0].Deps[0] != a[0].ID {
 		t.Errorf("//toy:b deps %v, want [%s]", b[0].Deps, a[0].ID)
 	}
-	// The same projection gives the same derivation path (checked through the build).
 	if len(g.Configs) < 2 {
 		t.Errorf("the two requested configurations are not both in configs[]: %+v", g.Configs)
 	}
+	// Equal projections give equal derivation paths: both configurations are built in one
+	// store and every label has the same output path (input-addressed: same derivation) in both.
+	bin := buildBobtoy(t)
+	dir := repo(t, "toy")
+	env := []string{"BOB_HOME=" + t.TempDir()}
+	pathsOf := func(cfg string) map[string]string {
+		r := harness.RunPath(t, bin, harness.Spec{Dir: dir, Env: env}, "build", "//toy:b@linux-arm64"+cfg, "--print-paths", "--json")
+		noLeak(t, r)
+		if harness.Red(t, r) || !exitIs(t, r, 0) {
+			return nil
+		}
+		out := map[string]string{}
+		for _, e := range eventsNamed(events(t, r), "package.finish") {
+			if ps, _ := e["paths"].([]any); len(ps) > 0 {
+				out[e.str("label")], _ = ps[0].(string)
+			}
+		}
+		return out
+	}
+	rel, dbg := pathsOf(""), pathsOf("+debug")
+	if rel == nil || dbg == nil {
+		return
+	}
+	for _, l := range []string{"//toy:a", "//toy:b"} {
+		if rel[l] == "" || rel[l] != dbg[l] {
+			t.Errorf("%s: output path %q for release, %q for debug; equal projections must give equal derivation paths", l, rel[l], dbg[l])
+		}
+	}
+}
+
+// buildBobtoy builds bob with the toy ecosystem linked in (tests/core/toyeco).
+func buildBobtoy(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "bobtoy")
+	cmd := exec.Command("go", "build", "-o", bin, "./tests/core/toyeco/cmd/bobtoy")
+	cmd.Dir = harness.Root(t)
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("harness: go build bobtoy: %v\n%s", err, out)
+	}
+	return bin
 }
 
 // R-FW-051: a test ecosystem registered from its own package (tests/core/toyeco) builds a
@@ -90,13 +130,7 @@ func TestRFW051ToyEcosystem(t *testing.T) {
 		}
 		return nil
 	})
-	bin := filepath.Join(t.TempDir(), "bobtoy")
-	cmd := exec.Command("go", "build", "-o", bin, "./tests/core/toyeco/cmd/bobtoy")
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("harness: go build bobtoy: %v\n%s", err, out)
-	}
+	bin := buildBobtoy(t)
 	dir := repo(t, "toy")
 	r := harness.RunPath(t, bin, harness.Spec{Dir: dir}, "build", "//toy:b", "--print-paths", "--json")
 	noLeak(t, r)

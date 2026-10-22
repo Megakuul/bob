@@ -160,7 +160,43 @@ func TestRNIX027IndexLookup(t *testing.T) {
 	if res["hello"].DrvPath == "" || res["sub.inner"].DrvPath == "" {
 		t.Errorf("the attributes next to the aborting one were not answered: %+v", res)
 	}
-	// Budgets B-078 (cold ≤ 2 s, warm ≤ 50 ms for the polyglot fixture) belong to the budgets stage.
+}
+
+// TestRNIX027IndexBudgets is the budget clause of the acceptance (budget B-078 in
+// tests/budgets/budgets.json): the index for the polyglot fixture takes <= 2 s cold and
+// <= 50 ms warm [8c/15G]. It is read from the "index" stage event of --json (R-FW-049), first
+// with an empty state, then again on the same state.
+func TestRNIX027IndexBudgets(t *testing.T) {
+	parity.Covers(t, "R-NIX-027")
+	e := newBobEnv(t)
+	indexMs := func(r harness.Result) float64 {
+		t.Helper()
+		for _, ev := range events(t, r.Stdout) {
+			if ev["event"] == "index" {
+				ms, _ := ev["durationMs"].(float64)
+				return ms
+			}
+		}
+		t.Errorf("no \"index\" stage event in:\n%s", r.Stdout)
+		return -1
+	}
+	cold := e.run(t, "polyglot", "build", "//...", "--json")
+	if harness.Red(t, cold) {
+		return
+	}
+	if cold.Exit != 0 {
+		t.Fatalf("cold bob build //...: exit %d:\n%s", cold.Exit, cold.Combined())
+	}
+	if ms := indexMs(cold); ms > 2000 {
+		t.Errorf("cold nixpkgs index for polyglot took %.0f ms, want <= 2000 ms (B-078)", ms)
+	}
+	warm := e.run(t, "polyglot", "build", "//...", "--json")
+	if warm.Exit != 0 {
+		t.Fatalf("warm bob build //...: exit %d:\n%s", warm.Exit, warm.Combined())
+	}
+	if ms := indexMs(warm); ms > 50 {
+		t.Errorf("warm nixpkgs index for polyglot took %.0f ms, want <= 50 ms (B-078)", ms)
+	}
 }
 
 // TestRNIX027ResolveNixShape: resolve.nix is embedded, ≤ 60 lines, takes the documented arguments
