@@ -430,7 +430,7 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 		}
 		if proj == nil {
 			// the snapshot exists: its uploader may call CreateBuild on this project id
-			if proj, err = up.ForUpload(ctx, r.Project); err != nil {
+			if _, err := up.ForUpload(ctx, r.Project); err != nil {
 				return nil, err
 			}
 		}
@@ -472,7 +472,7 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	if attempt <= 0 {
 		attempt = 1
 	}
-	rec := &store.BuildRecord{ID: store.ID(id), Project: store.Set(r.Project), Number: store.Set(n), State: store.Set(StatePending), Trigger: store.Set(r.Trigger),
+	rec := &store.BuildRecord{ID: store.ID(id), Project: store.Set(r.Project), Number: store.Set(n), State: store.Set[string](StatePending), Trigger: store.Set(r.Trigger),
 		Branch: store.Set(r.Branch), Commit: store.Set(commit), Author: store.Set(r.Author), Created: store.Set(now), Platforms: store.Set(r.Platforms),
 		RetryOf: store.Set(r.RetryOf), RerunOf: store.Set(r.RerunOf), Source: store.Set(r.Source), Targets: store.Set(r.Targets), Variants: store.Set(r.Variants),
 		LogPartition: store.Set(lg), Attempt: store.Set(attempt), Pipeline: store.Set(strings.Join(r.Pipelines, ",")), Test: store.Set(r.Test), Reason: store.Set(r.Reason)}

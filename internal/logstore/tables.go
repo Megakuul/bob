@@ -10,7 +10,7 @@ import (
 
 // LogLine is one row of the `log_line` table (S10 §5.1). Only the filter columns are lake
 // types; the rest are plain columns with parquet encodings (2.8× smaller files). No sort tag:
-// a filtered Scan over sorted, overlapping shards hangs (plan/progress/I-B16-repro/l1-sort).
+// lake bug L1 hangs filtered scans over sorted, overlapping shards (R-LOG-100).
 type LogLine struct {
 	lake.Table `name:"log_line"`
 	BuildID    lake.String `parquet:"build_id"`

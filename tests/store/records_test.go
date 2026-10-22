@@ -52,10 +52,10 @@ func TestRSTORE103RecordRules(t *testing.T) {
 	defer cancel()
 
 	t.Run("create", func(t *testing.T) {
-		if err := store.Create(ctx, b, &rec{ID: store.ID("c1"), N: store.Set(1), Wid: store.Set("w1")}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("c1"), N: store.Set[int64](1), Wid: store.Set[string]("w1")}); err != nil {
 			t.Fatalf("Create: %v", err)
 		}
-		if err := store.Create(ctx, b, &rec{ID: store.ID("c1"), N: store.Set(2), Wid: store.Set("w2")}); !errors.Is(err, store.ErrExists) {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("c1"), N: store.Set[int64](2), Wid: store.Set[string]("w2")}); !errors.Is(err, store.ErrExists) {
 			t.Errorf("second Create = %v, want ErrExists", err)
 		}
 		got, err := store.Get(ctx, b, &rec{ID: store.ID("c1")})
@@ -73,7 +73,7 @@ func TestRSTORE103RecordRules(t *testing.T) {
 			if cur != nil {
 				t.Errorf("CAS on an absent record passed %+v, want nil", cur)
 			}
-			return &rec{ID: store.ID("w"), N: store.Set(1)}, nil
+			return &rec{ID: store.ID("w"), N: store.Set[int64](1)}, nil
 		})
 		if err != nil || got.N.Value() != 1 {
 			t.Fatalf("CAS create = %+v, %v", got, err)
@@ -123,11 +123,11 @@ func TestRSTORE103RecordRules(t *testing.T) {
 				defer wg.Done()
 				_, err := store.CAS(ctx, b, &rec{ID: store.ID("race")}, func(cur *rec) (*rec, error) {
 					calls.Add(1)
-					n := rec{ID: store.ID("race")}
+					n, c := rec{ID: store.ID("race")}, int64(0)
 					if cur != nil {
-						n = *cur
+						n, c = *cur, cur.N.Value()
 					}
-					n.N = store.Set(n.N.Value() + 1)
+					n.N = store.Set(c + 1)
 					return &n, nil
 				})
 				errs <- err
@@ -168,7 +168,7 @@ func TestRSTORE103RecordRules(t *testing.T) {
 		// Create: the server applied the write, the response is lost. dynamitedb reports
 		// ErrAlreadyExists; store must re-read, see its own write id and report success.
 		be.Proxy.SetScript(lostPut(bucket))
-		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-c"), N: store.Set(1), Wid: store.Set("me"), Ep: store.Set(1)}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-c"), N: store.Set[int64](1), Wid: store.Set[string]("me"), Ep: store.Set[int64](1)}); err != nil {
 			t.Errorf("Create with a lost response = %v, want success (the stored value carries our write id)", err)
 		}
 		be.Proxy.SetScript(s3count.Script{})
@@ -176,20 +176,20 @@ func TestRSTORE103RecordRules(t *testing.T) {
 			t.Errorf("stored value after lost Create = %+v, %v", got, err)
 		}
 		// Create by somebody else with another write id is a real conflict, never success.
-		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-c"), N: store.Set(1), Wid: store.Set("other"), Ep: store.Set(1)}); !errors.Is(err, store.ErrExists) {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-c"), N: store.Set[int64](1), Wid: store.Set[string]("other"), Ep: store.Set[int64](1)}); !errors.Is(err, store.ErrExists) {
 			t.Errorf("Create of an existing record with another write id = %v, want ErrExists", err)
 		}
 
 		// CAS: the PUT is applied, the response lost. The increment must be applied once.
-		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-u"), N: store.Set(10)}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("lost-u"), N: store.Set[int64](10)}); err != nil {
 			t.Fatal(err)
 		}
 		be.Proxy.SetScript(lostPut(bucket))
 		got, err := store.CAS(ctx, b, &rec{ID: store.ID("lost-u")}, func(cur *rec) (*rec, error) {
 			n := *cur
 			n.N = store.Set(n.N.Value() + 1)
-			n.Wid = store.Set("me")
-			n.Ep = store.Set(7)
+			n.Wid = store.Set[string]("me")
+			n.Ep = store.Set[int64](7)
 			return &n, nil
 		})
 		be.Proxy.SetScript(s3count.Script{})
@@ -202,7 +202,7 @@ func TestRSTORE103RecordRules(t *testing.T) {
 	})
 
 	t.Run("stored cbor", func(t *testing.T) {
-		if err := store.Create(ctx, b, &rec{ID: store.ID("cbor"), N: store.Set(5), Wid: store.Set("w")}); err != nil {
+		if err := store.Create(ctx, b, &rec{ID: store.ID("cbor"), N: store.Set[int64](5), Wid: store.Set[string]("w")}); err != nil {
 			t.Fatal(err)
 		}
 		st, body := rawGet(t, be, bucket, "trec/cbor")

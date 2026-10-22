@@ -49,9 +49,31 @@ Not pkg/rust, pkg/npm.
   under `setarch linux32` (armv8l), exit 2. Still red on text: CLI renders "error[BOB-E-…]"
   blocks instead of "✗ …" (NEEDS 5) and code 1 has no "(known: …)" (NEEDS 1).
 
+- Go variants: capp @linux-arm64 +race/+asan/+debug build and run natively (tsan/asan runtime
+  linked); @linux-amd64 +asan (cross -asan std through the compiler shim) and +debug build;
+  +debug runs under qemu. Cold variant builds 32-52 s each at load ~25 [8c/15G shared].
+- cc: `bob test --platform linux-amd64 //...` mathx_test passes, runner qemu-x86_64.
+  Libs: cc.CrossLibs on pack → notes "openssl for linux-amd64 is not in the binary cache and
+  will be built from source (several minutes)" (and zlib) before any build (JSON note events).
+- R-PLAT-007: BOB_TEST_NIXPKGS_INDEX glibc 2.42/2.43 → refused before planning (exit 3,
+  1021); without the file the real lookup (x86_64-linux glibc 2.42 vs
+  pkgsCross.gnu64.stdenv.cc.libc 2.42) passes.
+- R-FW-030 restriction (platrestrict repo by hand): @linux-amd64 → exit 2 BOB-E-0006
+  "//only:only does not support linux-amd64 (it allows: linux-arm64)"; @linux-arm64 builds.
+- M7.6 (measured, proxy: cc fixture, the polyglot rows need Rust M8 + codegen M10): closure of
+  //app:app native 67.3 MiB (10 paths), @linux-amd64 91.1 MiB (11 paths: cross glibc +
+  x86_64 glibc from openssl, R-FW-036 default). Cross cc-wrapper closure 425 MiB unpacked
+  (shared with the native toolchain in part), qemu-user 213.6 MiB. Budget benchmarks are
+  registered in tools/internal/budgets (protected); TestRNIX030ClosureBudgets needs polyglot.
+- Unit tests green: pkg/bob, pkg/engine, pkg/engine/build (platform), pkg/cc/..., pkg/golang/...,
+  pkg/cli, pkg (layering). gofmt/vet/staticcheck clean on touched packages; tools/ci
+  fmt/vet fail only on other units' WIP (internal/notify, internal/store, tests/store).
+- Acceptance: tests/core and tests/platforms harness builds cmd/bob-server, which other units'
+  WIP breaks (internal/notify, internal/build); tests/platforms TestRPLAT001 ran: exit codes
+  and "no nix dir" right, text red (NEEDS 1, 5).
+
 ## next
-- Go variants (race/asan/debug native and cross) build+run; cc cross test; CrossLibs note;
-  closure measurements (M7.6).
+- nothing in this chain beyond NEEDS / TEST PROBLEM.
 
 ## DECISIONS
 - D-M7b-1: engine toolchain code lives in package engine (pkg/engine/toolchain.go), not a new
@@ -91,6 +113,14 @@ Not pkg/rust, pkg/npm.
    (rust-std-<triple> from legacyPackages.<target>.rustc.unwrapped), linker <triple>-cc, host
    units with RustFor(host, host); qemu-user dep for cross rust tests (p.Toolchain().Emulator).
 4. OCaml unit: nothing (engine refuses cross OCaml nodes before planning).
+6. cc owner (pkg/cc/gen Stale): `bob test //libs/mathx:mathx_test` alone reports BOB-E-1012
+   "the cc.External declarations changed": Stale compares the inputs of the Externals of a
+   partial graph with the whole repository's section (any pattern without the External).
+7. Files outside my ownership changed (small, additive): pkg/cli/cmd_build.go (platform
+   pre-check, note/test.result rendering, --require-all-tests), pkg/cli/cli.go (uname check),
+   pkg/engine/build/{build.go,pipeline.go,plan.go,realise.go} (hooks), pkg/cc/cc.go,
+   pkg/cc/internal/ccspec, pkg/golang/golang.go, pkg/golang/internal/gospec, pkg/nixpkgs
+   (CrossSet), pkg/builder/bspec (BuilderVersion 7 comment), builders.go, framework.zip.
 5. CLI owner (pkg/cli output.go diagnose): usage errors print "error[BOB-E-0001]: …" blocks;
    tests/platforms R-PLAT-001/005/007 want the "✗ <message>" form of §02.5 (same as I-M7a NEEDS 4).
 

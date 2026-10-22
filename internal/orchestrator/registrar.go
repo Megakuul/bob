@@ -185,7 +185,7 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 		return false, verr.Error(), nil
 	}
 	suite := fleet.Suite(body.Suite)
-	rec := &store.WorkerRecord{Wid: store.ID(wid), State: store.Set("active"), Gen: store.Set(0), Serial: store.Set(1), SigPub: store.Set(body.SigPub), Suite: store.Set(suite.String()),
+	rec := &store.WorkerRecord{Wid: store.ID(wid), State: store.Set[string]("active"), Gen: store.Set[int64](0), Serial: store.Set[int64](1), SigPub: store.Set(body.SigPub), Suite: store.Set(suite.String()),
 		KEMPub: store.Set(body.KEMPub), Platform: store.Set(body.Platform), Caps: store.Set(body.Caps), Labels: store.Set(body.Labels)}
 	if err := r.issue(rec, now); err != nil {
 		return false, "", err
@@ -396,7 +396,7 @@ func (r *Registrar) Revoke(ctx context.Context, wid, reason string) error {
 			return nil, store.ErrNoChange
 		}
 		n := *cur
-		n.State, n.Gen, n.Sealed, n.TokenExp = store.Set("revoked"), store.Set(cur.Gen.Value()+1), store.Set(nil), store.Set(time.Time{})
+		n.State, n.Gen, n.Sealed, n.TokenExp = store.Set[string]("revoked"), store.Set(cur.Gen.Value()+1), nil, store.Set(time.Time{})
 		return &n, nil
 	})
 	if err != nil {

@@ -50,14 +50,82 @@ func metaCache() string {
 	return filepath.Join(d, "bob", "npm-meta")
 }
 
-// declaration is what the npm section is resolved from (R-FW-062).
+// declaration is what the npm section is resolved from (R-FW-062). Node is the pinned
+// Node.js version the engines check used ("" when unknown: then the hash is the one of a
+// declaration without it).
 type declaration struct {
 	Input    resolve.Input
 	Registry string
+	Node     string `json:",omitempty"`
 }
 
-func inputsOf(in resolve.Input, registry string) (string, error) {
-	return lock.Inputs(declaration{Input: in, Registry: registry})
+func inputsOf(in resolve.Input, registry, node string) (string, error) {
+	return lock.Inputs(declaration{Input: in, Registry: registry, Node: node})
+}
+
+// nodeVersion is the version of the pinned nodejs the importers run on (the resolver's
+// engines.node check, like npm on that Node); "" when the lock request has no nixpkgs index or
+// the importers name several Node.js packages (then the check is off).
+func nodeVersion(ctx context.Context, req engine.LockRequest, ims []*importer) string {
+	if req.Nixpkgs == nil || req.Graph == nil {
+		return ""
+	}
+	byID := map[string]*ir.Node{}
+	for _, n := range req.Graph.Nodes {
+		byID[n.ID] = n
+	}
+	attrs := map[string]bool{}
+	for _, im := range ims {
+		i := im.spec.Tools.Node
+		if i < 0 || i >= len(im.node.Deps) {
+			continue
+		}
+		if n := byID[im.node.Deps[i]]; n != nil && n.Nix != nil {
+			attrs[n.Nix.Attr] = true
+		}
+	}
+	if len(attrs) != 1 {
+		return ""
+	}
+	var attr string
+	for a := range attrs {
+		attr = a
+	}
+	es, err := req.Nixpkgs.Lookup(ctx, []string{attr})
+	if err != nil {
+		return ""
+	}
+	e := es[attr]
+	if e.Missing || e.Version == "" {
+		return ""
+	}
+	if _, err := resolve.ParseVersion(e.Version, false); err != nil {
+		return ""
+	}
+	return e.Version
+}
+
+// previousPins are the versions of the previous section by package name (resolve.Options.Prefer):
+// bob lock keeps them unless --update names the package, names npm, or has no names.
+func previousPins(prev *lock.NpmSection, update []string) map[string][]string {
+	if update != nil && len(update) == 0 {
+		return nil // --update without names
+	}
+	moving := map[string]bool{}
+	for _, u := range update {
+		moving[u] = true
+	}
+	if moving[lock.SectionNpm] {
+		return nil // --update npm: the whole ecosystem moves
+	}
+	out := map[string][]string{}
+	for _, p := range prev.Packages {
+		if moving[p.Name] || hasString(out[p.Name], p.Version) {
+			continue
+		}
+		out[p.Name] = append(out[p.Name], p.Version)
+	}
+	return out
 }
 
 func decodeSection(raw json.RawMessage) (*lock.NpmSection, error) {
@@ -83,15 +151,20 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 		return nil, err
 	}
 	reg := registryURL()
-	inputs, err := inputsOf(in, reg)
+	node := nodeVersion(ctx, req, ims)
+	inputs, err := inputsOf(in, reg, node)
 	if err != nil {
 		return nil, err
 	}
-	if prev, err := decodeSection(req.Prev); err == nil && prev != nil && prev.Inputs == inputs && req.Update == nil {
+	prev, perr := decodeSection(req.Prev)
+	if perr == nil && prev != nil && prev.Inputs == inputs && req.Update == nil {
 		return lock.EncodeSection(lock.SectionNpm, prev)
 	}
 	opts := resolve.Options{Registry: &resolve.Registry{URL: reg, CacheDir: metaCache(), MaxAge: 24 * time.Hour},
-		Root: "the repository"}
+		Root: "the repository", NodeVersion: node}
+	if perr == nil && prev != nil && prev.Registry == reg {
+		opts.Prefer = previousPins(prev, req.Update)
+	}
 	res, err := resolve.Resolve(ctx, in, opts)
 	if err != nil {
 		var re *resolve.Error

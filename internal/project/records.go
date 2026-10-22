@@ -88,7 +88,27 @@ const indexPage = 200
 
 // Index is the projects index pidx/all/p/<num10>.
 func Index(control *store.Bucket) *store.PagedIndex[Entry] {
-	return store.NewPagedIndex[Entry](control, "pidx", "all", indexPage)
+	return store.NewPagedIndex(control, indexPage, func(k uint64, e []Entry) *indexPageRecord {
+		n, _ := store.Num10(k)
+		p := &indexPageRecord{Name: store.ID("all"), Page: store.ID(n)}
+		if len(e) > 0 {
+			p.Entries = store.Set(e)
+		}
+		return p
+	}, func(p *indexPageRecord) []Entry { return p.Entries.Value() })
+}
+
+// indexPageRecord is one page pidx/all/p/<num10> of the projects index.
+type indexPageRecord struct {
+	Name    store.KeyField           `pk:"pidx" cbor:"-"` // "all"
+	Page    store.KeyField           `sk:"p" cbor:"-"`
+	ETag    store.ETagField          `etag:"true" cbor:"-"`
+	Entries store.DataField[[]Entry] `cbor:"e,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *indexPageRecord) Draft() *indexPageRecord {
+	return &indexPageRecord{Name: r.Name, Page: r.Page, ETag: r.ETag, Entries: store.Carry(r.Entries)}
 }
 
 // PipelinesRecord is ppl/<projectID>: the pipelines of the newest accepted evaluation of the

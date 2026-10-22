@@ -488,7 +488,7 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.State, next.Owner, next.Epoch, next.Attempt, next.Claimed = store.Set("claimed"), store.Set(w.cfg.ID), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(now)
+		next.State, next.Owner, next.Epoch, next.Attempt, next.Claimed = store.Set[string]("claimed"), store.Set(w.cfg.ID), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(now)
 		verdict = "claimed"
 		return &next, nil
 	})
@@ -595,11 +595,11 @@ func (w *Worker) runJob(ctx, jctx context.Context, j *job) {
 			if fleet.VerifyResult(pub, id, ep, cur.Result.Value(), cur.ResultSig.Value()) {
 				return false
 			}
-			next.Result, next.ResultSig = store.Set(nil), store.Set(nil)
+			next.Result, next.ResultSig = nil, nil
 		default:
 			return false
 		}
-		next.State, next.Changed = store.Set("running"), store.Set(w.now())
+		next.State, next.Changed = store.Set[string]("running"), store.Set(w.now())
 		return true
 	})
 	if err != nil || !ok {
@@ -658,7 +658,7 @@ watch:
 			if cur.State.Value() != "claimed" && cur.State.Value() != "running" {
 				return false
 			}
-			next.State, next.Changed = store.Set("cancelled"), store.Set(w.now())
+			next.State, next.Changed = store.Set[string]("cancelled"), store.Set(w.now())
 			return true
 		}); err == nil && ok {
 			w.emit(Event{Kind: "cancelled", JobID: id, Epoch: ep})

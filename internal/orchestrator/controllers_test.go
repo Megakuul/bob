@@ -59,7 +59,7 @@ func run(t *testing.T, c *orchestrator.Controller) (stop func()) {
 func handoverAfterCrash(t *testing.T, b buckets) {
 	ctx := context.Background()
 	const iv, skew = 2 * time.Second, 500 * time.Millisecond
-	dead := &store.ControllerLease{Name: store.ID("t-crash"), Owner: store.Set("dead"), Epoch: store.Set(7), Expires: store.Set(time.Now().Add(orchestrator.LeaseTTLFactor * iv))}
+	dead := &store.ControllerLease{Name: store.ID("t-crash"), Owner: store.Set[string]("dead"), Epoch: store.Set[uint64](7), Expires: store.Set(time.Now().Add(orchestrator.LeaseTTLFactor * iv))}
 	if err := store.Create(ctx, b.fleet, dead); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func membership(t *testing.T, b buckets) {
 		t.Errorf("members = %+v, want only o1 once young never wrote a record within 30 s", fc.Members.Value())
 	}
 	// leader_of: a lease held by o1
-	if err := store.PutOwned(ctx, b.fleet, &store.ControllerLease{Name: store.ID(orchestrator.CtlRetention), Owner: store.Set("o1"), Epoch: store.Set(1), Expires: store.Set(time.Now().Add(time.Minute))}); err != nil {
+	if err := store.PutOwned(ctx, b.fleet, &store.ControllerLease{Name: store.ID(orchestrator.CtlRetention), Owner: store.Set[string]("o1"), Epoch: store.Set[uint64](1), Expires: store.Set(time.Now().Add(time.Minute))}); err != nil {
 		t.Fatal(err)
 	}
 	if l, err := m.List(ctx); err != nil || len(l) != 1 || !slices.Contains(l[0].LeaderOf, orchestrator.CtlRetention) {
@@ -256,7 +256,7 @@ func indexRepair(t *testing.T, b buckets) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.Create(ctx, b.fleet, &store.JobRecord{ID: store.ID("jlive"), State: store.Set("queued")}); err != nil {
+	if err := store.Create(ctx, b.fleet, &store.JobRecord{ID: store.ID("jlive"), State: store.Set[string]("queued")}); err != nil {
 		t.Fatal(err)
 	}
 	// bpage: one entry with its record, one dangling old, one dangling young
@@ -266,12 +266,12 @@ func indexRepair(t *testing.T, b buckets) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.Create(ctx, b.control, &store.BuildRecord{ID: store.ID("blive"), Project: store.Set("p1"), State: store.Set("running")}); err != nil {
+	if err := store.Create(ctx, b.control, &store.BuildRecord{ID: store.ID("blive"), Project: store.Set[string]("p1"), State: store.Set[string]("running")}); err != nil {
 		t.Fatal(err)
 	}
 	// rmem: u1 bound (listed), u2 listed without binding, u3 bound but not listed
-	for _, u := range []*store.UserRecord{{ID: "u1", Bindings: []store.RoleBindingEntry{{Role: "dev", Project: "*"}}}, {ID: "u2"},
-		{ID: "u3", Bindings: []store.RoleBindingEntry{{Role: "dev", Project: "p1"}}}} {
+	for _, u := range []*store.UserRecord{{ID: store.ID("u1"), Bindings: store.Set([]store.RoleBindingEntry{{Role: "dev", Project: "*"}})}, {ID: store.ID("u2")},
+		{ID: store.ID("u3"), Bindings: store.Set([]store.RoleBindingEntry{{Role: "dev", Project: "p1"}})}} {
 		if err := store.Create(ctx, b.control, u); err != nil {
 			t.Fatal(err)
 		}
@@ -342,7 +342,7 @@ func retention(t *testing.T, b buckets) {
 		if err := pages.Set(ctx, uint64(i), store.BuildEntry{N: uint64(i + 1), Build: x.id, State: x.state, Created: x.created}); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.Create(ctx, b.control, &store.BuildRecord{ID: store.ID(x.id), Project: store.Set("p2"), State: store.Set(x.state), Created: store.Set(x.created)}); err != nil {
+		if err := store.Create(ctx, b.control, &store.BuildRecord{ID: store.ID(x.id), Project: store.Set[string]("p2"), State: store.Set(x.state), Created: store.Set(x.created)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -351,7 +351,7 @@ func retention(t *testing.T, b buckets) {
 		ETag store.ETagField      `etag:"true" cbor:"-"`
 		N    store.DataField[int] `cbor:"n"`
 	}
-	if err := store.Create(ctx, b.control, &nodes{ID: store.ID("old1"), N: store.Set(3)}); err != nil {
+	if err := store.Create(ctx, b.control, &nodes{ID: store.ID("old1"), N: store.Set[int](3)}); err != nil {
 		t.Fatal(err)
 	}
 	// queue slots: 5 slots, head 1006 → all below head − 1000
@@ -367,7 +367,7 @@ func retention(t *testing.T, b buckets) {
 	}
 	q := store.Queue(b.fleet, "c1")
 	for range 5 {
-		if _, err := q.Append(ctx, &store.QueueSlot{Job: store.Set("j")}); err != nil {
+		if _, err := q.Append(ctx, &store.QueueSlot{Job: store.Set[string]("j")}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -376,7 +376,7 @@ func retention(t *testing.T, b buckets) {
 	}
 	reg := store.RegLog(b.fleet)
 	for range 3 {
-		if _, err := reg.Append(ctx, &store.RegSlot{Wid: store.Set("w")}); err != nil {
+		if _, err := reg.Append(ctx, &store.RegSlot{Wid: store.Set[string]("w")}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -428,13 +428,6 @@ func retention(t *testing.T, b buckets) {
 	if err != nil || res.Builds+res.QueueSlots+res.RegSlots != 0 {
 		t.Errorf("second pass = %+v (%v), want nothing", res, err)
 	}
-}
-
-// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
-func (r *nodes) Draft() *nodes {
-	return &nodes{ID: r.ID,
-		ETag: r.ETag,
-		N:    store.Carry(r.N)}
 }
 
 func keys(t *testing.T, b buckets) {

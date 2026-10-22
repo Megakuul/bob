@@ -25,10 +25,12 @@ func TestRSTORE106SeqLog(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	const writers, each = 20, 50
-	q := store.NewSeqLog[slot](b, "tqs", "tqt", "tqh", "x86_64-linux.k3j9d0a1b2")
+	q := newSeqLog(b, "x86_64-linux.k3j9d0a1b2")
 
+	// appended is who got a slot: writer and the writer's append number.
+	type appended struct{ By, Ord int64 }
 	var mu sync.Mutex
-	got := map[uint64]slot{}
+	got := map[uint64]appended{}
 	var wg sync.WaitGroup
 	errc := make(chan error, writers)
 	for w := range writers {
@@ -37,17 +39,17 @@ func TestRSTORE106SeqLog(t *testing.T) {
 			defer wg.Done()
 			for i := range each {
 				// Each appender uses its own handle: the log is a value type that performs no I/O.
-				l := store.NewSeqLog[slot](b, "tqs", "tqt", "tqh", "x86_64-linux.k3j9d0a1b2")
-				seq, err := l.Append(ctx, &slot{ID: store.ID(fmt.Sprintf("a%d-%d", w, i)), By: store.Set(int64(w)), Ord: store.Set(int64(i))})
+				l := newSeqLog(b, "x86_64-linux.k3j9d0a1b2")
+				seq, err := l.Append(ctx, &slot{By: store.Set(int64(w)), Ord: store.Set(int64(i))})
 				if err != nil {
 					errc <- fmt.Errorf("writer %d append %d: %w", w, i, err)
 					return
 				}
 				mu.Lock()
 				if prev, dup := got[seq]; dup {
-					errc <- fmt.Errorf("slot %d returned twice (writers %d and %d)", seq, prev.By.Value(), w)
+					errc <- fmt.Errorf("slot %d returned twice (writers %d and %d)", seq, prev.By, w)
 				}
-				got[seq] = slot{By: store.Set(int64(w)), Ord: store.Set(int64(i))}
+				got[seq] = appended{By: int64(w), Ord: int64(i)}
 				mu.Unlock()
 			}
 		}()
@@ -69,8 +71,8 @@ func TestRSTORE106SeqLog(t *testing.T) {
 			t.Errorf("slot %d is missing or unreadable: %v (the log must have no gaps)", s, err)
 			continue
 		}
-		if want := got[s]; v.By.Value() != want.By.Value() || v.Ord.Value() != want.Ord.Value() {
-			t.Errorf("slot %d holds writer %d/%d, the appender that got it was %d/%d", s, v.By.Value(), v.Ord.Value(), want.By.Value(), want.Ord.Value())
+		if want := got[s]; v.By.Value() != want.By || v.Ord.Value() != want.Ord {
+			t.Errorf("slot %d holds writer %d/%d, the appender that got it was %d/%d", s, v.By.Value(), v.Ord.Value(), want.By, want.Ord)
 		}
 	}
 	if _, err := q.Read(ctx, writers*each+1); !errors.Is(err, store.ErrNotFound) {
@@ -88,10 +90,10 @@ func TestRSTORE106SeqLog(t *testing.T) {
 	sort.Slice(seqs, func(i, j int) bool { return seqs[i] < seqs[j] })
 	for _, s := range seqs {
 		v := got[s]
-		if prev, ok := last[v.By.Value()]; ok && v.Ord.Value() != prev+1 {
-			t.Errorf("writer %d: append %d landed after append %d", v.By.Value(), v.Ord.Value(), prev)
+		if prev, ok := last[v.By]; ok && v.Ord != prev+1 {
+			t.Errorf("writer %d: append %d landed after append %d", v.By, v.Ord, prev)
 		}
-		last[v.By.Value()] = v.Ord.Value()
+		last[v.By] = v.Ord
 	}
 
 	// Hints: tail never exceeds the first free slot; head only moves up.
@@ -121,7 +123,7 @@ func TestRSTORE106PagedIndex(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	idx := store.NewPagedIndex[entry](b, "tbpage", "p1", 50)
+	idx := newPagedIndex(b, "p1", 50)
 
 	if got := idx.LastPage(1); got != 0 {
 		t.Errorf("LastPage(1) = %d, want 0", got)
@@ -196,10 +198,7 @@ func TestRSTORE106ShardSet(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	type act struct {
-		B string `cbor:"b,omitempty"`
-	}
-	set := store.NewShardSet[act](b, "tjact", 4)
+	set := newShardSet(b, 4)
 	var wg sync.WaitGroup
 	errc := make(chan error, 200)
 	for i := range 200 {
@@ -269,7 +268,7 @@ func TestRSTORE106Lease(t *testing.T) {
 	owners := []string{"orch-a", "orch-b", "orch-c"}
 	leases := make([]*store.Lease, len(owners))
 	for i, o := range owners {
-		leases[i] = store.NewLease(b, "ctl/job-reconciler", o, ttl)
+		leases[i] = store.NewControllerLease(b, "job-reconciler", o, ttl)
 	}
 	holderOf := map[uint64]string{}
 	var mu sync.Mutex

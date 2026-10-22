@@ -148,7 +148,7 @@ func TestIntakeAndService(t *testing.T) {
 		t.Fatal(err)
 	}
 	link := RepoLinkKey("fjx", 1)
-	link.Project, link.FullName, link.CloneURL = store.Set("acme"), store.Set("alice/demo"), store.Set("https://forgejo.test/alice/demo.git")
+	link.Project, link.FullName, link.CloneURL = store.Set[string]("acme"), store.Set[string]("alice/demo"), store.Set[string]("https://forgejo.test/alice/demo.git")
 	if err := store.Create(ctx, control, link); err != nil {
 		t.Fatal(err)
 	}

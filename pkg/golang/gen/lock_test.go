@@ -152,7 +152,7 @@ func TestLockErrors(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	_, err := Ecosystem{}.Lock(context.Background(), engine.LockRequest{Graph: moduleGraph(t, gospec.Requirement{Path: "github.com/foo/bar", Version: "v1.2.0"})})
 	de, ok := err.(*diag.Error)
-	if !ok || de.Code != 1008 || !strings.Contains(de.Cause, "github.com/foo/bar@v1.2.0 needs go 1.27.0, but example.com/tools uses go 1.26 (set Go in tools/bob.go)") {
+	if !ok || de.Code != 1008 || !strings.Contains(de.Error(), "github.com/foo/bar@v1.2.0 needs go 1.27.0, but example.com/tools uses go 1.26 (set Go in tools/bob.go)") {
 		t.Errorf("toolchain: %#v", err)
 	}
 	_, err = Ecosystem{}.Lock(context.Background(), engine.LockRequest{Graph: moduleGraph(t, gospec.Requirement{Path: "golang.org/x/net", Version: "v0.99.0"})})

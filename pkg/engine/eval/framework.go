@@ -104,6 +104,17 @@ func hash1(summary string) string {
 	return "h1:" + base64.StdEncoding.EncodeToString(s[:])
 }
 
+// FrameworkSum returns the go.sum lines of the framework module at BobVersion(), as the
+// evaluator compiles against it: what a root go.sum needs for the framework requirement of the
+// generated root go.mod (§03.2.5).
+func FrameworkSum() (string, error) {
+	fw, err := loadFramework()
+	if err != nil {
+		return "", err
+	}
+	return fw.sumLines(), nil
+}
+
 // sumLines are the go.sum lines of the framework module.
 func (fw *framework) sumLines() string {
 	return fmt.Sprintf("%s %s %s\n%s %s/go.mod %s\n", frameworkModule, fw.version, fw.h1, frameworkModule, fw.version, fw.modH1)

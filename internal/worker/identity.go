@@ -213,7 +213,7 @@ func ForgeResult(ctx context.Context, fleetB *store.Bucket, forger *Identity, ow
 			return nil, store.ErrNotFound
 		}
 		next := *cur
-		next.State, next.Owner, next.Epoch = store.Set("succeeded"), store.Set(owner), store.Set(epoch)
+		next.State, next.Owner, next.Epoch = store.Set[string]("succeeded"), store.Set(owner), store.Set(epoch)
 		next.Result, next.ResultSig = store.Set(rs), store.Set(fleet.SignResult(forger.sig, jobID, epoch, rs))
 		return &next, nil
 	})

@@ -76,7 +76,7 @@ func TestRSTORE005PrimitivesReturnErrPanic(t *testing.T) {
 		t.Errorf("Create with a nil model: %v, want ErrPanic", err)
 	}
 
-	seed := &rec{ID: store.ID("p1"), N: store.Set(1)}
+	seed := &rec{ID: store.ID("p1"), N: store.Set[int64](1)}
 	if err := store.Create(ctx, b, seed); err != nil {
 		t.Fatalf("Create: %v", err)
 	}

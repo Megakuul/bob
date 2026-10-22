@@ -1,6 +1,6 @@
 //go:build bob
 
-package web
+package vitereact
 
 import (
 	"github.com/megakuul/bob/pkg/bob"

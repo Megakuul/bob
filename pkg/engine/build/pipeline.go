@@ -165,8 +165,9 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 // are reported skipped by skippedResults.
 func (r *runner) skipForeign(g *ir.Graph, p *planner, units []testrun.Unit) []testrun.Unit {
 	var keep []testrun.Unit
+	byID := nodesByID(g)
 	for _, u := range units {
-		if why := skipReason(g, p, u); why != "" {
+		if why := skipReason(byID, p, u); why != "" {
 			r.skipped = append(r.skipped, TestResult{Label: u.Label, Status: string(testrun.StatusSkipped), Reason: why})
 			continue
 		}

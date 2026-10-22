@@ -235,17 +235,17 @@ func TestProjects(t *testing.T) {
 	// pipelines cache: a default-branch evaluation, then a branch one (ignored), then the end
 	rep := &jobspec.Report{Pipelines: []jobspec.Pipeline{{Name: "ci", Triggers: []string{"push trunk"}, Concurrency: "queue"},
 		{Name: "release", Triggers: []string{"tag v*"}, Releases: []string{"api"}}}, Matched: []string{"ci"}}
-	b1 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa1"), Project: store.Set("acme"), Number: store.Set(1), Branch: store.Set("trunk"), Commit: store.Set("c1"),
+	b1 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa1"), Project: store.Set[string]("acme"), Number: store.Set[uint64](1), Branch: store.Set[string]("trunk"), Commit: store.Set[string]("c1"),
 		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/trunk"})}
 	if err := p.Evaluated(ctx, b1, rep); err != nil {
 		t.Fatal(err)
 	}
-	b2 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa2"), Project: store.Set("acme"), Number: store.Set(2), Branch: store.Set("feature"), Commit: store.Set("c2"),
+	b2 := &store.BuildRecord{ID: store.ID("01aaaaaaaaaaaaaaaaaaaaaaa2"), Project: store.Set[string]("acme"), Number: store.Set[uint64](2), Branch: store.Set[string]("feature"), Commit: store.Set[string]("c2"),
 		Trigger: store.Set(store.BuildTrigger{Ref: "refs/heads/feature"})}
 	if err := p.Evaluated(ctx, b2, &jobspec.Report{Pipelines: []jobspec.Pipeline{{Name: "other"}}}); err != nil {
 		t.Fatal(err)
 	}
-	b1.State, b1.Pipelines = store.Set(buildctl.StateSucceeded), store.Set([]store.PipelineRun{{Name: "ci", State: buildctl.StateSucceeded}})
+	b1.State, b1.Pipelines = store.Set[string](buildctl.StateSucceeded), store.Set([]store.PipelineRun{{Name: "ci", State: buildctl.StateSucceeded}})
 	if err := p.Finished(ctx, b1); err != nil {
 		t.Fatal(err)
 	}

@@ -12,19 +12,20 @@ import (
 
 // Reader reads persisted logs from lake partitions.
 type Reader struct {
-	client *s3.Client // prefixed with the analytics bucket
+	client *s3.Client // prefixed with the analytics bucket, shard cache in front
 	shards int
 	err    error // set when the client could not be built
 }
 
-// NewReader returns a reader over the analytics bucket. It performs no I/O.
+// NewReader returns a reader over the analytics bucket; it keeps the last downloaded shards
+// (≤ 256 MiB) in memory keyed by object key.
 //
 // Example:
 //
 //	r := logstore.NewReader(s3client, "bob-analytics")
 //	lines, err := r.Package(ctx, buildID, "//svc/api:server", 0, 10000)
 func NewReader(client *s3.Client, analyticsBucket string) *Reader {
-	c, err := PrefixClient(client, analyticsBucket)
+	c, err := PrefixClient(client, analyticsBucket, func(next s3.HTTPClient) s3.HTTPClient { return newShardCache(next) })
 	return &Reader{client: c, shards: DefaultLogShards, err: err}
 }
 
@@ -134,7 +135,8 @@ func (r *Reader) LastSeqs(ctx context.Context, buildID string) (map[string]Curso
 	return out, nil
 }
 
-// read queries the build's log partition and settles the rows.
+// read queries the build's log partition once, and once more with a fresh catalog when a shard
+// vanished under it (compaction, lake bug L4).
 func (r *Reader) read(ctx context.Context, buildID, pkg string, afterSeq int64) ([]Line, []Restart, error) {
 	if r.err != nil {
 		return nil, nil, r.err
@@ -147,6 +149,9 @@ func (r *Reader) read(ctx context.Context, buildID, pkg string, afterSeq int64) 
 		return nil, nil, fmt.Errorf("%w: %w", ErrBadRequest, err)
 	}
 	rows, err := r.scan(ctx, part, buildID, pkg, afterSeq)
+	if isNoSuchKey(err) {
+		rows, err = r.scan(ctx, part, buildID, pkg, afterSeq)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("logstore: read %s: %w", part, err)
 	}
@@ -162,11 +167,9 @@ func (r *Reader) read(ctx context.Context, buildID, pkg string, afterSeq int64) 
 	return ls, rs, nil
 }
 
-// scan runs one filtered query with a fresh lake.Bucket (lake.NewFromClient loads the catalog,
-// one small GET). A long-lived Bucket caches its catalog for 60 s, so it does not see the
-// commits of other processes (workers), and after a compaction elsewhere it fails with
-// NoSuchKey on the deleted input shards: plan/progress/I-B16-repro/l7-catalog-cache and
-// l4-nosuchkey (part A). With a fresh Bucket per query neither happens (l4-nosuchkey part B).
+// scan runs one filtered query with a fresh lake.Bucket: a new catalog per query is what makes
+// new commits visible (lake caches a catalog for 60 s, S10 L7) and what keeps a reader from
+// using a catalog older than a compaction (L4).
 func (r *Reader) scan(ctx context.Context, part, buildID, pkg string, afterSeq int64) ([]LogLine, error) {
 	b, err := openPartition(ctx, r.client, part)
 	if err != nil {

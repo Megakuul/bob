@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -211,6 +212,9 @@ func (r *runner) noteUncached(ctx context.Context, ix *indexes, g *ir.Graph, ent
 			continue
 		}
 		out := e.Outputs[pickOutput(e.Outputs, "out")]
+		if _, err := os.Stat(hostPath(ix.st, out)); err == nil {
+			continue // already in bob's store: nothing to download or build
+		}
 		if cached, err := idx.Cached(ctx, out); err != nil || cached {
 			continue
 		}
@@ -311,8 +315,8 @@ func unitRunner(u testrun.Unit) string {
 // skipReason is why a test unit cannot run on this machine, or "": a sanitised or race test
 // for another platform needs a native machine of that platform (R-FW-039; sanitiser runtimes
 // do not run under qemu-user, S7 §3.2).
-func skipReason(g *ir.Graph, p *planner, u testrun.Unit) string {
-	n := nodesByID(g)[p.drvNode[u.DrvPath]]
+func skipReason(byID map[string]*ir.Node, p *planner, u testrun.Unit) string {
+	n := byID[p.drvNode[u.DrvPath]]
 	if n == nil {
 		return ""
 	}

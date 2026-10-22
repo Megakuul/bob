@@ -112,7 +112,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 	}
 	key := DeliveryKey(id, did)
 	rec := *key
-	rec.Received, rec.Event, rec.Result = store.Set(in.Registry.now().UTC()), store.Set(string(ev.Type)), store.Set(resultPending)
+	rec.Received, rec.Event, rec.Result = store.Set(in.Registry.now().UTC()), store.Set(string(ev.Type)), store.Set[string](resultPending)
 	err := store.Create(ctx, in.Registry.Control, &rec)
 	if errors.Is(err, store.ErrExists) {
 		cur, gerr := store.Get(ctx, in.Registry.Control, DeliveryKey(id, did))

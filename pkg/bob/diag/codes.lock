@@ -98,3 +98,4 @@
 9008 internal - args=feature hint=-
 9998 internal - args=nixVersion hint=-
 9999 internal - args=- hint=-
+1008 definition requirement args=file,go,module,need,requirement hint=requirement

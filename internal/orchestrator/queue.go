@@ -141,7 +141,7 @@ func (q *Queue) Enqueue(ctx context.Context, j Job, o Order) (uint64, error) {
 		return 0, err
 	}
 	rec := &store.JobRecord{ID: store.ID(j.ID), Spec: store.Set(spec), SpecSig: store.Set(fleet.SignSpec(q.Key, spec)), Kid: store.Set(q.Kid),
-		State: store.Set(StateQueued), Queued: store.Set(now), Attempt: store.Set(j.Attempts)}
+		State: store.Set[string](StateQueued), Queued: store.Set(now), Attempt: store.Set(j.Attempts)}
 	createJob := func() error { return store.Create(ctx, q.Fleet, rec) }
 	appendSlot := func() (uint64, error) {
 		return store.Queue(q.Fleet, q.Class).Append(ctx, &store.QueueSlot{Job: store.Set(j.ID), At: store.Set(now)})
@@ -225,12 +225,12 @@ func (q *Queue) Cancel(ctx context.Context, id string) error {
 		next := *cur
 		switch cur.State.Value() {
 		case StateQueued:
-			next.State, next.Changed = store.Set(StateCancelled), store.Set(now)
+			next.State, next.Changed = store.Set[string](StateCancelled), store.Set(now)
 		case StateClaimed, StateRunning:
 			if cur.Cancel.Value() {
 				return nil, store.ErrNoChange
 			}
-			next.Cancel = store.Set(true)
+			next.Cancel = store.Set[bool](true)
 		default:
 			return nil, store.ErrNoChange
 		}
@@ -303,9 +303,9 @@ func (q *Queue) dropForged(ctx context.Context, rec *store.JobRecord) error {
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.State, next.Result, next.ResultSig = store.Set(StateRunning), store.Set(nil), store.Set(nil)
+		next.State, next.Result, next.ResultSig = store.Set[string](StateRunning), nil, nil
 		if cur.Changed.Value().IsZero() {
-			next.State = store.Set(StateClaimed)
+			next.State = store.Set[string](StateClaimed)
 		}
 		return &next, nil
 	})

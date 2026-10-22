@@ -65,6 +65,11 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 			return e
 		}
 	}
+	if strings.HasPrefix(p.Kind, "npm.") {
+		if e := t.npmLogError(drv, lines); e != nil {
+			return e
+		}
+	}
 	if e := t.testFailure(drv, lines); e != nil {
 		return e
 	}

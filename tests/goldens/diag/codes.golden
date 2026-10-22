@@ -64,6 +64,10 @@ BOB-E-1008 definition - exit=3
   message: {label} needs Go {want} but nixpkgs {rev} provides Go {have}
   hint:    lower GoVersion or pin a newer nixpkgs
 
+BOB-E-1008 definition requirement exit=3
+  message: {requirement} needs go {need}, but {module} uses go {go} (set Go in {file})
+  hint:    raise the module's Go, or require an older {requirement}
+
 BOB-E-1009 definition - exit=3
   message: {label} has no pinned hash in bob.lock
   hint:    run bob lock

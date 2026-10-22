@@ -561,3 +561,42 @@ func TestValidName(t *testing.T) {
 		}
 	}
 }
+
+// Options.Prefer keeps previous pins: a range that admits a previously locked version keeps it
+// (also for transitive packages), a version the range excludes or engines.node refuses is
+// replaced by npm's pick, and exact versions are never redirected.
+func TestPreferKeepsPreviousPins(t *testing.T) {
+	f := newFakeRegistry(t, map[string]fpkg{
+		"a":     pkg(map[string]fv{"1.0.0": v("c", "^1"), "1.1.0": v("c", "^1")}),
+		"c":     pkg(map[string]fv{"1.0.0": v(), "1.2.0": v()}),
+		"b":     pkg(map[string]fv{"2.0.0": v(), "2.5.0": v()}),
+		"eng":   pkg(map[string]fv{"1.0.0": v(), "1.1.0": {engine: ">=99"}}),
+		"exact": pkg(map[string]fv{"1.0.0": v(), "1.0.1": v()}),
+		"new":   pkg(map[string]fv{"3.0.0": v(), "3.1.0": v()}),
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	prefer := map[string][]string{"a": {"1.0.0"}, "c": {"1.0.0"}, "b": {"1.0.0"}, "eng": {"1.1.0"}, "exact": {"1.0.0"}}
+	res, err := Resolve(ctx, Input{Importers: []Importer{app("app",
+		dep("a", "^1"), dep("b", "^2"), dep("eng", "^1"), dep("exact", "1.0.1"), dep("new", "^3"))}},
+		Options{Registry: &Registry{URL: f.url()}, NodeVersion: "24.21.0", Prefer: prefer})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	d := res.Section.Importers["app"].Deps
+	want := map[string]string{
+		"a":     "a@1.0.0",     // kept
+		"b":     "b@2.5.0",     // the pin 1.0.0 is outside ^2
+		"eng":   "eng@1.0.0",   // the pin needs node >=99
+		"exact": "exact@1.0.1", // exact versions are not redirected
+		"new":   "new@3.1.0",   // no pin: npm's pick
+	}
+	for a, k := range want {
+		if d[a] != k {
+			t.Errorf("%s → %q, want %q", a, d[a], k)
+		}
+	}
+	if got := res.Section.Packages["a@1.0.0"].Deps["c"]; got != "c@1.0.0" {
+		t.Errorf("a → c = %q, want the kept c@1.0.0", got)
+	}
+}

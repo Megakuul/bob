@@ -26,7 +26,8 @@ type builder struct {
 	ctx         context.Context
 	reg         *Registry
 	nodeVersion string
-	extend      map[string][]Dep // non-peer Extend deps, by package name
+	prefer      map[string][]string // Options.Prefer
+	extend      map[string][]Dep    // non-peer Extend deps, by package name
 
 	root    *node
 	queue   []*node
@@ -866,6 +867,9 @@ func (b *builder) pickManifest(p *packument, s spec) *manifest {
 		}
 		return byRaw[v.String()]
 	}
+	if m := b.preferred(byRaw, s); m != nil {
+		return m
+	}
 	if latest := p.DistTags["latest"]; latest != "" && (s.fetch == "*" || b.satisfiesRange(latest, s.fetch)) {
 		if m := byRaw[latest]; m != nil {
 			m.normalize()
@@ -905,4 +909,36 @@ func (b *builder) pickManifest(p *packument, s spec) *manifest {
 		return a.v.Compare(c.v) > 0
 	})
 	return cands[0].m
+}
+
+// preferred is the highest previously locked version of s's package (Options.Prefer) that s's
+// range admits and that the registry still lists with an acceptable engines.node; nil when
+// there is none.
+func (b *builder) preferred(byRaw map[string]*manifest, s spec) *manifest {
+	prev := b.prefer[s.name]
+	if len(prev) == 0 {
+		return nil
+	}
+	var (
+		best  *manifest
+		bestV *Version
+	)
+	for _, raw := range prev {
+		m := byRaw[raw]
+		if m == nil || s.fetch != "*" && !b.satisfiesRange(raw, s.fetch) {
+			continue
+		}
+		v, err := ParseVersion(raw, true)
+		if err != nil {
+			continue
+		}
+		m.normalize()
+		if !b.engineOK(m) {
+			continue
+		}
+		if best == nil || v.Compare(bestV) > 0 {
+			best, bestV = m, v
+		}
+	}
+	return best
 }

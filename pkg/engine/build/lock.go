@@ -20,6 +20,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/lock"
+	"github.com/megakuul/bob/pkg/engine/nixidx"
 	"github.com/megakuul/bob/pkg/engine/store"
 )
 
@@ -229,7 +230,7 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		if missing := missingSections(g, lf); len(missing) > 0 {
 			return nil, diag.New(1012, "what", missing[0]+" is not locked and --offline forbids locking it")
 		}
-	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, nil); err != nil {
+	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, nil, lazyIndex(st, f, g, lf)); err != nil {
 		return nil, err
 	}
 	after, err := lf.Encode()
@@ -266,10 +267,30 @@ func ecosystemsOf(g *ir.Graph) ([]engine.Ecosystem, error) {
 	return out, nil
 }
 
+// lazyIndex opens the nixpkgs index of lf's pin on first use (nil when bob.lock has no pin or
+// the graph needs no nixpkgs), so that a lock stage with nothing to resolve opens nothing.
+func lazyIndex(st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) func(context.Context) (*nixidx.Index, error) {
+	var (
+		idx    *nixidx.Index
+		err    error
+		opened bool
+	)
+	return func(ctx context.Context) (*nixidx.Index, error) {
+		if !opened {
+			opened = true
+			idx, err = nativeIndex(ctx, st, f, g, lf)
+		}
+		return idx, err
+	}
+}
+
 // lockEcosystems re-resolves the sections of the ecosystems used by g (onlyMissing: only those
 // bob.lock has no section for). Sections that bob.lock cannot hold (an ecosystem without a
-// lock section key) are left to their ecosystem.
-func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, root string, update []string, all, onlyMissing bool, note func(string)) ([]LockChange, error) {
+// lock section key) are left to their ecosystem. index opens the nixpkgs index the resolvers
+// read pinned toolchain versions from (LockRequest.Nixpkgs: npm's engines check, Rust's
+// rust-version fallback); nil passes none.
+func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, root string, update []string, all, onlyMissing bool, note func(string),
+	index func(context.Context) (*nixidx.Index, error)) ([]LockChange, error) {
 	ecos, err := ecosystemsOf(g)
 	if err != nil {
 		return nil, err
@@ -284,7 +305,13 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 		if all {
 			upd = []string{}
 		}
-		sec, err := e.Lock(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[name], Update: upd, Fetch: f, Root: root, Note: note})
+		var idx *nixidx.Index
+		if index != nil {
+			if idx, err = index(ctx); err != nil {
+				return nil, err
+			}
+		}
+		sec, err := e.Lock(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[name], Update: upd, Fetch: f, Nixpkgs: idx, Root: root, Note: note})
 		if err != nil {
 			return nil, err
 		}
@@ -439,7 +466,8 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 	}
 
 	var notes []string
-	ecoChanges, err := lockEcosystems(ctx, f, g, lf, o.Root, lo.Update, lo.All, false, func(n string) { notes = append(notes, n) })
+	ecoChanges, err := lockEcosystems(ctx, f, g, lf, o.Root, lo.Update, lo.All, false, func(n string) { notes = append(notes, n) },
+		lazyIndex(st, f, g, lf))
 	if err != nil {
 		return nil, err
 	}

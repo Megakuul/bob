@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -506,7 +507,11 @@ func runRun(e *env) int {
 	cmd := exec.CommandContext(e.ctx, bin, e.a.pass...)
 	cmd.Args[0] = filepath.Base(bin)
 	cmd.Dir = e.cwd
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// The program's stderr passes through unchanged; its tail is kept so that a failure bob
+	// can explain (an npm addon whose install script was denied, an undeclared import inside a
+	// store package: SPEC §03.4.4) gets bob's error block after the program's own output.
+	tail := &tailWriter{max: 64 << 10}
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, io.MultiWriter(os.Stderr, tail)
 	cmd.Env = os.Environ()
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	signal.Ignore(syscall.SIGINT) // the program gets ^C from the terminal itself
@@ -518,6 +523,9 @@ func runRun(e *env) int {
 	case errors.As(err, &ee):
 		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
 			return 128 + int(ws.Signal())
+		}
+		if d := translate.Program(label, tail.lines()); d != nil {
+			e.out.diagnose(d, "")
 		}
 		return ee.ExitCode()
 	}
@@ -547,4 +555,23 @@ func mainBinary(p *build.Package, name string) (string, error) {
 		return "", diag.New(4, "flag", "bob run "+p.Label, "what", "--bin <name> (it has several binaries)")
 	}
 	return filepath.Join(dir, ents[0].Name()), nil
+}
+
+// tailWriter keeps the last max bytes written to it.
+type tailWriter struct {
+	max int
+	buf []byte
+}
+
+func (w *tailWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	if over := len(w.buf) - w.max; over > 0 {
+		w.buf = append(w.buf[:0], w.buf[over:]...)
+	}
+	return len(p), nil
+}
+
+// lines are the kept bytes as lines (the first one may be cut).
+func (w *tailWriter) lines() []string {
+	return strings.Split(strings.TrimRight(string(w.buf), "\n"), "\n")
 }

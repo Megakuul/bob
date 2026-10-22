@@ -352,8 +352,6 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 		s.BuildScript = ""
 	}
 	c.spec = s
-	// The node is created with a provisional spec to learn its directory (the label), then the
-	// defaults that depend on the directory's files are filled in.
 	c.finish(problems)
 	return c
 }

@@ -24,14 +24,14 @@ func TestResolver(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	if err := store.Create(ctx, control, &store.BuildRecord{ID: store.ID("01jabcdefghjkmnpqrstvwxyz0"), Project: store.Set("p1"), Number: store.Set(1)}); err != nil {
+	if err := store.Create(ctx, control, &store.BuildRecord{ID: store.ID("01jabcdefghjkmnpqrstvwxyz0"), Project: store.Set[string]("p1"), Number: store.Set[uint64](1)}); err != nil {
 		t.Fatal(err)
 	}
 	spec, err := cbor.Marshal(store.JobSpec{V: 1, JobID: "01jjob00000000000000000000", Project: "p2"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Create(ctx, fleet, &store.JobRecord{ID: store.ID("01jjob00000000000000000000"), Spec: store.Set(spec), State: store.Set("queued")}); err != nil {
+	if err := store.Create(ctx, fleet, &store.JobRecord{ID: store.ID("01jjob00000000000000000000"), Spec: store.Set(spec), State: store.Set[string]("queued")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Create(ctx, control, &releaseHead{Project: store.ID("p3"), N: store.ID("0000000007")}); err != nil {

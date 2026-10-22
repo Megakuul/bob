@@ -136,7 +136,7 @@ func TestEvaluateCoreRepo(t *testing.T) {
 	// Another checkout path, a broken Go file next to a bob.go: same IR (R-FW-043 a, b).
 	files := coreRepo()
 	files["lib/broken.go"] = "package lib\n\nvar X = generatedByBob\n"
-	b := writeRepo(t, "elsewhere", files)
+	b := writeRepo(t, "elsewhere/core", files) // R2: the root's package is the directory name
 	other, err := evaluate(t, b)
 	if err != nil {
 		t.Fatal(err)
@@ -242,6 +242,25 @@ func TestRules(t *testing.T) {
 				t.Errorf("violations:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 			}
 		})
+	}
+}
+
+// TestRuleR2RootDirName: a root bob.go without Go code next to it uses the repository
+// directory's name, sanitised (SPEC R-FW-002 R2), not the module path.
+func TestRuleR2RootDirName(t *testing.T) {
+	cases := []struct{ dir, want string }{
+		{"npm", "npm"}, {"cpp-lib", "cpplib"}, {"My.Repo", "myrepo"}, {"9lives", "x9lives"}, {"---", "x"},
+	}
+	for _, c := range cases {
+		if got := expectedPkg(filepath.Join("/x", c.dir), "."); got != c.want {
+			t.Errorf("expectedPkg(%q) = %q, want %q", c.dir, got, c.want)
+		}
+	}
+	files := coreRepo() // module example.com/core, package core
+	_, err := evaluate(t, writeRepo(t, "checkout", files))
+	want := `bob.go: package core, but the Go code in this directory is package checkout; bob.go must use package checkout`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want %q", err, want)
 	}
 }
 

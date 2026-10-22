@@ -207,7 +207,7 @@ func (b *Builds) plan(ctx context.Context, rec *store.BuildRecord, recs map[stri
 		if cur.State.Value() != StatePending {
 			return store.ErrNoChange
 		}
-		cur.State, cur.Phase = store.Set(StateQueued), store.Set(PhaseEvaluating)
+		cur.State, cur.Phase = store.Set[string](StateQueued), store.Set[string](PhaseEvaluating)
 		cur.Jobs = store.Set(append(cur.Jobs.Value(), rows...))
 		return nil
 	})
@@ -292,7 +292,7 @@ func (b *Builds) follow(ctx context.Context, rec *store.BuildRecord, row store.B
 		return b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
 			changed := setRow(cur, rowOf(job, row))
 			if job.State.Value() != orchestrator.StateQueued && cur.State.Value() == StateQueued {
-				cur.State, cur.Started, changed = store.Set(StateRunning), store.Set(now), true
+				cur.State, cur.Started, changed = store.Set[string](StateRunning), store.Set(now), true
 			}
 			if !changed {
 				return store.ErrNoChange
@@ -363,10 +363,10 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 				r.State = orchestrator.StateRunning // the row ends with the verdict
 				changed := setRow(cur, r)
 				if cur.State.Value() == StateQueued {
-					cur.State, cur.Started, changed = store.Set(StateRunning), store.Set(b.now()), true
+					cur.State, cur.Started, changed = store.Set[string](StateRunning), store.Set(b.now()), true
 				}
 				if cur.Phase.Value() != PhasePromoting {
-					cur.Phase, changed = store.Set(PhasePromoting), true
+					cur.Phase, changed = store.Set[string](PhasePromoting), true
 				}
 				if !changed {
 					return store.ErrNoChange
@@ -398,7 +398,7 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 			cur.Started = store.Set(now)
 		}
 		if cur.State.Value() == StateQueued {
-			cur.State = store.Set(StateRunning)
+			cur.State = store.Set[string](StateRunning)
 		}
 		if report != nil {
 			applyReport(cur, report)
@@ -426,12 +426,14 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 				e.Message = "job " + job.ID.Value() + " failed"
 			}
 			cur.Errors = store.Set(addError(cur.Errors.Value(), e))
+			result := cur.Result.Value()
 			for _, l := range res.Failed {
-				cur.Result.Value().Failed = appendUnique(cur.Result.Value().Failed, l)
+				result.Failed = appendUnique(result.Failed, l)
 			}
+			cur.Result = store.Set(result)
 		}
 		if cur.Phase.Value() == PhaseEvaluating && report != nil {
-			cur.Phase = store.Set(PhaseBuilding)
+			cur.Phase = store.Set[string](PhaseBuilding)
 		}
 		return nil
 	})
@@ -483,7 +485,7 @@ func (b *Builds) readReport(ctx context.Context, staging, sha string) (*jobspec.
 
 // applyReport takes an accepted evaluation report into the build record.
 func applyReport(rec *store.BuildRecord, r *jobspec.Report) {
-	rec.Evaluated = store.Set(true)
+	rec.Evaluated = store.Set[bool](true)
 	byName := map[string]jobspec.Pipeline{}
 	for _, p := range r.Pipelines {
 		byName[p.Name] = p
@@ -495,11 +497,13 @@ func applyReport(rec *store.BuildRecord, r *jobspec.Report) {
 				Concurrency: p.Concurrency, Releases: len(p.Releases) > 0}))
 		}
 	}
+	result := rec.Result.Value()
 	for _, p := range r.Packages {
 		if p.Status == "failed" || p.Status == "fail" {
-			rec.Result.Value().Failed = appendUnique(rec.Result.Value().Failed, p.Label)
+			result.Failed = appendUnique(result.Failed, p.Label)
 		}
 	}
+	rec.Result = store.Set(result)
 	for _, e := range r.Errors {
 		rec.Errors = store.Set(addError(rec.Errors.Value(), store.BuildError{Code: e.Code, Message: e.Message, Label: e.Label, Hint: e.Hint}))
 	}
@@ -541,15 +545,17 @@ func (b *Builds) fail(ctx context.Context, rec *store.BuildRecord, _ string, msg
 			return store.ErrNoChange
 		}
 		moved = true
-		cur.State, cur.Finished = store.Set(StateFailed), store.Set(now)
+		cur.State, cur.Finished = store.Set[string](StateFailed), store.Set(now)
 		if cur.Started.Value().IsZero() {
 			cur.Started = store.Set(now)
 		}
 		if msg != "" {
 			cur.Errors = store.Set(addError(cur.Errors.Value(), store.BuildError{Message: msg}))
 		}
-		if len(cur.Errors.Value()) > 0 {
-			cur.Result.Value().Error = cur.Errors.Value()[0].Message
+		if errs := cur.Errors.Value(); len(errs) > 0 {
+			result := cur.Result.Value()
+			result.Error = errs[0].Message
+			cur.Result = store.Set(result)
 		}
 		for i := range cur.Pipelines.Value() {
 			if !Terminal(cur.Pipelines.Value()[i].State) {
@@ -592,7 +598,7 @@ func (b *Builds) finish(ctx context.Context, rec *store.BuildRecord) (*store.Bui
 			return store.ErrNoChange
 		}
 		moved = true
-		cur.State, cur.Finished, cur.Phase = store.Set(state), store.Set(now), store.Set("")
+		cur.State, cur.Finished, cur.Phase = store.Set(state), store.Set(now), store.Set[string]("")
 		for i := range cur.Pipelines.Value() {
 			cur.Pipelines.Value()[i].State = state
 		}

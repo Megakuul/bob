@@ -276,19 +276,31 @@ func (p *Promoter) job(ctx context.Context, rec *store.JobRecord, log *slog.Logg
 // lock is the per-job promotion lock: it keeps two orchestrators from doing the same work at
 // once. Correctness never depends on it (every write is conditional).
 func (p *Promoter) lock(jobID string) *store.Lease {
-	return store.NewLease(p.c.Control, "plock/"+jobID, p.c.Name, lockTTL)
+	return store.NewLease(p.c.Control, func(s store.LeaseState) *promoLock {
+		l := &promoLock{Job: store.ID(jobID), Owner: store.Set(s.Owner), Epoch: store.Set(s.Epoch), Expires: store.Set(s.Expires)}
+		if len(s.Cursor) > 0 {
+			l.Cursor = store.Set(s.Cursor)
+		}
+		return l
+	}, func(r *promoLock) store.LeaseState {
+		return store.LeaseState{Owner: r.Owner.Value(), Epoch: r.Epoch.Value(), Expires: r.Expires.Value(), Cursor: r.Cursor.Value()}
+	}, p.c.Name, lockTTL)
 }
 
-// promoLock is the record shape of plock/<job>, to delete it once the job is promoted.
+// promoLock is the lease record plock/<jobID> of the promotion lock.
 type promoLock struct {
-	Job  store.KeyField  `pk:"plock" cbor:"-"`
-	ETag store.ETagField `etag:"true" cbor:"-"`
+	Job     store.KeyField             `pk:"plock" cbor:"-"`
+	ETag    store.ETagField            `etag:"true" cbor:"-"`
+	Owner   store.DataField[string]    `cbor:"o,omitempty"`
+	Epoch   store.DataField[uint64]    `cbor:"ep,omitempty"`
+	Expires store.DataField[time.Time] `cbor:"ex,omitempty"`
+	Cursor  store.DataField[[]byte]    `cbor:"cu,omitempty"`
 }
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *promoLock) Draft() *promoLock {
-	return &promoLock{Job: r.Job,
-		ETag: r.ETag}
+	return &promoLock{Job: r.Job, ETag: r.ETag, Owner: store.Carry(r.Owner), Epoch: store.Carry(r.Epoch),
+		Expires: store.Carry(r.Expires), Cursor: store.Carry(r.Cursor)}
 }
 
 // acquire waits until this orchestrator holds the job lock, renewing it in the background
@@ -386,7 +398,7 @@ func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
 	if err != nil {
 		return err
 	}
-	defer p.unlock(context.WithoutCancel(ctx), l)
+	defer p.unlock(context.WithoutCancel(ctx), j.ID, l)
 	defer stop()
 	// Re-read: another orchestrator may have finished while we waited for the lock. Its
 	// result is then confirmed (every path already there) instead of redone.
@@ -452,11 +464,11 @@ func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
 
 // unlock releases the job lock and deletes its record (it is recreated by the next
 // promotion attempt); a failure leaves an expired lock, which never blocks anybody.
-func (p *Promoter) unlock(ctx context.Context, l *store.Lease) {
+func (p *Promoter) unlock(ctx context.Context, jobID string, l *store.Lease) {
 	if err := l.Release(ctx); err != nil {
 		return
 	}
-	if rec, err := store.Get(ctx, p.c.Control, &promoLock{Job: store.ID(strings.TrimPrefix(l.Key, "plock/"))}); err == nil {
+	if rec, err := store.Get(ctx, p.c.Control, &promoLock{Job: store.ID(jobID)}); err == nil {
 		_ = store.Delete(ctx, p.c.Control, rec)
 	}
 }
@@ -475,13 +487,14 @@ func (p *Promoter) finish(ctx context.Context, rec *store.JobRecord, verdict str
 		}
 		next := *cur
 		next.Promotion = store.Set(verdict)
-		next.NonReproducible = store.Set(slices.Clone(cur.NonReproducible.Value()))
+		nr := slices.Clone(cur.NonReproducible.Value())
 		for _, p := range nonRepro {
-			if !slices.Contains(next.NonReproducible.Value(), p) {
-				next.NonReproducible = store.Set(append(next.NonReproducible.Value(), p))
+			if !slices.Contains(nr, p) {
+				nr = append(nr, p)
 			}
 		}
-		slices.Sort(next.NonReproducible.Value())
+		slices.Sort(nr)
+		next.NonReproducible = store.Set(nr)
 		return &next, nil
 	})
 	return err
@@ -721,7 +734,7 @@ func (p *Promoter) promotePath(ctx context.Context, j *Job, sp *stagedPath, r *r
 	}
 	// the promotion log entry precedes the narinfo (cache GC walks it, §05.4)
 	if _, err := store.PromoLog(p.c.Control, p.c.Now()).Append(ctx, &store.PromoEntry{
-		StoreHash: sp.hash, Project: j.Project, Build: j.Build, At: p.c.Now().UTC()}); err != nil {
+		StoreHash: store.Set(sp.hash), Project: store.Set(j.Project), Build: store.Set(j.Build), At: store.Set(p.c.Now().UTC())}); err != nil {
 		return err
 	}
 	// e. sign and publish the narinfo, create-only and last

@@ -1,7 +1,9 @@
 package diag
 
 // Variant is one form of a code's message. Most codes have one unnamed variant. A code with
-// several variants (1024, 1025, 4009) selects one with the template argument "variant".
+// several variants (1008, 1024, 1025, 4009) selects one with the template argument "variant";
+// a code that gained variants later keeps its first one unnamed (selected without "variant"),
+// so its codes.lock line stays (R-NIX-028).
 type Variant struct {
 	Name    string   // "" for the only variant of a code
 	Message string   // message template (first line); every {arg} in it is required
@@ -41,7 +43,12 @@ var table = []Entry{
 	{1005, one(`nixpkgs package "{attr}" is not available for {system}`)},
 	{1006, one(`dependency cycle: {cycle}`, "a package cannot depend on itself; move the shared code into its own package")},
 	{1007, one(`{label} depends on unknown package {dep}`)},
-	{1008, one(`{label} needs Go {want} but nixpkgs {rev} provides Go {have}`, "lower GoVersion or pin a newer nixpkgs")},
+	{1008, []Variant{
+		{Message: `{label} needs Go {want} but nixpkgs {rev} provides Go {have}`, Hints: []string{"lower GoVersion or pin a newer nixpkgs"}},
+		// §03.2.4: a module requirement whose go directive exceeds the workspace module's Go.
+		{Name: "requirement", Message: `{requirement} needs go {need}, but {module} uses go {go} (set Go in {file})`,
+			Hints: []string{"raise the module's Go, or require an older {requirement}"}},
+	}},
 	{1009, one(`{label} has no pinned hash in bob.lock`, "run bob lock")},
 	{1010, one(`{label} targets {system}, which this machine cannot build`, "build it remotely (bob build --remote) or for this machine's platform")},
 	{1011, one(`generated file {file} was edited by hand`, "move the change into bob.go; bob check --fix regenerates the file")},

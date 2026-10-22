@@ -67,7 +67,7 @@ func devEnv(t *testing.T, dir, home string) ([]string, bool) {
 // and returns its directory and, per package, its imports.
 func synRepo(t *testing.T, n, width int) (string, map[int][]int) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "synroot") // R2: root package = directory name
 	imports := map[int][]int{}
 	write := func(rel, body string) {
 		p := filepath.Join(dir, rel)

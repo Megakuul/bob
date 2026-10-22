@@ -59,15 +59,15 @@ func TestCheckRecord(t *testing.T) {
 		body      []byte
 		want      string // "" | "corrupt" | "invalid"
 	}{
-		"job ok":            {"fleet", "job/j1", enc(store.JobRecord{State: store.Set("running"), Owner: store.Set("w"), Epoch: store.Set(1), Spec: store.Set([]byte{1})}), ""},
-		"job no owner":      {"fleet", "job/j1", enc(store.JobRecord{State: store.Set("claimed"), Spec: store.Set([]byte{1})}), "invalid"},
-		"job bad state":     {"fleet", "job/j1", enc(store.JobRecord{State: store.Set("weird"), Spec: store.Set([]byte{1})}), "invalid"},
+		"job ok":            {"fleet", "job/j1", enc(store.JobRecord{State: store.Set[string]("running"), Owner: store.Set[string]("w"), Epoch: store.Set[int64](1), Spec: store.Set([]byte{1})}), ""},
+		"job no owner":      {"fleet", "job/j1", enc(store.JobRecord{State: store.Set[string]("claimed"), Spec: store.Set([]byte{1})}), "invalid"},
+		"job bad state":     {"fleet", "job/j1", enc(store.JobRecord{State: store.Set[string]("weird"), Spec: store.Set([]byte{1})}), "invalid"},
 		"job garbage":       {"fleet", "job/j1", []byte{0xff, 0x00}, "corrupt"},
-		"worker ok":         {"fleet", "worker/w", enc(store.WorkerRecord{State: store.Set("active")}), ""},
+		"worker ok":         {"fleet", "worker/w", enc(store.WorkerRecord{State: store.Set[string]("active")}), ""},
 		"member twice":      {"fleet", "fleet/cfg", enc(store.FleetConfig{Members: store.Set([]store.FleetMember{{Orch: "a"}, {Orch: "a"}})}), "invalid"},
-		"lease epoch 0":     {"fleet", "ctl/x", enc(store.ControllerLease{Owner: store.Set("a")}), "invalid"},
-		"build ok":          {"control", "build/b", enc(store.BuildRecord{State: store.Set("succeeded")}), ""},
-		"build bad state":   {"control", "build/b", enc(store.BuildRecord{State: store.Set("x")}), "invalid"},
+		"lease epoch 0":     {"fleet", "ctl/x", enc(store.ControllerLease{Owner: store.Set[string]("a")}), "invalid"},
+		"build ok":          {"control", "build/b", enc(store.BuildRecord{State: store.Set[string]("succeeded")}), ""},
+		"build bad state":   {"control", "build/b", enc(store.BuildRecord{State: store.Set[string]("x")}), "invalid"},
 		"other well-formed": {"control", "pidx/all/p/0000000000", enc(map[string]int{"n": 1}), ""},
 		"other truncated":   {"control", "pidx/all/p/0000000000", []byte{0xa1, 0x61}, "corrupt"},
 	} {

@@ -99,7 +99,7 @@ func TestSettingsAndAnalytics(t *testing.T) {
 	}
 	pages := store.BuildPages(control, "p1")
 	mk := func(n uint64, id, state string, created time.Time, dur time.Duration) {
-		rec := &store.BuildRecord{ID: store.ID(id), Project: store.Set("p1"), Number: store.Set(n), State: store.Set(state), Created: store.Set(created), Started: store.Set(created),
+		rec := &store.BuildRecord{ID: store.ID(id), Project: store.Set[string]("p1"), Number: store.Set(n), State: store.Set(state), Created: store.Set(created), Started: store.Set(created),
 			Pipelines: store.Set([]store.PipelineRun{{Name: "ci", State: state}})}
 		if buildctl.Terminal(state) {
 			rec.Finished = store.Set(created.Add(dur))
@@ -117,7 +117,7 @@ func TestSettingsAndAnalytics(t *testing.T) {
 	mk(3, "01aaaaaaaaaaaaaaaaaaaaaaa3", buildctl.StateSucceeded, day2, 30*time.Second)
 	mk(4, "01aaaaaaaaaaaaaaaaaaaaaaa4", buildctl.StateRunning, day2, 0)
 	if _, err := store.CAS(ctx, control, &store.ProjectCounters{Project: store.ID("p1")}, func(*store.ProjectCounters) (*store.ProjectCounters, error) {
-		return &store.ProjectCounters{Project: store.ID("p1"), Builds: store.Set(4)}, nil
+		return &store.ProjectCounters{Project: store.ID("p1"), Builds: store.Set[uint64](4)}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}

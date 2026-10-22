@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,30 @@ func RootGoMod(g *ir.Graph, root string) (f engine.GeneratedFile, ok bool, err e
 	}
 	return engine.GeneratedFile{Path: "go.mod", Content: []byte(b.String()), Mode: 0o444, Owner: "//:bob.go",
 		Committed: true, Explain: explainRoot(g.Module, reqs)}, true, nil
+}
+
+// RootGoSum returns the root go.sum for graph g: the go.sum lines of the framework module
+// (frameworkSum, as the evaluator writes them for bob's own version) when the root go.mod
+// requires the framework at that version. ok is false when there is nothing to write.
+// Dependency bob repositories (bob.Import) get their lines from the go command until bob.lock
+// records their hashes.
+func RootGoSum(g *ir.Graph, frameworkSum string) (f engine.GeneratedFile, ok bool) {
+	if g == nil || g.Module == "" || !resolve.ValidVersion(g.BobVersion) {
+		return f, false
+	}
+	var lines []string
+	for _, l := range strings.Split(frameworkSum, "\n") {
+		if fs := strings.Fields(l); len(fs) == 3 && fs[0] == frameworkModule && strings.TrimSuffix(fs[1], "/go.mod") == g.BobVersion {
+			lines = append(lines, strings.Join(fs, " "))
+		}
+	}
+	if len(lines) == 0 {
+		return f, false
+	}
+	sort.Strings(lines)
+	sum := []byte(strings.Join(lines, "\n") + "\n")
+	return engine.GeneratedFile{Path: "go.sum", Content: sum, Mode: 0o444, Owner: "//:bob.go", Committed: true,
+		Explain: explainGoSum(sum)}, true
 }
 
 // explainRoot maps an edited root go.mod to bob.go terms. Only what a user changed counts:

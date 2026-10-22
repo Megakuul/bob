@@ -31,7 +31,7 @@ func hostileRepo(t *testing.T, gomodTail string, imp ...string) (string, goMod, 
 	if len(imp) == 0 {
 		imp = []string{"example.com/x/lib"}
 	}
-	root := writeRepo(t, "repo", map[string]string{
+	root := writeRepo(t, "core", map[string]string{
 		"go.mod":          "module example.com/core\n\ngo 1.26.0\n" + gomodTail,
 		"bob.go":          "//go:build bob\n\npackage core\n\nimport _ \"" + imp[0] + "\"\n",
 		"evil/go.mod":     "module example.com/x\n\ngo 1.26.0\n",
@@ -112,7 +112,7 @@ func TestHostileGoMod(t *testing.T) {
 
 // TestGenDirSymlinkRefused: a committed .bob symlink cannot redirect the generation's writes.
 func TestGenDirSymlinkRefused(t *testing.T) {
-	root := writeRepo(t, "repo", map[string]string{"go.mod": "module example.com/core\n"})
+	root := writeRepo(t, "core", map[string]string{"go.mod": "module example.com/core\n"})
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, ".bob")); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestGenDirSymlinkRefused(t *testing.T) {
 // TestScanCaps is the regression test of review finding F8: oversized files and too many
 // bob.go files are definition errors, not allocations.
 func TestScanCaps(t *testing.T) {
-	root := writeRepo(t, "repo", map[string]string{"go.mod": "module example.com/core\n", "bob.go": "package core\n"})
+	root := writeRepo(t, "core", map[string]string{"go.mod": "module example.com/core\n", "bob.go": "package core\n"})
 	if err := os.Truncate(filepath.Join(root, "bob.go"), maxBobGoBytes+1); err != nil {
 		t.Fatal(err)
 	}

@@ -60,7 +60,7 @@ func (id *Identity) createSession(ctx context.Context, uid, kind, userAgent stri
 	if kind == "cli" {
 		out.download = newToken(PrefixDownload)
 		dt := store.TokenKey(out.download.reveal())
-		dt.Owner, dt.Kind, dt.Scope, dt.Session = store.Set("user:"+uid), store.Set("dt"), store.Set("download"), store.Set(rec.Hash.Value())
+		dt.Owner, dt.Kind, dt.Scope, dt.Session = store.Set("user:"+uid), store.Set[string]("dt"), store.Set[string]("download"), store.Set(rec.Hash.Value())
 		dt.Expires, dt.Created = store.Set(rec.MaxUntil.Value()), store.Set(now)
 		if err := store.Create(ctx, id.control, dt); err != nil {
 			return nil, storageError(err)
@@ -106,7 +106,7 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 	now := id.now()
 	at := newToken(PrefixAccess)
 	rec := store.TokenKey(at.reveal())
-	rec.Owner, rec.Kind, rec.Scope, rec.Session = store.Set("user:"+s.User.Value()), store.Set("at"), store.Set("api"), store.Set(s.Hash.Value())
+	rec.Owner, rec.Kind, rec.Scope, rec.Session = store.Set("user:"+s.User.Value()), store.Set[string]("at"), store.Set[string]("api"), store.Set(s.Hash.Value())
 	rec.Expires, rec.Created = store.Set(now.Add(accessTTL)), store.Set(now)
 	if err := store.Create(ctx, id.control, rec); err != nil {
 		return "", storageError(err)

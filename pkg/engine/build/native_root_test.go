@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/pkg/engine"
+	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/lock"
 )
@@ -50,5 +51,28 @@ func TestNativeGetsRoot(t *testing.T) {
 	}
 	if st := readNativeState(root); st.Files["rooted.txt"].Owner != "//:r" {
 		t.Fatalf("generate did not write rooted.txt: %+v", st)
+	}
+}
+
+// I-M5b NEEDS 2: the root go.sum carries the framework's go.sum lines next to the root go.mod.
+func TestRootGoSumHasFramework(t *testing.T) {
+	g := &ir.Graph{IRVersion: ir.Version, Module: "example.com/app", BobVersion: eval.BobVersion()}
+	files, err := withRootGoMod(nil, g, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := eval.FrameworkSum()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, f := range files {
+		paths = append(paths, f.Path)
+		if f.Path == "go.sum" && string(f.Content) != want {
+			t.Errorf("go.sum:\n%s\nwant:\n%s", f.Content, want)
+		}
+	}
+	if len(paths) != 2 || paths[0] != "go.mod" || paths[1] != "go.sum" {
+		t.Errorf("root files %v, want go.mod and go.sum", paths)
 	}
 }

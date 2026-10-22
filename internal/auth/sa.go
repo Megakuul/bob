@@ -286,7 +286,7 @@ func (s saService) CreateServiceAccountToken(ctx context.Context, req *connect.R
 	secret := newToken(PrefixSA)
 	rec := store.TokenKey(secret.reveal())
 	entry := store.SATokenEntry{ID: "t" + randomString(crockford, 12), Name: name, Scope: scope, Hash: rec.Hash.Value(), Expires: expires, Created: now}
-	rec.Owner, rec.Kind, rec.Scope, rec.TokenID = store.Set("sa:"+m.GetServiceAccountId()), store.Set("sa"), store.Set(scope), store.Set(entry.ID)
+	rec.Owner, rec.Kind, rec.Scope, rec.TokenID = store.Set("sa:"+m.GetServiceAccountId()), store.Set[string]("sa"), store.Set(scope), store.Set(entry.ID)
 	rec.Expires, rec.Created = store.Set(expires), store.Set(now)
 	// The SA record lists the token first: a token record without its list entry would be a
 	// credential nobody can see or revoke.

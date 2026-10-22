@@ -12,7 +12,7 @@ import (
 // are not among tests/fixtures/repos/npm (ts-lib, site, native), so the tests spell them here.
 func newRepo(t *testing.T, files map[string]string) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "root") // R2: root package = directory name
 	files["go.mod"] = "module example.com/npmextra\n\ngo 1.26\n"
 	files["bob.lock"] = "{\n  \"lockVersion\": 1\n}\n"
 	files["bob.go"] = "//go:build bob\n\npackage root\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n"

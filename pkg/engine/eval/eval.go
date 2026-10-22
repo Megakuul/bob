@@ -178,6 +178,9 @@ func compile(ctx context.Context, r Request, root string, tc toolchain, fw *fram
 	for _, d := range scan.bobDirs {
 		own[d] = parseBob(d, bobPath(d), scan.content[bobPath(d)])
 	}
+	if err := addBobImports(&rootMod, own); err != nil {
+		return err
+	}
 	deps, err := resolveDeps(ctx, tc, root, rootMod, own, fw.version, r.Untrusted)
 	if err != nil {
 		return err

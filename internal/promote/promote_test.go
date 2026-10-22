@@ -97,7 +97,7 @@ func newEnv(t *testing.T) *env {
 	if err := store.Create(ctx, e.fleet, &store.FleetConfig{Name: store.ID("cfg"), Keys: store.Set([]store.FleetKey{{Kid: "k1", Pub: orchPub}})}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Create(ctx, e.fleet, &store.WorkerRecord{Wid: store.ID("w-evil1"), SigPub: store.Set(wrkPub)}); err != nil {
+	if err := store.Create(ctx, e.fleet, &store.WorkerRecord{Wid: store.ID("w-evil1"), SigPub: store.Set([]byte(wrkPub))}); err != nil {
 		t.Fatal(err)
 	}
 	h := cache.NewHandler(cache.Config{Objects: e.obj, Vis: e.vis, Log: slog.New(slog.NewTextHandler(e.logs, nil)),
@@ -249,8 +249,8 @@ func (e *env) stage(id, project string, paths []*path, claimRefs func(*path) []*
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	rec := &store.JobRecord{ID: store.ID(id), Spec: store.Set(spec), SpecSig: store.Set(fleet.SignSpec(e.orchKey, spec)), Kid: store.Set("k1"), State: store.Set("succeeded"),
-		Owner: store.Set("w-evil1"), Epoch: store.Set(1), Attempt: store.Set(1), Changed: store.Set(time.Now()), Result: store.Set(rs), ResultSig: store.Set(fleet.SignResult(e.wrkKey, id, 1, rs))}
+	rec := &store.JobRecord{ID: store.ID(id), Spec: store.Set(spec), SpecSig: store.Set(fleet.SignSpec(e.orchKey, spec)), Kid: store.Set[string]("k1"), State: store.Set[string]("succeeded"),
+		Owner: store.Set[string]("w-evil1"), Epoch: store.Set[int64](1), Attempt: store.Set[int64](1), Changed: store.Set(time.Now()), Result: store.Set(rs), ResultSig: store.Set(fleet.SignResult(e.wrkKey, id, 1, rs))}
 	if err := store.Create(e.ctx, e.fleet, rec); err != nil {
 		e.t.Fatal(err)
 	}

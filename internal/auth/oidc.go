@@ -368,7 +368,7 @@ func (id *Identity) oidcUser(ctx context.Context, p *store.OidcProviderRecord, i
 		}
 		now := id.now()
 		u := store.UserKey("u" + newID(now))
-		u.Login, u.Source, u.Provider, u.Issuer, u.Subject, u.Created = store.Set(login), store.Set(sourceOIDC), store.Set(p.ID.Value()), store.Set(issuer), store.Set(subject), store.Set(now)
+		u.Login, u.Source, u.Provider, u.Issuer, u.Subject, u.Created = store.Set(login), store.Set[string](sourceOIDC), store.Set(p.ID.Value()), store.Set(issuer), store.Set(subject), store.Set(now)
 		err = id.createUser(ctx, u, store.OidcSubKey(issuer, subject))
 		if err == nil {
 			return u.ID.Value(), nil

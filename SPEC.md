@@ -4504,12 +4504,13 @@ type ExeOpts struct {
 //	})
 func Executable(p *bob.P, o ExeOpts) *Exe
 
-// Test builds an executable and runs it; exit 0 = pass; TAP output parsed if present.
+// NewTest builds an executable and runs it; exit 0 = pass; TAP output parsed if present.
+// (Named NewTest: Go does not allow a function Test next to the type Test.)
 //
 //	var GeomTest = bob.Define(func(p *bob.P) *ocaml.Test {
-//		return ocaml.Test(p, ocaml.ExeOpts{Name: "geom_test", Main: "test", Deps: []ocaml.Dep{Geom(p)}})
+//		return ocaml.NewTest(p, ocaml.ExeOpts{Name: "geom_test", Main: "test", Deps: []ocaml.Dep{Geom(p)}})
 //	})
-func Test(p *bob.P, o ExeOpts) *Test
+func NewTest(p *bob.P, o ExeOpts) *Test
 ```
 
 v1 scope (S5 §5.7): native libraries/executables/tests, opam packages, conf-* table, C stubs

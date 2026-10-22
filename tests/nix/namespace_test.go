@@ -144,7 +144,7 @@ func TestRNIX021NamespaceProbes(t *testing.T) {
 		t.Fatalf("harness: bind mode needs /nix on the host: %v", err)
 	}
 	n := newNonRoot(t)
-	dir := filepath.Join(n.share, "probe-repo")
+	dir := filepath.Join(n.share, "synth") // R2: root package = directory name
 	files := probeFiles()
 	files["go.mod"] = "module example.com/synth\n\ngo 1.26.0\n"
 	files["bob.lock"] = "{\n  \"lockVersion\": 1\n}\n"

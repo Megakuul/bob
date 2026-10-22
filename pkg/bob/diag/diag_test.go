@@ -155,9 +155,11 @@ func TestTableWellFormed(t *testing.T) {
 			t.Errorf("bad entry %d", e.Code)
 		}
 		names := map[string]bool{}
-		for _, v := range e.Variants {
-			if len(e.Variants) > 1 && v.Name == "" || len(e.Variants) == 1 && v.Name != "" {
-				t.Errorf("%s: variant names must be set iff there are several", e.Code.ID())
+		for i, v := range e.Variants {
+			// Only the first variant may be unnamed: a code that gained variants later keeps
+			// its original form (and codes.lock line, R-NIX-028) as the default.
+			if i > 0 && v.Name == "" || len(e.Variants) == 1 && v.Name != "" {
+				t.Errorf("%s: variant names must be set iff there are several (the first may stay unnamed)", e.Code.ID())
 			}
 			if names[v.Name] {
 				t.Errorf("%s: duplicate variant %q", e.Code.ID(), v.Name)

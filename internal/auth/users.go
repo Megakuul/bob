@@ -61,7 +61,7 @@ func (id *Identity) CreateLocalUser(ctx context.Context, in NewLocalUser) (strin
 	}
 	now := id.now()
 	u := store.UserKey("u" + newID(now))
-	u.Login, u.DisplayName, u.Email, u.Source = store.Set(in.Login), store.Set(in.DisplayName), store.Set(in.Email), store.Set(sourceLocal)
+	u.Login, u.DisplayName, u.Email, u.Source = store.Set(in.Login), store.Set(in.DisplayName), store.Set(in.Email), store.Set[string](sourceLocal)
 	u.PasswordHash, u.MustChange, u.Created = store.Set(phc), store.Set(in.MustChange), store.Set(now)
 	if in.Admin {
 		u.Bindings = store.Set([]store.RoleBindingEntry{{ID: bindingID(), Role: adminRole, Project: "*", Source: sourceManual, Created: now}})

@@ -98,12 +98,13 @@ func realGo(root, dir string) *goPkg {
 var cgoExts = map[string]bool{".c": true, ".cc": true, ".cpp": true, ".cxx": true, ".m": true, ".f": true,
 	".F": true, ".f90": true, ".swig": true, ".swigcxx": true}
 
-// expectedPkg is R2's package for a directory without Go code. The root directory's name is
-// the last element of the module path (the checkout directory's name is not stable).
-func expectedPkg(module, dir string) string {
+// expectedPkg is R2's package for the directory dir (relative to the repository root) without
+// Go code: the directory's name, sanitised. For the root that is the name of the repository
+// directory itself (SPEC R-FW-002 R2).
+func expectedPkg(root, dir string) string {
 	base := path.Base(dir)
 	if dir == "." {
-		base = path.Base(module)
+		base = filepath.Base(root)
 	}
 	var b strings.Builder
 	for _, r := range strings.ToLower(base) {
@@ -163,7 +164,7 @@ func (c *ruleCheck) check() (ir.Errors, []string) {
 		}
 		g := realOf(dir)
 		// R2
-		want := expectedPkg(c.module, dir)
+		want := expectedPkg(c.root, dir)
 		if g != nil {
 			want = g.name
 		}

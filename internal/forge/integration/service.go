@@ -152,7 +152,7 @@ func (s *Service) CreateForgeIntegration(ctx context.Context, req *connect.Reque
 	rec := ForgeKey(in.GetId())
 	rec.Kind, rec.DisplayName, rec.BaseURL, rec.Secret, rec.Created = store.Set(string(kind)), store.Set(in.GetDisplayName()), store.Set(in.GetBaseUrl()), store.Set(secret), store.Set(s.Registry.now().UTC())
 	if kind == forge.GitHub && rec.BaseURL.Value() == "" {
-		rec.BaseURL = store.Set(GitHubAPI)
+		rec.BaseURL = store.Set[string](GitHubAPI)
 	}
 	if err := setCredentials(rec, in); err != nil {
 		return nil, err
@@ -264,7 +264,7 @@ func (s *Service) UpdateForgeIntegration(ctx context.Context, req *connect.Reque
 				if err := setCredentials(cur, in); err != nil {
 					return nil, err
 				}
-				cur.Health, cur.HealthMsg = store.Set(0), store.Set("")
+				cur.Health, cur.HealthMsg = store.Set[int32](0), store.Set[string]("")
 			}
 		}
 		if err := validate(cur); err != nil {

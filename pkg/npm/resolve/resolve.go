@@ -85,6 +85,12 @@ type Options struct {
 	NodeVersion string
 	// Root names the repository or package in error messages (E-RESOLVE "{root}").
 	Root string
+	// Prefer keeps previous pins (bob lock without --update after a declaration changed):
+	// package name → versions locked before. A range dependency whose range admits one of
+	// them (and whose engines.node admits the Node version) gets the highest such version
+	// instead of npm's pick, so a changed declaration moves only what it must. Exact
+	// versions and dist-tags are picked as npm does. nil resolves from scratch.
+	Prefer map[string][]string
 }
 
 // Section is bob.lock's "npm" section (SPEC §03.4.2; the same JSON as lock.NpmSection).
@@ -203,7 +209,7 @@ func Resolve(ctx context.Context, in Input, o Options) (*Result, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	b := &builder{
-		ctx: ctx, reg: o.Registry, nodeVersion: strings.TrimPrefix(o.NodeVersion, "v"),
+		ctx: ctx, reg: o.Registry, nodeVersion: strings.TrimPrefix(o.NodeVersion, "v"), prefer: o.Prefer,
 		extend: map[string][]Dep{}, seen: map[*node]bool{}, failed: map[*node]bool{},
 		psrc: map[*node]*node{}, vroots: map[*node]*node{}, indexes: map[*node]*edgeIndex{},
 		specs: map[string]specResult{}, picks: map[string]*manifest{}, sat: map[string]bool{},

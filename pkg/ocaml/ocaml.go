@@ -146,7 +146,7 @@ func Executable(p *bob.P, o ExeOpts) *Exe {
 }
 
 // NewTest builds an executable and runs it; exit 0 = pass; TAP output parsed if present.
-// (SPEC §03.5.1 names it Test, which Go does not allow next to the type Test; see D-M11a-1.)
+// (Go does not allow a function Test next to the type Test, SPEC §03.5.1.)
 //
 //	var GeomTest = bob.Define(func(p *bob.P) *ocaml.Test {
 //		return ocaml.NewTest(p, ocaml.ExeOpts{Name: "geom_test", Main: "test", Deps: []ocaml.Dep{Geom(p)}})

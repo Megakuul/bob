@@ -269,7 +269,7 @@ func (id *Identity) consent(w http.ResponseWriter, r *http.Request) {
 	}
 	code := newToken("")
 	rec := store.OAuthCodeKey(code.reveal())
-	rec.User, rec.Client, rec.Redirect, rec.Challenge = store.Set(uid), store.Set(clientID), store.Set(req.redirect), store.Set(req.challenge)
+	rec.User, rec.Client, rec.Redirect, rec.Challenge = store.Set(uid), store.Set[string](clientID), store.Set(req.redirect), store.Set(req.challenge)
 	rec.UserAgent, rec.Expires = store.Set(truncate(r.UserAgent(), 200)), store.Set(id.now().Add(codeTTL))
 	if err := store.Create(r.Context(), id.control, rec); err != nil {
 		id.httpFail(w, r, err)
@@ -445,7 +445,7 @@ func (id *Identity) deviceCode(w http.ResponseWriter, r *http.Request) {
 	now := id.now()
 	dev := newToken("")
 	rec := store.DeviceCodeKey(dev.reveal())
-	rec.State, rec.Client, rec.Interval = store.Set("pending"), store.Set(clientID), store.Set(deviceInterval)
+	rec.State, rec.Client, rec.Interval = store.Set[string]("pending"), store.Set[string](clientID), store.Set[int](deviceInterval)
 	rec.UserAgent, rec.Expires = store.Set(truncate(r.UserAgent(), 200)), store.Set(now.Add(deviceTTL))
 	var userCode string
 	for range 5 {
@@ -523,7 +523,7 @@ func (id *Identity) tokenFromDevice(w http.ResponseWriter, r *http.Request, f ur
 			answer = "access_denied"
 		case cur.State.Value() == "approved":
 			answer, uid, ua = "", cur.User.Value(), cur.UserAgent.Value()
-			cur.State = store.Set("used")
+			cur.State = store.Set[string]("used")
 		default:
 			answer = "invalid_grant"
 		}
@@ -598,9 +598,9 @@ func (id *Identity) deviceApprove(w http.ResponseWriter, r *http.Request) {
 			return nil, store.ErrNoChange
 		}
 		msg = ""
-		cur.State, cur.User = store.Set("denied"), store.Set(uid)
+		cur.State, cur.User = store.Set[string]("denied"), store.Set(uid)
 		if allow {
-			cur.State = store.Set("approved")
+			cur.State = store.Set[string]("approved")
 		}
 		return cur, nil
 	})

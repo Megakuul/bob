@@ -97,6 +97,18 @@ type Pending struct {
 	Created time.Time `cbor:"c,omitzero"`
 }
 
+// outboxShard is one shard nout/<sh2> of the outbox: delivery id -> pending delivery.
+type outboxShard struct {
+	Shard   store.KeyField                       `pk:"nout" cbor:"-"`
+	ETag    store.ETagField                      `etag:"true" cbor:"-"`
+	Pending store.DataField[map[string]Pending] `cbor:"m,omitempty"`
+}
+
+// Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
+func (r *outboxShard) Draft() *outboxShard {
+	return &outboxShard{Shard: r.Shard, ETag: r.ETag, Pending: store.Carry(r.Pending)}
+}
+
 // outboxShards is the shard count of the outbox (each shard ≤ store.MaxShardEntries).
 const outboxShards = 4
 
@@ -133,7 +145,13 @@ func New(control *store.Bucket, now func() time.Time, log *slog.Logger) *Notifie
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Notifier{Control: control, Now: now, Log: log, outbox: store.NewShardSet[Pending](control, "nout", outboxShards),
+	return &Notifier{Control: control, Now: now, Log: log, outbox: store.NewShardSet(control, outboxShards, func(sh string, m map[string]Pending) *outboxShard {
+		o := &outboxShard{Shard: store.ID(sh)}
+		if len(m) > 0 {
+			o.Pending = store.Set(m)
+		}
+		return o
+	}, func(o *outboxShard) map[string]Pending { return o.Pending.Value() }),
 		wake: make(chan struct{}, 1),
 		HTTP: &http.Client{Timeout: Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }

@@ -55,7 +55,7 @@ func TestSkipReason(t *testing.T) {
 	want := map[string]string{"plain": "", "asan": "not run: needs a native " + string(o) + " machine",
 		"race": "not run: needs a native " + string(o) + " machine", "native": ""}
 	for id, w := range want {
-		if got := skipReason(g, p, testrun.Unit{DrvPath: "/nix/store/" + id + ".drv"}); got != w {
+		if got := skipReason(nodesByID(g), p, testrun.Unit{DrvPath: "/nix/store/" + id + ".drv"}); got != w {
 			t.Errorf("%s: %q, want %q", id, got, w)
 		}
 	}

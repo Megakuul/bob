@@ -179,8 +179,8 @@ func lockError(err error, nodes map[string]*ir.Node) error {
 	var te *resolve.ToolchainError
 	switch {
 	case errors.As(err, &te):
-		e := diag.New(1008, "label", te.Module.String(), "want", te.NeedsGo, "rev", "of "+te.Workspace, "have", te.WorkspaceGo)
-		e.Cause = te.Error()
+		e := diag.New(1008, "variant", "requirement", "requirement", te.Module.String(), "need", te.NeedsGo,
+			"module", te.Workspace, "go", te.WorkspaceGo, "file", te.BobGo)
 		if n := nodes[te.Workspace]; n != nil {
 			e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
 		}

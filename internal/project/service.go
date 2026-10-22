@@ -12,6 +12,7 @@ import (
 	projectv1 "github.com/megakuul/bob/internal/gen/bob/project/v1"
 	"github.com/megakuul/bob/internal/gen/bob/project/v1/projectv1connect"
 	"github.com/megakuul/bob/internal/rbac"
+	"github.com/megakuul/bob/internal/store"
 )
 
 // Scoper answers which projects a principal may call a method on (rbac.Authorizer); the

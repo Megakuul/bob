@@ -61,3 +61,22 @@ func TestRootGoMod(t *testing.T) {
 		t.Errorf("invalid version: %v", err)
 	}
 }
+
+// TestRootGoSum: the root go.sum holds the framework's lines for the version the root go.mod
+// requires (I-M5b NEEDS 2); nothing for a graph without a module or a framework version.
+func TestRootGoSum(t *testing.T) {
+	sum := "github.com/megakuul/bob v0.0.0-dev h1:AAA=\ngithub.com/megakuul/bob v0.0.0-dev/go.mod h1:BBB=\n"
+	f, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v0.0.0-dev"}, sum)
+	if !ok || f.Path != "go.sum" || !f.Committed || string(f.Content) != sum {
+		t.Fatalf("RootGoSum = %+v, %v", f, ok)
+	}
+	if d := f.Explain([]byte(sum)); len(d) != 0 {
+		t.Errorf("unchanged go.sum is drift: %v", d)
+	}
+	if _, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v1.0.0"}, sum); ok {
+		t.Error("lines of another framework version were used")
+	}
+	if _, ok := RootGoSum(&ir.Graph{BobVersion: "v0.0.0-dev"}, sum); ok {
+		t.Error("a graph without a module got a go.sum")
+	}
+}

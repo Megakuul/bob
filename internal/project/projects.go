@@ -226,9 +226,9 @@ func (p *Projects) link(ctx context.Context, rec *Record, forgeID, repo string) 
 	if rec.RepoName.Value() == "" {
 		rec.RepoName = store.Set(repo)
 	}
-	rec.DefaultBranch, rec.WebURL, rec.HookErr = store.Set(l.Repo.DefaultBranch), store.Set(l.Repo.WebURL), store.Set("")
+	rec.DefaultBranch, rec.WebURL, rec.HookErr = store.Set(l.Repo.DefaultBranch), store.Set(l.Repo.WebURL), store.Set[string]("")
 	if l.HookErr != nil {
-		rec.HookErr = store.Set("bob's webhook could not be created on the repository; add it by hand or give the integration admin rights")
+		rec.HookErr = store.Set[string]("bob's webhook could not be created on the repository; add it by hand or give the integration admin rights")
 	}
 	return nil
 }
@@ -338,7 +338,7 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 	want.DisplayName, want.Description = store.Set(next.DisplayName), store.Set(next.Description)
 	relink = relink && (next.Forge != cur.Forge.Value() || !strings.EqualFold(next.RepoName, cur.RepoName.Value()))
 	if relink {
-		want.Forge, want.RepoName, want.RepoID, want.DefaultBranch, want.WebURL, want.HookErr = store.Set(""), store.Set(""), store.Set(0), store.Set(""), store.Set(""), store.Set("")
+		want.Forge, want.RepoName, want.RepoID, want.DefaultBranch, want.WebURL, want.HookErr = store.Set[string](""), store.Set[string](""), store.Set[int64](0), store.Set[string](""), store.Set[string](""), store.Set[string]("")
 		if next.Forge != "" {
 			if err := p.link(ctx, &want, next.Forge, next.RepoName); err != nil {
 				return nil, err

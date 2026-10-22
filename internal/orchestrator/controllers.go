@@ -199,7 +199,7 @@ func (c *Controller) acquire(ctx context.Context, now time.Time) error {
 	var other *store.ControllerLease
 	got, err := store.CAS(ctx, c.Fleet, &store.ControllerLease{Name: store.ID(c.ID)}, func(cur *store.ControllerLease) (*store.ControllerLease, error) {
 		other = nil
-		next := &store.ControllerLease{Name: store.ID(c.ID), Owner: store.Set(c.Owner), Epoch: store.Set(1), Expires: store.Set(now.Add(c.ttl()))}
+		next := &store.ControllerLease{Name: store.ID(c.ID), Owner: store.Set(c.Owner), Epoch: store.Set[uint64](1), Expires: store.Set(now.Add(c.ttl()))}
 		switch {
 		case cur == nil:
 		case cur.Owner.Value() == c.Owner && !cur.Expires.Value().Add(c.Skew).Before(now):

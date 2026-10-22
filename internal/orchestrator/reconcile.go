@@ -170,7 +170,7 @@ func (r *Reconciler) leader(ctx context.Context) (bool, error) {
 	if time.Until(until) > 2*ttl/3 {
 		return true, nil
 	}
-	held, _, err := store.NewLease(r.Fleet, "ctl/job-reconciler", r.Name, ttl).TryAcquire(ctx)
+	held, _, err := store.NewControllerLease(r.Fleet, "job-reconciler", r.Name, ttl).TryAcquire(ctx)
 	r.mu.Lock()
 	r.leaseUntil = time.Time{}
 	if held {
@@ -325,11 +325,11 @@ func (r *Reconciler) requeue(ctx context.Context, rec *store.JobRecord, class st
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		next.Owner, next.Changed = store.Set(""), store.Set(now)
+		next.Owner, next.Changed = store.Set[string](""), store.Set(now)
 		if cur.Cancel.Value() {
-			next.State = store.Set(StateCancelled)
+			next.State = store.Set[string](StateCancelled)
 		} else {
-			next.State, next.Queued = store.Set(StateQueued), store.Set(now)
+			next.State, next.Queued = store.Set[string](StateQueued), store.Set(now)
 		}
 		won, queued = true, !cur.Cancel.Value()
 		return &next, nil

@@ -119,7 +119,7 @@ func newLab(t *testing.T, be *env.Backend, await ...bool) *lab {
 	}
 	pub, key, _ := ed25519.GenerateKey(rand.Reader)
 	l.wid, l.key = "w1", key
-	if err := store.Create(ctx, l.fleet, &store.WorkerRecord{Wid: store.ID(l.wid), State: store.Set("active"), SigPub: store.Set(pub)}); err != nil {
+	if err := store.Create(ctx, l.fleet, &store.WorkerRecord{Wid: store.ID(l.wid), State: store.Set[string]("active"), SigPub: store.Set([]byte(pub))}); err != nil {
 		t.Fatal(err)
 	}
 	return l
@@ -158,7 +158,7 @@ func (l *lab) run(j *store.JobRecord, status string, report *jobspec.Report, fai
 	l.t.Helper()
 	claimed, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
-		n.State, n.Owner, n.Epoch, n.Attempt, n.Claimed, n.Changed = store.Set("running"), store.Set(l.wid), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(time.Now()), store.Set(time.Now())
+		n.State, n.Owner, n.Epoch, n.Attempt, n.Claimed, n.Changed = store.Set[string]("running"), store.Set(l.wid), store.Set(cur.Epoch.Value()+1), store.Set(cur.Attempt.Value()+1), store.Set(time.Now()), store.Set(time.Now())
 		return &n, nil
 	})
 	if err != nil {
