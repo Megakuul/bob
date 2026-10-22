@@ -43,18 +43,25 @@ type BucketConfig struct {
 // backend is then verified through a bucket the credential may write (OpenStorage).
 // A failed check returns a *Refusal.
 func Open(ctx context.Context, cfg BucketConfig) (*Bucket, error) {
-	if _, err := Segment(cfg.Name); err != nil || cfg.Name == "" {
+	b, err := newBucket(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := probe(ctx, b); err != nil && !errors.Is(err, errProbeDenied) {
+		return nil, err
+	}
+	return b, nil
+}
+
+func newBucket(ctx context.Context, cfg BucketConfig) (*Bucket, error) {
+	if _, err := Segment(cfg.Name); err != nil {
 		return nil, fmt.Errorf("store: bucket name %q is invalid", cfg.Name)
 	}
 	c, err := s3client.New(ctx, s3client.Options{Endpoint: cfg.Endpoint, Region: cfg.Region})
 	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
-	b := &Bucket{name: cfg.Name, endpoint: cfg.Endpoint, role: cfg.Role, s3: c}
-	if err := probe(ctx, b); err != nil && !errors.Is(err, errProbeDenied) {
-		return nil, err
-	}
-	return b, nil
+	return &Bucket{name: cfg.Name, endpoint: cfg.Endpoint, role: cfg.Role, s3: c}, nil
 }
 
 // Name is the bucket name.
@@ -86,7 +93,7 @@ func transient(err error) bool {
 
 // failed returns ctx's error when the context ended (S9 B11: check ctx first), else err.
 func failed(ctx context.Context, err error) error {
-	if ctx.Err() != nil {
+	if err != nil && ctx.Err() != nil {
 		return ctx.Err()
 	}
 	return err

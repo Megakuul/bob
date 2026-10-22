@@ -24,8 +24,9 @@ type Options struct {
 	// AccessKey and SecretKey set a static credential; empty = SDK default chain (env, shared
 	// file, IMDSv2, web identity). bob never mints credentials (R-SEC-100).
 	AccessKey, SecretKey string
-	// UserAgent is appended to the SDK user agent, e.g. "bob-sweep/staging-sweep" (R-STORE-101).
-	UserAgent string
+	// Sweep names a sweep controller; its requests carry "bob-sweep/<Sweep>" in the User-Agent,
+	// which is how the LIST accounting attributes them (R-STORE-101).
+	Sweep string
 }
 
 // New returns a client for o.
@@ -60,8 +61,8 @@ func New(ctx context.Context, o Options) (*s3.Client, error) {
 		so.Retryer = aws.NopRetryer{}
 		so.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		so.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
-		if o.UserAgent != "" {
-			so.APIOptions = append(so.APIOptions, awsmw.AddUserAgentKey(o.UserAgent))
+		if o.Sweep != "" {
+			so.APIOptions = append(so.APIOptions, awsmw.AddUserAgentKeyValue("bob-sweep", o.Sweep))
 		}
 	}), nil
 }

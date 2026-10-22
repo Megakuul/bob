@@ -87,11 +87,10 @@ func OpenStorage(ctx context.Context, cfg StorageConfig, mode string) (*Storage,
 	s := &Storage{Config: cfg}
 	probed := 0
 	for _, bc := range names {
-		c, err := s3client.New(ctx, s3client.Options{Endpoint: bc.Endpoint, Region: bc.Region})
+		b, err := newBucket(ctx, bc)
 		if err != nil {
-			return nil, fmt.Errorf("store: %w", err)
+			return nil, err
 		}
-		b := &Bucket{name: bc.Name, endpoint: bc.Endpoint, role: bc.Role, s3: c}
 		switch err := probe(ctx, b); {
 		case err == nil:
 			probed++

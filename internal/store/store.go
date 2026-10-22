@@ -408,7 +408,7 @@ type Lease struct {
 type leaseDoc struct {
 	Owner   string          `cbor:"o,omitempty"`
 	Epoch   uint64          `cbor:"ep,omitempty"`
-	Expires time.Time       `cbor:"ex,omitempty"`
+	Expires time.Time       `cbor:"ex,omitzero"`
 	Cursor  cbor.RawMessage `cbor:"cu,omitempty"`
 }
 
@@ -477,5 +477,28 @@ func validKey(key string) error {
 		return fmt.Errorf("store: key %q must be <pk>/<pkval> or <pk>/<pkval>/<sk>/<skval>", key)
 	}
 	_, err := Key(parts[0], parts[1], parts[2:]...)
+	return err
+}
+
+// Release gives up the lease (expires = now, CAS) so another orchestrator can take it at once
+// (§05.6.5 shutdown). Releasing a lease held by somebody else is a no-op.
+func (l *Lease) Release(ctx context.Context) error {
+	_, err := Call(ctx, func(ctx context.Context) (struct{}, error) {
+		if err := checkBucket(l.Bucket); err != nil {
+			return struct{}{}, err
+		}
+		if err := validKey(l.Key); err != nil {
+			return struct{}{}, err
+		}
+		_, err := cas(ctx, l.Bucket, l.Key, casAttempts, func(cur *leaseDoc) (*leaseDoc, error) {
+			if cur == nil || cur.Owner != l.Owner {
+				return nil, ErrNoChange
+			}
+			next := *cur
+			next.Expires = time.Now().Add(-LeaseSkew)
+			return &next, nil
+		})
+		return struct{}{}, wrap(l.Key, err)
+	})
 	return err
 }

@@ -61,7 +61,7 @@ func probe(ctx context.Context, b *Bucket) (err error) {
 	}
 	defer func() {
 		// Leave nothing behind, whatever happened (best effort; check 6 already deleted x).
-		if err != nil {
+		if err != nil && !errors.Is(err, errProbeDenied) {
 			_, _ = b.s3.DeleteObject(context.WithoutCancel(ctx), &s3.DeleteObjectInput{Bucket: aws.String(b.name), Key: aws.String(x)})
 		}
 	}()
