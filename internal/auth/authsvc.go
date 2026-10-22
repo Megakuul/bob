@@ -90,6 +90,9 @@ func clientIP(addr string) string {
 // Every failure answers "invalid login or password"; throttled callers get ResourceExhausted.
 func (s authService) LoginPassword(ctx context.Context, req *connect.Request[authv1.LoginPasswordRequest]) (*connect.Response[authv1.LoginPasswordResponse], error) {
 	login, pw := strings.TrimSpace(req.Msg.GetLogin()), Secret(req.Msg.GetPassword())
+	if login == "" || len(pw.reveal()) == 0 {
+		return nil, api.InvalidArgument("login", "login and password are required")
+	}
 	ip := clientIP(req.Peer().Addr)
 	if len(login) > 256 {
 		login = login[:256]

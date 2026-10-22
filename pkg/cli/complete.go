@@ -250,7 +250,7 @@ compdef _bob_complete bob
 		return `# bob completion for fish: bob completion fish | source
 function __bob_complete
     set -l tokens (commandline -opc)
-    bob __complete $tokens[2..-1] (commandline -ct | string collect --allow-empty) 2>/dev/null
+    bob __complete $tokens[2..-1] "$(commandline -ct)" 2>/dev/null
 end
 complete -c bob -f -a '(__bob_complete)'
 `, true

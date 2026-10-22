@@ -2,11 +2,12 @@
 
 Owner of: pkg/cc, pkg/cc/gen, pkg/cc/bop, pkg/cc/internal/ccspec. Outside (small, reported):
 pkg/cli/link.go (one blank import), cmd/bob-builder/main.go (merges ccbop.Kinds()),
-pkg/builder/testrun.go + bspec (test-run format "tap", BuilderVersion 4 → 5),
+pkg/builder/testrun.go + bspec (test-run format "tap", BuilderVersion 4 → 5; other units
+also change pkg/builder paths.go/unpack.go under the same bump),
 pkg/builder/testrun_tap_test.go (new), pkg/engine/store/builders.go and
 pkg/engine/eval/framework.zip (regenerated).
 
-## done (checkpoint 18:05)
+## done (checkpoint 18:45)
 - pkg/cc API: Linkable, Std (C11..CXX23), LibraryOpts, StaticLibrary, SharedLibrary, Library,
   BinaryOpts, NewBinary/Binary, NewTest/Test (see TEST PROBLEM 1), BuildSystem (CMake,
   Autotools, Meson, Make), ExternalOpts, External, ExternalLib. Kinds cc.library, cc.binary,
@@ -42,8 +43,21 @@ pkg/engine/eval/framework.zip (regenerated).
   R-CC-005a (a) entry removed → exit 3 BOB-E-1009 naming the label, no package started;
   (b) tampered archive, fresh store → exit 4 BOB-E-3001.
 
+- Golden candidates (owner approves): out/golden-candidates/tests/goldens/eco/cc/jobs/
+  {mathx,pack,app,mathx_test}.json and tests/goldens/eco/cc/compile_commands.json (+ .meta),
+  produced from the private-copy run (store paths include the bob-builder path, so the job
+  goldens change with every builder change; compile_commands.json has $REPO for the dir).
+- Shared tree: go test ./pkg/cc/... ./pkg/builder/... ./pkg/engine/store ./pkg (layering) and
+  pkg/engine/eval TestFrameworkZip green; gofmt/vet/staticcheck clean for pkg/cc; ci stage
+  builder green after go generate ./pkg/engine/store. Repo-wide fmt/vet/lint fail only on
+  other units' WIP (pkg/golang/resolve, pkg/cli/dev_env.go, pkg/rust, tests/serverenv).
+- Acceptance tests tests/eco/cc (private copy): all red on the 5-minute harness timeout of the
+  first `bob lock` in a fresh bob home (cold lock measured 5m31s at load 20 on 8 cores, 64 s
+  earlier on a quieter host); the steps they check were verified by hand (above).
+  B-053 (C/C++ no-op build): 0.51-1.06 s, median 0.59 s [8c/15G, load ~20, shared host].
+
 ## next
-- golden candidates (jobs, compile_commands.json) into out/golden-candidates; acceptance runs.
+- nothing in this chain beyond NEEDS / TEST PROBLEM; M7.4 (cross) unblocks R-CC-001a amd64.
 
 ## DECISIONS
 - D-M7a-1: constructors NewBinary/NewTest (types Binary/Test), like npm.NewApp/NewTest: Go

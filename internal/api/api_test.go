@@ -189,7 +189,7 @@ func TestErrorModelAndAuthz(t *testing.T) {
 		{"no permission on the project", getBuild, map[string]any{"id": "b2"}, bearer(userTok), "not_found", "build not found", "BOB-API-3001", 404},
 		{"missing build", getBuild, map[string]any{"id": "b9"}, bearer(userTok), "not_found", "build not found", "BOB-API-3001", 404},
 		{"some permission, not this method", cancel, map[string]any{"id": "b1"}, bearer(userTok), "permission_denied", "permission denied: bob.build.v1.BuildService/CancelBuild on project p1", "BOB-API-2002", 403},
-		{"project field missing", getBuild, map[string]any{}, bearer(userTok), "invalid_argument", "build is required", "BOB-API-1001", 400},
+		{"empty resolving id", getBuild, map[string]any{}, bearer(userTok), "not_found", "build not found", "BOB-API-3001", 404},
 		{"global method without permission", "/api/bob.access.v1.UserService/ListUsers", map[string]any{}, bearer(userTok), "permission_denied", "permission denied: bob.access.v1.UserService/ListUsers", "BOB-API-2002", 403},
 		{"not implemented", cancel, map[string]any{"id": "b1"}, bearer(adminTok), "unimplemented", "not implemented: bob.build.v1.BuildService/CancelBuild", "BOB-API-9001", 501},
 		{"cookie without Bob-Csrf", whoami, map[string]any{}, map[string]string{"Cookie": "bob_session=" + sessionCk}, "unauthenticated", "cookie session requires the Bob-Csrf header", "BOB-API-2001", 401},

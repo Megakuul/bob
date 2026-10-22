@@ -7,7 +7,22 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"connectrpc.com/connect"
+
+	authv1 "github.com/megakuul/bob/internal/gen/bob/auth/v1"
 )
+
+// TestLoginPasswordEmptyBody: a missing login or password is InvalidArgument (A107), decided
+// before any store access.
+func TestLoginPasswordEmptyBody(t *testing.T) {
+	for _, m := range []*authv1.LoginPasswordRequest{{}, {Login: "a"}, {Password: "x"}} {
+		_, err := authService{}.LoginPassword(context.Background(), connect.NewRequest(m))
+		if connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("%+v: got %v, want InvalidArgument", m, err)
+		}
+	}
+}
 
 func TestValidRedirect(t *testing.T) {
 	for _, c := range []struct {

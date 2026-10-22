@@ -211,6 +211,10 @@ func (s *Server) authorize(ctx context.Context, rule *Rule, p *Principal, req an
 		what := resourceName[rule.Resolve]
 		id := rule.projectOf(req)
 		if id == "" {
+			if rule.Resolve != authzv1.Resolve_RESOLVE_UNSPECIFIED {
+				// A107: an empty id names no resource.
+				return NotFound(what)
+			}
 			return InvalidArgument(protoJSONPath(rule), what+" is required")
 		}
 		project := id

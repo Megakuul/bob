@@ -63,6 +63,7 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 	}
 	r := &runner{o: o}
 	f := fetch.New(st, fetch.Policy{})
+
 	goRoot, err := r.evalGoRoot(ctx, st, f)
 	if err != nil {
 		return nil, err
