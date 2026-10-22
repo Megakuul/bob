@@ -55,3 +55,13 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    and peers in `deps`: read `devDependencies` and `peerDependencies` too (8 of 10 graphs report
    false "edge bob has and npm lacks" otherwise; with them there are zero differences; evidence
    plan/progress/I-R-npm.md).
+11. A87 `tests/ui` harness does not follow `proto/` and the `/api/` mount of SPEC 6.2 (evidence
+   plan/progress/I-UI.md TEST PROBLEM 1-7; a verification copy that fixes only these mismatches
+   passes everything: out/uicheck, gitignored): (1) `tests/ui/seed.json` does not decode against the
+   proto (20 of 23 responses); replacement ready at out/uicheck/seed.json; (2) the mock must answer
+   `/api/bob.*`; (3) page RPC lists: ListJobs for packages, ResolveRelease by exact version, no
+   artifact size on GetBuild, install line `bob install <project>/<release>@<version>`; (4) seed the
+   calls WatchBuild, GetBuildGraph, GetPath, ResolveRelease, ListRoleBindings, ListMySessions,
+   BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
+   (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
+   Needs owner OK like the others (tests/ui is protected).
