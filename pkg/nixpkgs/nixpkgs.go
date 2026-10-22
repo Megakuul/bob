@@ -48,9 +48,24 @@ func newPackage(p *bob.P, kind, attr string, opts []Option) *Package {
 	if o.cross {
 		set = "cross"
 	}
-	pk := &Package{outputs: o.outputs}
+	pk := &Package{outputs: o.outputs, kind: kind, attr: attr, opts: o}
 	pk.Node = ext.New(p, kind, attr, nil, nil, o.spec(attr, set))
 	return pk
+}
+
+// CrossSet returns the same package (attribute, kind and options) taken from the cross package
+// set, as if declared with Cross(). C/C++ packages with Libs: cc.CrossLibs use it for their
+// nixpkgs libraries (R-FW-036).
+func (pk *Package) CrossSet(p *bob.P) *Package {
+	if pk == nil || pk.attr == "" || pk.opts.cross {
+		return pk
+	}
+	o := pk.opts
+	o.cross = true
+	o.outputs, o.modules, o.insecure = slices.Clone(o.outputs), slices.Clone(o.modules), slices.Clone(o.insecure)
+	c := &Package{outputs: o.outputs, kind: pk.kind, attr: pk.attr, opts: o}
+	c.Node = ext.New(p, pk.kind, pk.attr, nil, nil, o.spec(pk.attr, "cross"))
+	return c
 }
 
 // Option changes how a nixpkgs package is used.
@@ -127,6 +142,9 @@ func AllowUnfree() Option { return func(o *options) { o.unfree = true } }
 type Package struct {
 	bob.Node
 	outputs []string
+	kind    string  // nixpkgs.lib or nixpkgs.pkg
+	attr    string  // nixpkgs attribute
+	opts    options // as declared (CrossSet)
 }
 
 // Outputs lists the selected outputs ("out" when none were selected).

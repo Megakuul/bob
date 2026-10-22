@@ -16,7 +16,7 @@ import (
 // §4.3) when the harness started one: BOB_TEST_GOPROXY is its Go module proxy URL. The run
 // then needs no network. Without it bob uses its configured default proxy.
 func registryEnv(home string, extra ...string) []string {
-	env := []string{"BOB_HOME=" + home}
+	env := []string{"BOB_HOME=" + home, "BOB_TEST_HTTP_LOOPBACK=1"} // the mirror is plain http (A109)
 	if p := os.Getenv("BOB_TEST_GOPROXY"); p != "" {
 		env = append(env, "BOB_GOPROXY="+p)
 	}

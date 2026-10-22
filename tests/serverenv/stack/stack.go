@@ -304,7 +304,7 @@ func buildServer(ctx context.Context, dir string) (string, error) {
 		return "", err
 	}
 	out := filepath.Join(dir, "bin", "bob-server")
-	cmd := exec.CommandContext(ctx, "go", "build", "-tags", "bobtest", "-o", out, "./cmd/bob-server")
+	cmd := exec.CommandContext(ctx, "go", "build", serverenv.BobtestTagsFlag(), "-o", out, "./cmd/bob-server")
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("devstack: build bob-server: %w\n%s: %w", err, b, serverenv.ErrHarness)

@@ -193,20 +193,16 @@ func (r *runner) indexStage(ctx context.Context, st *store.Store, f fetch.Fetche
 	if err != nil {
 		return nil, nil, err
 	}
-	var needs []nixidx.Need
-	for _, n := range g.Nodes {
-		if n.Nix == nil {
-			continue
-		}
-		needs = append(needs, nixidx.Need{Attr: n.Nix.Attr, Label: n.Label,
-			DefinedAt:   diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line},
-			AllowUnfree: n.Nix.Allow.Unfree, AllowInsecure: n.Nix.Allow.Insecure})
+	ix := &indexes{st: st, src: src, rev: lf.Nixpkgs.Rev, host: idx}
+	entries, err := ix.check(ctx, g)
+	if err != nil {
+		return idx, entries, err
 	}
-	if len(needs) == 0 {
-		return idx, map[string]nixidx.Entry{}, nil
+	if err := ix.precheck(ctx, g); err != nil {
+		return idx, entries, err
 	}
-	entries, err := idx.Check(ctx, needs)
-	return idx, entries, err
+	r.noteUncached(ctx, ix, g, entries)
+	return idx, entries, nil
 }
 
 // ensureAll makes every fetched input valid, at most 8 downloads at a time (R-FW-049).

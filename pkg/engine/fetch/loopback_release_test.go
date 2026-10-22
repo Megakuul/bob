@@ -10,6 +10,7 @@ import (
 
 // Release builds refuse unpinned plain http, loopback included (BOB-E-3002, A108).
 func TestLoopbackHTTPRefusedInRelease(t *testing.T) {
+	t.Setenv("BOB_TEST_HTTP_LOOPBACK", "1") // ignored outside -tags bobtest
 	e := newEnv(t)
 	u := e.serve("/f", 200, []byte("payload\n"))
 	for _, url := range []string{u, strings.Replace(u, "127.0.0.1", "localhost", 1)} {

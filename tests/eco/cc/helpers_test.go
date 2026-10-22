@@ -35,6 +35,8 @@ func bobIn(t *testing.T, dir, home string, args ...string) harness.Result {
 
 func bobEnv(t *testing.T, dir string, env []string, args ...string) harness.Result {
 	t.Helper()
+	// The archive server of this package is plain http on loopback (A109).
+	env = append([]string{"BOB_TEST_HTTP_LOOPBACK=1"}, env...)
 	r := harness.Run(t, "bob", harness.Spec{Dir: dir, Env: env, Timeout: 5 * time.Minute}, args...)
 	noLeak(t, r, args)
 	return r
@@ -348,7 +350,7 @@ func runAs(t *testing.T, uid, gid uint32, home, dir string, env []string, path s
 	t.Helper()
 	cmd := exec.Command(path, args...)
 	cmd.Dir = dir
-	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + home, "TZ=UTC", "LC_ALL=C"}, env...)
+	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + home, "TZ=UTC", "LC_ALL=C", "BOB_TEST_HTTP_LOOPBACK=1"}, env...)
 	if os.Geteuid() == 0 {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid}}
 		if info, err := os.Stat(filepath.Dir(path)); err == nil && info.Mode().Perm()&0o055 != 0o055 {

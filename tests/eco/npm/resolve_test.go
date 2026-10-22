@@ -325,7 +325,7 @@ func TestRNPM001aHostileRegistryDocuments(t *testing.T) {
 			g := graph{name: "hostile", importers: []importer{{dir: "app", kind: "app", deps: []dep{d("evil", "^1")}}}}
 			dir := writeGraph(t, g)
 			home := t.TempDir()
-			env := []string{"BOB_HOME=" + home, "BOB_NPM_REGISTRY=" + faultRegistry(t, mode)}
+			env := []string{"BOB_HOME=" + home, "BOB_TEST_HTTP_LOOPBACK=1", "BOB_NPM_REGISTRY=" + faultRegistry(t, mode)}
 			r := ecotest.BobEnv(t, dir, env, "lock", "--json")
 			if harness.Red(t, r) || !ecotest.ExitIs(t, r, 3) {
 				return

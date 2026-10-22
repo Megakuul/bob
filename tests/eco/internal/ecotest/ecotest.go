@@ -175,6 +175,7 @@ func Registry(t *testing.T, home string) []string {
 	}
 	env := []string{
 		"BOB_HOME=" + home,
+		"BOB_TEST_HTTP_LOOPBACK=1", // the mirror is plain http on loopback (A109)
 		"BOB_NPM_REGISTRY=" + url + "/npm/",
 		"BOB_OPAM_CACHE_URL=" + url + "/opam/cache",
 	}

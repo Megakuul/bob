@@ -94,7 +94,7 @@ func plainHTTPAllowed(host string, pinned bool) bool {
 	if pinned {
 		return true
 	}
-	if !testLoopbackHTTP {
+	if !testLoopbackHTTP() {
 		return false
 	}
 	if host == "localhost" {

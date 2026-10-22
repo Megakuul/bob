@@ -202,7 +202,7 @@ import (
 )
 
 var App = bob.Define(func(p *bob.P) *cc.Binary {
-	return cc.Binary(p, "app", cc.BinaryOpts{Srcs: bob.Files("main.c"), Deps: []cc.Linkable{restricted.Foo(p)}})
+	return cc.NewBinary(p, "app", cc.BinaryOpts{Srcs: bob.Files("main.c"), Deps: []cc.Linkable{restricted.Foo(p)}})
 })
 `
 

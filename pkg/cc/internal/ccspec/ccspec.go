@@ -24,6 +24,9 @@ type Tools struct {
 	CC       int `json:"cc"`       // nixpkgs gcc (cc-wrapper: gcc, g++)
 	Binutils int `json:"binutils"` // nixpkgs binutils (ar, strip, objcopy)
 	Patchelf int `json:"patchelf"` // nixpkgs patchelf (fixup)
+	// CCLib is the cross compiler's "lib" output (sanitised cross builds, R-FW-037); 0 = none
+	// (index 0 is always CC).
+	CCLib int `json:"ccLib,omitempty"`
 }
 
 // Target is the spec of cc.library, cc.binary and cc.test nodes. The node's sources are its

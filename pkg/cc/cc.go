@@ -54,7 +54,24 @@ type LibraryOpts struct {
 	Deps      []Linkable        // public deps: their headers propagate to consumers
 	PrivDeps  []Linkable        // private deps: linked, headers not propagated
 	Platforms []bob.Platform    // restrict; default all
+	// Libs selects where nixpkgs libraries in Deps and PrivDeps come from for a cross target
+	// (R-FW-036): NativeLibs (default, the target system's own cached set) or CrossLibs.
+	Libs LibSource
 }
+
+// LibSource is where the nixpkgs libraries (nixpkgs.Lib) of a cross-compiled package come
+// from (SPEC R-FW-036). On the host's own platform both are the same package.
+type LibSource int
+
+const (
+	// NativeLibs takes nixpkgs.Lib packages from the target system's own package set
+	// (legacyPackages.<target-system>): usually in the binary cache, but the closure then holds
+	// the target's glibc next to the cross toolchain's.
+	NativeLibs LibSource = iota
+	// CrossLibs takes them from the cross package set (pkgsCross.<x>): one glibc in the closure,
+	// usually built from source (several minutes per library).
+	CrossLibs
+)
 
 // BinaryOpts configures NewBinary and NewTest.
 type BinaryOpts struct {
@@ -65,6 +82,7 @@ type BinaryOpts struct {
 	LinkOpts  []string
 	Deps      []Linkable
 	Platforms []bob.Platform
+	Libs      LibSource // see LibraryOpts.Libs
 }
 
 // Library is a C/C++ library built by bob; it implements Linkable. A shared library's output
@@ -125,8 +143,8 @@ func library(p *bob.P, name string, o LibraryOpts, typ string) *Library {
 	t := ccspec.Target{Name: name, Type: typ, Std: string(o.Std), Defines: defines(o.Defines),
 		Flags: list(o.Flags), LinkOpts: list(o.LinkOpts), Hdrs: hdrs, Private: !isEmpty(o.Private)}
 	deps := tools(p, &t.Tools)
-	t.Deps, deps = linkables(o.Deps, deps)
-	t.PrivDeps, deps = linkables(o.PrivDeps, deps)
+	t.Deps, deps = linkables(libsFrom(p, o.Libs, o.Deps), deps)
+	t.PrivDeps, deps = linkables(libsFrom(p, o.Libs, o.PrivDeps), deps)
 	if typ == ccspec.TypeStatic && len(o.LinkOpts) > 0 {
 		problems = append(problems, "LinkOpts is set, but a static library is not linked; set it on the shared library or binary that links this one")
 	}
@@ -166,16 +184,40 @@ func program(p *bob.P, name string, o BinaryOpts, kind, typ string) (bob.Node, [
 	t := ccspec.Target{Name: name, Type: typ, Std: string(o.Std), Defines: defines(o.Defines),
 		Flags: list(o.Flags), LinkOpts: list(o.LinkOpts), PrivDeps: []int{}}
 	deps := tools(p, &t.Tools)
-	t.Deps, deps = linkables(o.Deps, deps)
+	t.Deps, deps = linkables(libsFrom(p, o.Libs, o.Deps), deps)
 	problems := check(o.Srcs, o.Std, o.Flags, o.LinkOpts, o.Defines)
 	return ext.Restrict(ext.New(p, kind, name, deps, []bob.Sources{o.Srcs}, t), o.Platforms), problems
 }
 
-// tools adds the host tools of every C/C++ derivation and records their dep indices.
+// tools adds the host tools of every C/C++ derivation and records their dep indices: the
+// compiler and binutils of the package's toolchain (cross ones for another platform, R-FW-033)
+// and patchelf. A sanitised cross build also gets the cross compiler's lib output, whose
+// directory goes into the RUNPATH (R-FW-037).
 func tools(p *bob.P, t *ccspec.Tools) []bob.Package {
-	deps := []bob.Package{nixpkgs.Tool(p, "gcc"), nixpkgs.Tool(p, "binutils"), nixpkgs.Tool(p, "patchelf")}
+	tc := p.Toolchain()
+	deps := []bob.Package{nixpkgs.Tool(p, tc.CC), nixpkgs.Tool(p, tc.Bintools), nixpkgs.Tool(p, "patchelf")}
 	*t = ccspec.Tools{CC: 0, Binutils: 1, Patchelf: 2}
+	if tc.CCLib != "" && len(p.Variant().Sanitize) > 0 {
+		t.CCLib = len(deps)
+		deps = append(deps, nixpkgs.Tool(p, tc.CCLib, nixpkgs.Outputs("lib")))
+	}
 	return deps
+}
+
+// libsFrom returns ls with every nixpkgs library taken from the cross package set when src is
+// CrossLibs and p is a cross configuration (R-FW-036); other Linkables are kept.
+func libsFrom(p *bob.P, src LibSource, ls []Linkable) []Linkable {
+	if src != CrossLibs || !p.Toolchain().Cross() {
+		return ls
+	}
+	out := make([]Linkable, len(ls))
+	for i, l := range ls {
+		out[i] = l
+		if nl, ok := l.(*nixpkgs.Package); ok && nl != nil {
+			out[i] = nl.CrossSet(p)
+		}
+	}
+	return out
 }
 
 // linkables appends ls to deps and returns their indices.

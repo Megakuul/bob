@@ -140,7 +140,8 @@ func scriptNotes(ims []*importer, sec *lock.NpmSection) []string {
 		for _, key := range closure(sec, sec.Importers[im.dir].Deps) {
 			p := sec.Packages[key]
 			id := p.Name + "@" + p.Version
-			if !p.HasInstallScript || allowed[p.Name] || seen[id] || quirkSkips(p.Name, p.Version) {
+			// Packages that never install on Linux (fsevents) need no note: bob builds for Linux.
+			if !p.HasInstallScript || allowed[p.Name] || seen[id] || quirkSkips(p.Name, p.Version) || !matches(p.OS, "linux") {
 				continue
 			}
 			seen[id] = true

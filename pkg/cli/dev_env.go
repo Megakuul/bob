@@ -171,9 +171,13 @@ func runEnv(e *env) int {
 	if err != nil {
 		return e.out.fail(err)
 	}
-	if format == "json" || e.out.json {
+	if e.out.json {
 		e.out.result(f)
 		return e.out.finish(0, translate.Counts{}, nil)
+	}
+	if format == "json" { // the result data as it is: env.json
+		e.out.printf("%s", b)
+		return 0
 	}
 	shell := "sh"
 	if format == "fish" {

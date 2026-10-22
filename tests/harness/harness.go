@@ -51,8 +51,10 @@ func Bin(t testing.TB, name string) string {
 		bins = map[string]string{}
 		for _, n := range []string{"bob", "bob-server", "bob-builder"} {
 			out := filepath.Join(dir, n)
-			cmd := exec.Command("go", "build", "-o", out, "./cmd/"+n)
+			cmd := exec.Command("go", "build", serverenv.BobtestTagsFlag(), "-o", out, "./cmd/"+n)
 			cmd.Dir = root
+			// -tags bobtest (replay, loopback, clock, admin token are gated by tag plus an
+			// explicit env, A109); GOFLAGS of the caller stay in effect (tags merged).
 			cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 			if b, err := cmd.CombinedOutput(); err != nil {
 				binsErr = fmt.Errorf("go build ./cmd/%s: %w: %s: %w", n, err, b, serverenv.ErrHarness)

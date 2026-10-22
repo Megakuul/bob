@@ -51,12 +51,46 @@
   token belongs to its account and stays valid.
 - D-IC1-11 GetLog/CancelBuild/CreateBuild are POST; only WhoAmI uses Connect GET (R-NIX-029 text).
 
+## Verified against the real server (devstack, 18:58)
+- `bob login --token-stdin <api_url>` with the admin token, `bob whoami --json`, credentials 0600, config
+  defaultServer + registry default. `bob build --remote --json //...` → BOB-E-4012 "not implemented:
+  /upload/" (NEEDS 1). Through a local proxy that stored the upload in bob-artifacts/src/<p>/<sha>.tar.zst
+  (and a project created with CreateProject): CreateBuild accepted the snapshot, remote.submitted,
+  WatchBuild stream → remote.state pending → queued → running; SIGTERM/Ctrl-C detached with
+  `bob cancel <id>`; `bob cancel` → cancelled; second cancel → "already finished"; `bob log --build`.
+- Fake WhoAmI server: 401 → BOB-E-4008 (exit 4, one WhoAmI hit, no Nix), 403 → 4010, unreachable →
+  warning[BOB-E-4009] and the build continues.
+
+## Tests
+- Green: tests/cli TestRCLI003DeviceFlow, TestRCLI003PKCE, TestRCLI003TokenStdin, TestRCLI001*;
+  tests/cli TestRCLI003Refresh/refresh-401; tests/devenv TestRDEV004CacheSetupAfterLogin; pkg/cli,
+  pkg/cli/remote, pkg TestLayering. The `--remote` half of TestRCLI005NoServer passes.
+- Still red, not this unit: TestRCLI003Refresh/refresh-ok and TestRCLI005NoServer (the acme fixture's
+  local build/check/graph fail or time out: unregistered oci/appimage/release kinds), tests/nix
+  TestRNIX029 (cpp-lib does not evaluate: cc API), server e2e (NEEDS below, TEST PROBLEM).
+- pkg/engine/srcs TestImportManyTiming failed on budget (1m54 vs 5 s) under host load; snapshot.go does
+  not touch Import.
+
 ## NEEDS
-- Server (internal/http owner): `PUT /upload/source/sha256/<hex>` (SPEC §6.9.7) is not implemented
-  (the /upload/ prefix answers 501). Every `bob build --remote` against the real server stops there
-  (BOB-E-4012 "not implemented: /upload/"), so tests/server, tests/chaos, R-DEV-005 and R-CLI-008 remain
-  red until it exists (I-B11's builds.checkUpload expects `src/<project>/<sha>.tar.zst`).
-- SPEC: where the project id of `--remote` comes from (D-IC1-5); §6.6.5 netrc token kind (D-IC1-2).
+1. internal/http (server): `PUT /upload/source/sha256/<hex>` (SPEC §6.9.7) is not implemented (the
+   /upload/ prefix answers 501). Every real `bob build --remote` stops there, so tests/server,
+   tests/chaos, R-DEV-005, R-CLI-008 stay red until it exists (buildctl.checkUpload expects
+   `src/<project>/<sha>.tar.zst`; the CLI sends Bearer, Bob-Project, application/zstd,
+   Expect: 100-continue, exact Content-Length).
+2. internal/auth: WhoAmI.nix (substituter + public_keys) is empty on the real server (I-B9 NEEDS to
+   I-B4 still open): without it bob writes no substituter and `--remote` cannot download its outputs.
+3. Server: CreateBuild answers NotFound "project not found" unless the project exists, but tests/server
+   (srvtest), tests/chaos and tests/cli R-CLI-008 submit right after `bob login` without creating a
+   project (see TEST PROBLEM 2).
+4. Server: build ids are lower-case ULIDs ("01m5jfnx6ww3f50h3pv28fj5g3"); SPEC §02.6 shows `b-01JB7Q8V3K`
+   and tests/devenv R-DEV-005 waits for `b-[0-9A-Z]{10,}` in bob's output.
+5. SPEC: where the project id of `--remote` comes from (D-IC1-5); §6.6.5 netrc token kind (D-IC1-2).
 
 ## TEST PROBLEM
-- (none)
+1. tests/devenv/login_test.go `rpc()` posts to `<api>/<method>` without the `/api/` prefix (same bug as
+   test-corrections item 12(b)/(e)): TestRDEV005 fails at its harness step
+   "RoleService/CreateRole: 501 not implemented: /" before bob runs; `buildState` has the same bug.
+2. tests/server/srvtest, tests/chaos and tests/cli logs_test submit `bob build --remote` in a fresh
+   repository with no project on the server; with the ProjectService in place CreateBuild answers
+   "project not found". Either the tests create the project (named after the repo directory, D-IC1-5,
+   or via BOB_SERVER_PROJECT) or the SPEC defines an implicit project for REMOTE builds (owner).
