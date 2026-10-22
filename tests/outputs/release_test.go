@@ -66,15 +66,6 @@ func (w *world) release(version string) (manifest, string, bool) {
 	return readManifest(w.t, out), out, true
 }
 
-func (m manifest) find(kind, platform string) *artifact {
-	for i := range m.Artifacts {
-		if m.Artifacts[i].Kind == kind && (platform == "" || m.Artifacts[i].Platform == platform) {
-			return &m.Artifacts[i]
-		}
-	}
-	return nil
-}
-
 // R-OUT-022: the version enters only the manifest, OCI tags, the image label and file names.
 // Releases 1.0.0 and 1.0.1 of unchanged sources share closure store paths, AppImage bytes and OCI
 // layer blobs; without a version bob says so and uses 0.0.0-dev.

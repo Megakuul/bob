@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,21 +41,6 @@ func hostPlatform(t testing.TB) bob.Platform {
 	}
 	t.Fatalf("harness: unsupported host architecture %s", runtime.GOARCH)
 	return ""
-}
-
-func otherPlatform(t testing.TB) bob.Platform {
-	if hostPlatform(t) == bob.LinuxARM64 {
-		return bob.LinuxAMD64
-	}
-	return bob.LinuxARM64
-}
-
-// archName is the AppImage architecture name of a platform (R-OUT-003).
-func archName(p bob.Platform) string {
-	if p == bob.LinuxAMD64 {
-		return "x86_64"
-	}
-	return "aarch64"
 }
 
 // ociArch is the OCI architecture name of a platform.
@@ -377,7 +361,7 @@ func checkTarRules(t testing.TB, what string, es []tarEntry) {
 		if h.Uid != 0 || h.Gid != 0 || h.Uname != "" || h.Gname != "" {
 			t.Errorf("%s: %s has owner %d/%d %q/%q, want 0/0 and no names", what, h.Name, h.Uid, h.Gid, h.Uname, h.Gname)
 		}
-		if len(h.PAXRecords) != 0 || len(h.Xattrs) != 0 { //nolint:staticcheck // checking that none are set
+		if len(h.PAXRecords) != 0 {
 			t.Errorf("%s: %s has xattrs or PAX records %v", what, h.Name, h.PAXRecords)
 		}
 		if h.Typeflag == tar.TypeLink {
@@ -412,27 +396,6 @@ func elfMachine(t testing.TB, p string) elf.Machine {
 	}
 	defer f.Close()
 	return f.Machine
-}
-
-// walkFiles lists regular files and symlinks below dir (relative paths, sorted).
-func walkFiles(t testing.TB, dir string) []string {
-	t.Helper()
-	var out []string
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			rel, _ := filepath.Rel(dir, p)
-			out = append(out, rel)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk %s: %v", dir, err)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func fmtSet(s []string) string { return fmt.Sprintf("%q", s) }

@@ -60,6 +60,7 @@ var Tools = bob.Define(func(p *bob.P) *appimage.Bundle {
 		Program: polyglot.API(p),
 		Entries: map[string]bob.Executable{
 			"curl":  nixpkgs.Exe(p, "curl", "bin/curl"),
+			"sleep": nixpkgs.Exe(p, "coreutils", "bin/sleep"),
 			"date":  nixpkgs.Exe(p, "coreutils", "bin/date"),
 			"iconv": nixpkgs.Exe(p, "glibc", "bin/iconv"),
 		},
@@ -90,14 +91,14 @@ var script = bob.Define(func(p *bob.P) bob.Executable {
 
 // Script has a shell-script entry in AutoMode (R-OUT-019 warns); ScriptUserns says so explicitly.
 var Script = bob.Define(func(p *bob.P) *appimage.Bundle {
-	return appimage.NewBundle(p, "tools", appimage.BundleOpts{
+	return appimage.NewBundle(p, "script", appimage.BundleOpts{
 		Program: polyglot.API(p),
 		Entries: map[string]bob.Executable{"deploy": script(p)},
 	})
 })
 
 var ScriptUserns = bob.Define(func(p *bob.P) *appimage.Bundle {
-	return appimage.NewBundle(p, "tools-userns", appimage.BundleOpts{
+	return appimage.NewBundle(p, "script-userns", appimage.BundleOpts{
 		Program: polyglot.API(p),
 		Entries: map[string]bob.Executable{"deploy": script(p)},
 		Mode:    appimage.UsernsOnly,
@@ -146,5 +147,6 @@ var Static = bob.Define(func(p *bob.P) *tarball.Tarball {
 })
 `
 
-// modeOf renders the overlay map for a world.
 func ociOverlay() map[string]string { return map[string]string{"ocitest/bob.go": ocitestGo} }
+
+func appOverlay() map[string]string { return map[string]string{"apptest/bob.go": apptestGo} }
