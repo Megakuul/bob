@@ -44,7 +44,7 @@ type Options struct {
 	// outside the repository are refused and the evaluator sandbox refuses weaker isolation.
 	Untrusted, Strict bool
 
-	Lock      bool  // --lock: re-resolve stale lock entries instead of failing with BOB-E-1012
+	Lock       bool  // --lock: re-resolve stale lock entries instead of failing with BOB-E-1012
 	Offline    bool  // --offline: no substituters, no downloads
 	KeepGoing  *bool // nil = true
 	MaxJobs    int   // -j (0 = Nix's default: the number of CPUs)

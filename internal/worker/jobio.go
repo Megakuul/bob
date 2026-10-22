@@ -27,6 +27,7 @@ import (
 	workerv1 "github.com/megakuul/bob/internal/gen/bob/worker/v1"
 	"github.com/megakuul/bob/internal/gen/bob/worker/v1/workerv1connect"
 	"github.com/megakuul/bob/internal/promote"
+	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/pkg/engine/nar"
 )
@@ -331,9 +332,7 @@ func (p *Process) stagePaths(ctx context.Context, staging, work string, paths []
 	}
 	upstream := p.upstream(ctx, paths)
 	sem := make(chan struct{}, 4)
-	var mu sync.Mutex
-	var errs []error
-	var wg sync.WaitGroup
+	var runs []<-chan error
 	for _, pi := range paths {
 		if !cache.ValidStorePath(pi.Path) {
 			return fmt.Errorf("closure path %q", pi.Path)
@@ -343,26 +342,18 @@ func (p *Process) stagePaths(ctx context.Context, staging, work string, paths []
 			continue
 		}
 		done.Paths = append(done.Paths, pi.Path)
-		wg.Add(1)
 		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
+		runs = append(runs, safe.Go(func() error {
 			defer func() { <-sem }()
-			defer func() {
-				if r := recover(); r != nil {
-					mu.Lock()
-					errs = append(errs, fmt.Errorf("staging %s: panic: %v", pi.Path, r))
-					mu.Unlock()
-				}
-			}()
-			if err := p.stagePath(ctx, staging, work, pi); err != nil {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-			}
-		}()
+			return p.stagePath(ctx, staging, work, pi)
+		}))
 	}
-	wg.Wait()
+	var errs []error
+	for _, r := range runs {
+		if err := <-r; err != nil {
+			errs = append(errs, err)
+		}
+	}
 	return errors.Join(errs...)
 }
 
@@ -414,22 +405,19 @@ func (p *Process) upstream(ctx context.Context, paths []PathInfo) map[string]boo
 	}
 	hc := &http.Client{Timeout: 5 * time.Second}
 	var mu sync.Mutex
-	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
+	var runs []<-chan error
 	for _, pi := range paths {
-		wg.Add(1)
 		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
+		runs = append(runs, safe.Go(func() error {
 			defer func() { <-sem }()
-			defer func() { _ = recover() }()
 			req, err := http.NewRequestWithContext(ctx, http.MethodHead, p.cfg.Upstream+"/"+cache.HashOf(pi.Path)+".narinfo", nil)
 			if err != nil {
-				return
+				return nil
 			}
 			res, err := hc.Do(req)
 			if err != nil {
-				return
+				return nil
 			}
 			res.Body.Close()
 			if res.StatusCode == http.StatusOK {
@@ -437,8 +425,11 @@ func (p *Process) upstream(ctx context.Context, paths []PathInfo) map[string]boo
 				out[pi.Path] = true
 				mu.Unlock()
 			}
-		}()
+			return nil
+		}))
 	}
-	wg.Wait()
+	for _, r := range runs {
+		<-r
+	}
 	return out
 }

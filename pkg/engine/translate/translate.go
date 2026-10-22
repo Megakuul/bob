@@ -1097,7 +1097,7 @@ func (t *Translator) packageResults(r *Report, valid map[string]bool, anyValid b
 		r.Packages = append(r.Packages, st)
 		switch st.Status {
 		case StBuilt:
-			r.Counts.Built++
+			r.BuiltPackages++
 		case StCached:
 			r.Counts.Cached++
 		case StFailed:
@@ -1106,6 +1106,13 @@ func (t *Translator) packageResults(r *Report, valid map[string]bool, anyValid b
 			r.Counts.Skipped++
 		case StCancelled:
 			r.Counts.Cancelled++
+		}
+	}
+	// counts.built is the number of bob derivations Nix built (a package's helper steps
+	// included, R-GO-002a "exactly 2 Go derivations rebuild"), not of packages.
+	for d := range t.builds {
+		if _, bob := t.ctx.Packages[d]; bob && valid[d] && !t.failed[d] {
+			r.Counts.Built++
 		}
 	}
 	rank := map[Status]int{StFailed: 0, StCancelled: 1, StSkipped: 2, StBuilt: 3, StCached: 4}

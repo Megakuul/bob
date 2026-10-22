@@ -185,7 +185,7 @@ func DirLicences(dir string) ([]string, error) {
 	for _, e := range ents {
 		// LICENSE.docs (e.g. CC-BY-SA for the documentation of
 		// opencontainers/go-digest) covers prose, not the code bob links.
-		if e.IsDir() || !licenceFile.MatchString(e.Name()) || strings.HasSuffix(strings.ToLower(e.Name()), ".docs") {
+		if e.IsDir() || !licenceFile.MatchString(e.Name()) || strings.HasSuffix(strings.ToLower(e.Name()), ".docs") || strings.HasSuffix(strings.ToLower(e.Name()), ".go") {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(dir, e.Name()))

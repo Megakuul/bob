@@ -128,6 +128,7 @@ type job struct {
 	viaPoll bool
 	seq     uint64 // the slot the job was claimed through
 	cancel  context.CancelFunc
+	check   chan struct{} // CheckJob: read job/<id> now instead of at the next watch tick
 }
 
 // New validates cfg. It performs no I/O.
@@ -220,6 +221,21 @@ func (w *Worker) Resume() {
 	if w.paused {
 		w.paused = false
 		close(w.resumed)
+	}
+}
+
+// CheckJob makes the job watch of a held job read its record now (CancelJob over Attach is a
+// hint; the cancel flag on job/<id> stays the truth).
+func (w *Worker) CheckJob(jobID string) {
+	w.mu.Lock()
+	j := w.running[jobID]
+	w.mu.Unlock()
+	if j == nil || j.check == nil {
+		return
+	}
+	select {
+	case j.check <- struct{}{}:
+	default:
 	}
 }
 
@@ -485,7 +501,8 @@ func (w *Worker) claim(ctx context.Context, class string, seq uint64, jobID stri
 	}
 	switch verdict {
 	case "claimed":
-		j := &job{claim: Claim{JobID: jobID, Epoch: rec.Epoch, Attempt: rec.Attempt, Spec: rec.Spec}, class: class, viaPoll: viaPoll}
+		j := &job{claim: Claim{JobID: jobID, Epoch: rec.Epoch, Attempt: rec.Attempt, Spec: rec.Spec}, class: class, viaPoll: viaPoll,
+			check: make(chan struct{}, 1)}
 		w.mu.Lock()
 		w.claiming--
 		w.running[jobID] = j
@@ -610,24 +627,25 @@ watch:
 			}
 			break watch
 		case <-tick.C:
-			if leaseLost || cancelled || !w.active() {
-				continue
-			}
-			rec, err := store.Get(ctx, w.cfg.Fleet, &store.JobRecord{ID: id})
-			switch {
-			case errors.Is(err, store.ErrNotFound):
-				leaseLost = true
-			case err != nil:
-				continue
-			case rec.Owner != w.cfg.ID || rec.Epoch != ep:
-				leaseLost = true
-			case rec.Cancel || rec.State == "cancelled":
-				cancelled = true
-			default:
-				continue
-			}
-			j.cancel()
+		case <-j.check:
 		}
+		if leaseLost || cancelled || !w.active() {
+			continue
+		}
+		rec, err := store.Get(ctx, w.cfg.Fleet, &store.JobRecord{ID: id})
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			leaseLost = true
+		case err != nil:
+			continue
+		case rec.Owner != w.cfg.ID || rec.Epoch != ep:
+			leaseLost = true
+		case rec.Cancel || rec.State == "cancelled":
+			cancelled = true
+		default:
+			continue
+		}
+		j.cancel()
 	}
 	if !w.waitResumed(ctx) {
 		return // killed or shut down: no cleanup (the lease expires)

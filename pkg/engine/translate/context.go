@@ -25,7 +25,7 @@ type Pkg struct {
 	Label     string `json:"label"`
 	DefinedAt string `json:"definedAt"` // "dir/bob.go:line:col"
 	Kind      string `json:"kind"`
-	Role      string `json:"role,omitempty"`   // "" = the package itself, "unpack" = a helper drv
+	Role      string `json:"role,omitempty"`   // "" = the package itself; helper drvs: "unpack" (a download's unpack job), "helper" (any other step)
 	SrcDir    string `json:"srcDir,omitempty"` // repo-relative source dir (maps relative compiler paths)
 	URL       string `json:"url,omitempty"`    // fetch packages
 	LockHash  string `json:"lockHash,omitempty"`

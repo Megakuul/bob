@@ -38,6 +38,9 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 	out := filepath.Join(root, genDir)
 	g := &generated{renames: map[string]string{}, files: map[string][]byte{}}
 	replace := map[string]string{sandboxPath(mainDir, "main.go"): sandboxPath(genDir, "main.go")}
+	for _, m := range s.bobMods {
+		replace[sandboxPath(path.Dir(m), path.Base(m))] = "" // bob's module of the Go code: not another module here
+	}
 	var imports []string
 	n := 0
 	for _, d := range s.bobDirs {

@@ -332,12 +332,17 @@ func (t *Translator) builderDiag(drv string, p Pkg, lines []string) *diag.Error 
 	e := t.pkgErr(cBuildFailed, drv, nil)
 	e.Cause = first
 	if rest != "" {
-		e.Excerpt = lastN(strings.Split(strings.TrimRight(rest, "\n"), "\n"), 12)
+		// bob-builder's own detail lines: a failed service's last 20 log lines (R-FW-025)
+		e.Excerpt = lastN(strings.Split(strings.TrimRight(rest, "\n"), "\n"), maxServiceTail)
 	} else {
 		e.Excerpt = lastN(plainLog(lines[:at]), 10)
 	}
 	return e
 }
+
+// maxServiceTail bounds the excerpt of a bob-builder diagnostic: R-FW-025 shows the last 20
+// log lines of a service that failed, the one exception to the 12-line excerpt of §02.3.
+const maxServiceTail = 20
 
 // plainLog drops bob-builder's own lines (diagnostics, the failure line) from a log.
 func plainLog(lines []string) []string {

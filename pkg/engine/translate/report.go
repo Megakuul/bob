@@ -48,7 +48,9 @@ type Report struct {
 	Packages []*PkgState   // in output order (failed, stopped, skipped, built, cached; by label)
 	Drift    []string      // log-format surprises (unknown types or keys, unparsable lines)
 	ExitCode int
-	Counts   Counts
+	Counts   Counts // Built counts derivations (--json run.finish)
+	// BuiltPackages is the number of packages with status built (the human summary line).
+	BuiltPackages int `json:"-"`
 
 	// hints holds hint texts that differ from the code's default hint (the error table hint
 	// extended with what bob knows in this run, e.g. "bob built locally instead").

@@ -56,12 +56,14 @@ func (s Style) pick(glyph, word, color string) string {
 	return s.c(color, word)
 }
 
-// maxExcerpt is the excerpt bound of SPEC §02.3 (diag.Error.Excerpt).
-const maxExcerpt = 12
-
 // Human writes the final part of a build's human output: package lines, warning and error
 // blocks, the summary (SPEC §02.5 rules 1–5). The live status line is not part of it.
-func Human(w io.Writer, r *Report, s Style) {
+func Human(w io.Writer, r *Report, s Style) { HumanTo(w, w, r, s) }
+
+// HumanTo is Human with the package lines on out and, when the run has warning or error
+// blocks, the blocks and the summary on errw (stdout followed by stderr reads as Human).
+func HumanTo(out, errw io.Writer, r *Report, s Style) {
+	w := out
 	for _, p := range r.Packages {
 		var mark string
 		switch p.Status {
@@ -85,7 +87,11 @@ func Human(w io.Writer, r *Report, s Style) {
 		fmt.Fprintln(w, line)
 	}
 	first := len(r.Packages) == 0
-	for _, e := range append(append([]*diag.Error{}, r.Warnings...), r.Errors...) {
+	blocks := append(append([]*diag.Error{}, r.Warnings...), r.Errors...)
+	if len(blocks) > 0 {
+		w = errw
+	}
+	for _, e := range blocks {
 		if !first {
 			fmt.Fprintln(w)
 		}
@@ -124,7 +130,7 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 		bar = "│"
 	}
 	for i, l := range e.Excerpt {
-		if i == maxExcerpt {
+		if i == maxServiceTail {
 			break
 		}
 		fmt.Fprintf(w, "   %s %s\n", s.c(cDim, bar), strings.TrimRight(l, " "))
@@ -156,7 +162,7 @@ func summary(r *Report, s Style) string {
 	add(r.Counts.Failed, "failed")
 	add(r.Counts.Skipped, "skipped")
 	add(r.Counts.Cancelled, "stopped")
-	add(r.Counts.Built, "built")
+	add(r.BuiltPackages, "built") // packages; counts.built (--json) counts derivations
 	add(r.Counts.Cached, "cached")
 	if len(parts) == 0 {
 		parts = []string{"nothing to do"}

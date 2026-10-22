@@ -104,12 +104,13 @@ func reportFindings(e *env, findings []*diag.Error) int {
 	exit := diag.ExitCode(findings)
 	if len(findings) == 0 {
 		e.out.printf("bob: no problems\n")
-	} else {
+	} else if !e.out.json {
 		word := "problems"
 		if len(findings) == 1 {
 			word = "problem"
 		}
-		e.out.printf("\nbob: %d %s (exit %d)\n", len(findings), word, exit)
+		// after the blocks, on stderr
+		fmt.Fprintf(e.out.errw, "\nbob: %d %s (exit %d)\n", len(findings), word, exit)
 	}
 	return e.out.finish(exit, translate.Counts{}, nil)
 }

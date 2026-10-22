@@ -264,9 +264,9 @@ func (d drifted) finding() *diag.Error {
 }
 
 // compareNative returns the generated files edited by hand: the working-tree copy differs from
-// what bob would write and from what bob wrote last (prev; with no record, any difference). A
-// missing file is not drift, nor is a copy bob wrote from older declarations (it is rewritten),
-// nor a mode change.
+// what bob would write and from what bob wrote last (prev; with no record: unless adoptable).
+// A missing file is not drift, nor is a copy bob wrote from older declarations (it is
+// rewritten), nor a mode change.
 func compareNative(root string, files []engine.GeneratedFile, prev nativeState) ([]drifted, error) {
 	var out []drifted
 	for _, f := range files {
@@ -295,12 +295,33 @@ func compareNative(root string, files []engine.GeneratedFile, prev nativeState) 
 			continue
 		}
 		sum := sha256.Sum256(b)
-		if e, ok := prev.Files[f.Path]; ok && e.SHA256 == hex.EncodeToString(sum[:]) {
-			continue
+		e, recorded := prev.Files[f.Path]
+		switch {
+		case recorded && e.SHA256 == hex.EncodeToString(sum[:]):
+			continue // bob wrote it from older declarations
+		case !recorded && adoptable(f, b):
+			continue // bob's file without a record (a fresh clone of a committed go.mod)
 		}
 		out = append(out, drifted{f: f, onDisk: b})
 	}
 	return out, nil
+}
+
+// adoptable reports whether b, found where f belongs but not recorded in native.json, is a
+// copy bob wrote (another clone, an older bob): the ecosystem's Explain finds no difference in
+// bob.go terms, or, without Explain, it starts with the same first line (bob's header) as f.
+func adoptable(f engine.GeneratedFile, b []byte) bool {
+	if f.Explain != nil {
+		return len(f.Explain(b)) == 0
+	}
+	first := func(x []byte) []byte {
+		if i := bytes.IndexByte(x, '\n'); i >= 0 {
+			return x[:i]
+		}
+		return x
+	}
+	h := first(f.Content)
+	return len(bytes.TrimSpace(h)) > 0 && bytes.Equal(first(b), h)
 }
 
 // backup moves the drifted files to .bob/gen/backup/<UTC time>/<path> (bob gen --force).

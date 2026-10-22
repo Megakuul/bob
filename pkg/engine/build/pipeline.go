@@ -99,6 +99,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 			return err
 		}
 		p = newPlanner(g, st, builder, srcPaths, entries, lf, idx)
+		p.root, p.fetcher = o.Root, f
 		if o.Command == CmdTest {
 			p.testArgs = o.TestArgs
 		}

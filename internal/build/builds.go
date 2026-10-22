@@ -160,8 +160,6 @@ type Builds struct {
 	pages   map[string]*store.PagedIndex[store.BuildEntry]
 	retry   map[string]statusRetry // status retry backoff per build|context
 	running store.Cache[store.RunningBuilds]
-	failed  store.Cache[store.FailedBuilds]
-	records store.Cache[store.BuildRecord]
 }
 
 // New performs no I/O.

@@ -23,6 +23,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/engine/nixidx"
+	"github.com/megakuul/bob/pkg/engine/srcs"
 	"github.com/megakuul/bob/pkg/engine/store"
 )
 
@@ -38,7 +39,9 @@ type planner struct {
 	lockf    *lock.File
 	idx      *nixidx.Index
 	res      *resolver
-	testArgs []string // bob test -- args, passed to the ecosystems
+	testArgs []string      // bob test -- args, passed to the ecosystems
+	root     string        // repository root (PlanRequest.Root)
+	fetcher  fetch.Fetcher // the run's fetcher (PlanRequest.Store.Ensure)
 
 	nodes   map[string]engine.Resolved // node id → planned outputs
 	drvs    []*drv.Derivation          // every bob derivation, in planning order
@@ -132,7 +135,7 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 	}()
 	res, err := eco.Plan(ctx, engine.PlanRequest{Graph: p.g, Nodes: nodes, Lock: p.lockf.Sections[name],
 		Inputs: p.nodes, Sources: p.srcs, Nixpkgs: p.idx, Builder: p.builder,
-		Resolver: p.res, TestArgs: p.testArgs})
+		Resolver: p.res, TestArgs: p.testArgs, Root: p.root, Store: planStore{st: p.st, f: p.fetcher}})
 	if err != nil {
 		if _, ok := diagErrors(err); ok {
 			return err
@@ -605,4 +608,23 @@ func (r *resolver) remember(p string, h [32]byte, learned bool) {
 	if learned {
 		r.learned[p] = hex.EncodeToString(h[:])
 	}
+}
+
+// planStore is engine.PlanStore over the run's store and fetcher.
+type planStore struct {
+	st *store.Store
+	f  fetch.Fetcher
+}
+
+func (s planStore) HostPath(p string) string { return hostPath(s.st, p) }
+
+func (s planStore) ImportSources(ctx context.Context, trees []srcs.Source) ([]string, error) {
+	return srcs.Import(ctx, s.st, trees)
+}
+
+func (s planStore) Ensure(ctx context.Context, r fetch.Request) (string, error) {
+	if s.f == nil {
+		return "", fmt.Errorf("fetch %s: no fetcher while planning", r.Label)
+	}
+	return s.f.Ensure(ctx, r)
 }

@@ -66,7 +66,7 @@ type Error struct {
 	DefinedAt Pos               // where the package was defined (bob.go position)
 	Location  *Pos              // compiler diagnostic position, when one exists
 	Cause     string            // one line
-	Excerpt   []string          // ≤ 12 lines; store paths already rewritten (§02.5 rule 3)
+	Excerpt   []string          // ≤ 12 lines (a failed service's log tail: 20, R-FW-025); store paths already rewritten (§02.5 rule 3)
 	Args      map[string]string // template arguments
 	Log       string            // "bob log //x:y" command, when a log exists
 	Raw       []string          // raw Nix/tool text; output only with -v

@@ -3,33 +3,18 @@ package resolve
 import (
 	"fmt"
 	"strings"
+
+	"github.com/megakuul/bob/pkg/rust/internal/cfgtab"
 )
 
-// cfgTables are `rustc --print cfg --target <triple>` of the pinned toolchain (rustc 1.95.0),
-// one line per entry; TestRRS002aCfgTablesEqualRustc compares them with the toolchain.
-var cfgTables = map[string][]string{
-	"aarch64-unknown-linux-gnu": {
-		`debug_assertions`, `panic="unwind"`, `target_abi=""`, `target_arch="aarch64"`, `target_endian="little"`,
-		`target_env="gnu"`, `target_family="unix"`, `target_feature="neon"`, `target_has_atomic="128"`,
-		`target_has_atomic="16"`, `target_has_atomic="32"`, `target_has_atomic="64"`, `target_has_atomic="8"`,
-		`target_has_atomic="ptr"`, `target_os="linux"`, `target_pointer_width="64"`, `target_vendor="unknown"`, `unix`,
-	},
-	"x86_64-unknown-linux-gnu": {
-		`debug_assertions`, `panic="unwind"`, `target_abi=""`, `target_arch="x86_64"`, `target_endian="little"`,
-		`target_env="gnu"`, `target_family="unix"`, `target_feature="fxsr"`, `target_feature="sse"`,
-		`target_feature="sse2"`, `target_has_atomic="16"`, `target_has_atomic="32"`, `target_has_atomic="64"`,
-		`target_has_atomic="8"`, `target_has_atomic="ptr"`, `target_os="linux"`, `target_pointer_width="64"`,
-		`target_vendor="unknown"`, `unix`,
-	},
-}
-
-// CfgTable returns bob's built-in cfg set of a target triple as `rustc --print cfg` lines.
+// CfgTable returns bob's built-in cfg set of a target triple as `rustc --print cfg` lines
+// (rustc 1.95.0, package cfgtab).
 func CfgTable(triple string) ([]string, error) {
-	t, ok := cfgTables[triple]
+	t, ok := cfgtab.Lookup(triple)
 	if !ok {
 		return nil, fmt.Errorf("no cfg table for target %q", triple)
 	}
-	return append([]string(nil), t...), nil
+	return t, nil
 }
 
 // Platform is a target as Cargo sees it when filtering platform-specific dependencies.

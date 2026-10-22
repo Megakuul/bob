@@ -278,7 +278,7 @@ func renderBuild(o *out, res *build.Result) {
 		q.Packages = nil
 		r = &q
 	}
-	translate.Human(o.w, r, o.style)
+	translate.HumanTo(o.w, o.errw, r, o.style)
 	if len(res.Packages) > 0 && hasPaths(res) {
 		for _, p := range res.Packages {
 			for _, hp := range p.HostPaths {
@@ -347,21 +347,27 @@ func renderTests(o *out, res *build.Result) {
 			fmt.Fprintf(o.w, "%s  %s\n", paint(o.style, sgrRedBold, "FAILED"), p.Label)
 		}
 	}
+	// Blocks and the summary after them go to stderr (stdout followed by stderr reads in order).
+	w := o.w
+	blocks := append(append([]*diag.Error{}, r.Warnings...), r.Errors...)
+	if len(blocks) > 0 {
+		w = o.errw
+	}
 	first := len(res.Tests) == 0
-	for _, d := range append(append([]*diag.Error{}, r.Warnings...), r.Errors...) {
+	for _, d := range blocks {
 		if !first {
-			fmt.Fprintln(o.w)
+			fmt.Fprintln(w)
 		}
 		first = false
-		translate.Block(o.w, d, r.Hint(d), o.style)
+		translate.Block(w, d, r.Hint(d), o.style)
 	}
-	fmt.Fprintln(o.w)
+	fmt.Fprintln(w)
 	line := fmt.Sprintf("bob: %d passed, %d failed, %d cached", pass, fail, cached)
 	if res.ExitCode != 0 {
-		fmt.Fprintf(o.w, "%s (exit %d)\n", paint(o.style, sgrRedBold, line), res.ExitCode)
+		fmt.Fprintf(w, "%s (exit %d)\n", paint(o.style, sgrRedBold, line), res.ExitCode)
 		return
 	}
-	fmt.Fprintln(o.w, paint(o.style, sgrGreen, line))
+	fmt.Fprintln(w, paint(o.style, sgrGreen, line))
 }
 
 const sgrGreen = "\x1b[32m"
@@ -374,7 +380,7 @@ func runReplay(e *env, dir string) int {
 		return e.out.fail(err)
 	}
 	if !e.out.json {
-		translate.Human(e.out.w, r, e.out.style)
+		translate.HumanTo(e.out.w, e.out.errw, r, e.out.style)
 		return r.ExitCode
 	}
 	s := newSink(e.out)

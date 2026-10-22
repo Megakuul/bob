@@ -65,6 +65,17 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
+17. A104 forge test defects (evidence plan/progress/I-B10.md, problems 1-6): (1) `adapters_test.go`
+   looks up GitHub fixtures as `"push.branch.json"` but `forgefix.Load` names them without `.json`
+   (every GitHub row and TestFixturesRefused stop there); (2) the "github push" row's fixture has
+   `created: true` but the expected result says false; (3) the Forgejo seed must make bobbot a
+   repository admin (Forgejo lets only admins manage hooks, 403 otherwise; blocks real hooks for the
+   live R-PIPE-003/004/005 tests); (4a) the test's status read-back struct never decodes
+   `target_url`; (4b) cancelled expects "error" but SPEC 6.9.2 says `warning` (SPEC wins);
+   (5) a job token on the other private repository gets 404 on this Forgejo: R-FLEET-006 /
+   G3 must accept a forge-decided denial (403 or 404, never 2xx) since the forge chooses the
+   status; (6) GitLab rejects the test's 34-byte signing key (422): use 32 bytes like the spike and
+   the recorded fixture.
 16. A102 `TestRGO004aToolchainPerModule` (evidence plan/progress/I-M5a.md): `tools/cmd/stamp`
    (Go 1.26) imports packages of `lib` (Go 1.25); Go refuses to compile against an archive built by
    another toolchain (go1.26.9 rejects a go1.25.10 archive), so lib's packages MUST be compiled

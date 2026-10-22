@@ -51,8 +51,8 @@ func asDiag(err error, d **diag.Error) bool {
 
 func TestMainUsage(t *testing.T) {
 	var so, se bytes.Buffer
-	if got := Main([]string{"buil"}, &so, &se); got != 2 || !strings.Contains(so.String(), "error[BOB-E-0001]") || !strings.Contains(so.String(), "did you mean build?") {
-		t.Errorf("exit %d, output %q", got, so.String())
+	if got := Main([]string{"buil"}, &so, &se); got != 2 || !strings.Contains(se.String(), "error[BOB-E-0001]") || !strings.Contains(se.String(), "did you mean build?") {
+		t.Errorf("exit %d, stderr %q", got, se.String())
 	}
 	so.Reset()
 	if got := Main([]string{"frobnicate", "--json"}, &so, &se); got != 2 {
@@ -77,8 +77,8 @@ func TestMainUsage(t *testing.T) {
 func TestOutsideRepository(t *testing.T) {
 	dir := t.TempDir()
 	var so, se bytes.Buffer
-	if got := Main([]string{"-C", dir, "build"}, &so, &se); got != 2 || !strings.Contains(so.String(), "BOB-E-0002") {
-		t.Errorf("exit %d: %s", got, so.String())
+	if got := Main([]string{"-C", dir, "build"}, &so, &se); got != 2 || !strings.Contains(se.String(), "BOB-E-0002") {
+		t.Errorf("exit %d: %s", got, se.String())
 	}
 }
 

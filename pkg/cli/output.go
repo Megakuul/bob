@@ -17,7 +17,7 @@ import (
 // which emits run.finish in --json mode and returns the exit status.
 type out struct {
 	w        io.Writer // stdout
-	errw     io.Writer // stderr: -vv debug lines and the live status line only
+	errw     io.Writer // stderr: error/warning blocks (and the summary after them), -vv debug lines, the live status line
 	json     bool
 	jsonLog  bool
 	quiet    bool
@@ -98,23 +98,23 @@ func (o *out) diagnose(e *diag.Error, hint string) {
 		o.refusal(e)
 		return
 	}
-	translate.Block(o.w, e, hint, o.style)
+	translate.Block(o.errw, e, hint, o.style)
 }
 
 // refusal renders BOB-E-7005 in the layout of SPEC R-NIX-022: the cause on its own line and
 // the fix indented by four spaces under "fix (run once as an administrator):".
 func (o *out) refusal(e *diag.Error) {
-	fmt.Fprintf(o.w, "%s %s\n", paint(o.style, sgrRedBold, "✗"), e.Error())
+	fmt.Fprintf(o.errw, "%s %s\n", paint(o.style, sgrRedBold, "✗"), e.Error())
 	if e.Cause != "" {
-		fmt.Fprintf(o.w, "  cause: %s\n", e.Cause)
+		fmt.Fprintf(o.errw, "  cause: %s\n", e.Cause)
 	}
-	fmt.Fprintln(o.w, "  fix (run once as an administrator):")
+	fmt.Fprintln(o.errw, "  fix (run once as an administrator):")
 	for _, l := range strings.Split(e.Args["fix"], "\n") {
-		fmt.Fprintf(o.w, "    %s\n", l)
+		fmt.Fprintf(o.errw, "    %s\n", l)
 	}
 	if o.style.Verbose {
 		for _, r := range e.Raw {
-			fmt.Fprintf(o.w, "  nix: %s\n", r)
+			fmt.Fprintf(o.errw, "  nix: %s\n", r)
 		}
 	}
 }

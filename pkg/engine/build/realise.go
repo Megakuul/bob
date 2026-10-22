@@ -120,19 +120,32 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 			c.Packages[dp] = pkgOf(byID[id], "")
 		}
 	}
-	// Helper derivations an ecosystem added belong to the package that uses them.
-	for changed := true; changed; {
-		changed = false
-		for dp, d := range p.byPath {
-			pk, ok := c.Packages[dp]
-			if !ok {
-				continue
-			}
-			for _, in := range d.InputDrvs {
-				if _, known := c.Packages[in.Path]; !known && p.byPath[in.Path] != nil {
-					pk.Role = "unpack"
-					c.Packages[in.Path] = pk
-					changed = true
+	// Helper derivations an ecosystem added belong to a package that uses them: first to the
+	// packages this run realises (so a helper's build never touches a package the run leaves
+	// alone, e.g. a test unit in bob build), then to any other; deterministic by drv path.
+	realised := map[string]bool{}
+	for _, l := range requested {
+		realised[l] = true
+	}
+	paths := make([]string, 0, len(p.byPath))
+	for dp := range p.byPath {
+		paths = append(paths, dp)
+	}
+	sort.Strings(paths)
+	for _, pass := range []bool{true, false} {
+		for changed := true; changed; {
+			changed = false
+			for _, dp := range paths {
+				pk, ok := c.Packages[dp]
+				if !ok || pass && !realised[pk.Label] {
+					continue
+				}
+				for _, in := range p.byPath[dp].InputDrvs {
+					if _, known := c.Packages[in.Path]; !known && p.byPath[in.Path] != nil {
+						pk.Role = helperRole(p.byPath[in.Path])
+						c.Packages[in.Path] = pk
+						changed = true
+					}
 				}
 			}
 		}
@@ -177,6 +190,17 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 	return c
 }
 
+// helperRole is the translator role of a helper derivation: "unpack" for bob-builder unpack
+// jobs (a failure is a broken download), "helper" for every other build step of the package.
+func helperRole(d *drv.Derivation) string {
+	if spec, ok := d.Structured["bobSpec"].(map[string]any); ok {
+		if k, _ := spec["kind"].(string); k == "unpack" || strings.HasSuffix(k, "-unpack") {
+			return "unpack"
+		}
+	}
+	return "helper"
+}
+
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
@@ -191,10 +215,12 @@ func contains(list []string, s string) bool {
 func (r *runner) realise(ctx context.Context, st *store.Store, g *ir.Graph, p *planner, srcPaths map[string]string,
 	requested []string, units []testrun.Unit, cached map[string]bool) (*translate.Report, error) {
 	tctx := r.translatorContext(g, p, srcPaths, requested)
-	for _, u := range units { // a --rerun unit is a new drv of the same package
+	for _, u := range units { // a --rerun unit is a new drv of the same package, replacing it
 		if _, ok := tctx.Packages[u.DrvPath]; !ok {
-			if pk, ok := tctx.Packages[testDrvOf(p, u.Label)]; ok {
+			orig := testDrvOf(p, u.Label)
+			if pk, ok := tctx.Packages[orig]; ok {
 				tctx.Packages[u.DrvPath] = pk
+				delete(tctx.Packages, orig)
 			}
 			tctx.Outputs[u.Out] = u.DrvPath
 		}
