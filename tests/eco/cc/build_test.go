@@ -49,18 +49,7 @@ func TestRCC001aBuildTestCrossAndReproducible(t *testing.T) {
 			if r.Exit != 0 || !strings.HasPrefix(r.Stdout, "gcd=12 isqrt=31 ") {
 				t.Errorf("app under env -i exited %d and printed %q; want the gcd=12 isqrt=31 line", r.Exit, r.Stdout+r.Stderr)
 			}
-			if plat == host {
-				tr := bobIn(t, dir, homeA, "test", "//...", "--json")
-				if ok(t, tr) {
-					got := map[string]string{}
-					for _, e := range eventsNamed(events(t, tr), "test.result") {
-						got[e.str("label")] = e.str("status")
-					}
-					if s := got["//libs/mathx:mathx_test"]; s != "pass" && s != "cached" {
-						t.Errorf("//libs/mathx:mathx_test has status %q, want pass", s)
-					}
-				}
-			}
+			assertTests(t, dir, homeA, plat, host, []string{"//libs/mathx:mathx_test"})
 			paths2, built2 := outputPaths(t, dir, homeB, args...)
 			if !built2 {
 				return

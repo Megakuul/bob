@@ -62,8 +62,9 @@ func TestRGO003aGoToolingOnGeneratedFiles(t *testing.T) {
 	}
 
 	// go mod tidy after making go.mod/go.sum writable (the read-only mode already stopped
-	// go get). If tidy rewrites either file, the next bob build must reject it as drift; if it
-	// leaves both byte-identical there is nothing to detect and the build must still pass.
+	// go get). A stale go.sum line for a module nobody requires forces a drift: tidy must
+	// remove it (offline, no lookup needed), so the files change and the next bob build must
+	// reject that as drift (BOB-E-1011, definition class, exit 3).
 	goMod, goSum := filepath.Join(api, "go.mod"), filepath.Join(api, "go.sum")
 	origMod, origSum := readFile(t, goMod), readFile(t, goSum)
 	for _, p := range []string{goMod, goSum} {
@@ -71,18 +72,25 @@ func TestRGO003aGoToolingOnGeneratedFiles(t *testing.T) {
 			t.Fatalf("harness: %v", err)
 		}
 	}
+	stale := "example.com/stale v1.0.0 h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n" +
+		"example.com/stale v1.0.0/go.mod h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+	if err := os.WriteFile(goSum, []byte(origSum+stale), 0o644); err != nil {
+		t.Fatalf("harness: %v", err)
+	}
 	r := runAs(t, uid, gid, userHome, api, env, shim("go"), "mod", "tidy")
-	changed := readFile(t, goMod) != origMod || readFile(t, goSum) != origSum
-	b := bobAs(t, uid, gid, home, dir, "build", "//...", "--json")
-	if changed {
-		if !exitIs(t, b, 3) {
-			return
-		}
-		e, found := errorWithCode(t, b, "BOB-E-1011")
-		if found && e.Message == "" {
-			t.Errorf("the drift error has no message")
-		}
-	} else if r.Exit == 0 && !exitIs(t, b, 0) {
+	if r.Exit != 0 {
+		t.Errorf("go mod tidy failed (exit %d): %s", r.Exit, r.Stderr)
 		return
+	}
+	if readFile(t, goMod) == origMod && readFile(t, goSum) == origSum {
+		t.Errorf("go mod tidy left go.mod/go.sum identical to the generated files; the stale go.sum line was not removed")
+		return
+	}
+	b := bobAs(t, uid, gid, home, dir, "build", "//...", "--json")
+	if !exitIs(t, b, 3) {
+		return
+	}
+	if e, found := errorWithCode(t, b, "BOB-E-1011"); found && e.Message == "" {
+		t.Errorf("the drift error has no message")
 	}
 }

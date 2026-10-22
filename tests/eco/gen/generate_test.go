@@ -278,9 +278,10 @@ func TestRGEN005WhitespaceChangeRebuildsOnlyCodegen(t *testing.T) {
 }
 
 // R-GEN-005 (cost): the two-phase planning adds at most 0.5 s to a no-change build [8c/15G].
-// S6 measured the no-change build of this fixture at 1.43 s with cutoff (0.93 s without
-// codegen), so the median of five no-change builds of //... must stay within 1.5 s; the
-// budgets stage owns the precise row.
+// S6 measured the no-change build of this fixture at 1.43 s with cutoff, 0.93 s baseline plus
+// the 0.5 s allowance, so the median of five no-change builds of //... must stay within
+// 0.93 s + 0.5 s = 1.43 s (the baseline is S6's measurement; see docs/review/owner-items.md
+// FIX-C for a baseline measured on the test host).
 func TestRGEN005NoChangeBuildCost(t *testing.T) {
 	parity.Covers(t, "R-GEN-005")
 	home := t.TempDir()
@@ -291,6 +292,7 @@ func TestRGEN005NoChangeBuildCost(t *testing.T) {
 	if r := ecotest.BobEnv(t, dir, env, "build", "//..."); !ecotest.OK(t, r) {
 		return
 	}
+	const baseline = 930 * time.Millisecond // S6 quiet no-change build before the two-phase planning
 	var times []time.Duration
 	for i := 0; i < 5; i++ {
 		start := time.Now()
@@ -300,8 +302,8 @@ func TestRGEN005NoChangeBuildCost(t *testing.T) {
 		times = append(times, time.Since(start))
 	}
 	sort.Slice(times, func(i, j int) bool { return times[i] < times[j] })
-	if med := times[len(times)/2]; med > 1500*time.Millisecond {
-		t.Errorf("median no-change build of //... took %s, want <= 1.5 s (%v)", med, times)
+	if med := times[len(times)/2]; med > baseline+500*time.Millisecond {
+		t.Errorf("median no-change build of //... took %s, want <= %s (baseline %s + 0.5 s) (%v)", med, baseline+500*time.Millisecond, baseline, times)
 	}
 }
 

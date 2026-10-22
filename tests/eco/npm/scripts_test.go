@@ -70,14 +70,15 @@ func TestRNPM004aScriptsDeniedByDefault(t *testing.T) {
 	}
 }
 
-// forbiddenRuntime matches store entries that may not be in the runtime closure of the native
-// app: the compiler, its wrapper, binutils, python, make, node-gyp and the full nodejs
-// (nodejs-slim is the runtime).
-var forbiddenRuntime = regexp.MustCompile(`^[0-9a-z]{32}-(gcc-wrapper-.*|gcc-[0-9.]+|binutils.*|python3.*|gnumake.*|node-gyp.*|nodejs-[0-9.]+|bob-builder.*)$`)
+// allowedRuntime matches the store entries the runtime closure of the native app may contain
+// besides node's own closure: glibc, libgcc (gcc-<v>-lib / libgcc), and bob's npm package and
+// app derivations (the .node file lives in the npm better-sqlite3 derivation).
+var allowedRuntime = regexp.MustCompile(`^[0-9a-z]{32}-(glibc-[0-9][0-9.]*|libgcc-.*|gcc-[0-9.]+-lib|npm-.*|node_modules-.*|native.*)$`)
 
 // R-NPM-004a (allowed): with AllowScripts the addon builds offline, the program opens :memory:
 // and the runtime closure has only the .node file of better-sqlite3's build tree besides
-// node, glibc and libgcc: no toolchain.
+// node, glibc and libgcc: no toolchain (allow-list, see allowedRuntime). Offline builds are
+// a store property bob does not expose to a black-box test; see docs/review/owner-items.md.
 func TestRNPM004aScriptsAllowedBuildOffline(t *testing.T) {
 	parity.Covers(t, "R-NPM-004a")
 	home := t.TempDir()
@@ -99,8 +100,6 @@ func TestRNPM004aScriptsAllowedBuildOffline(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(r.Stdout)), &out); err != nil || out.Sqlite.V == "" || out.Sqlite.Y != 42 || out.Lodash != "bobNpm" {
 		t.Errorf("program output %q (%v), want sqlite_version, y=42 and lodash camelCase bobNpm", r.Stdout, err)
 	}
-	// The addon must have been built without network: run the build again in a network-less
-	// namespace with a fresh store would need a cache; the build log must not show a download.
 	b := ecotest.BobEnv(t, dir, env, "build", "//native:native", "--print-paths", "--json")
 	if !ecotest.OK(t, b) {
 		return
@@ -110,9 +109,26 @@ func TestRNPM004aScriptsAllowedBuildOffline(t *testing.T) {
 		t.Fatalf("no output path for //native:native")
 	}
 	names, _ := ecotest.Closure(t, home, paths[0])
+	// Allow-list (SPEC: "contains only the .node file, glibc and libgcc beyond node"): node's
+	// own closure, glibc, libgcc and bob's own derivations; anything else is a violation.
+	nodeRoot := ""
 	for _, n := range names {
-		if forbiddenRuntime.MatchString(n) {
-			t.Errorf("runtime closure contains %s", n)
+		if strings.Contains(n, "-nodejs-slim-") {
+			nodeRoot = n
+		}
+	}
+	if nodeRoot == "" {
+		t.Errorf("runtime closure has no nodejs-slim: %v", names)
+	}
+	nodeNames, _ := ecotest.Closure(t, home, nodeRoot)
+	inNode := map[string]bool{}
+	for _, n := range nodeNames {
+		inNode[n] = true
+	}
+	self := filepath.Base(paths[0])
+	for _, n := range names {
+		if !inNode[n] && n != self && !allowedRuntime.MatchString(n) {
+			t.Errorf("runtime closure contains %s, which is neither node's closure, glibc, libgcc nor an npm derivation of the app", n)
 		}
 	}
 	var addons []string

@@ -56,20 +56,7 @@ func TestRGO001aBuildTestCrossAndReproducible(t *testing.T) {
 			if r.Exit != 0 || !strings.Contains(r.Stdout, "(42)") {
 				t.Errorf("stamp under env -i exited %d and printed %q; want exit 0 and the assembly sum (42)", r.Exit, r.Stdout+r.Stderr)
 			}
-			if plat == host {
-				tr := bobIn(t, dir, homeA, "test", "//...", "--json")
-				if ok(t, tr) {
-					got := map[string]string{}
-					for _, e := range eventsNamed(events(t, tr), "test.result") {
-						got[e.str("label")] = e.str("status")
-					}
-					for _, u := range goTestUnits {
-						if s := got[u]; s != "pass" && s != "cached" {
-							t.Errorf("test unit %s has status %q, want pass", u, s)
-						}
-					}
-				}
-			}
+			assertTests(t, dir, homeA, plat, host, goTestUnits)
 			// Second store: same derivations, so the same output paths with identical content.
 			paths2, built2 := outputPaths(t, dir, homeB, args...)
 			if !built2 {

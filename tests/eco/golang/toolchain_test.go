@@ -3,6 +3,7 @@ package golang
 import (
 	"archive/zip"
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -122,6 +123,31 @@ func goProxyModule(t *testing.T, root, path, version, goMod, src string) {
 	}
 }
 
+// fixtureRequires lists the (module path, version) pairs of every golang.Require call in the
+// bob.go files below dir.
+func fixtureRequires(t *testing.T, dir string) [][2]string {
+	t.Helper()
+	re := regexp.MustCompile(`golang\.Require\("([^"]+)",\s*"([^"]+)"`)
+	var out [][2]string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() != "bob.go" {
+			return err
+		}
+		b, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return rerr
+		}
+		for _, m := range re.FindAllStringSubmatch(string(b), -1) {
+			out = append(out, [2]string{m[1], m[2]})
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("harness: %v", err)
+	}
+	return out
+}
+
 // R-GO-004a (c): a module requirement whose go directive exceeds the module's Go fails at
 // bob lock with the toolchain error "✗ github.com/foo/bar@v1.2.0 needs go 1.27.0, but
 // example.com/api uses go 1.26 (set Go in api/bob.go)" (BOB-E-1008, definition class, exit 3).
@@ -130,6 +156,16 @@ func TestRGO004aRequirementNeedsNewerGo(t *testing.T) {
 	proxy := t.TempDir()
 	goProxyModule(t, proxy, "github.com/foo/bar", "v1.2.0", "module github.com/foo/bar\n\ngo 1.27.0\n", "package bar\n")
 	dir := harness.Fixture(t, "go")
+	// The fixture's other requirements must resolve too, so that a correct bob lock reaches
+	// the toolchain check instead of failing first with BOB-E-1015 on a module the isolated
+	// proxy does not serve. They are served as stubs with an old go directive: every
+	// Require of every bob.go of the fixture gets one (the stub's content is irrelevant).
+	for _, m := range fixtureRequires(t, dir) {
+		if m[0] == "github.com/foo/bar" {
+			continue
+		}
+		goProxyModule(t, proxy, m[0], m[1], "module "+m[0]+"\n\ngo 1.20\n", "package stub\n")
+	}
 	replaceIn(t, filepath.Join(dir, "api", "bob.go"),
 		`golang.Require("github.com/google/uuid", "v1.6.0")}`,
 		`golang.Require("github.com/google/uuid", "v1.6.0"), golang.Require("github.com/foo/bar", "v1.2.0")}`)

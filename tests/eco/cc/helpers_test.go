@@ -411,3 +411,45 @@ func bobDrvs(all map[string]*drv.Derivation) map[string]*drv.Derivation {
 	}
 	return out
 }
+
+// assertTests runs `bob test` for the test units on platform plat: natively with //..., for
+// the foreign platform with the units' labels suffixed @<platform> (R-FW-039: `bob test` has
+// no --platform flag; a foreign-architecture test runs under qemu-user and its test event
+// names the runner qemu-<arch>). Every unit must pass.
+func assertTests(t *testing.T, dir, home string, plat, host bob.Platform, units []string) {
+	t.Helper()
+	args := []string{"test"}
+	if plat == host {
+		args = append(args, "//...")
+	} else {
+		for _, u := range units {
+			args = append(args, u+"@"+string(plat))
+		}
+	}
+	tr := bobIn(t, dir, home, append(args, "--json")...)
+	if !ok(t, tr) {
+		return
+	}
+	evs := events(t, tr)
+	got := map[string]string{}
+	for _, e := range eventsNamed(evs, "test.result") {
+		got[strings.SplitN(e.str("label"), "@", 2)[0]] = e.str("status")
+	}
+	for _, u := range units {
+		if s := got[u]; s != "pass" && s != "cached" {
+			t.Errorf("test unit %s on %s has status %q, want pass", u, plat, s)
+		}
+	}
+	if plat != host {
+		runner := "qemu-" + map[bob.Platform]string{bob.LinuxAMD64: "x86_64", bob.LinuxARM64: "aarch64"}[plat]
+		found := false
+		for _, e := range evs {
+			if e.str("runner") == runner {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no test event with runner %q: foreign-platform tests must run under qemu-user", runner)
+		}
+	}
+}

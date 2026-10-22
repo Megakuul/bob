@@ -2,6 +2,7 @@ package npm
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -72,9 +73,13 @@ func TestRNPM005aIncompleteEntryFailsCI(t *testing.T) {
 }
 
 // R-NPM-005a (fixture): the Test of each entry passes in a fixture that depends on the package.
-// The native fixture depends on both v1 packages (better-sqlite3 with its script allowed,
-// esbuild with its postinstall skipped); bob runs each entry's Test after the build, so a
-// failing Test fails the build.
+// Every entry of the table must be exercised by the native fixture (a package it declares);
+// the fixture is built (with better-sqlite3's script allowed and esbuild's postinstall
+// skipped), then the entry's Test is run as the SPEC defines it: "command run in the package
+// dir after the build", i.e. in node_modules/<package> of the built app, in bob's tool
+// environment. It must exit 0. A deliberately failing Test (a copy of the table entry whose
+// command is `false`) is not injectable without the implementation; the tests of
+// R-NPM-005a (CI check) cover the rejection side.
 func TestRNPM005aQuirkTestsPassInFixture(t *testing.T) {
 	parity.Covers(t, "R-NPM-005a")
 	table, err := npm.Quirks()
@@ -90,13 +95,28 @@ func TestRNPM005aQuirkTestsPassInFixture(t *testing.T) {
 	if !ok {
 		return
 	}
-	r := ecotest.BobEnv(t, dir, env, "build", "//native:native", "-v")
-	if !ecotest.OK(t, r) {
+	declared := ecotest.ReadFile(t, filepath.Join(dir, "native", "bob.go"))
+	b := ecotest.BobEnv(t, dir, env, "build", "//native:native", "--print-paths", "--json")
+	if !ecotest.OK(t, b) {
 		return
 	}
+	paths := ecotest.FinishPaths(t, b)["//native:native"]
+	if len(paths) == 0 {
+		t.Fatalf("no output path for //native:native")
+	}
+	app := paths[0]
 	for _, q := range table {
-		if (q.Package == "esbuild" || q.Package == "better-sqlite3") && !strings.Contains(r.Combined(), q.Package) {
-			t.Errorf("the verbose build output never mentions %s: its quirk Test did not run", q.Package)
+		if !strings.Contains(declared, `"`+q.Package+`"`) {
+			t.Errorf("quirk entry %s has no fixture that depends on it (native fixture declares %q only)", q.Package, "better-sqlite3, esbuild")
+			continue
+		}
+		pkgDir := filepath.Join(app, "node_modules", q.Package)
+		script := "cd " + shellQuote(pkgDir) + " && " + q.Test
+		r := ecotest.BobEnv(t, filepath.Join(dir, "native"), env, "exec", "--", "sh", "-c", script)
+		if r.Exit != 0 {
+			t.Errorf("Test of quirk %s exited %d in %s:\n%s%s", q.Package, r.Exit, pkgDir, r.Stdout, r.Stderr)
 		}
 	}
 }
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }

@@ -24,9 +24,17 @@ type workspaceSpec struct {
 	deps [][3]string
 }
 
-// corpusWorkspaces are real-world dependency sets of increasing size (the S3 graphs have 12,
-// 25, 173 and 393 packages; these sets are chosen to span that range).
+// corpusWorkspaces are real-world dependency sets of increasing size. The four S3 graphs the
+// SPEC names (docs/spikes/s03-rust.md 3.2: serde_json 12, tokio full 25, web 173, big 393
+// packages) come first, spelled from the spike's table; the spike's exact Cargo.toml files are
+// not in the repository, so their package counts are as stated there only approximately (see
+// docs/review/owner-items.md, FIX-C). The remaining sets are author-chosen.
 var corpusWorkspaces = []workspaceSpec{
+	{"s3-serde_json", [][3]string{{"serde_json", "1", ""}}},
+	{"s3-tokio-full", [][3]string{{"tokio", "1", "full"}}},
+	{"s3-web", [][3]string{{"tokio", "1", "full"}, {"axum", "0.7", ""}, {"reqwest", "0.12", "rustls-tls"}, {"tracing", "0.1", ""}, {"serde", "1", "derive"}, {"clap", "4", "derive"}, {"anyhow", "1", ""}}},
+	{"s3-big", [][3]string{{"tokio", "1", "full"}, {"axum", "0.7", ""}, {"reqwest", "0.12", "rustls-tls"}, {"tracing", "0.1", ""}, {"serde", "1", "derive"}, {"clap", "4", "derive"}, {"anyhow", "1", ""},
+		{"sqlx", "0.8", "runtime-tokio,postgres,sqlite"}, {"tonic", "0.12", ""}, {"prost", "0.13", ""}, {"opentelemetry", "0.27", ""}, {"chrono", "0.4", ""}, {"uuid", "1", "v4"}, {"rand", "0.8", ""}, {"image", "0.25", ""}}},
 	{"itoa-hex", [][3]string{{"itoa", "1", ""}, {"hex", "0.4", ""}}},
 	{"serde", [][3]string{{"serde", "1", "derive"}, {"serde_json", "1", ""}}},
 	{"regex", [][3]string{{"regex", "1", ""}}},

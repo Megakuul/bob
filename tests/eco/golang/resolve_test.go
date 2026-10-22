@@ -119,7 +119,9 @@ func goIn(t *testing.T, dir string, env []string, args ...string) harness.Result
 	t.Helper()
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
-	cmd.Env = append(env, "HOME="+t.TempDir(), "GOCACHE="+t.TempDir(), "GOPATH="+t.TempDir(), "CGO_ENABLED=0")
+	// cgo is whatever `bob env` prescribes (SPEC does not switch it off): the fixture's cgo
+	// package must be built and vetted too.
+	cmd.Env = append(env, "HOME="+t.TempDir(), "GOCACHE="+t.TempDir(), "GOPATH="+t.TempDir())
 	return runCmd(t, cmd, args)
 }
 

@@ -49,18 +49,8 @@ func TestRRS001aCratesBuildScriptsProcMacrosAndCInterop(t *testing.T) {
 					t.Errorf("%s under env -i exited %d:\n%s%s", label, r.Exit, r.Stdout, r.Stderr)
 				}
 			}
+			assertTests(t, dir, homeA, plat, host, []string{"//corelib:corelib_test", "//corelib:corelib_test_num"})
 			if plat == host {
-				if tr := bobIn(t, dir, homeA, "test", "//...", "--json"); ok(t, tr) {
-					got := map[string]string{}
-					for _, e := range eventsNamed(events(t, tr), "test.result") {
-						got[e.str("label")] = e.str("status")
-					}
-					for _, u := range []string{"//corelib:corelib_test", "//corelib:corelib_test_num"} {
-						if s := got[u]; s != "pass" && s != "cached" {
-							t.Errorf("test unit %s has status %q, want pass", u, s)
-						}
-					}
-				}
 				if all, parsed := drvStore(t, homeA); parsed {
 					for n, d := range bobDrvs(all) {
 						text := jobSpec(d) + strings.Join(d.InputSrcs, "\n")
@@ -109,8 +99,10 @@ func TestRRS005LockCarriesCrateGraphFacts(t *testing.T) {
 	crates := lockedCrates(t, dir)
 	var withDeps, withFeatures int
 	links := map[string]string{}
+	byName := map[string]map[string]any{}
 	for _, c := range crates {
 		name, _ := c["name"].(string)
+		byName[name] = c
 		meta, _ := c["meta"].(map[string]any)
 		if ed, _ := meta["edition"].(string); ed == "" {
 			t.Errorf("crate %s has no meta.edition", name)
@@ -127,6 +119,20 @@ func TestRRS005LockCarriesCrateGraphFacts(t *testing.T) {
 	}
 	if len(crates) == 0 || withDeps == 0 || withFeatures == 0 {
 		t.Errorf("the rust section lacks graph facts: %d crates, %d with deps, %d with features", len(crates), withDeps, withFeatures)
+	}
+	// Each crate entry stores its edges and feature table: spot-check crates whose graph
+	// facts are known (serde has a derive feature, serde_derive depends on proc-macro2/syn,
+	// clap_derive and zstd-sys likewise carry edges or features).
+	for name, keys := range map[string][]string{"serde": {"features"}, "serde_derive": {"deps"}, "zstd-sys": {"features"}, "tokio": {"deps", "features"}} {
+		c, found := byName[name]
+		if !found {
+			continue
+		}
+		for _, k := range keys {
+			if _, has := c[k]; !has {
+				t.Errorf("crate %s has no %q in the lock: every crate entry stores edges and its feature table", name, k)
+			}
+		}
 	}
 	if links["zstd-sys"] != "zstd" {
 		t.Errorf("zstd-sys must record links = \"zstd\", got %v", links)

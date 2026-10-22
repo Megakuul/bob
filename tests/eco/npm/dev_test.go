@@ -1,7 +1,9 @@
 package npm
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -49,8 +51,8 @@ func devSession(t *testing.T, dir, importerDir string) (p *devProc, port int, en
 // R-NPM-010a (HMR, dependency restart): in the Vite fixture under bob dev as non-root, saving
 // the Svelte component (the fixture is Vite+Svelte; the SPEC says App.tsx) emits an HMR update
 // over the dev-server websocket (end to end within 2 s; the 50 ms server-side budget B-082 is
-// measured by the budgets stage), and adding a dependency in bob.go restarts Vite with the new
-// package importable within 10 s.
+// measured by the budgets stage), and adding a dependency in bob.go restarts Vite (old process gone, new one
+// answering) with the new package importable through a served module within 10 s.
 func TestRNPM010aHMRAndDependencyRestart(t *testing.T) {
 	parity.Covers(t, "R-NPM-010a")
 	dir := harness.Fixture(t, "npm")
@@ -91,22 +93,41 @@ func TestRNPM010aHMRAndDependencyRestart(t *testing.T) {
 		t.Errorf("no HMR update for src/App.svelte within 2 s of the save\n%s", p.output())
 	}
 
-	// Adding a dependency restarts Vite; the new package is importable within 10 s.
+	// Adding a dependency restarts Vite. The old process must go away (its HMR websocket
+	// closes or receives a full-reload), a new one must answer, and a module importing the
+	// new package must be served with the package resolved: all within 10 s of the edit.
 	bobgo := filepath.Join(dir, "site", "bob.go")
 	start := time.Now()
 	ecotest.ReplaceIn(t, bobgo, `npm.Dep("svelte", "^5"),`, `npm.Dep("svelte", "^5"),
 			npm.Dep("left-pad", "^1.3.0"),`)
 	_ = os.Chown(bobgo, int(uid), int(gid))
-	probe := filepath.Join(dir, "site", "node_modules", "left-pad", "package.json")
-	for time.Since(start) < 10*time.Second {
-		if _, err := os.Stat(probe); err == nil {
-			if _, err := waitGet(port, "/", nil, 10*time.Second-time.Since(start)); err == nil {
-				return
-			}
+	restarted := false
+	for !restarted && time.Since(start) < 10*time.Second {
+		m, err := ws.next(10*time.Second - time.Since(start))
+		// A read error means the old server's connection closed (it was stopped); a
+		// full-reload is Vite's own signal after a config or dependency change.
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() {
+			break // nothing happened: not restarted
 		}
-		time.Sleep(100 * time.Millisecond)
+		restarted = err != nil || strings.Contains(m, `"type":"full-reload"`)
 	}
-	t.Errorf("left-pad was not importable (node_modules/left-pad present and Vite answering) within 10 s of the bob.go edit\n%s", p.output())
+	if !restarted {
+		t.Errorf("Vite was not restarted within 10 s of the bob.go edit: its websocket neither closed nor sent full-reload\n%s", p.output())
+		return
+	}
+	probe := filepath.Join(dir, "site", "src", "leftpad.js")
+	ecotest.WriteFile(t, probe, "import leftPad from \"left-pad\";\nexport default leftPad;\n")
+	_ = os.Chown(probe, int(uid), int(gid))
+	body, err := waitGet(port, "/src/leftpad.js", regexp.MustCompile(`from "(/[^"]*left-pad[^"]*)"`), 10*time.Second-time.Since(start))
+	if err != nil {
+		t.Errorf("the module importing left-pad is not served with the package resolved within 10 s of the bob.go edit: %v\n%s", err, p.output())
+		return
+	}
+	dep := regexp.MustCompile(`from "(/[^"]*left-pad[^"]*)"`).FindStringSubmatch(body)[1]
+	if _, err := waitGet(port, dep, nil, 10*time.Second-time.Since(start)); err != nil {
+		t.Errorf("the resolved left-pad module %s is not served by the restarted Vite: %v\n%s", dep, err, p.output())
+	}
 }
 
 const siteGo = `//go:build bob
