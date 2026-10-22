@@ -110,7 +110,8 @@ func recorded(t *testing.T, sub, name string) delivery {
 
 // githubSigned signs a body-only fixture like GitHub does.
 func githubSigned(t *testing.T, name, event string) delivery {
-	d := loadOne(t, "github/webhooks", name)
+	// forgefix names body-only deliveries without the .json suffix.
+	d := loadOne(t, "github/webhooks", strings.TrimSuffix(name, ".json"))
 	mac := hmac.New(sha256.New, []byte(githubSecret))
 	mac.Write(d.Body)
 	h := http.Header{}
@@ -310,10 +311,10 @@ func githubCases() []contractCase {
 	file := func(name, event string) func(*testing.T, adapterSet) delivery {
 		return func(t *testing.T, _ adapterSet) delivery { return githubSigned(t, name, event) }
 	}
-	push := func(branch string) func(*testing.T, delivery) want {
+	push := func(branch string, created bool) func(*testing.T, delivery) want {
 		return func(t *testing.T, d delivery) want {
 			m := jsonOf(t, d.body)
-			return want{typ: forge.EventPush, repoID: 186853002, branch: branch, after: str(m["after"])}
+			return want{typ: forge.EventPush, repoID: 186853002, branch: branch, created: created, after: str(m["after"])}
 		}
 	}
 	pr := func(action forge.PRAction, fork, merged bool) func(*testing.T, delivery) want {
@@ -327,7 +328,8 @@ func githubCases() []contractCase {
 		}
 	}
 	return []contractCase{
-		{"github push", gh, file("push.branch.json", "push"), push("master")},
+		// push.branch.json is a branch creation ("created": true, "before": "000…0").
+		{"github push", gh, file("push.branch.json", "push"), push("master", true)},
 		{"github tag created", gh, file("push.tag-created.derived.json", "push"), func(t *testing.T, d delivery) want {
 			m := jsonOf(t, d.body)
 			return want{typ: forge.EventTag, repoID: 186853002, tag: "v1.0.0", tagCommit: str(dig(m, "head_commit", "id"))}
