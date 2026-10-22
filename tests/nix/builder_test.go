@@ -361,7 +361,7 @@ func TestRNIX016FuzzedJobsStayContained(t *testing.T) {
 			case "exec":
 				steps = append(steps, step(t, op, bspec.ExecArgs{Argv: []string{"true"}, Cwd: path(), Path: []string{"/usr/bin"}}))
 			default:
-				steps = append(steps, bspec.Step{Op: op, Args: json.RawMessage(`{"path":"` + path() + `"}`)})
+				steps = append(steps, step(t, op, map[string]string{"path": path()}))
 			}
 		}
 		r := j.run(t, "run", runJob(t, steps...))

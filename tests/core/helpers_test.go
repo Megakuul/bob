@@ -20,6 +20,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/eval"
+	_ "github.com/megakuul/bob/tests/core/toyeco" // registers the toy kinds in the test binary (A68)
 	"github.com/megakuul/bob/tests/errors/leakcheck"
 	"github.com/megakuul/bob/tests/harness"
 )

@@ -54,7 +54,7 @@ var (
 		e0:      {l0},
 		e1:      {e0, l0},
 		e2:      {e0, e1, l0, l1, l2, l3},
-		e3:      {e0, e1, e2},
+		e3:      {e0, e1, e2, l0},
 		builder: {e0},
 		glue:    {l0, l1, l2, l3, e0, e1, e2, e3, builder},
 	}

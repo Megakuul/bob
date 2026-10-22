@@ -37,8 +37,8 @@ func s7Repo(t *testing.T) string {
 	// Variant.Features[bob.Label{Dir, Name}] (a feature list per crate label), SPEC §1.9.
 	// Named variants that add Rust features (Variant.Features, SPEC §1.9): "shout" for rdemo
 	// (the "feature shout" configurations of S7 §3.3) and "xtra" for the proc-macro rmac.
-	replaceIn(t, filepath.Join(dir, "bob.go"), "Variants: []bob.NamedVariant{\n",
-		"Variants: []bob.NamedVariant{\n"+
+	replaceIn(t, filepath.Join(dir, "bob.go"), "Variants: []bob.Named{\n",
+		"Variants: []bob.Named{\n"+
 			"\t\tbob.NamedVariant(\"shout\", func(v *bob.Variant) { v.Features = map[bob.Label][]string{{Dir: \"rdemo\", Name: \"rdemo\"}: {\"shout\"}} }),\n"+
 			"\t\tbob.NamedVariant(\"xtra\", func(v *bob.Variant) { v.Features = map[bob.Label][]string{{Dir: \"rmac\", Name: \"rmac\"}: {\"extra\"}} }),\n")
 	git(t, dir, "add", "-A")

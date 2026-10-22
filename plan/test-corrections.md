@@ -1,4 +1,9 @@
-# Protected-test corrections pending owner OK (2026-10-22)
+# Protected-test corrections (owner OK given 2026-10-22: "i give the onetime ok for test-corrections")
+
+Applied by the coordinator 2026-10-22: items 1-7. Item 8 (A75) was NOT applied: the layering test
+explicitly forbids pkg/rust importing pkg/builder/bspec ("API into builder"), which encodes SPEC
+R-ARCH-003; A75 is revoked. Generators describe jobs through E0 (`pkg/engine/drv`); if the job
+types are needed there, the M5 owner moves the bspec types into an E0 package.
 
 The permission system blocks agents and the coordinator from editing protected tests. Each item
 is a defect found while implementing, resolved with AGENTS.md section 2 (rulings A65-A67 in

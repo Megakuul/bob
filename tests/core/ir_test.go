@@ -215,7 +215,7 @@ func TestRFW047IRValidation(t *testing.T) {
 	n := func(id string, deps ...string) irNode {
 		return irNode{ID: id, Kind: "bob.run", Label: "//" + strings.TrimPrefix(id, "//"), Deps: deps}
 	}
-	g, err, ok := parseIR(t, irDoc(n("a:one"), n("b:two", "//a:one")))
+	g, err, ok := parseIR(t, irDoc(n("a:one"), n("b:two", "a:one")))
 	if !ok {
 		return
 	}
@@ -223,13 +223,13 @@ func TestRFW047IRValidation(t *testing.T) {
 		t.Fatalf("a valid two-node IR is rejected: %v", err)
 	}
 	t.Run("missing dependency", func(t *testing.T) {
-		_, err := ir.Parse(irDoc(n("a:one", "//nope:x")), ownVersion)
+		_, err := ir.Parse(irDoc(n("a:one", "nope:x")), ownVersion)
 		if err == nil {
 			t.Fatal("a dependency id that does not exist is accepted")
 		}
 	})
 	t.Run("cycle", func(t *testing.T) {
-		_, err := ir.Parse(irDoc(n("a:one", "//b:two"), n("b:two", "//a:one")), ownVersion)
+		_, err := ir.Parse(irDoc(n("a:one", "b:two"), n("b:two", "a:one")), ownVersion)
 		if err == nil {
 			t.Fatal("a dependency cycle is accepted")
 		}
@@ -299,7 +299,7 @@ func TestRFW047IRValidation(t *testing.T) {
 // memory (R-FW-047). Seeds run in every go test; the slow suite runs it with -fuzz.
 func FuzzIRParse(f *testing.F) {
 	parity.Covers(f, "R-FW-047")
-	valid := irDoc(irNode{ID: "a:one", Kind: "bob.run", Label: "//a:one"}, irNode{ID: "b:two", Kind: "bob.run", Label: "//b:two", Deps: []string{"//a:one"}})
+	valid := irDoc(irNode{ID: "a:one", Kind: "bob.run", Label: "//a:one"}, irNode{ID: "b:two", Kind: "bob.run", Label: "//b:two", Deps: []string{"a:one"}})
 	f.Add(valid)
 	f.Add([]byte(`{"irVersion":1}`))
 	f.Add(bytes.ReplaceAll(valid, []byte("//a:one"), []byte("//b:two")))

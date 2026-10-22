@@ -199,7 +199,7 @@ func TestRNIX006ATermEscapes(t *testing.T) {
 		t.Fatalf("ATerm: %v", err)
 	}
 	want := `Derive([("dev","/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-esc-dev","",""),("out","/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-esc","","")],` +
-		`[("/nix/store/dddddddddddddddddddddddddddddddd-a.drv",["out"]),("/nix/store/cccccccccccccccccccccccccccccccc-b.drv",["dev","out"])],` +
+		`[("/nix/store/cccccccccccccccccccccccccccccccc-b.drv",["dev","out"]),("/nix/store/dddddddddddddddddddddddddddddddd-a.drv",["out"])],` +
 		`["/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-s1","/nix/store/ffffffffffffffffffffffffffffffff-s2"],` +
 		`"x86_64-linux","/bin/b",["z","a\"\\\n\r\t"],` +
 		`[("a","t\tx"),("dev","/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-esc-dev"),("out","/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-esc"),("z","1")])`

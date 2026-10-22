@@ -14,7 +14,7 @@ import (
 
 var _ = bob.Repo(bob.RepoOpts{
 	Nixpkgs: "nixos-26.05",
-	Variants: []bob.NamedVariant{
+	Variants: []bob.Named{
 		bob.NamedVariant("asan", bob.WithSanitize(bob.ASan, bob.UBSan), bob.WithProfile(bob.Debug)),
 	},
 })

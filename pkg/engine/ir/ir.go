@@ -87,6 +87,7 @@ type Nix struct {
 	Attr    string   `json:"attr"`
 	Set     string   `json:"set"` // host | target | cross
 	Outputs []string `json:"outputs"`
+	Modules []string `json:"modules,omitempty"` // pkg-config modules a nixpkgs.Lib links (Modules option)
 	Allow   Allow    `json:"allow"`
 }
 
@@ -135,8 +136,7 @@ func invalid(format string, args ...any) error {
 // bobVersion. IR is hostile input: size, node count, string length, dependency ids, cycles
 // (BOB-E-1006) and kinds are checked; another bobVersion is an internal error (R-FW-044).
 //
-// A dependency names a node by id; a dependency equal to the label of exactly one node also
-// resolves to it. Parse rewrites resolved dependencies and roots to node ids.
+// Dependencies and roots name nodes by id (A67).
 func Parse(data []byte, bobVersion string) (*Graph, error) {
 	if len(data) > MaxBytes {
 		return nil, invalid("the graph is %d bytes, more than %d", len(data), MaxBytes)
@@ -238,7 +238,6 @@ func valueDone(stack []*level) {
 // validate checks ids, kinds, dependencies, roots and cycles.
 func (g *Graph) validate() error {
 	byID := make(map[string]*Node, len(g.Nodes))
-	byLabel := map[string][]*Node{}
 	for i, n := range g.Nodes {
 		if n == nil || n.ID == "" {
 			return invalid("node %d has no id", i)
@@ -250,18 +249,10 @@ func (g *Graph) validate() error {
 			return invalid("node %s has the unknown kind %q", n.ID, n.Kind)
 		}
 		byID[n.ID] = n
-		if n.Label != "" {
-			byLabel[n.Label] = append(byLabel[n.Label], n)
-		}
 	}
 	resolve := func(ref string) (*Node, bool) {
-		if n, ok := byID[ref]; ok {
-			return n, true
-		}
-		if ns := byLabel[ref]; len(ns) == 1 {
-			return ns[0], true
-		}
-		return nil, false
+		n, ok := byID[ref]
+		return n, ok
 	}
 	for _, n := range g.Nodes {
 		for i, d := range n.Deps {

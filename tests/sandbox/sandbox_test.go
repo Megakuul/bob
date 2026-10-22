@@ -242,6 +242,11 @@ func checkContained(t *testing.T, c evil.Case, res *eval.Result, err error) {
 	stderr := string(res.Stderr)
 	for _, l := range strings.Split(stderr, "\n") {
 		if strings.HasPrefix(l, "LEAK ") {
+			// A70: seccomp is the only layer that refuses AF_VSOCK sockets (Landlock has no
+			// socket-family control), so the seccomp layer-removal build must leak exactly that.
+			if eval.DisabledLayer == "seccomp" && strings.HasPrefix(l, "LEAK AF_VSOCK socket") {
+				continue
+			}
 			t.Errorf("case %s: attack succeeded: %s", c.Name, l)
 		}
 		if strings.Contains(l, "bob-sandbox-secret") {
@@ -251,6 +256,9 @@ func checkContained(t *testing.T, c evil.Case, res *eval.Result, err error) {
 	for _, want := range c.Contained {
 		re := regexp.MustCompile(`(?m)^PASS ` + regexp.QuoteMeta(want.Name) + `: (.*)$`)
 		m := re.FindStringSubmatch(stderr)
+		if m == nil && eval.DisabledLayer == "seccomp" && want.Name == "AF_VSOCK socket" {
+			continue // A70: leaks without seccomp, checked above
+		}
 		if m == nil {
 			t.Errorf("case %s: no PASS line for %q in the evaluator stderr:\n%s", c.Name, want.Name, stderr)
 			continue
