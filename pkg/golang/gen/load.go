@@ -20,7 +20,9 @@ import (
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/lock"
+	"github.com/megakuul/bob/pkg/engine/srcs"
 	"github.com/megakuul/bob/pkg/golang/internal/gospec"
+	"github.com/megakuul/bob/pkg/golang/resolve"
 )
 
 // Bounds on what planning reads (hostile repositories, §5.4).
@@ -144,9 +146,11 @@ func modulePathOf(p string) string {
 	return ""
 }
 
-// lockModules reads the third-party modules of bob.lock that provide packages.
+// lockModules reads the third-party modules of bob.lock that provide packages, and the
+// build list of each workspace module: a closure uses the versions its main module selects.
 func (pl *planner) lockModules() error {
 	pl.third = map[string]*thirdParty{}
+	pl.selected = map[string]map[string]string{}
 	if len(pl.req.Lock) == 0 {
 		return nil
 	}
@@ -158,8 +162,11 @@ func (pl *planner) lockModules() error {
 	pl.lock = sec
 	for _, m := range sec.Modules {
 		if m.Packages {
-			pl.third[m.Path] = &thirdParty{GoModule: m}
+			pl.third[m.Path+"@"+m.Version] = &thirdParty{GoModule: m}
 		}
+	}
+	for ws, bl := range sec.Workspaces {
+		pl.selected[ws] = selected(bl)
 	}
 	return nil
 }
@@ -183,8 +190,9 @@ const (
 	refGen
 )
 
-// resolve maps an import path to its module (S2-1: bob resolves imports itself).
-func (pl *planner) resolve(importPath string) (pkgRef, error) {
+// resolve maps an import path to its module (S2-1: bob resolves imports itself); third-party
+// modules come from the build list of main, the closure's main module.
+func (pl *planner) resolve(main, importPath string) (pkgRef, error) {
 	var best *wsModule
 	for mp, m := range pl.mods {
 		if importPath == mp || strings.HasPrefix(importPath, mp+"/") {
@@ -197,8 +205,8 @@ func (pl *planner) resolve(importPath string) (pkgRef, error) {
 		}
 	}
 	var bestThird *thirdParty
-	for mp, t := range pl.third {
-		if (importPath == mp || strings.HasPrefix(importPath, mp+"/")) && (bestThird == nil || len(mp) > len(bestThird.Path)) {
+	for mp, v := range pl.selected[main] {
+		if t := pl.third[mp+"@"+v]; t != nil && (importPath == mp || strings.HasPrefix(importPath, mp+"/")) && (bestThird == nil || len(mp) > len(bestThird.Path)) {
 			bestThird = t
 		}
 	}
@@ -232,46 +240,98 @@ func (pl *planner) resolve(importPath string) (pkgRef, error) {
 var errNoModule = fmt.Errorf("no module provides it")
 
 // moduleTree realises a third-party module's unpacked tree (bob's fetcher, the lock's tree
-// hash, S2-2) and returns where bob reads it.
+// hash, S2-2) and returns where bob reads it. When the fetcher cannot get it (a file:// proxy,
+// or offline), the zip in the local proxy directory is unpacked and imported instead; the
+// store path proves it is the locked tree.
 func (pl *planner) moduleTree(t *thirdParty) (string, error) {
-	if p, ok := pl.trees[t.Path]; ok {
+	key := t.Path + "@" + t.Version
+	if p, ok := pl.trees[key]; ok {
 		return p, nil
 	}
 	if pl.req.Store == nil {
 		return "", fmt.Errorf("planning Go module %s needs the store (engine.PlanRequest.Store)", t.Path)
 	}
-	req, sp, err := moduleRequest(pl.proxy(), t.GoModule)
+	proxy := pl.proxy()
+	req, sp, err := moduleRequest(proxy, t.GoModule)
 	if err != nil {
 		return "", err
 	}
 	got, err := pl.req.Store.Ensure(pl.ctx, req)
 	if err != nil {
-		return "", err
+		if got, err = pl.importLocalZip(proxy, t.GoModule, req.Name, err); err != nil {
+			return "", err
+		}
 	}
 	if got != sp {
 		return "", fmt.Errorf("module %s@%s: fetched path %s, want %s", t.Path, t.Version, got, sp)
 	}
 	host := pl.req.Store.HostPath(sp)
-	pl.trees[t.Path] = host
+	pl.trees[key] = host
 	pl.storeOf[host] = sp
 	return host, nil
 }
 
-func (pl *planner) proxy() string {
-	if pl.lock != nil && pl.lock.Proxy != "" {
-		return pl.lock.Proxy
+// importLocalZip imports a module tree from a local zip: the file:// proxy's, else bob's
+// proxy directory's. ensureErr is returned when there is none.
+func (pl *planner) importLocalZip(proxy string, m lock.GoModule, name string, ensureErr error) (string, error) {
+	mv := resolve.Module{Path: m.Path, Version: m.Version}
+	var file string
+	for _, dir := range []string{strings.TrimPrefix(proxy, "file://"), ProxyDir()} {
+		if !filepath.IsAbs(dir) {
+			continue
+		}
+		f := filepath.Join(dir, filepath.FromSlash(resolve.EscapePath(m.Path)), "@v", resolve.EscapePath(m.Version)+".zip")
+		if _, err := os.Stat(f); err == nil {
+			file = f
+			break
+		}
 	}
-	return defaultProxy
+	if file == "" {
+		return "", ensureErr
+	}
+	z, err := resolve.OpenModuleZip(file, mv)
+	if err != nil {
+		return "", err
+	}
+	defer z.Close()
+	tmp, err := os.MkdirTemp("", "bob-gotree-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	root := filepath.Join(tmp, "tree")
+	if err := z.Extract(root); err != nil {
+		return "", fmt.Errorf("%s: %w", mv, err)
+	}
+	ents, err := os.ReadDir(root)
+	if err != nil {
+		return "", err
+	}
+	files := []string{}
+	for _, e := range ents {
+		files = append(files, e.Name())
+	}
+	paths, err := pl.req.Store.ImportSources(pl.ctx, []srcs.Source{{Name: name, Tree: srcs.Tree{Root: root, Files: files}}})
+	if err != nil {
+		return "", err
+	}
+	return paths[0], nil
 }
 
-// defaultProxy is the Go module proxy when bob.lock names none (§03.2.4).
-const defaultProxy = "https://proxy.golang.org"
+// proxy is where module zips are fetched from (BOB_GOPROXY, else bob.lock's proxy).
+func (pl *planner) proxy() string {
+	locked := ""
+	if pl.lock != nil {
+		locked = pl.lock.Proxy
+	}
+	return readProxy(locked)
+}
 
 // moduleRequest is the fetch of a module's unpacked tree: the proxy's zip, unpacked without
 // the "<path>@<version>/" prefix, pinned by the lock's tree hash (R-FW-063).
 func moduleRequest(proxy string, m lock.GoModule) (fetch.Request, string, error) {
 	name := drv.Name("gomod", m.Path, m.Version)
-	req := fetch.Request{URLs: []string{strings.TrimSuffix(proxy, "/") + "/" + escapePath(m.Path) + "/@v/" + escapeVersion(m.Version) + ".zip"},
+	req := fetch.Request{URLs: []string{strings.TrimSuffix(proxy, "/") + "/" + resolve.EscapePath(m.Path) + "/@v/" + resolve.EscapePath(m.Version) + ".zip"},
 		Kind: fetch.Archive, NarHash: m.Tree, Name: name, Strip: strings.Count(m.Path, "/") + 1,
 		Label: m.Path + "@" + m.Version}
 	h, err := sriHex(m.Tree)
@@ -282,24 +342,9 @@ func moduleRequest(proxy string, m lock.GoModule) (fetch.Request, string, error)
 	return req, sp, err
 }
 
-// escapePath is the module proxy's case escaping ("!x" for upper-case letters).
-func escapePath(p string) string {
-	var b strings.Builder
-	for _, r := range p {
-		if r >= 'A' && r <= 'Z' {
-			b.WriteByte('!')
-			b.WriteRune(r + ('a' - 'A'))
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}
-
-func escapeVersion(v string) string { return escapePath(v) }
-
 // buildCtx is one configuration packages are loaded and compiled in.
 type buildCtx struct {
+	main         string // module path of the closure's main module (its build list applies)
 	goos, goarch string
 	tags         []string // module tags of the main module + binary/test tags, sorted
 	cgo          bool
@@ -357,7 +402,7 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 		if len(cl.pkgs) >= maxPackages {
 			return fmt.Errorf("more than %d packages in one closure", maxPackages)
 		}
-		ref, err := pl.resolve(ip)
+		ref, err := pl.resolve(c.main, ip)
 		if err != nil {
 			if err == errNoModule {
 				return pl.importError(ip, from)
@@ -397,7 +442,7 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 			case imp == ip:
 				continue // the external test package imports the package under test
 			}
-			r, err := pl.resolve(imp)
+			r, err := pl.resolve(c.main, imp)
 			if err != nil && err != errNoModule {
 				return err
 			}

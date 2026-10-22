@@ -9,7 +9,10 @@ import (
 	"os"
 
 	"github.com/megakuul/bob/pkg/builder"
+	ccbop "github.com/megakuul/bob/pkg/cc/bop"
 	gobop "github.com/megakuul/bob/pkg/golang/bop"
+	npmbop "github.com/megakuul/bob/pkg/npm/bop"
+	rustbop "github.com/megakuul/bob/pkg/rust/bop"
 )
 
 func main() {
@@ -19,8 +22,10 @@ func main() {
 // kinds are the core kinds plus every ecosystem's.
 func kinds() map[string]builder.Kind {
 	k := builder.Core()
-	for name, kind := range gobop.Kinds() {
-		k[name] = kind
+	for _, eco := range []map[string]builder.Kind{gobop.Kinds(), ccbop.Kinds(), rustbop.Kinds(), npmbop.Kinds()} {
+		for name, kind := range eco {
+			k[name] = kind
+		}
 	}
 	return k
 }

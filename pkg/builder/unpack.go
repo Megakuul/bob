@@ -37,29 +37,36 @@ func unpackKind(c *Ctx, raw json.RawMessage) error {
 	if err := decodeStrict(raw, &a); err != nil {
 		return Invalidf("unpack args: %v", err)
 	}
-	if a.Archive == "" || !filepath.IsAbs(a.Archive) || strings.ContainsRune(a.Archive, 0) {
-		return Invalidf("archive %q is not an absolute path", a.Archive)
+	c.Phase("unpack")
+	return c.Unpack(a.Archive, a.To, a.Strip)
+}
+
+// Unpack extracts the archive into the writable directory to (created), dropping strip leading
+// path components, with the rules of kind "unpack". Ecosystem kinds use it for their own
+// archives (npm tarballs).
+func (c *Ctx) Unpack(archive, to string, strip int) error {
+	if archive == "" || !filepath.IsAbs(archive) || strings.ContainsRune(archive, 0) {
+		return Invalidf("archive %q is not an absolute path", archive)
 	}
-	if a.Strip < 0 {
-		return Invalidf("negative strip %d", a.Strip)
+	if strip < 0 {
+		return Invalidf("negative strip %d", strip)
 	}
-	to, err := c.Writable(a.To)
+	to, err := c.Writable(to)
 	if err != nil {
 		return err
 	}
-	c.Phase("unpack")
 	if err := c.MkdirAll(to); err != nil {
 		return err
 	}
-	u := &unpacker{c: c, root: to, strip: a.Strip, kinds: map[string]entryKind{}, links: map[string]string{}}
-	if err := u.walk(a.Archive); err != nil {
-		return fmt.Errorf("unpack %s: %w", a.Archive, err)
+	u := &unpacker{c: c, root: to, strip: strip, kinds: map[string]entryKind{}, links: map[string]string{}}
+	if err := u.walk(archive); err != nil {
+		return fmt.Errorf("unpack %s: %w", archive, err)
 	}
 	// Links may go through links listed later, so they are resolved once the archive is
 	// complete; a refusal fails the job and Nix discards the partial output.
 	for _, rel := range slices.Sorted(maps.Keys(u.links)) {
 		if !linkInside(u.links, rel) {
-			return fmt.Errorf("unpack %s: %s: symlink pointing outside the archive", a.Archive, rel)
+			return fmt.Errorf("unpack %s: %s: symlink pointing outside the archive", archive, rel)
 		}
 	}
 	return nil

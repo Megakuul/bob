@@ -439,6 +439,9 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 		return nil, err
 	}
 	if report != nil {
+		if b.cfg.Evaluated != nil {
+			b.cfg.Evaluated(ctx, next, report)
+		}
 		if next, err = b.writeNodes(ctx, next, job.ID, report); err != nil {
 			return next, err
 		}

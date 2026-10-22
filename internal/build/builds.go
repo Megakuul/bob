@@ -143,10 +143,13 @@ type Config struct {
 	DefaultPlatform string
 	// Finished is called once when a build becomes terminal (outgoing webhooks, §6.9.8).
 	Finished func(ctx context.Context, rec *store.BuildRecord)
-	Interval time.Duration // controller interval (5 s)
-	Skew     time.Duration // fleet.skew
-	Now      func() time.Time
-	Log      *slog.Logger
+	// Evaluated is called after an evaluation report of build rec was accepted (R-PIPE-003
+	// verified), with the build as updated by it (the pipelines cache of ListPipelines).
+	Evaluated func(ctx context.Context, rec *store.BuildRecord, r *jobspec.Report)
+	Interval  time.Duration // controller interval (5 s)
+	Skew      time.Duration // fleet.skew
+	Now       func() time.Time
+	Log       *slog.Logger
 }
 
 // Builds is the build controller and the state it shares with BuildService.

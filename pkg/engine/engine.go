@@ -34,6 +34,13 @@ type LockRequest struct {
 	Update  []string        // names to move (bob lock --update), empty = keep pins
 	Fetch   fetch.Fetcher
 	Nixpkgs *nixidx.Index
+	// Root is the repository root (working tree) the graph was evaluated from; "" when the
+	// caller has none. Resolvers that follow source imports read it (Go: which modules provide
+	// packages, R-GO-002b).
+	Root string
+	// Note prints one "note: …" line for the user (npm: install scripts bob does not run,
+	// R-NPM-004); nil discards notes.
+	Note func(msg string)
 }
 
 // PlanRequest asks an ecosystem for the derivations of its nodes. Plan must be deterministic
@@ -186,6 +193,7 @@ type RemoteRequest struct {
 	Patterns  []string
 	Platforms []bob.Platform
 	Variants  []string
+	Test      bool // bob test --remote: the patterns name tests
 }
 
 // Event is one --json event of a build (SPEC §02.4).

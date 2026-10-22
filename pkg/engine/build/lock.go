@@ -43,8 +43,9 @@ type LockChange struct {
 // LockResult is the outcome of Lock.
 type LockResult struct {
 	Changes     []LockChange
-	Written     bool // bob.lock changed on disk
-	Reformatted bool // only the formatting changed ("note: bob.lock was reformatted")
+	Written     bool     // bob.lock changed on disk
+	Reformatted bool     // only the formatting changed ("note: bob.lock was reformatted")
+	Notes       []string // the ecosystems' notes ("note: <text>"), e.g. npm install scripts not run
 }
 
 func lockPath(root string) string { return filepath.Join(root, "bob.lock") }
@@ -228,7 +229,7 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		if missing := missingSections(g, lf); len(missing) > 0 {
 			return nil, diag.New(1012, "what", missing[0]+" is not locked and --offline forbids locking it")
 		}
-	} else if _, err := lockEcosystems(ctx, f, g, lf, nil, false, !r.o.Lock); err != nil {
+	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, nil); err != nil {
 		return nil, err
 	}
 	after, err := lf.Encode()
@@ -268,7 +269,7 @@ func ecosystemsOf(g *ir.Graph) ([]engine.Ecosystem, error) {
 // lockEcosystems re-resolves the sections of the ecosystems used by g (onlyMissing: only those
 // bob.lock has no section for). Sections that bob.lock cannot hold (an ecosystem without a
 // lock section key) are left to their ecosystem.
-func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, update []string, all, onlyMissing bool) ([]LockChange, error) {
+func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, root string, update []string, all, onlyMissing bool, note func(string)) ([]LockChange, error) {
 	ecos, err := ecosystemsOf(g)
 	if err != nil {
 		return nil, err
@@ -283,16 +284,20 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 		if all {
 			upd = []string{}
 		}
-		sec, err := e.Lock(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[name], Update: upd, Fetch: f})
+		sec, err := e.Lock(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[name], Update: upd, Fetch: f, Root: root, Note: note})
 		if err != nil {
 			return nil, err
 		}
-		if !bytes.Equal(lf.Sections[name], sec) {
+		if !sameSection(name, lf.Sections[name], sec) {
 			op := "update"
 			if lf.Sections[name] == nil {
 				op = "add"
 			}
-			changes = append(changes, LockChange{Ecosystem: name, Name: name, Op: op})
+			if name == lock.SectionGo {
+				changes = append(changes, goChanges(lf.Sections[name], sec)...)
+			} else {
+				changes = append(changes, LockChange{Ecosystem: name, Name: name, Op: op})
+			}
 			if lf.Sections == nil {
 				lf.Sections = map[string]json.RawMessage{}
 			}
@@ -433,7 +438,8 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		lf.Sources = nil
 	}
 
-	ecoChanges, err := lockEcosystems(ctx, f, g, lf, lo.Update, lo.All, false)
+	var notes []string
+	ecoChanges, err := lockEcosystems(ctx, f, g, lf, o.Root, lo.Update, lo.All, false, func(n string) { notes = append(notes, n) })
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +460,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := &LockResult{Changes: changes}
+	res := &LockResult{Changes: changes, Notes: notes}
 	if !bytes.Equal(data, raw) {
 		if _, err := lock.WriteBytes(lockPath(o.Root), data); err != nil {
 			return nil, err
@@ -470,4 +476,66 @@ func short(rev string) string {
 		return rev[:12]
 	}
 	return rev
+}
+
+// goChanges lists the module versions that differ between two go sections, one change per
+// module path (SPEC §02.5: "~ go golang.org/x/net v0.30.0 → v0.31.0").
+func goChanges(prev, next json.RawMessage) []LockChange {
+	versions := func(raw json.RawMessage) map[string]string {
+		out := map[string]string{}
+		if len(raw) == 0 {
+			return out
+		}
+		v, err := lock.DecodeSection(lock.SectionGo, raw)
+		if err != nil {
+			return out
+		}
+		for _, bl := range v.(*lock.GoSection).Workspaces {
+			for _, mv := range bl.Modules {
+				if p, ver, ok := strings.Cut(mv, "@"); ok && (out[p] == "" || out[p] < ver) {
+					out[p] = ver
+				}
+			}
+		}
+		return out
+	}
+	a, b := versions(prev), versions(next)
+	var out []LockChange
+	for p, v := range b {
+		switch w, ok := a[p]; {
+		case !ok:
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, To: v, Op: "add"})
+		case w != v:
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, From: w, To: v, Op: "update"})
+		}
+	}
+	for p, v := range a {
+		if _, ok := b[p]; !ok {
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, From: v, Op: "remove"})
+		}
+	}
+	if len(out) == 0 { // only hashes or other details changed
+		out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: lock.SectionGo, Op: "update"})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// sameSection compares two encodings of a lock section by content: bob.lock holds sections
+// indented, ecosystems return them compact.
+func sameSection(name string, a, b json.RawMessage) bool {
+	if bytes.Equal(a, b) {
+		return true
+	}
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	va, err1 := lock.DecodeSection(name, a)
+	vb, err2 := lock.DecodeSection(name, b)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	ea, err1 := lock.EncodeSection(name, va)
+	eb, err2 := lock.EncodeSection(name, vb)
+	return err1 == nil && err2 == nil && bytes.Equal(ea, eb)
 }

@@ -48,10 +48,11 @@ type Config struct {
 	Client *http.Client
 }
 
-// Upstream crates.io locations used by RecordCrates.
-const (
-	cratesIndexUpstream = "https://index.crates.io/"
-	cratesDLUpstream    = "https://static.crates.io/crates/"
+// Upstream crates.io locations used by RecordCrates (variables so tests can point them at a
+// fake upstream).
+var (
+	cratesIndexUpstreamURL = "https://index.crates.io/"
+	cratesDLUpstreamURL    = "https://static.crates.io/crates/"
 )
 
 // New returns the mirror handler. Routes:
@@ -227,10 +228,10 @@ func (m *mirror) record(r *http.Request, rest, file string) error {
 	}
 	var url string
 	if idx, ok := strings.CutPrefix(rest, "index/"); ok {
-		url = cratesIndexUpstream + idx
+		url = cratesIndexUpstreamURL + idx
 	} else {
 		parts := strings.Split(rest, "/") // dl/<name>/<version>/download
-		url = cratesDLUpstream + parts[1] + "/" + parts[1] + "-" + parts[2] + ".crate"
+		url = cratesDLUpstreamURL + parts[1] + "/" + parts[1] + "-" + parts[2] + ".crate"
 	}
 	c := m.c.Client
 	if c == nil {

@@ -40,9 +40,10 @@ type planner struct {
 	disk map[string]string // module path → repo-relative dir of go.mod files found on disk
 	lock *lock.GoSection
 	// third-party modules that provide packages, by path
-	third   map[string]*thirdParty
-	trees   map[string]string // module path → host path of its tree
-	storeOf map[string]string // host path → store path (trees and generated outputs)
+	third    map[string]*thirdParty       // "path@version" → module that provides packages
+	selected map[string]map[string]string // workspace module → path → selected version
+	trees    map[string]string            // module path → host path of its tree
+	storeOf  map[string]string            // host path → store path (trees and generated outputs)
 
 	own     map[string]*drv.Derivation // drv path → derivation planned here
 	byName  map[string]string          // cache key → drv path (std, tools, groups)
@@ -56,6 +57,26 @@ func newPlanner(ctx context.Context, req engine.PlanRequest) *planner {
 	return &planner{ctx: ctx, req: req, trees: map[string]string{}, storeOf: map[string]string{},
 		own: map[string]*drv.Derivation{}, byName: map[string]string{}, srcPath: map[string]string{},
 		bp: map[string]*build.Package{}, modulo: map[string][32]byte{}, out: engine.PlanResult{Nodes: map[string]engine.Resolved{}}}
+}
+
+// cutoffEnv switches on the export-data cutoff mode (R-GO-005; off by default in v1).
+const cutoffEnv = "BOB_GO_CUTOFF"
+
+// cutoffStore is what the cutoff mode needs from the engine besides PlanStore (§03.6.3,
+// I-M5a NEEDS 6): build the derivations planned so far while planning goes on and return the
+// host paths of their outputs, so that the export data of a package (compile -linkobj split)
+// can be added to the store by content and its importers planned against that path.
+type cutoffStore interface {
+	RealiseNow(ctx context.Context, drvs map[string]*drv.Derivation) (map[string]map[string]string, error)
+}
+
+// cutoff is the cutoff mode's entry: it needs the engine's realise-during-planning, which no
+// PlanStore offers yet, and the go-compile -linkobj output of the builder.
+func (pl *planner) cutoff() error {
+	if _, ok := pl.req.Store.(cutoffStore); !ok {
+		return diag.NotImplemented("Go export-data cutoff (" + cutoffEnv + "=1, R-GO-005): building derivations while planning")
+	}
+	return diag.NotImplemented("Go export-data cutoff (" + cutoffEnv + "=1, R-GO-005): compile -linkobj split in go-compile")
 }
 
 // Modulo resolves the derivations planned here first, then the engine's.
@@ -77,6 +98,9 @@ func (pl *planner) Modulo(p string) ([32]byte, error) {
 }
 
 func (pl *planner) plan() (engine.PlanResult, error) {
+	if os.Getenv(cutoffEnv) == "1" {
+		return pl.out, pl.cutoff()
+	}
 	if err := pl.workspace(); err != nil {
 		return pl.out, err
 	}
@@ -243,7 +267,7 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 		t.cgoOK = true
 	}
 	tags := append(slices.Clone(mod.spec.Tags), b.Tags...)
-	t.ctx = buildCtx{goos: goos, goarch: goarch, tags: sortedUnique(tags), cgo: t.cgoOK, tc: tc}
+	t.ctx = buildCtx{main: mod.spec.Path, goos: goos, goarch: goarch, tags: sortedUnique(tags), cgo: t.cgoOK, tc: tc}
 	return t, nil
 }
 

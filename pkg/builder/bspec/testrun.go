@@ -12,7 +12,7 @@ type TestRunArgs struct {
 	// package's source tree into the build dir so the test runs in it with Cwd there (Go tests
 	// read testdata/ relative to their package directory).
 	Copy     []CopyArgs `json:"copy,omitempty"`
-	Format   string     `json:"format,omitempty"`   // per-case parser: "" (none) or "go" (-test.v output)
+	Format   string     `json:"format,omitempty"`   // per-case parser: "" (none), "go" (-test.v output), "tap"
 	Services []Service  `json:"services,omitempty"` // R-FW-025, started in list order
 	// TimeoutS stops the test after that many seconds (0 = DefaultTestTimeoutS); the unit then
 	// fails with the diagnostic "<label> timed out after <n>s" (BOB-E-2007).

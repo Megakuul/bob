@@ -35,18 +35,40 @@ func runVersion(e *env) int {
 // R-NIX-021) and opens the store there. done = true means the command is over (the outer
 // process waited for the re-executed one, or entering failed) and exit is its status.
 func (e *env) enterStore() (st *store.Store, exit int, done bool) {
+	st, _, warns, exit, done := e.openStore(false)
+	for _, w := range warns {
+		e.out.diagnose(w, "")
+	}
+	return st, exit, done
+}
+
+// openStore is enterStore with bob's binary caches (R-DEV-004): the caches of config.json and
+// the logged-in servers. With check, the credential pre-check of R-NIX-029 runs first (inside
+// the namespace, so once per command) and an unreachable server is left out with a warning;
+// caches are then the substituters for build.Options.Caches.
+func (e *env) openStore(check bool) (st *store.Store, caches []store.Substituter, warns []*diag.Error, exit int, done bool) {
 	inside, code, err := store.Enter(e.ctx, store.Config{})
 	if err != nil {
-		return nil, e.out.fail(err), true
+		return nil, nil, nil, e.out.fail(err), true
 	}
 	if !inside {
-		return nil, code, true
+		// The re-executed bob wrote the whole output; this process only passes its status on.
+		e.out.started, e.out.finished = true, true
+		return nil, nil, nil, code, true
 	}
-	st, err = store.Open(e.ctx, store.Config{})
+	var skip map[string]bool
+	if check {
+		if skip, warns, err = e.preCheck(e.ctx); err != nil {
+			return nil, nil, nil, e.out.fail(err), true
+		}
+	}
+	creds, _ := e.loadCreds()
+	caches = e.substituters(creds, skip)
+	st, err = store.Open(e.ctx, store.Config{Substituters: caches})
 	if err != nil {
-		return nil, e.out.fail(err), true
+		return nil, nil, nil, e.out.fail(err), true
 	}
-	return st, 0, false
+	return st, caches, warns, 0, false
 }
 
 // namespaceMs is the duration of the namespace entry of this process (the `namespace` stage
@@ -162,8 +184,11 @@ func recordBuild(root string, drvs map[string]string) {
 // runLog is `bob log <label>`: the full log of the label's last local build, exactly as Nix
 // stored it (raw text is the point here). `--build` reads a server build.
 func runLog(e *env) int {
-	if e.a.has("build") || e.a.bool("f") {
-		return needsServer(e)
+	if e.a.has("build") {
+		return runServerLog(e)
+	}
+	if e.a.bool("f") || e.a.has("attempt") {
+		return e.out.fail(diag.New(4, "flag", "-f/--attempt", "what", "--build <id> (they apply to server builds)"))
 	}
 	if len(e.a.pos) != 1 {
 		return e.out.fail(diag.New(4, "flag", "bob log", "what", "one label"))

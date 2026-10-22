@@ -173,3 +173,13 @@ func Errorf(format string, a ...any) {
 		graph.Misuse(fmt.Sprintf(format, a...))
 	}
 }
+
+// CallerDir returns the label directory of the bob.go that is calling the constructor ("" for
+// the repository root): the directory New gives a node created now. Constructors use it for
+// defaults such as "the label name is the directory name". ok is false outside a bob.go.
+func CallerDir() (dir string, ok bool) {
+	if graph.CallerDir == nil {
+		return "", false
+	}
+	return graph.CallerDir()
+}

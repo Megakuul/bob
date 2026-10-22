@@ -25,11 +25,11 @@ func runTest(e *env) int { return runPipeline(e, build.CmdTest) }
 
 // runPipeline runs build.Run for build and test and renders the result.
 func runPipeline(e *env, cmd build.Command) int {
-	if e.a.bool("remote") {
-		return needsServer(e)
-	}
 	if cmd == build.CmdBuild && e.a.dash {
 		return e.out.fail(diag.New(4, "flag", "--", "what", "bob test, run, exec or dev"))
+	}
+	if e.a.bool("remote") {
+		return runRemote(e, cmd == build.CmdTest)
 	}
 	if dir := replayDir(e.getenv); dir != "" {
 		return runReplay(e, dir)
@@ -42,14 +42,21 @@ func runPipeline(e *env, cmd build.Command) int {
 	if err != nil {
 		return e.out.fail(err)
 	}
-	st, exit, done := e.enterStore()
+	st, caches, warns, exit, done := e.openStore(true)
 	if done {
 		return exit
 	}
-	opts.Store = st
+	opts.Store, opts.Caches = st, caches
 	s := newSink(e.out)
 	opts.Events = s.put
 	s.put(build.Event{Event: build.StageNamespace, DurationMs: namespaceMs()})
+	for _, w := range warns {
+		if e.out.json { // after run.start, which Run emits later
+			s.put(build.Event{Event: "warning", Error: w, Hint: w.Hint()})
+		} else {
+			e.out.diagnose(w, "")
+		}
+	}
 	res, err := build.Run(e.ctx, opts)
 	s.flush()
 	s.clear()
@@ -411,11 +418,14 @@ func runRun(e *env) int {
 	if err != nil {
 		return e.out.fail(err)
 	}
-	st, exit, done := e.enterStore()
+	st, caches, warns, exit, done := e.openStore(true)
 	if done {
 		return exit
 	}
-	res, err := build.Run(e.ctx, build.Options{Command: build.CmdBuild, Root: root, Patterns: []string{label}, Store: st, Offline: e.a.bool("offline")})
+	for _, w := range warns {
+		e.out.diagnose(w, "")
+	}
+	res, err := build.Run(e.ctx, build.Options{Command: build.CmdBuild, Root: root, Patterns: []string{label}, Store: st, Caches: caches, Offline: e.a.bool("offline")})
 	if err != nil {
 		return e.out.fail(err)
 	}

@@ -11,32 +11,48 @@ import (
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/golang/internal/gospec"
+	"github.com/megakuul/bob/pkg/golang/resolve"
 )
 
 // goModFiles returns go.mod and go.sum of module m (§03.2.5, R-GO-003): the two header lines,
-// module, go X.Y.0, one block of direct requirements, one of indirect ones (the module's
-// build list from bob.lock), both sorted; go.sum from bob.lock. go.sum is left out while it
-// would be empty.
-func goModFiles(m *wsModule, sec *lock.GoSection) []engine.GeneratedFile {
+// module, go X.Y.0, one block of direct requirements, one of indirect ones, both sorted;
+// go.sum from bob.lock. The requirements are the roots resolution used (resolve.Roots): the
+// module's declarations and every module of its build list that some workspace module
+// declares (declared) or that provides packages, each at its selected version, so the go
+// command selects exactly the locked build list. go.sum is left out while it would be empty.
+func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool) []engine.GeneratedFile {
 	direct := directRequires(m)
-	var indirect []gospec.Requirement
-	var buildList []string
+	var buildList []resolve.Module
+	packages := map[string]bool{}
 	if sec != nil {
-		if bl, ok := sec.Workspaces[m.spec.Path]; ok {
-			buildList = bl.Modules
+		for _, mv := range sec.Workspaces[m.spec.Path].Modules {
+			if p, v, ok := strings.Cut(mv, "@"); ok {
+				buildList = append(buildList, resolve.Module{Path: p, Version: v})
+			}
 		}
+		for _, e := range sec.Modules {
+			if e.Packages {
+				packages[e.Path] = true
+			}
+		}
+	}
+	sel := map[string]string{}
+	for _, bm := range buildList {
+		sel[bm.Path] = bm.Version
 	}
 	isDirect := map[string]bool{}
-	for _, r := range direct {
+	for i, r := range direct {
 		isDirect[r.Path] = true
-	}
-	for _, mv := range buildList {
-		p, v, ok := strings.Cut(mv, "@")
-		if ok && !isDirect[p] {
-			indirect = append(indirect, gospec.Requirement{Path: p, Version: v})
+		if v := sel[r.Path]; v != "" {
+			direct[i].Version = v // bob lock --update or a dependency moved it up
 		}
 	}
-	sort.Slice(indirect, func(i, j int) bool { return indirect[i].Path < indirect[j].Path })
+	var indirect []gospec.Requirement
+	for _, r := range resolve.Roots(buildList, declared, packages) {
+		if !isDirect[r.Path] {
+			indirect = append(indirect, gospec.Requirement{Path: r.Path, Version: r.Version})
+		}
+	}
 
 	bobGo := "bob.go"
 	if m.dir != "" {
@@ -98,22 +114,25 @@ func directRequires(m *wsModule) []gospec.Requirement {
 	return out
 }
 
-// goSum is go.sum for a build list: "<path> <version> <h1>" for modules that provide
-// packages, "<path> <version>/go.mod <modH1>" for every module, sorted bytewise.
-func goSum(buildList []string, sec *lock.GoSection) []byte {
+// goSum is go.sum for a build list: "<path> <version> <h1>" for the selected modules that
+// provide packages, "<path> <version>/go.mod <modH1>" for every locked version of a module of
+// the build list (the go command reads the go.mod of non-selected versions too, below
+// unpruned modules), sorted bytewise.
+func goSum(buildList []resolve.Module, sec *lock.GoSection) []byte {
 	if sec == nil {
 		return nil
 	}
-	in := map[string]bool{}
-	for _, mv := range buildList {
-		in[mv] = true
+	sel := map[string]string{}
+	for _, m := range buildList {
+		sel[m.Path] = m.Version
 	}
 	var lines []string
 	for _, m := range sec.Modules {
-		if !in[m.Path+"@"+m.Version] {
+		v, ok := sel[m.Path]
+		if !ok {
 			continue
 		}
-		if m.Packages && m.H1 != "" {
+		if m.Packages && m.H1 != "" && v == m.Version {
 			lines = append(lines, fmt.Sprintf("%s %s %s", m.Path, m.Version, m.H1))
 		}
 		lines = append(lines, fmt.Sprintf("%s %s/go.mod %s", m.Path, m.Version, m.ModH1))
@@ -189,6 +208,9 @@ func explainGoMod(m *wsModule, direct, indirect []gospec.Requirement, bobGo stri
 			w, inWant := want[p]
 			g, inGot := got.require[p]
 			switch {
+			case inWant && !inGot && len(got.require) == 0:
+				// A skeleton (go mod init, or bob's file from before the requirements were
+				// locked) lacks them all: nothing a user changed.
 			case inWant && !inGot:
 				out = append(out, engine.DriftLine{Op: "-", Text: fmt.Sprintf("%s %s  (%s declares it)", p, w, bobGo)})
 			case !inWant && inGot:

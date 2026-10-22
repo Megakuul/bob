@@ -36,16 +36,16 @@ func commands() []command {
 		{"run", []string{"bob run <label> [--platform native] [-- args]"}, "build and run a binary",
 			[]flag{{name: "platform", kind: fStr}, {name: "bin", kind: fStr}}, runRun},
 		{"dev", []string{"bob dev [--shell <name>] [--no-servers] [--servers-only] [-- cmd args]"}, "enter the developer environment",
-			[]flag{{name: "shell", kind: fStr}, {name: "no-servers"}, {name: "servers-only"}}, notYet},
+			[]flag{{name: "shell", kind: fStr}, {name: "no-servers"}, {name: "servers-only"}}, runDev},
 		{"env", []string{"bob env [--shell <name>] [--format sh|fish|json] [--hook=bash|zsh|fish]"}, "print the developer environment",
-			[]flag{{name: "shell", kind: fStr}, {name: "format", kind: fStr}, {name: "hook", kind: fStr}}, notYet},
-		{"hook", []string{"bob hook bash|zsh|fish"}, "print the shell hook", nil, notYet},
-		{"allow", []string{"bob allow [dir]"}, "allow the shell hook in a directory", nil, notYet},
-		{"deny", []string{"bob deny [dir]"}, "deny the shell hook in a directory", nil, notYet},
+			[]flag{{name: "shell", kind: fStr}, {name: "format", kind: fStr}, {name: "hook", kind: fStr}}, runEnv},
+		{"hook", []string{"bob hook bash|zsh|fish"}, "print the shell hook", nil, runHook},
+		{"allow", []string{"bob allow [dir]"}, "allow the shell hook in a directory", nil, runAllow},
+		{"deny", []string{"bob deny [dir]"}, "deny the shell hook in a directory", nil, runDeny},
 		{"exec", []string{"bob exec [--lsp] [--project <root>] [--shell <name>] -- <tool> [args]"}, "run a tool of the developer environment",
-			[]flag{{name: "lsp"}, {name: "project", kind: fStr}, {name: "shell", kind: fStr}}, notYet},
+			[]flag{{name: "lsp"}, {name: "project", kind: fStr}, {name: "shell", kind: fStr}}, runExec},
 		{"editor", []string{"bob editor vscode|nvim|helix|zed|jetbrains [--write]"}, "set up an editor",
-			[]flag{{name: "write"}}, notYet},
+			[]flag{{name: "write"}}, runEditor},
 		{"check", []string{"bob check [--fix]"}, "check bob.go files and bob.lock",
 			[]flag{{name: "fix"}, {name: "determinism"}}, runCheck},
 		{"gen", []string{"bob gen [patterns…] [--check] [--force]"}, "write native tooling files and generated code",
@@ -57,12 +57,13 @@ func commands() []command {
 			[]flag{{name: "why", kind: fTwo}, {name: "all"}, {name: "rdeps"}, {name: "depth", kind: fInt}, {name: "format", kind: fStr}}, runGraph},
 		{"log", []string{"bob log <label> [--build <id>] [-f] [--attempt N]"}, "show a build log",
 			[]flag{{name: "build", kind: fStr}, {name: "f", short: true}, {name: "attempt", kind: fInt}}, runLog},
-		{"cancel", []string{"bob cancel <build-id>"}, "cancel a remote build", nil, needsServer},
+		{"cancel", []string{"bob cancel <build-id>"}, "cancel a remote build", nil, runCancel},
 		{"pipeline", []string{"bob pipeline run <name> [--remote]"}, "run a pipeline",
 			[]flag{{name: "remote"}}, notYet},
 		{"login", []string{"bob login [<url>] [--device] [--token-stdin]"}, "log in to a bob server",
-			[]flag{{name: "device"}, {name: "token-stdin"}}, notYet},
-		{"logout", []string{"bob logout [<url>]"}, "log out of a bob server", nil, notYet},
+			[]flag{{name: "device"}, {name: "token-stdin"}}, runLogin},
+		{"logout", []string{"bob logout [<url>]"}, "log out of a bob server", nil, runLogout},
+		{"whoami", []string{"bob whoami [<url>]"}, "show the login of a bob server", nil, runWhoAmI},
 		{"install", []string{"bob install <ref> [--as <name>] [--bin-dir <dir>]"}, "install a release",
 			[]flag{{name: "as", kind: fStr}, {name: "bin-dir", kind: fStr}}, notYet},
 		{"uninstall", []string{"bob uninstall <ref>"}, "remove an installed release", nil, notYet},
@@ -214,15 +215,6 @@ func (o *out) configure(a *args) {
 // notYet is the answer of a command that a later milestone implements.
 func notYet(e *env) int {
 	return e.out.fail(diag.NotImplemented("bob " + e.cmd.name))
-}
-
-// needsServer is a command that only talks to a bob server: without one configured it is
-// BOB-E-4009 (SPEC R-CLI-005).
-func needsServer(e *env) int {
-	if !serverConfigured(e) {
-		return e.out.fail(diag.New(4009, "variant", "none"))
-	}
-	return notYet(e)
 }
 
 func lookup(name string) (command, bool) {

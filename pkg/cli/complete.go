@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -128,6 +129,30 @@ func runComplete(words []string, cwd string, w func(string)) {
 		return
 	}
 	prev := words[len(words)-2]
+	if prev == "--shell" || strings.HasPrefix(cur, "--shell=") {
+		// dev shell names of the last evaluation (.bob/shells); never evaluates
+		if root, err := findRoot(cwd, false); err == nil {
+			if v, ok := strings.CutPrefix(cur, "--shell="); ok {
+				for _, n := range readShells(root) {
+					if strings.HasPrefix(n, v) {
+						w("--shell=" + n + "\n")
+					}
+				}
+				return
+			}
+			emit(readShells(root))
+		}
+		return
+	}
+	if cmd.name == "exec" && slices.Contains(words[:len(words)-1], "--") {
+		// the tool after "--": the shims of the project
+		if words[len(words)-2] == "--" {
+			if root, err := findRoot(cwd, false); err == nil {
+				emit(shimNames(root))
+			}
+		}
+		return
+	}
 	if strings.HasPrefix(prev, "--") && !strings.Contains(prev, "=") {
 		if v := flagValues(cmd.name, prev); v != nil {
 			emit(v)
@@ -191,10 +216,23 @@ func runComplete(words []string, cwd string, w func(string)) {
 func completionScript(shell string) (string, bool) {
 	switch shell {
 	case "bash":
+		// The words are split from the line itself: bash's own COMP_WORDS breaks labels at
+		// ':' (COMP_WORDBREAKS), and the part before the last ':' is taken off the candidates.
 		return `# bob completion for bash: source <(bob completion bash)
 _bob_complete() {
+    local line="${COMP_LINE:0:$COMP_POINT}"
+    local -a words
+    read -r -a words <<< "$line"
+    [[ "$line" == *[[:space:]] ]] && words+=("")
+    local cur="${words[${#words[@]}-1]}"
     local IFS=$'\n'
-    COMPREPLY=($(bob __complete "${COMP_WORDS[@]:1:$COMP_CWORD}" 2>/dev/null))
+    local -a cands
+    cands=($(bob __complete "${words[@]:1}" 2>/dev/null))
+    if [[ "$cur" == *:* && "$COMP_WORDBREAKS" == *:* ]]; then
+        local pre="${cur%"${cur##*:}"}"
+        cands=("${cands[@]#"$pre"}")
+    fi
+    COMPREPLY=("${cands[@]}")
 }
 complete -o default -F _bob_complete bob
 `, true
@@ -203,7 +241,7 @@ complete -o default -F _bob_complete bob
 # bob completion for zsh: source <(bob completion zsh)
 _bob_complete() {
     local -a cands
-    cands=("${(@f)$(bob __complete "${(@)words[2,CURRENT]}" 2>/dev/null)}")
+    cands=(${(f)"$(bob __complete "${(@)words[2,CURRENT]}" 2>/dev/null)"})
     compadd -Q -- "${cands[@]}"
 }
 compdef _bob_complete bob
@@ -211,8 +249,8 @@ compdef _bob_complete bob
 	case "fish":
 		return `# bob completion for fish: bob completion fish | source
 function __bob_complete
-    set -l tokens (commandline -opc) (commandline -ct)
-    bob __complete $tokens[2..-1] 2>/dev/null
+    set -l tokens (commandline -opc)
+    bob __complete $tokens[2..-1] (commandline -ct | string collect --allow-empty) 2>/dev/null
 end
 complete -c bob -f -a '(__bob_complete)'
 `, true
@@ -238,4 +276,17 @@ func runCompletion(e *env) int {
 	}
 	e.out.printf("%s", s)
 	return 0
+}
+
+// shimNames are the tools of the project's dev shell (.bob/bin), for `bob exec -- <tool>`.
+func shimNames(root string) []string {
+	ents, err := os.ReadDir(filepath.Join(root, ".bob", "bin"))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range ents {
+		out = append(out, e.Name())
+	}
+	return out
 }

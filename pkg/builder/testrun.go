@@ -124,8 +124,15 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 	svcs.stop()
 
 	res := bspec.TestResult{Version: 1, Label: c.Job.Label, Passed: runErr == nil, Duration: took.Seconds(), Cases: []bspec.TestCase{}}
-	if a.Format == "go" {
+	switch a.Format {
+	case "go":
 		cases, err := goCases(logPath)
+		if err != nil {
+			return err
+		}
+		res.Cases = cases
+	case "tap":
+		cases, err := tapCases(logPath, c.Job.Label, res.Passed, took.Seconds())
 		if err != nil {
 			return err
 		}
@@ -160,8 +167,8 @@ func checkTestRun(a bspec.TestRunArgs) error {
 	if len(a.Argv) == 0 || a.Argv[0] == "" {
 		return Invalidf("test-run without argv")
 	}
-	if a.Format != "" && a.Format != "go" {
-		return Invalidf("test-run format %q is not \"\" or \"go\"", a.Format)
+	if a.Format != "" && a.Format != "go" && a.Format != "tap" {
+		return Invalidf("test-run format %q is not \"\", \"go\" or \"tap\"", a.Format)
 	}
 	if a.TimeoutS < 0 {
 		return Invalidf("test-run timeout %d is negative", a.TimeoutS)
@@ -463,6 +470,59 @@ func goCases(logPath string) ([]bspec.TestCase, error) {
 	// A line longer than the scanner buffer ends parsing; the cases so far are kept.
 	if err := sc.Err(); err != nil && !errors.Is(err, bufio.ErrTooLong) {
 		return nil, err
+	}
+	return cases, nil
+}
+
+// tapResult matches a TAP test line: "ok 1 - name", "not ok 2 name # SKIP reason".
+var tapResult = regexp.MustCompile(`^(not )?ok\b(?:\s+([0-9]+))?(?:\s*-)?\s*([^#]*?)\s*(?:#\s*(\S+).*)?$`)
+
+// tapCases parses TAP output (a log that starts with "TAP version") into cases; any other
+// output is one case named after the unit (the name of its label), passed when the program
+// exited 0. A failing TAP case carries the diagnostic lines ("# ...") that follow it.
+func tapCases(logPath, label string, passed bool, seconds float64) ([]bspec.TestCase, error) {
+	b, err := os.ReadFile(logPath)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(b), "\n")
+	if !strings.HasPrefix(strings.TrimSpace(lines[0]), "TAP version") {
+		name := label
+		if i := strings.LastIndexByte(label, ':'); i >= 0 {
+			name = label[i+1:]
+		}
+		tc := bspec.TestCase{Name: name, Result: "pass", Duration: seconds}
+		if !passed {
+			tc.Result = "fail"
+			tc.Output = string(b[max(0, len(b)-maxCaseOutput):])
+		}
+		return []bspec.TestCase{tc}, nil
+	}
+	cases := []bspec.TestCase{}
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "#") && len(cases) > 0 && cases[len(cases)-1].Result == "fail" {
+			last := &cases[len(cases)-1]
+			if len(last.Output)+len(line)+1 <= maxCaseOutput {
+				last.Output += line + "\n"
+			}
+			continue
+		}
+		m := tapResult.FindStringSubmatch(strings.TrimRight(line, "\r"))
+		if m == nil {
+			continue
+		}
+		name := m[3]
+		if name == "" {
+			name = m[2]
+		}
+		tc := bspec.TestCase{Name: name, Result: "pass"}
+		switch {
+		case strings.EqualFold(m[4], "skip"):
+			tc.Result = "skip"
+		case m[1] != "" && !strings.EqualFold(m[4], "todo"):
+			tc.Result = "fail"
+		}
+		cases = append(cases, tc)
 	}
 	return cases, nil
 }

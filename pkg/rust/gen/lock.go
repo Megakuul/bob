@@ -384,8 +384,11 @@ func download(ctx context.Context, c *http.Client, u string) ([]byte, error) {
 	return nil, last
 }
 
-// Stale reports what changed since the rust section was resolved (R-FW-062).
-func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Pos, error) {
+// Stale reports whether the rust section still resolves the crates of the graph (R-FW-062).
+// Equal inputs mean fresh. Otherwise the graph's crates (a build of part of the repository sees
+// only part of them) are resolved against the locked crates alone: the section is stale exactly
+// when that fails, i.e. when a declaration needs a crate, version or feature bob.lock lacks.
+func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.Pos, error) {
 	st, err := readLockState(req.Graph)
 	if err != nil {
 		return "", ir.Pos{}, err
@@ -395,14 +398,23 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 		return "the rust section cannot be read: " + err.Error(), ir.Pos{}, nil
 	}
 	sec := v.(*lock.RustSection)
-	if sec.Inputs == st.inputs {
+	if sec.Inputs == st.inputs || len(st.members) == 0 {
 		return "", ir.Pos{}, nil
 	}
-	// Name the first crate whose requirement bob.lock does not hold, else the first crate.
 	records, err := fromLockCrates(sec.Crates)
 	if err != nil {
 		return "the rust section cannot be read: " + err.Error(), ir.Pos{}, nil
 	}
+	reg, err := lockedRegistry(records)
+	if err != nil {
+		return "the rust section cannot be read: " + err.Error(), ir.Pos{}, nil
+	}
+	if _, err := resolve.Resolve(ctx, reg, st.members, resolve.Options{}); err == nil {
+		return "", ir.Pos{}, nil
+	} else if ctx.Err() != nil {
+		return "", ir.Pos{}, err
+	}
+	// Name the first crate whose own requirement bob.lock does not hold, else the first crate.
 	byName := map[string][]*resolve.Crate{}
 	for i := range records {
 		byName[records[i].Name] = append(byName[records[i].Name], &records[i])
@@ -415,9 +427,32 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 			}
 		}
 	}
-	if len(st.ws.names) == 0 {
-		return "the Rust crates changed", ir.Pos{}, nil
-	}
 	n := st.ws.members[st.ws.names[0]].node
-	return "the Rust crate declarations changed", n.DefinedAt, nil
+	return "the Rust crate declarations need crates or features bob.lock does not hold", n.DefinedAt, nil
+}
+
+// lockedRegistry is a registry of exactly the locked crates: every dependency requires the
+// version it was resolved to.
+func lockedRegistry(records []resolve.Crate) (resolve.MemRegistry, error) {
+	reg := resolve.MemRegistry{}
+	for _, c := range records {
+		hexSum, err := resolve.HexOfSRI(c.Checksum)
+		if err != nil {
+			return nil, fmt.Errorf("%s@%s: %w", c.Name, c.Version, err)
+		}
+		ie := resolve.IndexEntry{Name: c.Name, Vers: c.Version, Cksum: hexSum, Features: c.Features, Links: c.Links}
+		for _, d := range c.Deps {
+			n, v, _ := strings.Cut(d.Crate, "@")
+			def := !d.NoDefault
+			ie.Deps = append(ie.Deps, resolve.IndexDep{Name: d.Name, Req: "=" + v, Features: d.Features, Optional: d.Optional,
+				DefaultFeatures: &def, Target: d.Target, Kind: d.Kind, Package: n})
+		}
+		e, err := resolve.NewEntry(&ie)
+		if err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(c.Name)
+		reg[key] = append(reg[key], e)
+	}
+	return reg, nil
 }

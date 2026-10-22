@@ -154,6 +154,10 @@ func fileMode(m fs.FileMode) fs.FileMode {
 	return 0o644
 }
 
+// Copy copies the file or tree from (followed if it is a symlink itself) to the writable path
+// to; inside a tree symlinks stay symlinks. Ecosystem kinds use it like the copy op of "run".
+func (c *Ctx) Copy(from, to string) error { return c.copyAny(from, to) }
+
 // copyAny copies the file or tree from (followed if it is a symlink itself) to the writable
 // path to. Inside a tree symlinks are copied as symlinks and modes are normalised.
 func (c *Ctx) copyAny(from, to string) error {

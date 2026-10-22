@@ -108,4 +108,7 @@ var (
 	// Restrict limits the platforms n (a bob.Node) may be built for; platforms is a
 	// []bob.Platform (empty = every platform).
 	Restrict func(n any, platforms any)
+	// CallerDir returns the label directory a node created now would get (the calling
+	// bob.go's directory); ok is false outside a bob.go of this build.
+	CallerDir func() (dir string, ok bool)
 )

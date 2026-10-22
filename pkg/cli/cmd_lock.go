@@ -47,6 +47,9 @@ func runLock(e *env) int {
 	}{changes})
 	if !e.out.json {
 		printChanges(e.out, res.Changes)
+		for _, n := range res.Notes {
+			e.out.printf("note: %s\n", n)
+		}
 		if res.Reformatted {
 			e.out.printf("note: bob.lock was reformatted\n")
 		}

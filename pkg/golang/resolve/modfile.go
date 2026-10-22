@@ -60,10 +60,10 @@ func ParseModFile(b []byte) (*ModFile, error) {
 			if len(f) != 3 {
 				return nil, fmt.Errorf("go.mod line %d: malformed require directive", i+1)
 			}
-			if err := checkPath(f[1]); err != nil {
+			if err := CheckPath(f[1]); err != nil {
 				return nil, fmt.Errorf("go.mod line %d: %w", i+1, err)
 			}
-			if !ValidVersion(f[2]) {
+			if !ValidVersion(f[2]) || !majorMatches(f[1], f[2]) {
 				return nil, fmt.Errorf("go.mod line %d: invalid version %q of %s", i+1, f[2], f[1])
 			}
 			m.Require = append(m.Require, Module{Path: f[1], Version: f[2]})
@@ -117,9 +117,9 @@ func modFields(line string) ([]string, error) {
 	return out, nil
 }
 
-// checkPath accepts module paths as the proxy protocol can carry them: non-empty, no spaces,
+// CheckPath accepts module paths as the proxy protocol can carry them: non-empty, no spaces,
 // no "..", no leading or trailing slash, printable ASCII.
-func checkPath(p string) error {
+func CheckPath(p string) error {
 	if p == "" || len(p) > 1024 || strings.HasPrefix(p, "/") || strings.HasSuffix(p, "/") || strings.Contains(p, "//") {
 		return fmt.Errorf("invalid module path %q", p)
 	}
@@ -134,4 +134,25 @@ func checkPath(p string) error {
 		}
 	}
 	return nil
+}
+
+// majorMatches is golang.org/x/mod's MatchPathMajor: v2 and later need the path suffix /vN
+// (gopkg.in: .vN) or "+incompatible"; gopkg.in .v1 also takes the old v0.0.0- pseudo-versions.
+func majorMatches(path, version string) bool {
+	pathMajor := ""
+	if strings.HasPrefix(path, "gopkg.in/") {
+		if i := strings.LastIndex(path, ".v"); i >= 0 {
+			pathMajor = strings.TrimSuffix(path[i:], "-unstable")
+		}
+	} else if i := strings.LastIndex(path, "/v"); i >= 0 && isNum(path[i+2:]) && path[i+2] != '0' && path[i+2:] != "1" {
+		pathMajor = path[i:]
+	}
+	if strings.HasPrefix(version, "v0.0.0-") && pathMajor == ".v1" {
+		return true
+	}
+	major := strings.SplitN(version, ".", 2)[0]
+	if pathMajor == "" {
+		return major == "v0" || major == "v1" || strings.HasSuffix(version, "+incompatible")
+	}
+	return major == "v"+pathMajor[2:]
 }

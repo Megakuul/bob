@@ -87,28 +87,6 @@ func configDir(getenv func(string) string) string {
 	return filepath.Join(h, ".config", "bob")
 }
 
-// serverConfigured reports whether a bob server is configured: --server, BOB_SERVER, or a
-// default server or credentials in the config files (SPEC §02.8 Files).
-func serverConfigured(e *env) bool {
-	if e.a.str("server") != "" || e.getenv("BOB_SERVER") != "" {
-		return true
-	}
-	dir := configDir(e.getenv)
-	if dir == "" {
-		return false
-	}
-	var cfg struct {
-		DefaultServer string `json:"defaultServer"`
-	}
-	if readJSON(filepath.Join(dir, "config.json"), &cfg) == nil && cfg.DefaultServer != "" {
-		return true
-	}
-	var cred struct {
-		Servers map[string]json.RawMessage `json:"servers"`
-	}
-	return readJSON(filepath.Join(dir, "credentials.json"), &cred) == nil && len(cred.Servers) > 0
-}
-
 // maxConfigBytes bounds the config files bob reads (hand-edited input).
 const maxConfigBytes = 1 << 20
 

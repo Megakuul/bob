@@ -22,8 +22,9 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	if err != nil {
 		return parts, err
 	}
-	fw := forgeParts(env, &parts)                               // forges, /hooks/, checkout minter, notifications (after fleetParts)
-	if err := buildParts(ctx, env, &parts, f, fw); err != nil { // build controller, BuildService, JobService (I-B11)
+	fw := forgeParts(env, &parts)                                   // forges, /hooks/, checkout minter, notifications (after fleetParts)
+	pw := projectParts(ctx, env, &parts, fw)                        // ProjectService, settings, cache and list RPCs (I-B12)
+	if err := buildParts(ctx, env, &parts, f, fw, pw); err != nil { // build controller, BuildService, JobService (I-B11)
 		return parts, err
 	}
 	return parts, nil

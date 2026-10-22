@@ -261,7 +261,7 @@ func vendorToml(c resolve.Crate) string {
 			fmt.Fprintf(&b, "%s = %s\n", key(k), list(vs))
 		}
 	}
-	type table struct{ name, kind, target string }
+	type table struct{ kind, target string }
 	tables := map[table][]resolve.CrateDep{}
 	for _, d := range c.Deps {
 		t := table{kind: d.Kind, target: d.Target}

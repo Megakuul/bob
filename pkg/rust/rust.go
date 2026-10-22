@@ -19,10 +19,11 @@ import (
 	"github.com/megakuul/bob/pkg/rust/internal/rsspec"
 )
 
-// Kinds of the Rust ecosystem (SPEC §03.3). Every crate unit depends on the target platform.
+// Kinds of the Rust ecosystem (SPEC §03.3). Every crate unit depends on the target platform;
+// a variant's Features of a crate are added on top of its Enable list (§04).
 func init() {
-	ext.Register(ext.Kind{Name: rsspec.KindCrate, Axes: []ext.Axis{ext.AxisPlatform}})
-	ext.Register(ext.Kind{Name: rsspec.KindTest, Axes: []ext.Axis{ext.AxisPlatform}})
+	ext.Register(ext.Kind{Name: rsspec.KindCrate, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisFeatures}})
+	ext.Register(ext.Kind{Name: rsspec.KindTest, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisFeatures}})
 	ext.Register(ext.Kind{Name: rsspec.KindTests, Axes: []ext.Axis{ext.AxisPlatform}})
 }
 
@@ -237,37 +238,18 @@ func CDylib(p *bob.P, o LibOpts) *CLib {
 //		return rust.Binary(p, rust.BinOpts{Deps: []rust.Dep{rust.Crate("tokio", "1", rust.Features("rt", "macros")), Core(p)}})
 //	})
 func Binary(p *bob.P, o BinOpts) *Bin {
-	co := common{Name: o.Name, Edition: o.Edition, Root: o.Root, Srcs: o.Srcs, Deps: o.Deps, BuildDeps: o.BuildDeps,
-		DevDeps: o.DevDeps, Features: o.Features, Default: o.Default, Enable: o.Enable, BuildScript: o.BuildScript,
-		Native: o.Native, Toolchain: o.Toolchain, Options: o.Options}
-	c := newCrate(p, rsspec.TypeBin, co, "")
+	c := newCrate(p, rsspec.TypeBin, o, "")
 	return &Bin{Node: *c.node, c: c}
 }
 
-// common is the union of LibOpts and BinOpts.
-type common struct {
-	Name, Root  string
-	Edition     Edition
-	Srcs        bob.Sources
-	Deps        []Dep
-	BuildDeps   []Dep
-	DevDeps     []Dep
-	Features    map[string][]string
-	Default     []string
-	Enable      []string
-	BuildScript string
-	Native      []bob.Linkable
-	Toolchain   bob.Tool
-	Options     []Option
-}
-
-func libCommon(o LibOpts) common {
-	return common{Name: o.Name, Edition: o.Edition, Root: o.Root, Srcs: o.Srcs, Deps: o.Deps, BuildDeps: o.BuildDeps,
+// libCommon is LibOpts in BinOpts form (the options both share; Enable is a binary's only).
+func libCommon(o LibOpts) BinOpts {
+	return BinOpts{Name: o.Name, Edition: o.Edition, Root: o.Root, Srcs: o.Srcs, Deps: o.Deps, BuildDeps: o.BuildDeps,
 		DevDeps: o.DevDeps, Features: o.Features, Default: o.Default, BuildScript: o.BuildScript, Native: o.Native,
 		Toolchain: o.Toolchain, Options: o.Options}
 }
 
-func newCrate(p *bob.P, typ string, o common, headers string) *crate {
+func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 	c := &crate{p: p, given: !isZeroSources(o.Srcs), srcs: o.Srcs}
 	var problems []string
 	ed := o.Edition

@@ -114,6 +114,7 @@ type Info struct {
 	Orchestrators  []Proc   `json:"orchestrators"`
 	Workers        []Proc   `json:"workers"`
 	Rustfs         Proc     `json:"rustfs"`
+	Seed           *Seed    `json:"seed,omitempty"` // set by Stack.Seed (devstack up)
 }
 
 // Stack is a running stack.

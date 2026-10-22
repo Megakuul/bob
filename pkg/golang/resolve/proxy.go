@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -35,7 +36,18 @@ var ErrNotFound = errors.New("not found")
 type Proxy struct {
 	base   string // without a trailing slash
 	dir    string // file:// proxies: the local directory
+	cache  string // local GOPROXY directory that keeps every .mod and .zip read ("" = none)
 	client *http.Client
+}
+
+// WithCache keeps every go.mod and zip read from the proxy in dir, in the GOPROXY layout
+// (§03.2.5: bob env points GOPROXY at it), and answers later reads from there: module versions
+// are immutable, so a warm cache makes resolution need no network.
+func (p *Proxy) WithCache(dir string) *Proxy {
+	if p.dir == "" || filepath.Clean(dir) != p.dir {
+		p.cache = dir
+	}
+	return p
 }
 
 // NewProxy checks a proxy URL: one http, https or file URL ("direct" and "off" are not
@@ -43,22 +55,22 @@ type Proxy struct {
 func NewProxy(raw string) (*Proxy, error) {
 	raw = strings.TrimSuffix(strings.TrimSpace(raw), "/")
 	if raw == "" || strings.ContainsAny(raw, ",|") || raw == "direct" || raw == "off" {
-		return nil, fmt.Errorf("Go module proxy %q: bob needs exactly one proxy URL (http, https or file)", raw)
+		return nil, fmt.Errorf("module proxy %q: bob needs exactly one proxy URL (http, https or file)", raw)
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("Go module proxy %q: %w", raw, err)
+		return nil, fmt.Errorf("module proxy %q: %w", raw, err)
 	}
 	p := &Proxy{base: raw}
 	switch u.Scheme {
 	case "file":
 		if u.Host != "" && u.Host != "localhost" || !filepath.IsAbs(u.Path) {
-			return nil, fmt.Errorf("Go module proxy %q: a file URL names an absolute local directory", raw)
+			return nil, fmt.Errorf("module proxy %q: a file URL names an absolute local directory", raw)
 		}
 		p.dir = filepath.Clean(u.Path)
 	case "http", "https":
 		if u.Host == "" {
-			return nil, fmt.Errorf("Go module proxy %q has no host", raw)
+			return nil, fmt.Errorf("module proxy %q has no host", raw)
 		}
 		d := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
 		p.client = &http.Client{Transport: &http.Transport{
@@ -67,7 +79,7 @@ func NewProxy(raw string) (*Proxy, error) {
 			MaxIdleConnsPerHost: 16, ForceAttemptHTTP2: true,
 		}}
 	default:
-		return nil, fmt.Errorf("Go module proxy %q: scheme %q is not supported (http, https or file)", raw, u.Scheme)
+		return nil, fmt.Errorf("module proxy %q: scheme %q is not supported (http, https or file)", raw, u.Scheme)
 	}
 	return p, nil
 }
@@ -102,19 +114,149 @@ func EscapePath(s string) string {
 }
 
 // ZipURL is where the proxy serves the zip of a module version.
-func (p *Proxy) ZipURL(m Module) string {
-	return p.base + "/" + EscapePath(m.Path) + "/@v/" + EscapePath(m.Version) + ".zip"
+func (p *Proxy) ZipURL(m Module) string { return p.base + "/" + versionFile(m, ".zip") }
+
+func versionFile(m Module, ext string) string {
+	return EscapePath(m.Path) + "/@v/" + EscapePath(m.Version) + ext
 }
 
 // Mod returns the go.mod of a module version.
 func (p *Proxy) Mod(ctx context.Context, m Module) ([]byte, error) {
-	return p.get(ctx, EscapePath(m.Path)+"/@v/"+EscapePath(m.Version)+".mod", MaxModBytes)
+	rel := versionFile(m, ".mod")
+	if p.cache != "" {
+		if b, err := readCapped(filepath.Join(p.cache, filepath.FromSlash(rel)), MaxModBytes); err == nil {
+			return b, nil
+		}
+	}
+	b, err := p.get(ctx, rel, MaxModBytes)
+	if err != nil || p.cache == "" {
+		return b, err
+	}
+	// A cache that cannot be written only costs a later download.
+	_ = p.store(m, ".mod", func(f *os.File) error { _, err := f.Write(b); return err })
+	return b, nil
 }
 
-// Zip writes the zip of a module version to w.
-func (p *Proxy) Zip(ctx context.Context, m Module, w io.Writer) error {
-	rel := EscapePath(m.Path) + "/@v/" + EscapePath(m.Version) + ".zip"
-	return p.stream(ctx, rel, MaxZipBytes, w)
+// ZipFile returns a local file holding the zip of a module version: the proxy's own file
+// (file://), the cached copy, or a download into tmp (temp reports that the caller removes it).
+func (p *Proxy) ZipFile(ctx context.Context, m Module, tmp string) (file string, temp bool, err error) {
+	rel := versionFile(m, ".zip")
+	if p.cache != "" {
+		file = filepath.Join(p.cache, filepath.FromSlash(rel))
+		if _, err := os.Stat(file); err == nil {
+			return file, false, nil
+		}
+		err := p.store(m, ".zip", func(f *os.File) error { return p.stream(ctx, rel, MaxZipBytes, f) })
+		if err == nil {
+			return file, false, nil
+		}
+		if errors.Is(err, ErrNotFound) || ctx.Err() != nil {
+			return "", false, err
+		}
+		// The cache is not writable: read the proxy directly.
+	}
+	if p.dir != "" {
+		file = filepath.Join(p.dir, filepath.FromSlash(rel))
+		if _, err := os.Stat(file); err != nil {
+			return "", false, fmt.Errorf("%s: %w", rel, ErrNotFound)
+		}
+		return file, false, nil
+	}
+	f, err := os.CreateTemp(tmp, "gozip-*.zip")
+	if err != nil {
+		return "", false, err
+	}
+	err = p.stream(ctx, rel, MaxZipBytes, f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return "", false, err
+	}
+	return f.Name(), true, nil
+}
+
+// store writes one version file into the cache (temp file + rename, so readers never see a
+// partial file) and keeps the GOPROXY layout complete: .info and the version list.
+func (p *Proxy) store(m Module, ext string, write func(*os.File) error) error {
+	dir := filepath.Join(p.cache, filepath.FromSlash(EscapePath(m.Path)), "@v")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	err = write(f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), filepath.Join(dir, EscapePath(m.Version)+ext))
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+	return WriteVersionInfo(p.cache, m)
+}
+
+// WriteVersionInfo adds a version to a GOPROXY directory: <v>.info and the list file.
+func WriteVersionInfo(root string, m Module) error {
+	dir := filepath.Join(root, filepath.FromSlash(EscapePath(m.Path)), "@v")
+	info := filepath.Join(dir, EscapePath(m.Version)+".info")
+	if _, err := os.Stat(info); err != nil {
+		b, _ := json.Marshal(struct{ Version string }{m.Version})
+		if err := writeAtomic(info, b); err != nil {
+			return err
+		}
+	}
+	list := filepath.Join(dir, "list")
+	old, _ := readCapped(list, maxListBytes)
+	vs := strings.Fields(string(old))
+	for _, v := range vs {
+		if v == m.Version {
+			return nil
+		}
+	}
+	vs = append(vs, m.Version)
+	sort.Slice(vs, func(i, j int) bool { return Compare(vs[i], vs[j]) < 0 })
+	return writeAtomic(list, []byte(strings.Join(vs, "\n")+"\n"))
+}
+
+func writeAtomic(path string, b []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(f.Name(), 0o644)
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+	}
+	return err
+}
+
+func readCapped(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var b strings.Builder
+	if err := copyCapped(&b, f, limit, path); err != nil {
+		return nil, err
+	}
+	return []byte(b.String()), nil
 }
 
 // Latest returns the highest release version of a module (pre-releases only when there is

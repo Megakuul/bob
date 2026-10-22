@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/lock"
@@ -52,13 +51,21 @@ func (Ecosystem) Native(_ context.Context, req engine.PlanRequest) ([]engine.Gen
 	if err := pl.lockModules(); err != nil {
 		return nil, err
 	}
+	declared := map[string]bool{} // what resolution counts as declared (resolve.Roots)
+	for _, m := range pl.mods {
+		if m.node != nil && strings.HasPrefix(m.node.Label, "//") {
+			for _, r := range directRequires(m) {
+				declared[r.Path] = true
+			}
+		}
+	}
 	var out []engine.GeneratedFile
 	for _, mp := range sortedKeys(pl.mods) {
 		m := pl.mods[mp]
 		if m.node == nil || !strings.HasPrefix(m.node.Label, "//") {
 			continue // modules of dependency repositories keep their own files
 		}
-		out = append(out, goModFiles(m, pl.lock)...)
+		out = append(out, goModFiles(m, pl.lock, declared)...)
 	}
 	return out, nil
 }
@@ -91,95 +98,4 @@ func declarations(g *ir.Graph) ([]declaration, map[string]*ir.Node, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nodes, nil
-}
-
-// Lock writes the go section: the declarations' hash, the proxy, a build list per workspace
-// module and the module entries. Resolving third-party requirements (MVS over the proxy's
-// .mod files, R-GO-002b) is task M5.3; until it exists, requirements that the previous
-// section does not already resolve fail with BOB-E-9008.
-func (Ecosystem) Lock(_ context.Context, req engine.LockRequest) (json.RawMessage, error) {
-	decls, _, err := declarations(req.Graph)
-	if err != nil {
-		return nil, err
-	}
-	inputs, err := lock.Inputs(decls)
-	if err != nil {
-		return nil, err
-	}
-	var prev *lock.GoSection
-	if len(req.Prev) > 0 {
-		if v, err := lock.DecodeSection(lock.SectionGo, req.Prev); err == nil {
-			prev = v.(*lock.GoSection)
-		}
-	}
-	sec := &lock.GoSection{Inputs: inputs, Proxy: defaultProxy, Workspaces: map[string]lock.GoBuildList{}, Modules: []lock.GoModule{}}
-	used := map[string]bool{}
-	for _, d := range decls {
-		bl := lock.GoBuildList{Go: goDirective(d.Go), Modules: []string{}}
-		if len(d.Require) > 0 {
-			if prev == nil || !resolves(prev.Workspaces[d.Path], d.Require) || len(req.Update) > 0 {
-				return nil, diag.NotImplemented("Go module resolution for " + d.Path + " (golang.Require, task M5.3)")
-			}
-			bl.Modules = append(bl.Modules, prev.Workspaces[d.Path].Modules...)
-		}
-		for _, mv := range bl.Modules {
-			used[mv] = true
-		}
-		sec.Workspaces[d.Path] = bl
-	}
-	if prev != nil {
-		sec.Proxy = prev.Proxy
-		for _, m := range prev.Modules {
-			if used[m.Path+"@"+m.Version] {
-				sec.Modules = append(sec.Modules, m)
-			}
-		}
-	}
-	return lock.EncodeSection(lock.SectionGo, sec)
-}
-
-// resolves reports whether a workspace build list contains every requirement.
-func resolves(bl lock.GoBuildList, reqs []gospec.Requirement) bool {
-	have := map[string]bool{}
-	for _, mv := range bl.Modules {
-		have[mv] = true
-	}
-	for _, r := range reqs {
-		if !have[r.Path+"@"+r.Version] {
-			return false
-		}
-	}
-	return true
-}
-
-// Stale reports the first workspace module of the graph whose declarations the section does
-// not reflect (R-FW-062): a module without a build list, another Go version, or a
-// requirement that is not in its build list. Only modules of the graph are compared, so a
-// build of part of the repository sees the same answer as one of all of it.
-func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Pos, error) {
-	decls, nodes, err := declarations(req.Graph)
-	if err != nil {
-		return "", ir.Pos{}, err
-	}
-	v, err := lock.DecodeSection(lock.SectionGo, req.Prev)
-	if err != nil {
-		return "the go section cannot be read: " + err.Error(), ir.Pos{}, nil
-	}
-	sec := v.(*lock.GoSection)
-	for _, d := range decls {
-		at := nodes[d.Path].DefinedAt
-		bl, ok := sec.Workspaces[d.Path]
-		switch {
-		case !ok:
-			return fmt.Sprintf("Go module %s is not locked", d.Path), at, nil
-		case bl.Go != goDirective(d.Go):
-			return fmt.Sprintf("Go module %s declares Go %s but is locked for %s", d.Path, d.Go, bl.Go), at, nil
-		}
-		for _, r := range d.Require {
-			if !resolves(bl, []gospec.Requirement{r}) {
-				return fmt.Sprintf("Go module %s requires %s %s, which is not locked", d.Path, r.Path, r.Version), at, nil
-			}
-		}
-	}
-	return "", ir.Pos{}, nil
 }

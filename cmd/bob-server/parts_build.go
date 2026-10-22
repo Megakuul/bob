@@ -23,7 +23,7 @@ import (
 // controller, BuildService and JobService, job ids resolving to their project through the
 // build id they carry, the webhook intake's build creation and build.finished notifications.
 // It runs after fleetParts (enqueue) and forgeParts (intake, statuses, notifier).
-func buildParts(ctx context.Context, env *server.Env, parts *server.OrchestratorParts, f *fleetsrv.Fleet, fw *forgeWiring) error {
+func buildParts(ctx context.Context, env *server.Env, parts *server.OrchestratorParts, f *fleetsrv.Fleet, fw *forgeWiring, pw *projectWiring) error {
 	if f == nil || env.Storage == nil || env.Storage.Control == nil {
 		return errors.New("builds: the fleet parts or the control bucket are missing")
 	}
@@ -34,7 +34,8 @@ func buildParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 	params = fleetsrv.Merge(params, fleetsrv.DefaultParams())
 	cfg := buildctl.Config{Name: env.Config.Name, Control: env.Storage.Control, Jobs: env.Storage.Fleet, Fleet: f,
 		Cancel: f.Hub, MaxAttempts: params.MaxAttempts, JobShards: params.JobShards, AwaitPromotion: true,
-		BaseURL: strings.TrimRight(env.Config.BaseURL, "/"), Skew: params.Skew, Now: env.Now, Log: env.Log}
+		BaseURL: strings.TrimRight(env.Config.BaseURL, "/"), Skew: params.Skew, Now: env.Now, Log: env.Log,
+		Projects: pw.projects()}
 	sc := env.Storage.Config
 	if objs, err := cache.OpenObjects(ctx, s3client.Options{Endpoint: sc.Endpoint, Region: sc.Region}, sc.Artifacts); err == nil {
 		cfg.Artifacts = objs
@@ -42,7 +43,7 @@ func buildParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 		env.Log.Error("builds: artifacts bucket unavailable; evaluation reports cannot be read", "err", err.Error())
 	}
 	if fw != nil && fw.Registry != nil {
-		cfg.Statuses = statusSink{reg: fw.Registry, projects: buildctl.AnyProject{}}
+		cfg.Statuses = statusSink{reg: fw.Registry, projects: pw.projects()}
 	}
 	var b *buildctl.Builds
 	if fw != nil && fw.Notifier != nil {
@@ -56,9 +57,11 @@ func buildParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 			}
 		}
 	}
+	pw.hooks(env, &cfg) // pipelines cache (after Finished is set)
 	if b, err = buildctl.New(cfg); err != nil {
 		return err
 	}
+	pw.withBuilds(env, parts, b) // AnalyticsService
 	parts.Controllers = append(parts.Controllers, b.Controller())
 	svc := &buildctl.Service{B: b, Authz: parts.Authz}
 	parts.Services.Build, parts.Services.Job = svc, svc

@@ -4,9 +4,10 @@ import "encoding/json"
 
 // BuilderVersion is bob-builder's own version (SPEC R-NIX-015). It is bumped only when the
 // builder's behaviour changes (2: test-run timeout, A92; unpack symlink rules, F1; 3: the Go
-// kinds of pkg/golang/bop; 4: test-run Copy). The CI stage "builder" fails when the builder
+// kinds of pkg/golang/bop; 4: test-run Copy; 5: the C/C++ kinds of pkg/cc/bop, test-run format
+// tap; 6: the npm kinds of pkg/npm/bop, Ctx.Unpack/Copy). The CI stage "builder" fails when the builder
 // changed since the last commit without a bump.
-const BuilderVersion = 4
+const BuilderVersion = 6
 
 // Job is one derivation's work. Kind selects the subcommand; Args is the kind's own schema.
 type Job struct {

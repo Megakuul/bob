@@ -74,6 +74,10 @@ func init() {
 		ps, _ := platforms.([]Platform)
 		restrict(nn.n, ps)
 	}
+	graph.CallerDir = func() (string, bool) {
+		s := bobSite()
+		return s.dir, s.ok
+	}
 	graph.Misuse = func(msg string) {
 		if ev := active; ev != nil {
 			ev.misuse(msg)
