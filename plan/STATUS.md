@@ -13,6 +13,10 @@
   (brief: `plan/m1.8-brief.md`; coordinator commits). Then M1.9 (quiet-host re-measure), M1.10
   (selfcheck + `docs/harness-validation.md`) → Gate H (self-reviewed, D70).
   Host check (D69): newuidmap/newgidmap have file caps, bobtest has subuid/subgid 524288:65536 — nothing to change.
+- **2026-10-22 resume:** M1.8 stopped on 402 credit errors (6 Opus agents) — only T1 partly landed
+  (c5b09df). Now run as 12 small units (ledger `plan/m1.8-ledger.md`), ≤ 3 sonnet agents at once,
+  each checkpointing in `plan/progress/<unit>.md`. **Resume after a limit:** read the ledger,
+  `git status`, the progress files; relaunch every unit not `done` from its progress file.
 - **Last gate passed:** **Gate S** (2026-10-21): SPEC, budgets, ADRs 0003–0019 (locked), HARNESS.md,
   plan approved → D65–D69. AGENTS.md replaces BOOTSTRAP.md.
 - **Next:** finish M0/M1 → Gate H (self-reviewed, D70; owner answer "b)" 2026-10-21) → M2…
