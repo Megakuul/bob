@@ -207,7 +207,8 @@ func Fixture(t testing.TB, name string) string {
 	}
 	for _, args := range [][]string{
 		{"init", "-q"}, {"add", "-A"},
-		{"-c", "user.name=bob-harness", "-c", "user.email=harness@bob.invalid", "commit", "-q", "-m", "fixture"},
+		// no background maintenance: it races with copies of the fixture (.git/objects/maintenance.lock)
+		{"-c", "user.name=bob-harness", "-c", "user.email=harness@bob.invalid", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "commit", "-q", "-m", "fixture"},
 	} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dst
