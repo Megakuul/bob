@@ -159,7 +159,8 @@ func parseGoMod(b []byte) modFile {
 	return m
 }
 
-// explainGoMod maps a go.mod edited outside bob to its differences in bob.go terms (R-FW-061).
+// explainGoMod maps a go.mod edited outside bob to its differences in bob.go terms (R-FW-061);
+// no line means the file declares the same module (only layout or comments differ).
 func explainGoMod(m *wsModule, direct, indirect []gospec.Requirement, bobGo string) func([]byte) []engine.DriftLine {
 	want := map[string]string{}
 	declared := map[string]bool{}
@@ -198,10 +199,7 @@ func explainGoMod(m *wsModule, direct, indirect []gospec.Requirement, bobGo stri
 				out = append(out, engine.DriftLine{Op: "~", Text: fmt.Sprintf("%s %s → %s  (bob.lock selects %s)", p, w, g, w)})
 			}
 		}
-		if len(out) == 0 {
-			out = append(out, engine.DriftLine{Op: "~", Text: "formatting or comments changed"})
-		}
-		return out
+		return out // empty: the same module in bob.go terms (only layout or comments differ)
 	}
 }
 
@@ -219,6 +217,9 @@ func explainGoSum(want []byte) func([]byte) []engine.DriftLine {
 			if !g[l] {
 				removed++
 			}
+		}
+		if added+removed == 0 {
+			return nil // the same lines in another order or layout
 		}
 		return []engine.DriftLine{{Op: "~", Text: fmt.Sprintf("go.sum: %d lines added, %d removed (bob writes go.sum from bob.lock)", added, removed)}}
 	}

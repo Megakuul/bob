@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/megakuul/bob/internal/build/jobspec"
 	"regexp"
 	"slices"
 	"sort"
@@ -304,7 +305,7 @@ func (b *Builds) follow(ctx context.Context, rec *store.BuildRecord, row store.B
 
 // rowOf is the jb row of a job record.
 func rowOf(job *store.JobRecord, row store.BuildJob) store.BuildJob {
-	row.State, row.Attempts, row.Epoch, row.Worker = job.State, job.Attempt, job.Epoch, job.Owner
+	row.State, row.Attempts, row.Epoch, row.Worker, row.Promotion = job.State, job.Attempt, job.Epoch, job.Owner, job.Promotion
 	if !job.Claimed.IsZero() && !job.Changed.IsZero() && orchestrator.Terminal(job.State) {
 		row.Duration = job.Changed.Sub(job.Claimed)
 	}
@@ -337,14 +338,14 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 	}
 	res, _ := fleet.DecodeResult(job.Result)
 	spec, _ := fleet.DecodeSpec(job.Spec)
-	var report *Report
+	var report *jobspec.Report
 	var reject string
 	if res.EvalSHA != "" && (row.Kind == KindEvalBuild || row.Kind == KindEval) {
-		report, reject = b.readReport(ctx, StagingPrefix(spec.Staging, job.Attempt), res.EvalSHA)
+		report, reject = b.readReport(ctx, jobspec.StagingPrefix(spec.Staging, job.Attempt), res.EvalSHA)
 		if report != nil {
 			if err := report.Verify(SelectionOf(rec)); err != nil {
-				reject = ErrMatchMismatch.Error()
-				if !errors.Is(err, ErrMatchMismatch) {
+				reject = jobspec.ErrMatchMismatch.Error()
+				if !errors.Is(err, jobspec.ErrMatchMismatch) {
 					reject += " (" + err.Error() + ")"
 				}
 				b.cfg.Log.Warn("security: evaluation result rejected", "build", rec.ID, "job", job.ID, "worker", job.Owner, "err", err.Error())
@@ -352,12 +353,18 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 			}
 		}
 	}
+	blocked := false
 	if job.State == orchestrator.StateSucceeded && reject == "" && b.cfg.AwaitPromotion {
 		switch {
-		case job.Promotion == "" || strings.HasPrefix(job.Promotion, "blocked"):
-			// the promotion controller has not finished this job yet
+		case job.Promotion == "":
+			// the promotion controller has not finished this job yet: never finalise before it
 			return b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
-				changed := setRow(cur, rowOf(job, row))
+				r := rowOf(job, row)
+				r.State = orchestrator.StateRunning // the row ends with the verdict
+				changed := setRow(cur, r)
+				if cur.State == StateQueued {
+					cur.State, cur.Started, changed = StateRunning, b.now(), true
+				}
 				if cur.Phase != PhasePromoting {
 					cur.Phase, changed = PhasePromoting, true
 				}
@@ -366,11 +373,13 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 				}
 				return nil
 			})
+		case strings.HasPrefix(job.Promotion, "blocked"):
+			blocked = true // staging incomplete: run the job again (§6.6.4 step 1)
 		case job.Promotion != "done":
 			reject = "promotion: " + job.Promotion
 		}
 	}
-	infraRetry := job.State == orchestrator.StateFailed && res.Status == "infra" && reject == ""
+	infraRetry := (job.State == orchestrator.StateFailed && res.Status == "infra" || blocked) && reject == ""
 	retryRow := store.BuildJob{}
 	if infraRetry && job.Attempt < int64(b.cfg.MaxAttempts) {
 		retryRow = store.BuildJob{ID: JobID(rec.ID, len(rec.Jobs)+1), Kind: row.Kind, Class: row.Class,
@@ -379,6 +388,12 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 	now := b.now()
 	next, err := b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
 		setRow(cur, rowOf(job, row))
+		if len(job.NonReproducible) > 0 {
+			if cur.NonReproducible == nil {
+				cur.NonReproducible = map[string][]string{}
+			}
+			cur.NonReproducible[job.ID] = slices.Clone(job.NonReproducible)
+		}
 		if cur.Started.IsZero() {
 			cur.Started = now
 		}
@@ -398,6 +413,9 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 			if !slices.ContainsFunc(cur.Jobs, func(j store.BuildJob) bool { return j.ID == retryRow.ID }) {
 				cur.Jobs = append(cur.Jobs, retryRow)
 			}
+		case blocked:
+			cur.Errors = addError(cur.Errors, store.BuildError{Message: fmt.Sprintf(
+				"build failed: job %s: %s after %d attempts", job.ID, job.Promotion, b.cfg.MaxAttempts)})
 		case infraRetry:
 			cur.Errors = addError(cur.Errors, store.BuildError{Message: fmt.Sprintf(
 				"build failed: job %s failed %d times on workers (infrastructure)", job.ID, b.cfg.MaxAttempts)})
@@ -445,15 +463,15 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 
 // readReport reads and verifies the evaluation report of one job attempt; reject explains
 // why none was accepted.
-func (b *Builds) readReport(ctx context.Context, staging, sha string) (*Report, string) {
+func (b *Builds) readReport(ctx context.Context, staging, sha string) (*jobspec.Report, string) {
 	if b.cfg.Artifacts == nil {
 		return nil, "evaluation report unreadable: no artifacts bucket"
 	}
-	body, _, err := b.cfg.Artifacts.Read(ctx, ReportKey(staging), MaxReport)
+	body, _, err := b.cfg.Artifacts.Read(ctx, jobspec.ReportKey(staging), jobspec.MaxReport)
 	if err != nil {
 		return nil, "evaluation report unreadable: " + err.Error()
 	}
-	r, err := ParseReport(body, sha)
+	r, err := jobspec.ParseReport(body, sha)
 	if err != nil {
 		return nil, "evaluation result rejected: " + err.Error()
 	}
@@ -461,9 +479,9 @@ func (b *Builds) readReport(ctx context.Context, staging, sha string) (*Report, 
 }
 
 // applyReport takes an accepted evaluation report into the build record.
-func applyReport(rec *store.BuildRecord, r *Report) {
+func applyReport(rec *store.BuildRecord, r *jobspec.Report) {
 	rec.Evaluated = true
-	byName := map[string]Pipeline{}
+	byName := map[string]jobspec.Pipeline{}
 	for _, p := range r.Pipelines {
 		byName[p.Name] = p
 	}
@@ -513,10 +531,13 @@ func firstLine(s string) string {
 // jobs that are still queued (running jobs finish; settle finalises them).
 func (b *Builds) fail(ctx context.Context, rec *store.BuildRecord, _ string, msg string) (*store.BuildRecord, error) {
 	now := b.now()
+	moved := false
 	next, err := b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
 		if Terminal(cur.State) {
+			moved = false
 			return store.ErrNoChange
 		}
+		moved = true
 		cur.State, cur.Finished = StateFailed, now
 		if cur.Started.IsZero() {
 			cur.Started = now
@@ -536,6 +557,9 @@ func (b *Builds) fail(ctx context.Context, rec *store.BuildRecord, _ string, msg
 	})
 	if err != nil {
 		return rec, err
+	}
+	if moved {
+		b.ended(ctx, next)
 	}
 	b.cancelJobs(ctx, next)
 	if err := b.addFailed(ctx, next); err != nil {
@@ -558,16 +582,23 @@ func (b *Builds) finish(ctx context.Context, rec *store.BuildRecord) (*store.Bui
 		state = StateSkipped // no pipeline matched the forge event (§6.9.4)
 	}
 	now := b.now()
-	return b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
+	moved := false
+	next, err := b.update(ctx, rec.ID, func(cur *store.BuildRecord) error {
 		if Terminal(cur.State) {
+			moved = false
 			return store.ErrNoChange
 		}
+		moved = true
 		cur.State, cur.Finished, cur.Phase = state, now, ""
 		for i := range cur.Pipelines {
 			cur.Pipelines[i].State = state
 		}
 		return nil
 	})
+	if err == nil && moved {
+		b.ended(ctx, next)
+	}
+	return next, err
 }
 
 // hasRetry reports whether a failed infra job row was replaced by a later attempt.
@@ -606,6 +637,10 @@ func (b *Builds) settle(ctx context.Context, rec *store.BuildRecord) error {
 			continue
 		case err != nil:
 			return err
+		}
+		if job.State == orchestrator.StateSucceeded && job.Promotion == "" && b.cfg.AwaitPromotion {
+			open++ // promotion pending: never finalise before the verdict
+			continue
 		}
 		if !orchestrator.Terminal(job.State) {
 			open++

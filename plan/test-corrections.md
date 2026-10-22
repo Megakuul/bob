@@ -65,6 +65,13 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
+16. A102 `TestRGO004aToolchainPerModule` (evidence plan/progress/I-M5a.md): `tools/cmd/stamp`
+   (Go 1.26) imports packages of `lib` (Go 1.25); Go refuses to compile against an archive built by
+   another toolchain (go1.26.9 rejects a go1.25.10 archive), so lib's packages MUST be compiled
+   again with 1.26 inside stamp's closure, which the test flags. The test must allow a package of
+   another module to be compiled with the importing closure's toolchain (and its own module's
+   -lang), as SPEC R-GO-004a "toolchain per module" implies, while still asserting that each
+   module's own binaries use that module's toolchain.
 15. A101 `tests/cache/big_slow_test.go` `assertNoDanglingReferences` requires a bob narinfo for every
    reference, but references to skipped cache.nixos.org paths (R-REG-005) have none by design:
    restrict the check to references that are not skipped nixpkgs paths (or to a fixture whose

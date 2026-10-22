@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/build"
 	"os"
 	"path"
 	"path/filepath"
@@ -46,19 +47,28 @@ type planner struct {
 	own     map[string]*drv.Derivation // drv path → derivation planned here
 	byName  map[string]string          // cache key → drv path (std, tools, groups)
 	srcPath map[string]string          // source tree key → imported store path
+	bp      map[string]*build.Package  // configuration + directory → package read
+	modulo  map[string][32]byte        // drv path → hashDerivationModulo (own derivations)
 	out     engine.PlanResult
 }
 
 func newPlanner(ctx context.Context, req engine.PlanRequest) *planner {
 	return &planner{ctx: ctx, req: req, trees: map[string]string{}, storeOf: map[string]string{},
 		own: map[string]*drv.Derivation{}, byName: map[string]string{}, srcPath: map[string]string{},
-		out: engine.PlanResult{Nodes: map[string]engine.Resolved{}}}
+		bp: map[string]*build.Package{}, modulo: map[string][32]byte{}, out: engine.PlanResult{Nodes: map[string]engine.Resolved{}}}
 }
 
 // Modulo resolves the derivations planned here first, then the engine's.
 func (pl *planner) Modulo(p string) ([32]byte, error) {
+	if h, ok := pl.modulo[p]; ok {
+		return h, nil
+	}
 	if d, ok := pl.own[p]; ok {
-		return d.Modulo(pl)
+		h, err := d.Modulo(pl)
+		if err == nil {
+			pl.modulo[p] = h
+		}
+		return h, err
 	}
 	if pl.req.Resolver == nil {
 		return [32]byte{}, fmt.Errorf("no resolver for input derivation %s", p)
@@ -916,7 +926,7 @@ func (pl *planner) groupDrv(t *target, cl *closure, res *compiled, g *group, src
 	}
 	args := map[string]any{"goroot": tca.GoRoot, "goos": tca.GOOS, "goarch": tca.GOARCH, "path": tca.Path, "cc": tca.CC,
 		"std": res.std, "pack": pack, "packages": pkgs}
-	p, d, err := pl.job(groupName(g), t.system, kind, t.node.Label, args, in)
+	p, d, err := pl.job(groupName(g), t.system, kind, groupLabel(g), args, in)
 	if err != nil {
 		return internal(t.node, "%v", err)
 	}
@@ -931,6 +941,16 @@ func hasObjects(pkgs []*pkg) bool {
 		}
 	}
 	return false
+}
+
+// groupLabel is the job label of a group: its import path or module, never the label of the
+// node that planned it, so binaries and tests share the derivation.
+func groupLabel(g *group) string {
+	p := g.pkgs[0]
+	if p.ref.kind == refThird {
+		return p.ref.third.Path + "@" + p.ref.third.Version
+	}
+	return p.ip
 }
 
 // groupName is go-<importpath> for a workspace package, go-<module>-<version> for a module.

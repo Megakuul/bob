@@ -371,14 +371,9 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 		if err != nil {
 			return err
 		}
-		bp, err := bc.ImportDir(dir, build.ImportComment)
+		bp, err := pl.importDir(c, &bc, dir)
 		if err != nil {
-			var noGo *build.NoGoError
-			if errorsAs(err, &noGo) && tests[ip] {
-				bp.Dir = dir
-			} else {
-				return pl.loadError(ip, from, err)
-			}
+			return pl.loadError(ip, from, err)
 		}
 		if len(bp.CgoPkgConfig) > 0 {
 			return pl.defError(from, fmt.Sprintf("%s uses #cgo pkg-config, which bob does not support; give the package its C dependencies with Module.Cgo(dir, golang.CgoOpts{Deps: …nixpkgs.Lib(…)})", ip))
@@ -427,6 +422,20 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 	return cl, nil
 }
 
+// importDir reads a package directory in configuration c, once per planner.
+func (pl *planner) importDir(c buildCtx, bc *build.Context, dir string) (*build.Package, error) {
+	key := strings.Join([]string{c.goos, c.goarch, strings.Join(c.tags, ","), fmt.Sprint(c.cgo, c.tc.minor), dir}, "|")
+	if bp, ok := pl.bp[key]; ok {
+		return bp, nil
+	}
+	bp, err := bc.ImportDir(dir, build.ImportComment)
+	if err != nil {
+		return nil, err
+	}
+	pl.bp[key] = bp
+	return bp, nil
+}
+
 // packageDir is where bob reads the package of ref.
 func (pl *planner) packageDir(ref pkgRef) (string, error) {
 	switch ref.kind {
@@ -450,14 +459,6 @@ func (pl *planner) packageDir(ref pkgRef) (string, error) {
 	default:
 		return filepath.Join(ref.modDir, filepath.FromSlash(ref.rel)), nil
 	}
-}
-
-func errorsAs(err error, target **build.NoGoError) bool {
-	e, ok := err.(*build.NoGoError)
-	if ok {
-		*target = e
-	}
-	return ok
 }
 
 // importError is the error of an import no module provides.

@@ -296,6 +296,8 @@ type BuildRecord struct {
 	Evaluated bool          `cbor:"ev,omitempty"`  // an evaluation result was accepted
 	Counts    PackageCounts `cbor:"pc,omitzero"`
 	Errors    []BuildError  `cbor:"er,omitempty"` // first failures, ≤ 20
+	// NonReproducible is JobRecord.nr of the finalised jobs, by job id (R-NFR-006).
+	NonReproducible map[string][]string `cbor:"nr,omitempty"`
 }
 
 // PackageCounts is BuildRecord.pc (§06 PackageCounts).
@@ -361,6 +363,8 @@ type BuildJob struct {
 	Epoch    int64         `cbor:"ep,omitempty"`
 	Worker   string        `cbor:"w,omitempty"`
 	Duration time.Duration `cbor:"d,omitempty"`
+	// Promotion is the job's final JobRecord.pm (§06 Job.promotion).
+	Promotion string `cbor:"pm,omitempty"`
 }
 
 // BuildResult is BuildRecord.rs.

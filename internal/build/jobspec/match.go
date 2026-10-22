@@ -1,9 +1,13 @@
-package buildctl
+// Package jobspec is the contract between the build controller and the workers: the target
+// selection a JobSpec carries, the pipeline matcher (SPEC §6.9.4 pipeline.Match) and the
+// evaluation report a job stages. It imports nothing of the orchestrator, so workers use it.
+package jobspec
 
 import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -228,3 +232,23 @@ func Targets(ps []Pipeline, names []string) (targets, tests []string) {
 	}
 	return targets, tests
 }
+
+// UploadKey is the artifacts key of a source snapshot (SPEC §6.9.7).
+func UploadKey(project, sha string) string { return "src/" + project + "/" + sha + ".tar.zst" }
+
+// HostPlatform is the Nix system of this host.
+func HostPlatform() string {
+	switch runtime.GOARCH {
+	case "arm64":
+		return "aarch64-linux"
+	case "amd64":
+		return "x86_64-linux"
+	}
+	return runtime.GOARCH + "-linux"
+}
+
+// PipelineName is the syntax of pipeline names (pkg/bob).
+func PipelineName(s string) bool { return pipelineName.MatchString(s) }
+
+// IsSHA256 reports a lower-case hex SHA-256.
+func IsSHA256(s string) bool { return sha256Hex.MatchString(s) }

@@ -286,3 +286,31 @@ func TestJobsDecode(t *testing.T) {
 		}
 	}
 }
+
+// The library package is one derivation for the binary and for the test that both use it.
+func TestPlanSharesPackages(t *testing.T) {
+	root := testRepo(t)
+	writeTree(t, root, map[string]string{
+		"m/lib/b/b.go":      "package b\n\nimport \"example.com/m/lib/a\"\n\n// B uses a.\nfunc B() string { return a.Up(\"b\") }\n",
+		"m/lib/b/b_test.go": "package b\n\nimport \"testing\"\n\nfunc TestB(t *testing.T) { _ = B() }\n",
+		"m/cmd/x/main.go":   "package main\n\nimport (\n\t\"fmt\"\n\n\t\"example.com/m/lib/b\"\n)\n\nfunc main() { fmt.Println(b.B()) }\n",
+	})
+	g := testGraph(t)
+	unit := *g.Nodes[2]
+	unit.ID, unit.Label = "//m/lib/b:go_test", "//m/lib/b:go_test"
+	unit.Spec = rawJSON(t, gospec.Test{Build: gospec.Build{Module: 0, CC: 1, Cgo: []int{}, Tags: []string{}, CGo: gospec.CgoAuto}, Dir: "lib/b", Args: []string{}})
+	g.Nodes = append(g.Nodes, &unit)
+	res, err := Ecosystem{}.Plan(context.Background(), testRequest(t, root, g, &fakeStore{}))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	n := 0
+	for _, d := range res.Drvs {
+		if d.Name == "go-example.com-m-lib-a" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("package example.com/m/lib/a has %d derivations, want 1 shared by the binary and both tests", n)
+	}
+}

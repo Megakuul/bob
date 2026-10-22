@@ -3,6 +3,7 @@ package buildctl
 import (
 	"context"
 	"errors"
+	"github.com/megakuul/bob/internal/build/jobspec"
 	"slices"
 
 	"github.com/megakuul/bob/internal/store"
@@ -22,7 +23,7 @@ type BuildNodes struct {
 type Node struct {
 	Label    string            `cbor:"l"`
 	Platform string            `cbor:"p,omitempty"`
-	Status   string            `cbor:"s"` // PackageReport.Status
+	Status   string            `cbor:"s"` // jobspec.PackageReport.Status
 	Job      string            `cbor:"j,omitempty"`
 	Deps     []int             `cbor:"d,omitempty"` // indexes into Nodes
 	Outputs  []string          `cbor:"o,omitempty"`
@@ -31,7 +32,7 @@ type Node struct {
 
 // writeNodes replaces the nodes of job in bnodes/<build> with those of report and stores the
 // package counts of all nodes in the build record.
-func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job string, r *Report) (*store.BuildRecord, error) {
+func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job string, r *jobspec.Report) (*store.BuildRecord, error) {
 	bn, err := store.CAS(ctx, b.cfg.Control, &BuildNodes{ID: rec.ID}, func(cur *BuildNodes) (*BuildNodes, error) {
 		next := &BuildNodes{ID: rec.ID}
 		if cur != nil {
@@ -41,7 +42,7 @@ func (b *Builds) writeNodes(ctx context.Context, rec *store.BuildRecord, job str
 			next.Nodes = slices.Clone(cur.Nodes)
 		}
 		base := len(next.Nodes)
-		if base+len(r.Packages) > MaxReportPackages {
+		if base+len(r.Packages) > jobspec.MaxReportPackages {
 			return nil, store.ErrNoChange // the graph view is capped; counts come from what is kept
 		}
 		for _, p := range r.Packages {

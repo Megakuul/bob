@@ -13,9 +13,9 @@ import (
 
 	"github.com/megakuul/bob/internal/api"
 	"github.com/megakuul/bob/internal/fleet"
-	commonv1 "github.com/megakuul/bob/internal/gen/bob/common/v1"
 	buildv1 "github.com/megakuul/bob/internal/gen/bob/build/v1"
 	"github.com/megakuul/bob/internal/gen/bob/build/v1/buildv1connect"
+	commonv1 "github.com/megakuul/bob/internal/gen/bob/common/v1"
 	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -480,7 +480,7 @@ func (s *Service) ListJobs(ctx context.Context, req *connect.Request[buildv1.Lis
 func (b *Builds) job(ctx context.Context, rec *store.BuildRecord, row store.BuildJob) (*buildv1.Job, error) {
 	j := &buildv1.Job{Id: row.ID, BuildId: rec.ID, Kind: protoJobKind(row.Kind), State: protoJobState(row.State),
 		Platform: platformOf(row.Class), WorkerId: row.Worker, Attempt: int32(row.Attempts), Epoch: row.Epoch,
-		CreatedAt: ts(rec.Created)}
+		CreatedAt: ts(rec.Created), Promotion: row.Promotion, NonReproducible: rec.NonReproducible[row.ID]}
 	if orchestrator.Terminal(row.State) {
 		return j, nil
 	}

@@ -319,7 +319,7 @@ func (q *Queue) summarise(ctx context.Context, buildID string, rec *store.JobRec
 			return nil, store.ErrNoChange
 		}
 		next := *cur
-		row := store.BuildJob{ID: rec.ID, State: rec.State, Attempts: rec.Attempt, Epoch: rec.Epoch, Worker: rec.Owner}
+		row := store.BuildJob{ID: rec.ID, State: rec.State, Attempts: rec.Attempt, Epoch: rec.Epoch, Worker: rec.Owner, Promotion: rec.Promotion}
 		if spec, ok := fleet.DecodeSpec(rec.Spec); ok {
 			row.Kind, row.Class = spec.Kind, spec.Class
 		}

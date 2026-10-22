@@ -18,14 +18,19 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	cacheParts(ctx, env, &parts)       // /nix/ cache, promotion, signing keys (needs identity)
 	cs := controllerParts(env, &parts) // membership, key, index-repair, retention, staging sweep
 	live := logParts(env, &parts)      // LogService, lake-maintenance; LiveLogs feeds Attach
-	if _, err := fleetParts(ctx, env, &parts, cs, live); err != nil {
+	f, err := fleetParts(ctx, env, &parts, cs, live)
+	if err != nil {
 		return parts, err
 	}
-	forgeParts(env, &parts) // forges, /hooks/, checkout minter, notifications (after fleetParts)
+	fw := forgeParts(env, &parts)                               // forges, /hooks/, checkout minter, notifications (after fleetParts)
+	if err := buildParts(ctx, env, &parts, f, fw); err != nil { // build controller, BuildService, JobService (I-B11)
+		return parts, err
+	}
 	return parts, nil
 }
 
 // workerParts wires the worker loop (internal/worker) into a worker process.
 func workerParts(env *server.Env) (server.WorkerParts, error) {
-	return workerLoop(env)
+	wp, err := workerLoop(env)
+	return workerJobs(env, wp, err) // sources and staging of the job runner (I-B11)
 }

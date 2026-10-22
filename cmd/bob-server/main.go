@@ -64,7 +64,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		// Hidden: the program of a job container (worker side), never started by hand.
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
-		if err := worker.RunJob(ctx, os.Stdin, os.Stdout, worker.NotBuilt{}); err != nil {
+		if err := worker.RunJob(ctx, os.Stdin, os.Stdout, worker.EngineRunner{}); err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return 1
 		}

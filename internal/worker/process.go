@@ -48,6 +48,11 @@ type ProcessConfig struct {
 	Storage       store.StorageConfig
 	Orchestrators []string
 	LogFlush      time.Duration // log.flush_interval; 0 = 30 s
+	// Artifacts is the artifacts bucket (source snapshots, staging uploads); nil: jobs get no
+	// source and stage nothing. Upstream is the public cache whose paths are not staged
+	// (R-REG-005, "https://cache.nixos.org"; "" = stage every path).
+	Artifacts Artifacts
+	Upstream  string
 }
 
 // DefaultStateDir is the worker state directory when BOB_STATE_DIR is not set.
@@ -353,6 +358,21 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 			jl = nil
 		}
 	}
+	if p.cfg.Artifacts != nil {
+		if err := p.prepareSource(ctx, c, spec, filepath.Join(dir, "work")); err != nil {
+			var jf *jobFailed
+			if errors.As(err, &jf) {
+				return Outcome{Status: "failed", Error: jf.msg}
+			}
+			return Outcome{Status: "infra", Error: "job source: " + err.Error()}
+		}
+	}
+	// The engine's state home (evaluator seed, drv cache) lives per slot across jobs: one job
+	// at a time uses it, and rebuilding the seed for every job would cost minutes.
+	home := filepath.Join(p.state, "home", strconv.Itoa(slot))
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		return Outcome{Status: "infra", Error: "job home: " + err.Error()}
+	}
 	pr, pw := io.Pipe()
 	var out Output
 	if jl != nil {
@@ -371,6 +391,7 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 			{Host: p.exe, Path: "/bin/bob"},
 			{Host: p.nixConf, Path: "/etc/nix/nix.conf"},
 			{Host: filepath.Join(dir, "work"), Path: "/work", Writable: true},
+			{Host: home, Path: JobHome, Writable: true},
 		},
 		Args: []string{"/bin/bob", "job-run"},
 		Env: []string{"PATH=/bin", "HOME=/root", "TMPDIR=/tmp", "NIX_CONF_DIR=/etc/nix",
@@ -400,6 +421,7 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 		}
 		o.LogLast = last
 	}
+	p.stage(ctx, c, spec, filepath.Join(dir, "work"), &o)
 	return o
 }
 

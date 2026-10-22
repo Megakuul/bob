@@ -5,9 +5,9 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"github.com/megakuul/bob/internal/build/jobspec"
 	"log/slog"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -141,10 +141,12 @@ type Config struct {
 	BaseURL        string     // web_url base; "" = no web_url
 	// DefaultPlatform is the platform of builds that name none ("" = this host's).
 	DefaultPlatform string
-	Interval        time.Duration // controller interval (5 s)
-	Skew            time.Duration // fleet.skew
-	Now             func() time.Time
-	Log             *slog.Logger
+	// Finished is called once when a build becomes terminal (outgoing webhooks, §6.9.8).
+	Finished func(ctx context.Context, rec *store.BuildRecord)
+	Interval time.Duration // controller interval (5 s)
+	Skew     time.Duration // fleet.skew
+	Now      func() time.Time
+	Log      *slog.Logger
 }
 
 // Builds is the build controller and the state it shares with BuildService.
@@ -186,24 +188,13 @@ func New(cfg Config) (*Builds, error) {
 		cfg.Projects = AnyProject{}
 	}
 	if cfg.DefaultPlatform == "" {
-		cfg.DefaultPlatform = HostPlatform()
+		cfg.DefaultPlatform = jobspec.HostPlatform()
 	}
 	b := &Builds{cfg: cfg, wake: make(chan struct{}, 1), keys: map[string]ed25519.PublicKey{},
 		pages: map[string]*store.PagedIndex[store.BuildEntry]{}, retry: map[string]statusRetry{}}
 	b.queue = &orchestrator.Queue{Fleet: cfg.Jobs, Control: cfg.Control, Shards: cfg.JobShards,
 		WorkerKey: b.workerKey, Now: cfg.Now}
 	return b, nil
-}
-
-// HostPlatform is the Nix system of this host.
-func HostPlatform() string {
-	switch runtime.GOARCH {
-	case "arm64":
-		return "aarch64-linux"
-	case "amd64":
-		return "x86_64-linux"
-	}
-	return runtime.GOARCH + "-linux"
 }
 
 func (b *Builds) now() time.Time { return b.cfg.Now().UTC() }
@@ -300,7 +291,7 @@ func (r *Request) validate() error {
 	switch {
 	case src.Upload != "" && (src.Ref != "" || src.SHA != ""):
 		return invalid("source", "a build has either a git source or an uploaded snapshot")
-	case src.Upload != "" && !sha256Hex.MatchString(src.Upload):
+	case src.Upload != "" && !jobspec.IsSHA256(src.Upload):
 		return invalid("source.upload_sha256", "not a sha256")
 	case src.Upload == "" && src.Ref == "" && src.SHA == "":
 		return invalid("source", "a git ref or sha, or an uploaded snapshot, is required")
@@ -321,7 +312,7 @@ func (r *Request) validate() error {
 		return invalid("pipeline", "a build runs a pipeline or targets, not both")
 	}
 	for _, p := range r.Pipelines {
-		if !pipelineName.MatchString(p) {
+		if !jobspec.PipelineName(p) {
 			return invalid("pipeline", "invalid pipeline name %q", p)
 		}
 	}
@@ -388,29 +379,29 @@ func refOf(tr store.BuildTrigger, src store.BuildSource, branch string) string {
 
 // selection derives what a build runs from its record (stable for the build's life):
 // explicit pipelines, else plain targets, else the forge event of its ref.
-func selection(pipelines string, targets []string, ref string, test bool, variants []string, upload string) Selection {
-	s := Selection{Test: test, Variants: variants, Upload: upload}
+func selection(pipelines string, targets []string, ref string, test bool, variants []string, upload string) jobspec.Selection {
+	s := jobspec.Selection{Test: test, Variants: variants, Upload: upload}
 	switch {
 	case pipelines != "":
 		s.Pipelines = strings.Split(pipelines, ",")
 	case len(targets) > 0:
 		s.Labels = targets
 	case strings.HasPrefix(ref, "refs/heads/"):
-		s.Event, s.Ref = EventPush, strings.TrimPrefix(ref, "refs/heads/")
+		s.Event, s.Ref = jobspec.EventPush, strings.TrimPrefix(ref, "refs/heads/")
 	case strings.HasPrefix(ref, "refs/tags/"):
-		s.Event, s.Ref = EventTag, strings.TrimPrefix(ref, "refs/tags/")
+		s.Event, s.Ref = jobspec.EventTag, strings.TrimPrefix(ref, "refs/tags/")
 	case strings.HasPrefix(ref, "refs/pull/"), strings.HasPrefix(ref, "refs/merge-requests/"):
-		s.Event = EventPullRequest
+		s.Event = jobspec.EventPullRequest
 	}
 	return s
 }
 
-func selectionOfRequest(r *Request) Selection {
+func selectionOfRequest(r *Request) jobspec.Selection {
 	return selection(strings.Join(r.Pipelines, ","), r.Targets, refOf(r.Trigger, r.Source, r.Branch), r.Test, r.Variants, r.Source.Upload)
 }
 
 // SelectionOf is what build rec runs.
-func SelectionOf(rec *store.BuildRecord) Selection {
+func SelectionOf(rec *store.BuildRecord) jobspec.Selection {
 	return selection(rec.Pipeline, rec.Targets, refOf(rec.Trigger, rec.Source, rec.Branch), rec.Test, rec.Variants, rec.Source.Upload)
 }
 
@@ -499,15 +490,12 @@ func (b *Builds) checkUpload(ctx context.Context, project, sha string) error {
 	if b.cfg.Artifacts == nil {
 		return invalid("source.upload_sha256", "source uploads are not available on this server")
 	}
-	_, err := b.cfg.Artifacts.Head(ctx, UploadKey(project, sha))
+	_, err := b.cfg.Artifacts.Head(ctx, jobspec.UploadKey(project, sha))
 	if errors.Is(err, cache.ErrNotFound) {
 		return invalid("source.upload_sha256", "no uploaded snapshot %s (PUT /upload/source/sha256/<hex> first)", sha)
 	}
 	return err
 }
-
-// UploadKey is the artifacts key of a source snapshot (SPEC §6.9.7).
-func UploadKey(project, sha string) string { return "src/" + project + "/" + sha + ".tar.zst" }
 
 // setRunning adds rec to bidx/running (every non-terminal build is listed there, decision
 // D-IB11-1; the started time is set when its first job is claimed).
@@ -667,6 +655,12 @@ func (b *Builds) update(ctx context.Context, id string, fn func(cur *store.Build
 		next.Jobs = slices.Clone(cur.Jobs)
 		next.Pipelines = slices.Clone(cur.Pipelines)
 		next.Errors = slices.Clone(cur.Errors)
+		if cur.NonReproducible != nil {
+			next.NonReproducible = make(map[string][]string, len(cur.NonReproducible))
+			for k, v := range cur.NonReproducible {
+				next.NonReproducible[k] = v
+			}
+		}
 		if cur.Reported != nil {
 			next.Reported = make(map[string]string, len(cur.Reported))
 			for k, v := range cur.Reported {
@@ -707,6 +701,7 @@ func (b *Builds) stop(ctx context.Context, id, state string, sp uint64) (*store.
 	if err != nil {
 		return nil, err
 	}
+	b.ended(ctx, rec)
 	b.cancelJobs(ctx, rec)
 	if err := b.syncEntry(ctx, rec); err != nil {
 		b.cfg.Log.Warn("build: bpage entry", "build", id, "err", err.Error())
@@ -797,4 +792,24 @@ func pipelineNames(ps []store.PipelineRun) []string {
 		out[i] = p.Name
 	}
 	return out
+}
+
+// ended runs the Finished hook for a build that just became terminal.
+func (b *Builds) ended(ctx context.Context, rec *store.BuildRecord) {
+	if b.cfg.Finished == nil || rec == nil || !Terminal(rec.State) {
+		return
+	}
+	if err := safeCall(func() { b.cfg.Finished(ctx, rec) }); err != nil {
+		b.cfg.Log.Warn("build: finished hook", "build", rec.ID, "err", err.Error())
+	}
+}
+
+func safeCall(fn func()) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	fn()
+	return nil
 }

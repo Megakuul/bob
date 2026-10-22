@@ -252,7 +252,10 @@ func (r *Reconciler) job(ctx context.Context, rec *store.JobRecord, aj store.Act
 		if after <= 0 {
 			after = 10 * time.Minute
 		}
-		if r.Queue != nil && !rec.Changed.IsZero() && rec.Changed.Add(after).Before(now) {
+		// A succeeded job waits for its promotion verdict (pm): finalising deletes the record the
+		// promotion controller works from (I-B9/I-B11).
+		pending := rec.State == StateSucceeded && rec.Promotion == ""
+		if r.Queue != nil && !pending && !rec.Changed.IsZero() && rec.Changed.Add(after).Before(now) {
 			ok, err := r.Queue.Finalise(ctx, id)
 			if ok {
 				res.Finalised++

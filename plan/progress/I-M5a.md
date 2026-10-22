@@ -6,7 +6,7 @@ was built by I-M4f in pkg/engine/build/native.go; no pkg/engine/eco package exis
 puts the shared types in pkg/engine; a new pkg/engine/eco would also need a protected
 layering-test row). The Go side of M5.1 is here: Native (go.mod/go.sum + Explain), Stale.
 
-## done (checkpoint 17:20)
+## done (checkpoint 17:35)
 - pkg/golang API (evaluator side): NewModule/ModuleOpts/Require/Requirement/Generated,
   Module.Binary/BinaryOpts/CGo (CGoAuto, CGoOff), Module.Cgo/CgoOpts/Package,
   Module.Tests/TestOpts (Name, Tags, Services, Args, Timeout, CGo)/TestSet, Module.CArchive/
@@ -37,9 +37,25 @@ layering-test row). The Go side of M5.1 is here: Native (go.mod/go.sum + Explain
   bob lock, bob build //..., bob test //... all work; the binary runs under env -i
   (RUNPATH has zlib/glibc); a failing test shows the case and BOB-E-2005.
 
+- cmd/bob-builder merges gobop.Kinds(); bspec.BuilderVersion 2 → 3; builders.go regenerated
+  (genbuilders -check vs HEAD passes); framework.zip regenerated (pkg/bob + pkg/golang changed).
+- Tests green: pkg/golang/gen (plan, granularity, shared packages, resolve error, strict job
+  decode, BOB_GO_BUDGETS=1 1,000-package plan 0.56 s [8c/15G, shared host] vs budget 5 s),
+  pkg/golang/bop (compile+embed+link with the host toolchain, invalid jobs, levels), pkg/bob/...,
+  pkg/engine, pkg/builder, pkg/engine/store (builder table), pkg (layering). gofmt/vet/
+  staticcheck/boblint clean on pkg/golang, pkg/engine, pkg/bob, cmd/bob-builder. The repo-wide
+  `tools/ci -only fmt,vet,lint,layering` fails only in internal/* (other units' WIP: import
+  cycle orchestrator↔worker↔build, unused fields) and pkg/engine/build/build.go gofmt (I-M4f).
+- Acceptance tests run in the private copy (NEEDS 1-3 applied there):
+  - TestRGO002aSyntheticBottomLayer: lock + build + rebuild work; fails only on NEEDS 4
+    (counts.built = 1 package instead of 37 derivations).
+  - TestRFW025PostgresServices: both Go test units with postgres pass in 1.27/1.30 s (≤ 3 s);
+    fails on BOB-E-9002 from `bob test --rerun` bookkeeping (NEEDS 10).
+  - TestRFW025NeverReadyService: the run fails right ("//it:never: service sleeper did not
+    become ready within 30s" + log tail); the test fails on NEEDS 11 (stream, 12-line cap).
+
 ## next
-- run tests/eco/golang synthetic tests in the copy; cutoff (R-GO-005) needs engine support
-  (NEEDS); register bop kinds in cmd/bob-builder + regenerate builders (end of unit).
+- nothing in this chain beyond the NEEDS; M5.3 (resolution) and M5.4 (go.mod details) next.
 
 ## files (outside ownership, small, reported)
 - pkg/bob/internal/graph/graph.go, pkg/bob/node.go, pkg/bob/ext/ext.go: ext.NewIn (label dir
@@ -47,6 +63,9 @@ layering-test row). The Go side of M5.1 is here: Native (go.mod/go.sum + Explain
   (definition errors of ecosystem constructors). Framework zip must be regenerated.
 - pkg/engine/engine.go: PlanRequest.Root, PlanRequest.Store (additive);
   pkg/engine/planstore.go (new): engine.PlanStore interface.
+- cmd/bob-builder/main.go (merges gobop.Kinds()), pkg/builder/bspec/bspec.go (BuilderVersion 3),
+  pkg/engine/store/builders.go (regenerated), pkg/engine/eval/framework.zip (regenerated).
+- Private test copy (not in the tree): /var/tmp/i-m5a/{sync.sh,rebuild.sh,repo,patches}.
 
 ## DECISIONS
 - D-M5a-1: M5.1 framework lives in pkg/engine/build (I-M4f); no pkg/engine/eco.
@@ -72,6 +91,8 @@ layering-test row). The Go side of M5.1 is here: Native (go.mod/go.sum + Explain
 - D-M5a-9: errors: import without module → BOB-E-1015 (Go, root label, hint golang.Require);
   invalid declarations at plan time (pkg-config, C++ files in Go packages, CGoOff + cgo,
   duplicate module) → BOB-E-1020; toolchain version ≠ ModuleOpts.Go → BOB-E-1008.
+- D-M5a-11: a package's group derivation is labelled with its import path (third-party:
+  module@version), not with the node that planned it, so binaries and tests share it.
 - D-M5a-10: test binaries run with -test.v=true -test.paniconexit0 -test.timeout=<unit
   timeout>s, then TestOpts.Args, then `bob test --` args; cwd is the build dir (see NEEDS 5).
 
@@ -104,15 +125,27 @@ layering-test row). The Go side of M5.1 is here: Native (go.mod/go.sum + Explain
    (§03.6.3). Proposal: optional `PlanStore.Realise(ctx, drvs)`; the Go planner then plans
    level by level in cutoff mode. Until then BOB_GO_CUTOFF=1 is not implemented and generated
    Go packages must already be built when Go plans (they are read from their output path).
-7. coordinator: cmd/bob-builder must merge `gobop.Kinds()` (pkg/golang/bop) into
-   builder.Core(); then `go generate ./pkg/engine/store` and BuilderVersion bump (builder
-   behaviour changed). Done in the private copy; I do it in the shared tree at the end of
-   this unit unless told otherwise.
+7. done in the shared tree (cmd/bob-builder, BuilderVersion 3, builders.go); coordinator:
+   commit them together with pkg/golang/bop.
 8. M5.3 (Go resolution in bob lock, MVS over GOPROXY .mod files) is needed by every fixture
    with golang.Require (go, acme, polyglot, codegen); Lock returns BOB-E-9008 for them now.
 9. go.mod of a module whose directory holds bob.go files should also require the framework
    (§03.2.5 "build-definition requirements §01 contributes"); needs the bob version (eval) in
    the Native request — M5.4.
+
+10. I-M4f (build/realise.go translatorContext): helper derivations are attributed to the first
+   package found using them (map order); a Go package derivation shared by a binary and a test
+   unit can be attributed to the unit, which `bob build` does not realise → the unit is
+   "touched" with an invalid output → BOB-E-9002, exit 70 (seen once on my test repo after the
+   builder bump). Same family: `bob test --rerun` replaces unit drvs by nonce drvs the context
+   does not know (tests/core svc: //it:it 9002 while both tests passed). Also helpers get role
+   "unpack", so a failing Go compile says "cause: unpacking the download failed"; Go helpers
+   are builds.
+11. I-M4f / translator: TestRFW025NeverReadyService reads the service failure from stderr (the
+   CLI prints human output on stdout, D-M4e-3) and wants the last 20 service log lines
+   (the excerpt is capped at 12, D-M4b-6).
+12. eval/M3 or M5.4: the go fixture's root go.mod (bob.go module, not a golang.Module) must be
+   generated too (TestRFW060 lists it); not the Go ecosystem's file.
 
 ## TEST PROBLEM
 1. tests/eco/golang/toolchain_test.go TestRGO004aToolchainPerModule: with lib at Go 1.25 and

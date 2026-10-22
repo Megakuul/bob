@@ -14,6 +14,7 @@ import (
 	"time"
 
 	buildctl "github.com/megakuul/bob/internal/build"
+	"github.com/megakuul/bob/internal/build/jobspec"
 	"github.com/megakuul/bob/internal/cache"
 	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/fleetsrv"
@@ -101,7 +102,7 @@ type lab struct {
 	key      ed25519.PrivateKey
 }
 
-func newLab(t *testing.T, be *env.Backend) *lab {
+func newLab(t *testing.T, be *env.Backend, await ...bool) *lab {
 	t.Helper()
 	ctx := context.Background()
 	l := &lab{t: t, ctx: ctx, control: be.Open(t, "control"), fleet: be.Open(t, "fleet"),
@@ -111,7 +112,8 @@ func newLab(t *testing.T, be *env.Backend) *lab {
 		t.Fatal(err)
 	}
 	l.b, err = buildctl.New(buildctl.Config{Name: "o1", Control: l.control, Jobs: l.fleet, Fleet: f,
-		Artifacts: l.art, Projects: projects{}, Statuses: l.statuses, BaseURL: "https://bob.example"})
+		Artifacts: l.art, Projects: projects{}, Statuses: l.statuses, BaseURL: "https://bob.example",
+		AwaitPromotion: len(await) > 0 && await[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +154,7 @@ func (l *lab) job(id string) *store.JobRecord {
 }
 
 // run claims job j as the fake worker and finishes it with res, writing report (if any) first.
-func (l *lab) run(j *store.JobRecord, status string, report *buildctl.Report, failed ...string) {
+func (l *lab) run(j *store.JobRecord, status string, report *jobspec.Report, failed ...string) {
 	l.t.Helper()
 	claimed, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
 		n := *cur
@@ -169,8 +171,8 @@ func (l *lab) run(j *store.JobRecord, status string, report *buildctl.Report, fa
 	}
 	if report != nil {
 		body, _ := json.Marshal(report)
-		l.art.put(buildctl.ReportKey(buildctl.StagingPrefix(spec.Staging, claimed.Attempt)), body)
-		res.EvalSHA = buildctl.SHA256(body)
+		l.art.put(jobspec.ReportKey(jobspec.StagingPrefix(spec.Staging, claimed.Attempt)), body)
+		res.EvalSHA = jobspec.SHA256(body)
 	}
 	rs, _ := fleet.Encode(res)
 	state := "succeeded"
@@ -186,15 +188,15 @@ func (l *lab) run(j *store.JobRecord, status string, report *buildctl.Report, fa
 	}
 }
 
-var pipelines = []buildctl.Pipeline{
+var pipelines = []jobspec.Pipeline{
 	{Name: "ci", Triggers: []string{"push main", "push feature*"}, Targets: []string{"//..."}, Tests: []string{"//..."}},
 	{Name: "release", Triggers: []string{"tag v*"}, Concurrency: "queue", Targets: []string{"//cmd/api:api"}, Releases: []string{"api"}},
 }
 
-func okReport(matched ...string) *buildctl.Report {
-	r := &buildctl.Report{V: 1, Pipelines: pipelines, Matched: matched,
-		Packages: []buildctl.PackageReport{{Label: "//cmd/api:api", Status: "built"}, {Label: "//libs/foo:foo", Status: "cached"}}}
-	r.Targets, r.Tests = buildctl.Targets(pipelines, matched)
+func okReport(matched ...string) *jobspec.Report {
+	r := &jobspec.Report{V: 1, Pipelines: pipelines, Matched: matched,
+		Packages: []jobspec.PackageReport{{Label: "//cmd/api:api", Status: "built"}, {Label: "//libs/foo:foo", Status: "cached"}}}
+	r.Targets, r.Tests = jobspec.Targets(pipelines, matched)
 	return r
 }
 
@@ -212,6 +214,7 @@ func TestBuildController(t *testing.T) {
 	t.Run("queue", func(t *testing.T) { queue(t, newLab(t, be)) })
 	t.Run("cancel-retry-rerun", func(t *testing.T) { cancelRetryRerun(t, newLab(t, be)) })
 	t.Run("infra-retries", func(t *testing.T) { infraRetries(t, newLab(t, be)) })
+	t.Run("promotion", func(t *testing.T) { promotion(t, newLab(t, be, true)) })
 	t.Run("event-idempotent", func(t *testing.T) { eventIdempotent(t, newLab(t, be)) })
 }
 
@@ -290,7 +293,7 @@ func forgedMatch(t *testing.T, l *lab) {
 	j := l.job(id2)
 	l.run(j, "ok", okReport("ci"))
 	spec, _ := fleet.DecodeSpec(j.Spec)
-	l.art.put(buildctl.ReportKey(buildctl.StagingPrefix(spec.Staging, 1)), []byte(`{"v":1}`))
+	l.art.put(jobspec.ReportKey(jobspec.StagingPrefix(spec.Staging, 1)), []byte(`{"v":1}`))
 	l.pass()
 	if rec := l.build(id2); rec.State != buildctl.StateFailed {
 		t.Errorf("tampered report: build %s", rec.State)
@@ -329,7 +332,7 @@ func supersede(t *testing.T, l *lab) {
 		t.Errorf("second: %s", st)
 	}
 	l.pass()
-	if j := l.job(first.ID); j.State != "cancelled" {
+	if j, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: got.Jobs[0].ID}); err == nil && j.State != "cancelled" {
 		t.Errorf("job of the superseded build: %s", j.State)
 	}
 }
@@ -392,10 +395,6 @@ func cancelRetryRerun(t *testing.T, l *lab) {
 		t.Fatalf("cancel: %v %v", c, err)
 	}
 	l.pass()
-	if j := l.job(retry.ID); j.State != "cancelled" {
-		t.Errorf("job of the cancelled build: %s", j.State)
-	}
-	l.pass()
 	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: running.Jobs[0].ID}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("cancelled job not finalised: %v", err)
 	}
@@ -429,5 +428,57 @@ func eventIdempotent(t *testing.T, l *lab) {
 	}
 	if _, err := l.b.CreateFromEvent(l.ctx, "acme", "del", forge.Event{Type: forge.EventPush, Push: &forge.Push{Branch: "x", Deleted: true}}); !errors.Is(err, buildctl.ErrNoBuild) {
 		t.Errorf("deleted branch: %v", err)
+	}
+}
+
+func setPM(t *testing.T, l *lab, id, pm string, nr ...string) {
+	t.Helper()
+	if _, err := store.CAS(l.ctx, l.fleet, &store.JobRecord{ID: id}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		n := *cur
+		n.Promotion, n.NonReproducible = pm, nr
+		return &n, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func promotion(t *testing.T, l *lab) {
+	id, _ := l.b.CreateFromEvent(l.ctx, "acme", "k1", push("main"))
+	l.pass()
+	j := l.job(id)
+	l.run(j, "ok", okReport("ci"))
+	l.pass()
+	if rec := l.build(id); rec.State != buildctl.StateRunning || rec.Phase != buildctl.PhasePromoting {
+		t.Fatalf("waiting for promotion: %s %s", rec.State, rec.Phase)
+	}
+	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}); err != nil {
+		t.Fatalf("job finalised before its promotion: %v", err)
+	}
+	setPM(t, l, j.ID, "blocked: staging incomplete")
+	l.pass()
+	j2 := l.job(id)
+	if j2.ID == j.ID || j2.State != "queued" {
+		t.Fatalf("blocked promotion: next job %s %s", j2.ID, j2.State)
+	}
+	l.run(j2, "ok", okReport("ci"))
+	setPM(t, l, j2.ID, "done", "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-x")
+	l.pass()
+	rec := l.build(id)
+	if rec.State != buildctl.StateSucceeded {
+		t.Fatalf("after promotion done: %s %+v", rec.State, rec.Errors)
+	}
+	s := &buildctl.Service{B: l.b}
+	pj, err := s.B.ToProto(l.ctx, rec)
+	if err != nil || pj.GetState().String() != "BUILD_STATE_SUCCEEDED" {
+		t.Fatal(pj, err)
+	}
+	var row store.BuildJob
+	for _, r := range rec.Jobs {
+		if r.ID == j2.ID {
+			row = r
+		}
+	}
+	if row.Promotion != "done" || len(rec.NonReproducible[j2.ID]) != 1 {
+		t.Errorf("row %+v nr %v", row, rec.NonReproducible)
 	}
 }

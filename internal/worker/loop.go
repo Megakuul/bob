@@ -31,6 +31,10 @@ type Outcome struct {
 	Error  string
 	// LogLast is, per package, the last log seq persisted in the lake (JobResult.LogLast).
 	LogLast map[string]int64
+	// Complete, CompSHA, EvalSHA and Failed go into the JobResult as they are: the staged
+	// COMPLETE.json (key, hex SHA-256), the evaluation report's SHA-256, the failing labels.
+	Complete, CompSHA, EvalSHA string
+	Failed                     []string
 }
 
 // Config configures one in-process worker (the server worker mode builds the same value).
@@ -664,7 +668,8 @@ func (w *Worker) finish(ctx context.Context, j *job, out Outcome, lost func()) {
 		errText = errText[:8<<10]
 	}
 	now := w.now()
-	rs, err := fleet.Encode(store.JobResult{V: 1, Status: status, Error: errText, LogLast: out.LogLast, Finished: now.Unix()})
+	rs, err := fleet.Encode(store.JobResult{V: 1, Status: status, Error: errText, Finished: now.Unix(), LogLast: out.LogLast,
+		Complete: out.Complete, CompSHA: out.CompSHA, EvalSHA: out.EvalSHA, Failed: out.Failed})
 	if err != nil {
 		slog.Error("worker: encode result", "job", id, "err", err)
 		return

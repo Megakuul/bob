@@ -110,9 +110,8 @@ func (pl *planner) planTest(n *ir.Node) error {
 		GoFiles: sortedUnique(append(slices.Clone(bp.GoFiles), bp.TestGoFiles...)), CgoFiles: bp.CgoFiles,
 		CFiles: bp.CFiles, SFiles: bp.SFiles, SysoFiles: bp.SysoFiles, Imports: map[string]string{},
 		Trim: trim(under), Out: internalArchive}
-	if bp.Name == "main" {
-		ptest.Flags = compileFlags("main", lang)
-	}
+	// A main package under test is compiled as a library (its import path, not "main"), as
+	// the go command does: the test main is the program.
 	ptest.Embed = embedOf(testEmbeds, append(slices.Clone(bp.EmbedPatterns), bp.TestEmbedPatterns...))
 	if under.cgo() {
 		cf, lf, err := pl.cgoFlags(t, under, in)

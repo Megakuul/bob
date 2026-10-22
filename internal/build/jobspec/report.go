@@ -1,4 +1,4 @@
-package buildctl
+package jobspec
 
 import (
 	"bytes"
