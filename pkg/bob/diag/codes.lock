@@ -99,3 +99,6 @@
 9998 internal - args=nixVersion hint=-
 9999 internal - args=- hint=-
 1008 definition requirement args=file,go,module,need,requirement hint=requirement
+0010 usage - args=known,platform hint=-
+0011 usage - args=ecosystem,host,label,platform hint=-
+1026 definition - args=what hint=hint

@@ -1920,6 +1920,8 @@ added by §02.
 | 0007 **new** | usage | `variants "{a}" and "{b}" conflict: {reason}` | drop one of them |
 | 0008 **new** | usage | `unsupported host architecture "{arch}" (bob runs on linux-amd64 and linux-arm64)` | — |
 | 0009 **new** | usage | `{ref} has nothing to install (it contains: {kinds}); download its artifacts from {url}` | — |
+| 0010 **new** | usage | `unknown platform "{platform}" (known: {known})` | — |
+| 0011 **new** | usage | `{label}: {ecosystem} packages cannot be cross-compiled yet (requested {platform} on a {host} host)` | build for the host platform, or use an ecosystem that supports cross-compilation |
 | 1001 | definition | `nixpkgs has no package "{attr}"` | did you mean {suggest}? |
 | 1002 | definition | `nixpkgs package "{attr}" ({version}) is marked broken` | pin a nixpkgs revision where it builds, or use another package |
 | 1003 | definition | `nixpkgs package "{attr}" ({version}) is marked insecure: {cves}` | use a fixed version; bob refuses known-vulnerable packages unless allowed per package |
@@ -1945,6 +1947,7 @@ added by §02.
 | 1023 **new** | definition | `{package} cannot be pinned: {reason}` | — (no checksum; no nixpkgs mapping for an opam `conf-*` package) |
 | 1024 **new** | definition | the rule's text from §01 R-FW-002 (R1–R7), e.g. `{dir}/bob.go: the first line must be "//go:build bob" …` | — (all violations are listed, sorted by path) |
 | 1025 **new** | definition | `{pos}: source pattern "{pattern}" leaves the repository` / `{pos}: bob.Glob("{pattern}") matches no files` / `{file}: symlink points outside the repository` | — |
+| 1026 **new** | definition | `nixpkgs mismatch: {what}` | the fix named by the check (set Libs: cc.CrossLibs on the packages that link the library, or move the nixpkgs pin; R-PLAT-007) |
 | 2000 | build | `{label} failed to build` | — (excerpt = last 10 log lines) |
 | 2001 | build | `{label}: compile error in {file}` | — |
 | 2002 | build | `{label}: undefined symbol {symbol}` | the symbol is not provided by any linked library; a dependency is probably missing from Deps |
@@ -2021,8 +2024,10 @@ aliases only in this table.
 | §03 `E-SCRIPT-DENIED` | 2013 |
 | §03 `E-PHANTOM-DEP` | 2014 |
 | §03 `E-QUIRK-TEST` | 9006 |
-| §03 forbidden compiler flag; §04 `MaxLayers`, roots > MaxLayers, invalid release version; OCaml cross | 1020 |
-| §03 Go module needs newer Go | 2006 (at build) / 1008 (at evaluation); Rust mixed toolchains, generator/runtime mismatch, §04 nixpkgs target-library mismatch | 1021 |
+| §03 forbidden compiler flag; §04 `MaxLayers`, roots > MaxLayers, invalid release version | 1020 |
+| §03 Go module needs newer Go | 2006 (at build) / 1008 (at evaluation); Rust mixed toolchains, generator/runtime mismatch | 1021
+| §04 nixpkgs target-library / rustc mismatch (R-PLAT-007) | 1026 |
+| §04 OCaml (native-only) requested for another platform (R-PLAT-005); unknown platform (R-PLAT-001) | 0011 / 0010 | |
 | §03 opam package without checksum; `conf-*` without mapping | 1023 |
 | §03 codegen generator failed | 2000 |
 | §01 nixpkgs attribute cannot be evaluated | 1017 |
@@ -2185,7 +2190,8 @@ is written to stdout in `--json` mode; stderr gets only bob's own debug lines (`
 | `upstream.start` | `name` (a nixpkgs package built from source) |
 | `log` | `label`, `line` (only with `--json-log`) |
 | `error` / `warning` | `error{code, severity, class, message, label, definedAt, location, cause, excerpt[], hint, log, args{}}`, `raw[]` only with `-v` |
-| `test.result` | `label`, `status` (`pass`/`fail`/`cached`), `durationMs`, `failed[]` (test names, when the runner reports them) |
+| `note` **new** | `type`, `code` (string), `message`, optional `label`, `attr`, `platform`, `field`: a non-error remark that precedes the build it concerns (an uncached target library built from source, a dropped variant); the human format prints `note: <message>` on stderr |
+| `test.result` | `label`, `status` (`pass`/`fail`/`cached`/`skipped`), `durationMs`, `failed[]` (test names, when the runner reports them), `runner` (**new**: `qemu-<arch>` when a cross test ran under emulation), `reason` (**new**: why a test is `skipped`, e.g. `not run: needs a native linux-amd64 machine`, R-FW-039) |
 | `package.finish` | `label`, `status` (`built`, `cached`, `failed`, `skipped`, `cancelled`), `paths[]` (host paths, only with `--print-paths`) |
 | `remote.submitted` **new** | `server`, `buildId`, `url` |
 | `remote.state` **new** | `buildId`, `state` (§05 build states) |

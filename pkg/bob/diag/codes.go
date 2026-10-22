@@ -35,6 +35,9 @@ var table = []Entry{
 	{8, one(`unsupported host architecture "{arch}" (bob runs on linux-amd64 and linux-arm64)`)},
 	{9, one(`{ref} has nothing to install (it contains: {kinds}); download its artifacts from {url}`)},
 
+	{10, one(`unknown platform "{platform}" (known: {known})`)},
+	{11, one(`{label}: {ecosystem} packages cannot be cross-compiled yet (requested {platform} on a {host} host)`, "build for the host platform, or use an ecosystem that supports cross-compilation")},
+
 	// 1xxx definition
 	{1001, one(`nixpkgs has no package "{attr}"`, "did you mean {suggest}?")},
 	{1002, one(`nixpkgs package "{attr}" ({version}) is marked broken`, "pin a nixpkgs revision where it builds, or use another package")},
@@ -77,6 +80,8 @@ var table = []Entry{
 		{Name: "noglob", Message: `{pos}: bob.Glob("{pattern}") matches no files`},
 		{Name: "symlink", Message: `{file}: symlink points outside the repository`},
 	}},
+
+	{1026, one(`nixpkgs mismatch: {what}`, "{hint}")},
 
 	// 2xxx build
 	{2000, one(`{label} failed to build`)},

@@ -106,9 +106,11 @@ func validDir(dir string) bool {
 	return first != ".git" && first != ".bob"
 }
 
+func encode(m *Manifest) ([]byte, error) { return json.MarshalIndent(m, "", "  ") }
+
 // writeManifest writes m atomically (temp file, fsync, rename, fsync of the directory).
 func writeManifest(repo string, m *Manifest) error {
-	b, err := json.MarshalIndent(m, "", "  ")
+	b, err := encode(m)
 	if err != nil {
 		return fmt.Errorf("materialise: %w", err)
 	}

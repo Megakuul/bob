@@ -98,8 +98,7 @@ func runPipeline(e *env, cmd build.Command) int {
 }
 
 // checkPlatforms refuses an unknown platform in --platform or a pattern's "@<platform>" suffix
-// (R-PLAT-001, usage error). SPEC's text "unknown platform "<p>" (known: …)" has no code of its
-// own in §02.3 yet; code 1 ("unknown {kind} "{name}"") names the known ones in its hint.
+// (R-PLAT-001, usage error BOB-E-0010).
 func checkPlatforms(flag string, patterns []string) error {
 	ps := []string{flag}
 	for _, p := range patterns {
@@ -110,7 +109,7 @@ func checkPlatforms(flag string, patterns []string) error {
 	}
 	for _, p := range ps {
 		if p != "" && bob.Platform(p).NixSystem() == "" {
-			return diag.New(1, "kind", "platform", "name", p, "suggest", "linux-amd64 or linux-arm64")
+			return diag.New(10, "platform", p, "known", "linux-amd64, linux-arm64")
 		}
 	}
 	return nil
@@ -468,7 +467,7 @@ func runRun(e *env) int {
 		return e.out.fail(diag.New(4, "flag", "bob run", "what", "one label"))
 	}
 	if p := e.a.str("platform"); p != "" && p != "native" {
-		return e.out.fail(diag.New(1, "kind", "platform", "name", p, "suggest", "native"))
+		return e.out.fail(diag.New(10, "platform", p, "known", "native"))
 	}
 	label := e.a.pos[0]
 	root, err := e.root(false)

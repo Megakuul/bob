@@ -145,12 +145,8 @@ func CrossRefused(n *ir.Node) error {
 	if err != nil || p == HostPlatform() {
 		return nil
 	}
-	// SPEC R-PLAT-005 text: "<label>: OCaml packages cannot be cross-compiled yet (requested
-	// <p> on a <host> host)", exit 2; §02.3 has no code for it yet, so it is the usage error 6
-	// ("<label> does not support <p> (it allows: <host>)") with the SPEC text as cause
-	// (I-M7b NEEDS).
-	e := diag.New(6, "label", n.Label, "platform", string(p), "platforms", string(HostPlatform()))
-	e.Cause = fmt.Sprintf("%s packages cannot be cross-compiled yet (requested %s on a %s host)", name, p, HostPlatform())
+	// SPEC R-PLAT-005: usage error 11, exit 2.
+	e := diag.New(11, "label", n.Label, "ecosystem", name, "platform", string(p), "host", string(HostPlatform()))
 	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
 	return e
 }
@@ -209,13 +205,9 @@ func CheckVersions(target bob.Platform, native, cross Versions, libs, rust bool)
 	return errorList(errs)
 }
 
-// mismatch is the R-PLAT-007 error. SPEC: "✗ nixpkgs mismatch: <what>" with the hint; §02.3
-// has no code for it, so it uses 1021 (toolchain mismatch) with label "nixpkgs" until one is
-// assigned (I-M7b NEEDS). The hint is kept in Cause.
+// mismatch is the R-PLAT-007 error: BOB-E-1026 "nixpkgs mismatch: <what>" with the fix as hint.
 func mismatch(what, hint string) *diag.Error {
-	e := diag.New(1021, "label", "nixpkgs", "reason", what)
-	e.Cause = hint
-	return e
+	return diag.New(1026, "what", what, "hint", hint)
 }
 
 // errorList joins errors so that callers still see each diagnostic (Unwrap []error).

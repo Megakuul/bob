@@ -34,6 +34,13 @@ BOB-E-0008 usage - exit=2
 BOB-E-0009 usage - exit=2
   message: {ref} has nothing to install (it contains: {kinds}); download its artifacts from {url}
 
+BOB-E-0010 usage - exit=2
+  message: unknown platform "{platform}" (known: {known})
+
+BOB-E-0011 usage - exit=2
+  message: {label}: {ecosystem} packages cannot be cross-compiled yet (requested {platform} on a {host} host)
+  hint:    build for the host platform, or use an ecosystem that supports cross-compilation
+
 BOB-E-1001 definition - exit=3
   message: nixpkgs has no package "{attr}"
   hint:    did you mean {suggest}?
@@ -151,6 +158,10 @@ BOB-E-1025 definition noglob exit=3
 
 BOB-E-1025 definition symlink exit=3
   message: {file}: symlink points outside the repository
+
+BOB-E-1026 definition - exit=3
+  message: nixpkgs mismatch: {what}
+  hint:    {hint}
 
 BOB-E-2000 build - exit=1
   message: {label} failed to build

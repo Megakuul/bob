@@ -79,7 +79,7 @@ func TestCheckVersions(t *testing.T) {
 	err := CheckVersions(o, same, Versions{Glibc: "2.43", Rustc: "1.95.0"}, true, true)
 	var d *diag.Error
 	if !errors.As(err, &d) || !strings.Contains(d.Error(), "target libraries for "+string(o)+" use glibc 2.42 but the cross toolchain uses glibc 2.43") ||
-		!strings.Contains(d.Cause, "cc.CrossLibs") {
+		!strings.Contains(d.Hint(), "cc.CrossLibs") || d.Code != 1026 {
 		t.Errorf("glibc mismatch: %v", err)
 	}
 	if err := CheckVersions(o, same, Versions{Glibc: "2.43"}, false, true); err != nil {
@@ -112,7 +112,7 @@ func TestCrossRefused(t *testing.T) {
 	n := &ir.Node{Kind: "ocaml.exe", Label: "//app:demo", Proj: map[string]json.RawMessage{"platform": json.RawMessage(`"` + string(other()) + `"`)}}
 	err := CrossRefused(n)
 	var d *diag.Error
-	if !errors.As(err, &d) || !strings.Contains(d.Cause, "OCaml packages cannot be cross-compiled yet (requested "+string(other())+" on a "+string(HostPlatform())+" host)") {
+	if !errors.As(err, &d) || d.Code != 11 || !strings.Contains(d.Error(), "//app:demo: OCaml packages cannot be cross-compiled yet (requested "+string(other())+" on a "+string(HostPlatform())+" host)") {
 		t.Errorf("CrossRefused = %v", err)
 	}
 	n.Proj["platform"] = json.RawMessage(`"` + string(HostPlatform()) + `"`)
