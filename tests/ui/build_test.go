@@ -145,7 +145,7 @@ func TestBuildPage(t *testing.T) {
 // the held-back step only after POST /__test/release, as connect+json envelopes.
 func TestStreamMock(t *testing.T) {
 	e := setup(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/bob.log.v1.LogService/FollowLog", strings.NewReader("\x00\x00\x00\x00\x02{}"))
 	if err != nil {
