@@ -7,6 +7,10 @@
 // D60 forbids LIST on the hot paths: every server e2e test ends with
 // AssertNoList(t, "bob-control", "bob-fleet").
 //
+// Per-role counters: Options.Roles (exact access key) and Options.RoleOf (e.g. a key
+// prefix) name the role of each credential; Counts.Roles and Counts.ByRole report
+// the requests per role.
+//
 // Counters are served at GET /_s3count (JSON) and reset with DELETE /_s3count.
 // A fault script is installed with PUT /_s3count/faults or SetScript. Bucket
 // names cannot start with "_", so these paths never shadow S3.
@@ -116,6 +120,21 @@ type Row struct {
 type Counts struct {
 	Rows   []Row      `json:"rows"`
 	Faults []Injected `json:"faults"`
+	// Roles is the request count per credential role (Options.Roles / RoleOf; the
+	// access key itself for an unmapped key), all buckets and operations.
+	Roles map[string]int `json:"roles"`
+}
+
+// ByRole returns the requests made with credentials of role matching op ("" = any
+// operation) on bucket ("" = any bucket).
+func (c Counts) ByRole(role, bucket, op string) int {
+	n := 0
+	for _, r := range c.Rows {
+		if r.Cred == role && (bucket == "" || r.Bucket == bucket) && (op == "" || r.Op == op) {
+			n += r.Count
+		}
+	}
+	return n
 }
 
 // Lists returns the LIST requests on bucket that no sweep controller made.
@@ -172,6 +191,9 @@ type Injected struct {
 type Options struct {
 	Backend string            // RustFS base URL
 	Roles   map[string]string // access key → role name (e.g. "worker", "orchestrator")
+	// RoleOf maps an access key to a role name when Roles has no entry (e.g. by key
+	// prefix); "" means unmapped. Row.Cred and Counts.Roles use the role.
+	RoleOf  func(accessKey string) string
 	Secrets map[string]string // access key → secret, for faults that rewrite signed headers
 }
 
@@ -233,8 +255,9 @@ func (p *Proxy) Reset() {
 func (p *Proxy) Counts() Counts {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	c := Counts{Rows: []Row{}, Faults: append([]Injected{}, p.injected...)}
+	c := Counts{Rows: []Row{}, Faults: append([]Injected{}, p.injected...), Roles: map[string]int{}}
 	for k, n := range p.counts {
+		c.Roles[k.cred] += n
 		c.Rows = append(c.Rows, Row{Bucket: k.bucket, Prefix: k.prefix, Op: k.op, Cred: k.cred, Sweep: k.sweep, Count: n})
 	}
 	sort.Slice(c.Rows, func(i, j int) bool {
@@ -311,6 +334,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cred := ak
 	if role, ok := p.opt.Roles[ak]; ok {
 		cred = role
+	} else if p.opt.RoleOf != nil {
+		if role := p.opt.RoleOf(ak); role != "" {
+			cred = role
+		}
 	}
 	sweep := ""
 	if _, after, ok := strings.Cut(r.UserAgent(), "bob-sweep/"); ok {

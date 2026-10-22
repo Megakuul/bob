@@ -2,6 +2,27 @@
 // the counting proxy in front of it, N orchestrators and M workers. Server suites
 // and `go run ./tools/devstack up` start their stacks through this package.
 //
+// Contracts with the bob-server binary (set in the process environment):
+//
+//   - BOB_LISTEN (orchestrator): the address the orchestrator serves API and Attach on.
+//   - BOB_ADMIN_TOKEN (orchestrator): bootstrap admin credential.
+//   - BOB_ORCHESTRATOR_ADDRS (worker): comma-separated http://host:port list, entry i is the
+//     attach proxy front of orchestrator-i (tests/serverenv/attachproxy). Workers must reach
+//     orchestrators only through these addresses so tests can block, count and redirect Attach.
+//   - BOB_TEST_CLOCK_OFFSET (orchestrator, only set when Options.ClockOffset != 0): a Go
+//     duration (may be negative, e.g. "90s") added to the orchestrator's wall clock. It must
+//     be honoured only by servers built with -tags bobtest, which devstack uses when it builds
+//     bob-server itself and ClockOffset is set. A release build ignores the variable.
+//   - S3 credential roles: the counting proxy maps an access key to a role by prefix
+//     (Options.RolePrefixes, default "worker-" -> "worker", "orchestrator-" -> "orchestrator").
+//     Until the shipped policies create per-role keys, all processes use the RustFS root key
+//     and appear under that key.
+//
+// devstack.json carries, next to the Info fields, attach_proxy_url (control API of the
+// attach proxy, see its package comment) and orchestrators[i].api_url.
+//
+// The stack does not start a forge (HARNESS.md §13.2 -forgejo is still to do).
+//
 // The product has no dev mode (decision A22). While the server modes are stubs
 // ("not implemented"), their processes exit at once; Start records that in Info
 // instead of failing, unless Options.Strict is set.
@@ -14,14 +35,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/megakuul/bob/tests/serverenv"
+	"github.com/megakuul/bob/tests/serverenv/attachproxy"
 	"github.com/megakuul/bob/tests/serverenv/rustfs"
 	"github.com/megakuul/bob/tests/serverenv/s3count"
 )
@@ -34,6 +59,12 @@ type Options struct {
 	Offline       bool   // never download pinned tools
 	Strict        bool   // fail when a server process exits during start-up
 	Server        string // bob-server binary; empty builds ./cmd/bob-server into Dir/bin
+	// ClockOffset is passed to the orchestrators as BOB_TEST_CLOCK_OFFSET; when non-zero and
+	// Server is empty, bob-server is built with -tags bobtest.
+	ClockOffset time.Duration
+	// RolePrefixes maps S3 access-key prefixes to role names for the counting proxy.
+	// Nil means the default (worker-, orchestrator-).
+	RolePrefixes map[string]string
 }
 
 // Proc is one stack process.
@@ -43,34 +74,38 @@ type Proc struct {
 	Log      string `json:"log"`
 	Running  bool   `json:"running"`
 	ExitNote string `json:"exit_note,omitempty"` // set when it exited during start-up
+	APIURL   string `json:"api_url,omitempty"`   // orchestrators: this one's HTTP listener
 }
 
 // Info is what `devstack up` prints and writes to <dir>/devstack.json.
 type Info struct {
-	V             int      `json:"v"`
-	Dir           string   `json:"dir"`
-	Pid           int      `json:"pid"` // the process that owns the stack; `down` signals it
-	S3URL         string   `json:"s3_url"`
-	S3ProxyURL    string   `json:"s3_proxy_url"` // what servers use; counts requests, injects faults
-	Region        string   `json:"region"`
-	AccessKey     string   `json:"access_key"`
-	SecretKey     string   `json:"secret_key"`
-	Buckets       []string `json:"buckets"`
-	APIURL        string   `json:"api_url"`          // first orchestrator's HTTP listener
-	AdminToken    string   `json:"admin_token"`      // bootstrap admin credential for tests
-	PoliciesReady bool     `json:"policies_applied"` // false until the shipped policies exist (M-server)
-	Orchestrators []Proc   `json:"orchestrators"`
-	Workers       []Proc   `json:"workers"`
-	Rustfs        Proc     `json:"rustfs"`
+	V              int      `json:"v"`
+	Dir            string   `json:"dir"`
+	Pid            int      `json:"pid"` // the process that owns the stack; `down` signals it
+	S3URL          string   `json:"s3_url"`
+	S3ProxyURL     string   `json:"s3_proxy_url"` // what servers use; counts requests, injects faults
+	Region         string   `json:"region"`
+	AccessKey      string   `json:"access_key"`
+	SecretKey      string   `json:"secret_key"`
+	Buckets        []string `json:"buckets"`
+	AttachProxyURL string   `json:"attach_proxy_url"` // control API of the orchestrator TCP fronts
+	APIURL         string   `json:"api_url"`          // first orchestrator's HTTP listener
+	AdminToken     string   `json:"admin_token"`      // bootstrap admin credential for tests
+	PoliciesReady  bool     `json:"policies_applied"` // false until the shipped policies exist (M-server)
+	Orchestrators  []Proc   `json:"orchestrators"`
+	Workers        []Proc   `json:"workers"`
+	Rustfs         Proc     `json:"rustfs"`
 }
 
 // Stack is a running stack.
 type Stack struct {
-	Info  Info
-	fs    *rustfs.Server
-	proxy *s3count.Server
-	procs map[string]*serverenv.Process
-	order []string
+	Info      Info
+	fs        *rustfs.Server
+	proxy     *s3count.Server
+	attach    *attachproxy.Proxy
+	attachSrv *http.Server
+	procs     map[string]*serverenv.Process
+	order     []string
 }
 
 // Start brings the stack up. On error everything already started is stopped.
@@ -96,14 +131,25 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 
 	server := o.Server
 	if server == "" {
-		if server, err = buildServer(ctx, dir); err != nil {
+		if server, err = buildServer(ctx, dir, o.ClockOffset != 0); err != nil {
 			return fail(err)
 		}
 	}
 	if s.fs, err = rustfs.Start(ctx, rustfs.Options{Dir: filepath.Join(dir, "rustfs"), Offline: o.Offline}); err != nil {
 		return fail(err)
 	}
-	px, err := s3count.New(s3count.Options{Backend: s.fs.URL})
+	prefixes := o.RolePrefixes
+	if prefixes == nil {
+		prefixes = map[string]string{"worker-": "worker", "orchestrator-": "orchestrator"}
+	}
+	px, err := s3count.New(s3count.Options{Backend: s.fs.URL, RoleOf: func(ak string) string {
+		for pre, role := range prefixes {
+			if strings.HasPrefix(ak, pre) {
+				return role
+			}
+		}
+		return ""
+	}})
 	if err != nil {
 		return fail(err)
 	}
@@ -123,23 +169,45 @@ func Start(ctx context.Context, o Options) (*Stack, error) {
 		AdminToken: adminToken,
 		Rustfs:     Proc{Name: "rustfs", Pid: s.fs.Pid(), Log: filepath.Join(s.fs.Dir, "rustfs.log"), Running: true},
 	}
-	for i := range o.Orchestrators {
+	listens := make([]string, o.Orchestrators)
+	for i := range listens {
 		port, err := serverenv.FreePort()
 		if err != nil {
 			return fail(err)
 		}
-		listen := "127.0.0.1:" + strconv.Itoa(port)
+		listens[i] = "127.0.0.1:" + strconv.Itoa(port)
+	}
+	if s.attach, err = attachproxy.New(listens); err != nil {
+		return fail(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return fail(fmt.Errorf("devstack: %w", err))
+	}
+	s.attachSrv = &http.Server{Handler: s.attach.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = s.attachSrv.Serve(ln) }()
+	s.Info.AttachProxyURL = "http://" + ln.Addr().String()
+	var fronts []string
+	for _, a := range s.attach.Addrs() {
+		fronts = append(fronts, "http://"+a)
+	}
+	for i, listen := range listens {
 		if i == 0 {
 			s.Info.APIURL = "http://" + listen
 		}
-		p, err := s.spawn(server, "orchestrator", "orchestrator-"+strconv.Itoa(i), dir, "BOB_LISTEN="+listen, "BOB_ADMIN_TOKEN="+adminToken)
+		env := []string{"BOB_LISTEN=" + listen, "BOB_ADMIN_TOKEN=" + adminToken}
+		if o.ClockOffset != 0 {
+			env = append(env, "BOB_TEST_CLOCK_OFFSET="+o.ClockOffset.String())
+		}
+		p, err := s.spawn(server, "orchestrator", "orchestrator-"+strconv.Itoa(i), dir, env...)
 		if err != nil {
 			return fail(err)
 		}
+		p.APIURL = "http://" + listen
 		s.Info.Orchestrators = append(s.Info.Orchestrators, p)
 	}
 	for i := range o.Workers {
-		p, err := s.spawn(server, "worker", "worker-"+strconv.Itoa(i), dir)
+		p, err := s.spawn(server, "worker", "worker-"+strconv.Itoa(i), dir, "BOB_ORCHESTRATOR_ADDRS="+strings.Join(fronts, ","))
 		if err != nil {
 			return fail(err)
 		}
@@ -189,13 +257,17 @@ func (s *Stack) spawn(server, mode, name, dir string, env ...string) (Proc, erro
 	return pr, nil
 }
 
-func buildServer(ctx context.Context, dir string) (string, error) {
+func buildServer(ctx context.Context, dir string, bobtest bool) (string, error) {
 	root, err := serverenv.Root()
 	if err != nil {
 		return "", err
 	}
 	out := filepath.Join(dir, "bin", "bob-server")
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/bob-server")
+	args := []string{"build", "-o", out}
+	if bobtest {
+		args = append(args, "-tags", "bobtest")
+	}
+	cmd := exec.CommandContext(ctx, "go", append(args, "./cmd/bob-server")...)
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("devstack: build bob-server: %w\n%s: %w", err, b, serverenv.ErrHarness)
@@ -236,6 +308,14 @@ func (s *Stack) Stop() error {
 		}
 	}
 	s.order = nil
+	if s.attachSrv != nil {
+		_ = s.attachSrv.Close()
+		s.attachSrv = nil
+	}
+	if s.attach != nil {
+		errs = append(errs, s.attach.Close())
+		s.attach = nil
+	}
 	if s.proxy != nil {
 		errs = append(errs, s.proxy.Close())
 		s.proxy = nil

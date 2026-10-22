@@ -2,8 +2,11 @@ package stack
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,5 +51,52 @@ func TestStrictFailsOnStubs(t *testing.T) {
 	defer cancel()
 	if _, err := Start(ctx, Options{Dir: t.TempDir(), Strict: true}); err == nil {
 		t.Skip("bob-server modes are implemented; strict start succeeded")
+	}
+}
+
+// H1: the harness contracts of srvtest (api_url, attach proxy, clock offset).
+func TestHarnessContracts(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fake-server")
+	script := "#!/bin/sh\nenv > \"$BOB_STATE_DIR/env\"\nexec sleep 60\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Start(ctx, Options{Dir: filepath.Join(dir, "stack"), Orchestrators: 2, Workers: 1, Server: fake, ClockOffset: 90 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+	in := s.Info
+	if in.AttachProxyURL == "" || in.Orchestrators[0].APIURL == "" || in.Orchestrators[1].APIURL == in.Orchestrators[0].APIURL || in.APIURL != in.Orchestrators[0].APIURL {
+		t.Fatalf("info: %+v", in)
+	}
+	r, err := http.Get(in.AttachProxyURL + "/streams")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]int
+	if err := json.NewDecoder(r.Body).Decode(&m); err != nil || len(m) != 2 {
+		t.Fatalf("streams: %v %v", m, err)
+	}
+	r.Body.Close()
+	read := func(name string) string {
+		var b []byte
+		for range 100 {
+			if b, err = os.ReadFile(filepath.Join(in.Dir, name, "env")); err == nil && len(b) > 0 {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		return string(b)
+	}
+	if env := read("orchestrator-1"); !strings.Contains(env, "BOB_TEST_CLOCK_OFFSET=1m30s\n") {
+		t.Fatalf("orchestrator env lacks clock offset:\n%s", env)
+	}
+	w := read("worker-0")
+	if strings.Contains(w, "BOB_TEST_CLOCK_OFFSET") || strings.Count(w, "BOB_ORCHESTRATOR_ADDRS=http://127.0.0.1:") != 1 || !strings.Contains(w, ",http://127.0.0.1:") {
+		t.Fatalf("worker env:\n%s", w)
 	}
 }

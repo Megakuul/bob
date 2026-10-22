@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // ErrHarness marks failures of the harness itself (a pinned tool that cannot be
@@ -148,6 +149,16 @@ func ToolPath(ctx context.Context, name string, offline bool) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 	}
+	// Parallel test binaries (go test ./...) race here: serialise them with an
+	// flock on the tool directory, then look again.
+	unlock, err := lockDir(dir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	if fi, err := os.Stat(bin); err == nil && fi.Mode()&0o111 != 0 {
+		return bin, nil
+	}
 	archive := filepath.Join(dir, filepath.Base(a.URL))
 	if err := verify(archive, a); err != nil {
 		if offline {
@@ -161,6 +172,28 @@ func ToolPath(ctx context.Context, name string, offline bool) (string, error) {
 		return "", err
 	}
 	return bin, nil
+}
+
+// lockDir takes an exclusive flock on dir/.lock; the returned func releases it.
+func lockDir(dir string) (func(), error) {
+	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("serverenv: flock %s: %w: %w", dir, err, ErrHarness)
+	}
+	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); f.Close() }, nil
+}
+
+// tempFile creates a uniquely named temp file next to dst (mode perm).
+func tempFile(dst string, perm os.FileMode) (*os.File, error) {
+	f, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".part-*")
+	if err != nil {
+		return nil, err
+	}
+	return f, f.Chmod(perm)
 }
 
 func verify(path string, a Artifact) error {
@@ -193,11 +226,12 @@ func download(ctx context.Context, a Artifact, dst string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("serverenv: fetch %s: %s: %w", a.URL, resp.Status, ErrHarness)
 	}
-	tmp := dst + ".part"
-	f, err := os.Create(tmp)
+	f, err := tempFile(dst, 0o644)
 	if err != nil {
 		return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // no-op after a successful rename
 	_, cerr := io.Copy(f, io.LimitReader(resp.Body, a.Size+1))
 	if err := errors.Join(cerr, f.Close()); err != nil {
 		return fmt.Errorf("serverenv: fetch %s: %w: %w", a.URL, err, ErrHarness)
@@ -212,16 +246,21 @@ func download(ctx context.Context, a Artifact, dst string) error {
 }
 
 func extract(archive, member, bin string) error {
-	tmp := bin + ".part"
 	if member == "" {
 		src, err := os.ReadFile(archive)
 		if err != nil {
 			return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 		}
-		if err := os.WriteFile(tmp, src, 0o755); err != nil {
+		out, err := tempFile(bin, 0o755)
+		if err != nil {
 			return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 		}
-		return publish(tmp, bin)
+		defer os.Remove(out.Name())
+		_, werr := out.Write(src)
+		if err := errors.Join(werr, out.Close()); err != nil {
+			return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
+		}
+		return publish(out.Name(), bin)
 	}
 	zr, err := zip.OpenReader(archive)
 	if err != nil {
@@ -236,11 +275,13 @@ func extract(archive, member, bin string) error {
 		if err != nil {
 			return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 		}
-		out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+		out, err := tempFile(bin, 0o755)
 		if err != nil {
 			rc.Close()
 			return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 		}
+		tmp := out.Name()
+		defer os.Remove(tmp)
 		_, cerr := io.Copy(out, rc)
 		if err := errors.Join(cerr, rc.Close(), out.Close()); err != nil {
 			return fmt.Errorf("serverenv: extract %s: %w: %w", member, err, ErrHarness)
@@ -250,8 +291,13 @@ func extract(archive, member, bin string) error {
 	return fmt.Errorf("serverenv: %s has no member %q: %w", archive, member, ErrHarness)
 }
 
+// publish atomically moves tmp to dst; an existing valid dst (another process
+// won the race) is fine.
 func publish(tmp, dst string) error {
 	if err := os.Rename(tmp, dst); err != nil {
+		if fi, serr := os.Stat(dst); serr == nil && fi.Mode()&0o111 != 0 {
+			return nil
+		}
 		return fmt.Errorf("serverenv: %w: %w", err, ErrHarness)
 	}
 	return nil

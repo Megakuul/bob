@@ -334,3 +334,41 @@ func TestIgnoreCondAgainstRustFS(t *testing.T) {
 		}
 	}
 }
+
+func TestRoleOfPerRoleCounters(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	s := newProxy(t, ok, s3count.Options{
+		Roles: map[string]string{"EXACT": "admin"},
+		RoleOf: func(ak string) string {
+			switch {
+			case strings.HasPrefix(ak, "bobw-"):
+				return "worker"
+			case strings.HasPrefix(ak, "bobo-"):
+				return "orchestrator"
+			}
+			return ""
+		},
+	})
+	do := func(ak, target string) {
+		req, _ := http.NewRequest(http.MethodGet, s.URL+target, nil)
+		s3sig.Sign(req, s3sig.Creds{AccessKey: ak, SecretKey: "x"}, s3sig.UnsignedPayload, time.Now())
+		if _, err := get(t, http.DefaultClient, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	do("bobw-1", "/bob-fleet/a")
+	do("bobw-2", "/bob-fleet/b")
+	do("bobo-1", "/bob-control/c")
+	do("EXACT", "/bob-control/d")
+	do("other", "/bob-control/e")
+	c, err := s3count.Fetch(context.Background(), s.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(c.Roles) != "map[admin:1 orchestrator:1 other:1 worker:2]" {
+		t.Fatalf("roles = %v", c.Roles)
+	}
+	if c.ByRole("worker", "bob-fleet", "GET") != 2 || c.ByRole("worker", "bob-control", "") != 0 || c.ByRole("orchestrator", "", "") != 1 {
+		t.Fatalf("ByRole wrong: %+v", c.Rows)
+	}
+}
