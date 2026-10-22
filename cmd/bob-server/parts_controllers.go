@@ -15,9 +15,10 @@ import (
 
 // controllerSet is what the HA milestone (M14.3/M14.4) contributes to an orchestrator: the
 // membership (ListOrchestrators reads it), the signing keys, and the settings the other
-// leader-only controllers share. Fleet adds the fleet controllers once their parts exist.
+// leader-only controllers share. The fleet controllers plug in with
+// orchestrator.RegistrarController, ReconcilerController and ForgeSweeperController and
+// these settings.
 type controllerSet struct {
-	env        *server.Env
 	Membership *orchestrator.Membership
 	Keys       *orchestrator.Keys
 	Skew       time.Duration
@@ -32,7 +33,7 @@ func controllerParts(env *server.Env, parts *server.OrchestratorParts) *controll
 	if env.Storage == nil || env.Storage.Control == nil || env.Storage.Fleet == nil {
 		return nil // Open never lets this happen for an orchestrator
 	}
-	cs := &controllerSet{env: env, Skew: setting(env, "BOB_FLEET_SKEW", 5*time.Second), JobShards: intSetting(env, "BOB_FLEET_JOB_SHARDS", 16)}
+	cs := &controllerSet{Skew: setting(env, "BOB_FLEET_SKEW", 5*time.Second), JobShards: intSetting(env, "BOB_FLEET_JOB_SHARDS", 16)}
 	owner, ctl, fl := env.Config.Name, env.Storage.Control, env.Storage.Fleet
 	cs.Membership = &orchestrator.Membership{Fleet: fl, ID: owner, Endpoint: endpoint(env.Config), Version: server.Version(),
 		Now: env.Now, Log: env.Log}
@@ -55,27 +56,6 @@ func controllerParts(env *server.Env, parts *server.OrchestratorParts) *controll
 		parts.Controllers = append(parts.Controllers, (&orchestrator.StagingSweep{Sweep: sw, Log: env.Log}).Controller(fl, owner, cs.Skew, env.Now))
 	}
 	return cs
-}
-
-// Fleet returns the fleet controllers over the given parts (nil parts are skipped): the
-// registrar, the job-reconciler and the forge-sweeper, under their leases.
-func (cs *controllerSet) Fleet(reg *orchestrator.Registrar, rec *orchestrator.Reconciler, co *orchestrator.Checkouts) []server.Component {
-	if cs == nil {
-		return nil
-	}
-	env := cs.env
-	owner, fl := env.Config.Name, env.Storage.Fleet
-	var out []server.Component
-	if reg != nil {
-		out = append(out, orchestrator.RegistrarController(reg, fl, owner, cs.Skew, env.Now))
-	}
-	if rec != nil {
-		out = append(out, orchestrator.ReconcilerController(rec, owner, cs.Skew, env.Now))
-	}
-	if co != nil {
-		out = append(out, orchestrator.ForgeSweeperController(co, fl, owner, cs.Skew, env.Now))
-	}
-	return out
 }
 
 // endpoint is the URL workers attach to: server.base_url, else the listen address (with the

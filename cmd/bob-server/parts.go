@@ -12,6 +12,7 @@ func orchestratorParts(env *server.Env) server.OrchestratorParts {
 	var parts server.OrchestratorParts
 	rbacParts(env, &parts)
 	authParts(env, &parts)
+	controllerParts(env, &parts)
 	return parts
 }
 

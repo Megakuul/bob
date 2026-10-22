@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/megakuul/lake"
 
-	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/internal/store/s3client"
 )
 
@@ -31,70 +29,25 @@ const (
 	CompactionSize = 8 << 20
 )
 
-// Maintenance is the `lake-maintenance` controller (every 30 s, under the ctl/lake-maintenance
-// lease): it compacts the recent partitions. Each partition gets a lake.Bucket that nothing
-// else uses (lake bug L3: a Bucket that reloads its catalog during a compaction duplicates the
-// merged rows).
+// Maintenance is the work of the `lake-maintenance` controller (every 30 s, leader only,
+// SPEC §05.11): it compacts the recent partitions. Each partition gets a lake.Bucket that
+// nothing else uses (lake bug L3: a Bucket that reloads its catalog during a compaction
+// duplicates the merged rows). It is not safe for concurrent use: one controller runs it.
 type Maintenance struct {
 	client  *s3.Client // prefixed with the analytics bucket
 	err     error
 	shards  int
-	lease   *store.Lease
 	now     func() time.Time
-	log     *slog.Logger
 	buckets map[string]*lake.Bucket
 }
 
-// NewMaintenance performs no I/O. control and self are the lease's bucket and owner; a nil
-// control runs without a lease (tests).
-func NewMaintenance(client *s3.Client, analyticsBucket string, control *store.Bucket, self string, now func() time.Time, log *slog.Logger) *Maintenance {
+// NewMaintenance performs no I/O.
+func NewMaintenance(client *s3.Client, analyticsBucket string, now func() time.Time) *Maintenance {
 	c, err := PrefixClient(client, analyticsBucket, nil)
-	m := &Maintenance{client: c, err: err, shards: DefaultLogShards, now: now, log: log, buckets: map[string]*lake.Bucket{}}
-	if control != nil {
-		m.lease = store.NewLease(control, "ctl/lake-maintenance", self, 3*MaintenanceInterval)
+	if now == nil {
+		now = time.Now
 	}
-	if m.now == nil {
-		m.now = time.Now
-	}
-	if m.log == nil {
-		m.log = slog.Default()
-	}
-	return m
-}
-
-// Name is the controller name.
-func (m *Maintenance) Name() string { return "lake-maintenance" }
-
-// Critical is false: a failing compaction restarts the controller, not the process.
-func (m *Maintenance) Critical() bool { return false }
-
-// Run compacts every 30 s while this orchestrator holds the lease.
-func (m *Maintenance) Run(ctx context.Context) error {
-	if m.err != nil {
-		return m.err
-	}
-	t := time.NewTicker(MaintenanceInterval)
-	defer t.Stop()
-	for {
-		if m.lease != nil {
-			held, _, err := m.lease.TryAcquire(ctx)
-			if err != nil && ctx.Err() == nil {
-				m.log.Warn("lake-maintenance: lease", "err", err)
-			}
-			if held {
-				if _, err := m.Pass(ctx); err != nil && ctx.Err() == nil {
-					m.log.Warn("lake-maintenance: pass", "err", err)
-				}
-			}
-		} else if _, err := m.Pass(ctx); err != nil && ctx.Err() == nil {
-			m.log.Warn("lake-maintenance: pass", "err", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-t.C:
-		}
-	}
+	return &Maintenance{client: c, err: err, shards: DefaultLogShards, now: now, buckets: map[string]*lake.Bucket{}}
 }
 
 // Candidates are the partitions a pass at now considers: the log partitions of the last two

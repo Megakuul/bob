@@ -294,7 +294,7 @@ func (s roleService) UpdateRole(ctx context.Context, req *connect.Request[access
 		if cur == nil {
 			return nil, api.NotFound("role")
 		}
-		if err := api.CheckETag("role.etag", in.GetEtag(), cur.ETag); err != nil {
+		if err := checkETag("role.etag", in.GetEtag(), cur.ETag); err != nil {
 			return nil, err
 		}
 		for _, p := range paths {

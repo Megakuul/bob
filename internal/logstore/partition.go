@@ -71,6 +71,34 @@ func RunPartition(buildID string) (string, error) {
 // JobPartition is the partition of job runs finalised at t: `job-<yyyymm>`.
 func JobPartition(t time.Time) string { return "job-" + t.UTC().Format("200601") }
 
+// PartitionEnd is the end of a partition's time range: the next UTC day of `log-<yyyymmdd>-<k>`,
+// the next month of `run-<yyyymm>` and `job-<yyyymm>`. ok is false for any other name.
+func PartitionEnd(name string) (end time.Time, ok bool) {
+	class, rest, found := strings.Cut(name, "-")
+	if !found {
+		return time.Time{}, false
+	}
+	switch class {
+	case "log":
+		day, k, found := strings.Cut(rest, "-")
+		if !found || k == "" || strings.Trim(k, "0123456789") != "" {
+			return time.Time{}, false
+		}
+		t, err := time.Parse("20060102", day)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t.AddDate(0, 0, 1), true
+	case "run", "job":
+		t, err := time.Parse("200601", rest)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t.AddDate(0, 1, 0), true
+	}
+	return time.Time{}, false
+}
+
 // PrefixClient returns a client whose base endpoint is <endpoint>/<bucket>, so that lake's
 // "bucket" argument becomes a key prefix inside the analytics bucket (path-style addressing,
 // SPEC §05.10.1, verified V3/V4). The client keeps base's credentials, region and HTTP client;

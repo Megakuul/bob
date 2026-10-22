@@ -156,7 +156,7 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	if err := api.CheckETag("serviceAccount.etag", in.GetEtag(), cur.ETag); err != nil {
+	if err := checkETag("serviceAccount.etag", in.GetEtag(), cur.ETag); err != nil {
 		return nil, err
 	}
 	setDisabled, setDesc := false, false
@@ -182,7 +182,7 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 		if sa == nil {
 			return nil, api.NotFound("service account")
 		}
-		if sa.ETag != cur.ETag {
+		if in.GetEtag() != "" && sa.ETag != in.GetEtag() {
 			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 		}
 		if setDesc {

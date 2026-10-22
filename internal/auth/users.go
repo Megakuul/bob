@@ -259,7 +259,7 @@ func (s userService) UpdateUser(ctx context.Context, req *connect.Request[access
 	if err != nil {
 		return nil, err
 	}
-	if err := api.CheckETag("user.etag", in.GetEtag(), cur.ETag); err != nil {
+	if err := checkETag("user.etag", in.GetEtag(), cur.ETag); err != nil {
 		return nil, err
 	}
 	paths := map[string]bool{}
@@ -284,7 +284,7 @@ func (s userService) UpdateUser(ctx context.Context, req *connect.Request[access
 		if u == nil {
 			return nil, api.NotFound("user")
 		}
-		if u.ETag != cur.ETag {
+		if in.GetEtag() != "" && u.ETag != in.GetEtag() {
 			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 		}
 		if paths["displayname"] {
@@ -458,4 +458,13 @@ func (id *Identity) lookupLogin(ctx context.Context, login string) (*store.UserR
 
 func hasBinding(ro []store.RoleBindingEntry, role, project string) bool {
 	return slices.ContainsFunc(ro, func(b store.RoleBindingEntry) bool { return b.Role == role && b.Project == project })
+}
+
+// checkETag is api.CheckETag, except that an update without an etag is unconditional (the
+// read-modify-write still runs as one CAS); a given etag must match.
+func checkETag(field, requested, stored string) error {
+	if requested == "" {
+		return nil
+	}
+	return api.CheckETag(field, requested, stored)
 }

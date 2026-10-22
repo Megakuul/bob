@@ -505,7 +505,7 @@ func (s oidcService) UpdateOidcProvider(ctx context.Context, req *connect.Reques
 		if p == nil {
 			return nil, api.NotFound("OIDC provider")
 		}
-		if err := api.CheckETag("provider.etag", in.GetEtag(), p.ETag); err != nil {
+		if err := checkETag("provider.etag", in.GetEtag(), p.ETag); err != nil {
 			return nil, err
 		}
 		if paths["displayname"] {
