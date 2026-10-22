@@ -283,12 +283,14 @@ func (f *Feed) run(ctx context.Context) {
 		}
 		finished := err == nil && buildDone && len(running) == 0
 		live := map[string]bool{}
-		if f.src.Live != nil && len(running) > 0 {
+		switch {
+		case err != nil: // keep the subscriptions and the delayed state until the next tick
+		case f.src.Live != nil && len(running) > 0:
 			live = f.src.Live.Subscribe(ctx, f, running)
 			if subscribedAt.IsZero() {
 				subscribedAt = now
 			}
-		} else {
+		default:
 			subscribedAt = time.Time{}
 		}
 		attached := true
@@ -298,7 +300,10 @@ func (f *Feed) run(ctx context.Context) {
 
 		f.mu.Lock()
 		silent := !subscribedAt.IsZero() && now.Sub(subscribedAt) > liveSilence && now.Sub(f.lastLive) > liveSilence
-		delayed := len(running) > 0 && (!attached || silent)
+		delayed := f.delayed
+		if err == nil {
+			delayed = len(running) > 0 && (!attached || silent)
+		}
 		if delayed != f.delayed {
 			f.delayed = delayed
 			f.notify()
@@ -309,7 +314,7 @@ func (f *Feed) run(ctx context.Context) {
 		since := now.Sub(lastLake)
 		read := lastLake.IsZero() || (want && since >= minLakeGap) || (delayed && since >= degradedPoll) ||
 			(finished && !complete)
-		if read && err == nil {
+		if read {
 			f.mu.Lock()
 			f.wantLake = false
 			f.mu.Unlock()

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // The error-quality suite (HARNESS.md §5): every fault catalogue entry of tests/faults runs
@@ -26,7 +27,9 @@ func runFaults(ctx context.Context, env *Env) error {
 	_ = os.Remove(summary)
 	cmd := exec.CommandContext(ctx, "go", "test", "-count=1", "./tests/errors/...")
 	cmd.Dir = env.Root
-	cmd.Env = append(os.Environ(), "BOB_ERRORS_SUMMARY="+summary)
+	// -tags=bobtest: the bob the suite builds honours BOB_TEST_NIX_REPLAY (replay entries, A27).
+	cmd.Env = append(os.Environ(), "BOB_ERRORS_SUMMARY="+summary,
+		"GOFLAGS="+strings.TrimSpace(os.Getenv("GOFLAGS")+" -tags=bobtest"))
 	// main.go owns -update and -slow (HARNESS.md §1.2); looked up here so this file does not
 	// depend on how main parses flags.
 	if f := flag.Lookup("update"); f != nil && f.Value.String() == "true" {

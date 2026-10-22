@@ -28,7 +28,7 @@ import (
 
 // attachPath is the path the orchestrator verifies the proof of possession against (the API
 // is mounted under /api/, SPEC §6.2).
-const attachPath = "/api/" + workerv1connect.WorkerControlServiceAttachProcedure
+const attachPath = "/api" + workerv1connect.WorkerControlServiceAttachProcedure
 
 // Client is one registered worker identity.
 type Client struct {

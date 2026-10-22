@@ -24,8 +24,9 @@ func (ev *evaluation) noteCall(pos Position, fn string) {
 	}
 }
 
-// column is the 1-based byte column of the call recorded at pos, 0 when unknown.
-func (ev *evaluation) column(pos Position) int {
+// column is the 1-based byte column of the call recorded at pos, 0 when unknown. name is the
+// package's name: of several calls on one line, the one naming it wins.
+func (ev *evaluation) column(pos Position, name string) int {
 	fn, ok := ev.calls[pos]
 	if !ok || pos.Line < 1 {
 		return 0
@@ -43,7 +44,7 @@ func (ev *evaluation) column(pos Position) int {
 	if pos.Line > len(lines) {
 		return 0
 	}
-	return callColumn(string(lines[pos.Line-1]), funcName(fn))
+	return callColumn(string(lines[pos.Line-1]), funcName(fn), name)
 }
 
 // funcName is the plain name of a runtime function name: "example.com/x/cc.SharedLibrary" →
@@ -68,18 +69,42 @@ func funcName(fn string) string {
 	return ""
 }
 
-// callColumn finds the first call of name in line ("name(" or "name[", optionally qualified
-// as "pkg.name") and returns the 1-based byte column of the call expression, 0 if there is none.
-func callColumn(line, name string) int {
-	if name == "" {
+// callColumn finds the calls of fn in line ("fn(" or "fn[", optionally qualified as
+// "pkg.fn") and returns the 1-based byte column of the call expression: the first call whose
+// text up to the next call holds the string literal "name", else the first call; 0 if there is
+// none.
+func callColumn(line, fn, name string) int {
+	starts := callStarts(line, fn)
+	if len(starts) == 0 {
 		return 0
 	}
-	for from := 0; ; {
-		i := strings.Index(line[from:], name)
-		if i < 0 {
-			return 0
+	if name != "" {
+		lit := `"` + name + `"`
+		for i, s := range starts {
+			end := len(line)
+			if i+1 < len(starts) {
+				end = starts[i+1]
+			}
+			if strings.Contains(line[s:end], lit) {
+				return s + 1
+			}
 		}
-		start, end := from+i, from+i+len(name)
+	}
+	return starts[0] + 1
+}
+
+// callStarts returns the byte offsets of the calls of fn in line, qualifier included.
+func callStarts(line, fn string) []int {
+	if fn == "" {
+		return nil
+	}
+	var out []int
+	for from := 0; ; {
+		i := strings.Index(line[from:], fn)
+		if i < 0 {
+			return out
+		}
+		start, end := from+i, from+i+len(fn)
 		from = end
 		if !boundary(line, start) || end < len(line) && isIdent(rune(line[end])) {
 			continue
@@ -102,7 +127,7 @@ func callColumn(line, name string) int {
 				start = q
 			}
 		}
-		return start + 1
+		out = append(out, start)
 	}
 }
 

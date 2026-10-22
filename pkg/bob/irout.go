@@ -102,7 +102,7 @@ func (ev *evaluation) encode(repo RepoOpts, pipes []pipelineJSON, targets []targ
 			return
 		}
 		seen[n] = true
-		in := irNode{ID: n.id, Kind: n.kind.Name, Label: n.label.String(), DefinedAt: irPos{n.pos.File, n.pos.Line, ev.column(n.pos)},
+		in := irNode{ID: n.id, Kind: n.kind.Name, Label: n.label.String(), DefinedAt: irPos{n.pos.File, n.pos.Line, ev.column(n.pos, n.label.Nix+n.label.Name)},
 			Proj: n.proj.json(), Deps: []string{}, Srcs: []irSrcs{}, Spec: n.spec, Nix: n.nix}
 		for _, d := range n.deps {
 			in.Deps = append(in.Deps, d.id)

@@ -17,8 +17,15 @@ func TestCallColumn(t *testing.T) {
 		{"\treturn mk(p)", "a/b.mk.func1", 9},
 		{"\treturn mk(p)", "", 0},
 	} {
-		if got := callColumn(c.line, funcName(c.fn)); got != c.want {
+		if got := callColumn(c.line, funcName(c.fn), ""); got != c.want {
 			t.Errorf("callColumn(%q, %s) = %d, want %d", c.line, c.fn, got, c.want)
+		}
+	}
+	// Two calls on one line: the one naming the package.
+	line := `		Tools:   []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},`
+	for name, want := range map[string]int{"bash": 23, "coreutils": 48, "": 23, "zsh": 23} {
+		if got := callColumn(line, "Tool", name); got != want {
+			t.Errorf("callColumn(%q) = %d, want %d", name, got, want)
 		}
 	}
 }

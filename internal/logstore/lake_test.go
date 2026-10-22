@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -324,4 +325,42 @@ func TestWriterBudget(t *testing.T) {
 // scanAll returns every raw row of the log table (no dedupe, no restart rule).
 func scanAll(ctx context.Context, b *lake.Bucket) ([]LogLine, error) {
 	return lake.Query[LogLine]().Scan(ctx, b)
+}
+
+// TestGetLogBudget measures the failing-package view of R-LOG-003 on a 50-package build whose
+// lines are still uncommitted-to-compaction (one shard per package commit, the worst case for a
+// running build): GetLog(build, package) p99 ≤ 500 ms, and only that package's lines.
+func TestGetLogBudget(t *testing.T) {
+	c := startS3(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	build := idAt(time.Now().UTC(), "budget")
+	w := NewWriter(WriterConfig{Client: c, Bucket: analytics, FlushInterval: time.Hour})
+	for p := range 50 {
+		pkg := fmt.Sprintf("//a%d:t", p)
+		for s := 1; s <= 20; s++ {
+			if err := w.Add(build, "", Line{Package: pkg, Seq: int64(s), Attempt: 1, Text: fmt.Sprintf("pkg%d line %d", p, s)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := w.Flush(ctx, build); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := NewReader(c, analytics)
+	var lat []time.Duration
+	for range 100 {
+		t0 := time.Now()
+		ls, err := r.Package(ctx, build, "//a7:t", 0, 0)
+		lat = append(lat, time.Since(t0))
+		if err != nil || len(ls) != 20 || ls[0].Text != "pkg7 line 1" {
+			t.Fatalf("GetLog(//a7:t) = %d lines, %v", len(ls), err)
+		}
+	}
+	slices.Sort(lat)
+	p99 := lat[98]
+	t.Logf("GetLog(one package of 50, 50 shards) p50 %v p99 %v [this host, RustFS local]", lat[49], p99)
+	if p99 > 500*time.Millisecond {
+		t.Errorf("GetLog p99 = %v, want ≤ 500 ms", p99)
+	}
 }
