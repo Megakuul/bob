@@ -51,7 +51,7 @@ func (s *SettingsService) ListSigningKeys(ctx context.Context, _ *connect.Reques
 	if a := x.Active(); a != nil {
 		out.Keys = append(out.Keys, keyMessage(*a))
 	}
-	for _, e := range x.Keys.Value() {
+	for _, e := range x.Entries() {
 		if e.State != KeyActive && e.State != KeyRetired {
 			out.Keys = append(out.Keys, keyMessage(e))
 		}

@@ -82,10 +82,13 @@ func (id *Identity) CreateLocalUser(ctx context.Context, in NewLocalUser) (strin
 // for local users, oidcsub for OIDC users).
 func (id *Identity) createUser(ctx context.Context, u *store.UserRecord, name any) error {
 	meta, err := store.CAS(ctx, id.control, store.UserIndexMetaKey(), func(cur *store.UserIndexMeta) (*store.UserIndexMeta, error) {
+		var count uint64
 		if cur == nil {
 			cur = store.UserIndexMetaKey()
+		} else {
+			count = cur.Count.Value()
 		}
-		cur.Count = store.Set(cur.Count.Value() + 1)
+		cur.Count = store.Set(count + 1)
 		return cur, nil
 	})
 	if err != nil {

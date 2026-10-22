@@ -320,7 +320,9 @@ type QueueTail struct {
 }
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
-func (r *QueueTail) Draft() *QueueTail { return &QueueTail{Class: r.Class, ETag: r.ETag, N: Carry(r.N)} }
+func (r *QueueTail) Draft() *QueueTail {
+	return &QueueTail{Class: r.Class, ETag: r.ETag, N: Carry(r.N)}
+}
 
 // QueueHead is the head hint `qh/<classID>` of a class queue (`SeqHint`: n).
 type QueueHead struct {
@@ -330,7 +332,9 @@ type QueueHead struct {
 }
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
-func (r *QueueHead) Draft() *QueueHead { return &QueueHead{Class: r.Class, ETag: r.ETag, N: Carry(r.N)} }
+func (r *QueueHead) Draft() *QueueHead {
+	return &QueueHead{Class: r.Class, ETag: r.ETag, N: Carry(r.N)}
+}
 
 // QueueSlotKey is the key model of slot seq of class classID (for CAS of `tk`).
 func QueueSlotKey(classID string, seq uint64) *QueueSlot {

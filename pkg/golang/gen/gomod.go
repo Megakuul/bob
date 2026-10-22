@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -14,13 +15,21 @@ import (
 	"github.com/megakuul/bob/pkg/golang/resolve"
 )
 
+// localModule is another workspace module of this repository that a module imports: go.mod
+// requires it at v0.0.0 and replaces it by its directory (the go command cannot find it
+// otherwise); bob's build list does not contain it (R-GO-002b).
+type localModule struct{ path, dir string }
+
+// localVersion is the version a workspace module is required at (it is never fetched).
+const localVersion = "v0.0.0"
+
 // goModFiles returns go.mod and go.sum of module m (§03.2.5, R-GO-003): the two header lines,
 // module, go X.Y.0, one block of direct requirements, one of indirect ones, both sorted;
 // go.sum from bob.lock. The requirements are the roots resolution used (resolve.Roots): the
 // module's declarations and every module of its build list that some workspace module
 // declares (declared) or that provides packages, each at its selected version, so the go
 // command selects exactly the locked build list. go.sum is left out while it would be empty.
-func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool) []engine.GeneratedFile {
+func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, local []localModule) []engine.GeneratedFile {
 	direct := directRequires(m)
 	var buildList []resolve.Module
 	packages := map[string]bool{}
@@ -63,9 +72,17 @@ func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool) []en
 	fmt.Fprintf(&b, "// Edit %s and run bob lock.\n", bobGo)
 	goLine := goDirectiveOf(m, buildList, sec)
 	fmt.Fprintf(&b, "module %s\n\ngo %s\n", m.spec.Path, goLine)
-	if len(direct) > 0 {
+	withLocal := direct
+	if len(local) > 0 {
+		withLocal = slices.Clone(direct)
+		for _, l := range local {
+			withLocal = append(withLocal, gospec.Requirement{Path: l.path, Version: localVersion})
+		}
+		sort.Slice(withLocal, func(i, j int) bool { return withLocal[i].Path < withLocal[j].Path })
+	}
+	if len(withLocal) > 0 {
 		b.WriteString("\nrequire (\n")
-		for _, r := range direct {
+		for _, r := range withLocal {
 			fmt.Fprintf(&b, "\t%s %s\n", r.Path, r.Version)
 		}
 		b.WriteString(")\n")
@@ -77,9 +94,12 @@ func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool) []en
 		}
 		b.WriteString(")\n")
 	}
+	for _, l := range local {
+		fmt.Fprintf(&b, "\nreplace %s => %s\n", l.path, l.dir)
+	}
 	modPath := path.Join(m.dir, "go.mod")
 	files := []engine.GeneratedFile{{Path: modPath, Content: []byte(b.String()), Mode: 0o444, Owner: m.node.Label,
-		Committed: true, Explain: explainGoMod(goLine, direct, indirect, bobGo)}}
+		Committed: true, Explain: explainGoMod(goLine, withLocal, indirect, bobGo)}}
 
 	if sum := goSum(buildList, sec); len(sum) > 0 {
 		files = append(files, engine.GeneratedFile{Path: path.Join(m.dir, "go.sum"), Content: sum, Mode: 0o444,

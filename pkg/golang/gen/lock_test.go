@@ -176,3 +176,74 @@ func TestGoLineCoversDependencies(t *testing.T) {
 		t.Errorf("go line %s, want 1.26.1", got)
 	}
 }
+
+// TestNativeLocalModules (R-GO-002b, test correction for the go fixture): a module importing
+// another workspace module of the repository requires it at v0.0.0 with a directory replace;
+// `go list -m all` then lists bob's build list plus that module's replace line, and the
+// importer builds offline.
+func TestNativeLocalModules(t *testing.T) {
+	proxy := t.TempDir()
+	proxyModule(t, proxy, "golang.org/x/text", "v0.1.0", "module golang.org/x/text\n\ngo 1.20\n", map[string]string{"text.go": "package text\n"})
+	cache := t.TempDir()
+	t.Setenv(proxyEnv, "file://"+proxy)
+	t.Setenv("XDG_CACHE_HOME", cache)
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"lib/str/str.go":  "package str\n\nimport _ \"golang.org/x/text\"\n\n// S is a string.\nconst S = \"s\"\n",
+		"tools/main.go":   "package main\n\nimport \"example.com/lib/str\"\n\nfunc main() { println(str.S) }\n",
+		"tools/x_test.go": "package main\n\nimport \"testing\"\n\nfunc TestX(t *testing.T) {}\n",
+	})
+	mod := func(id, label, path string, reqs ...gospec.Requirement) *ir.Node {
+		return &ir.Node{ID: id, Kind: gospec.KindModule, Label: label, DefinedAt: ir.Pos{File: strings.TrimPrefix(label[:strings.Index(label, ":")], "//") + "/bob.go", Line: 9},
+			Spec: rawJSON(t, gospec.Module{Path: path, Go: "1.26", Require: reqs, Generated: []gospec.Generated{}})}
+	}
+	g := &ir.Graph{Module: "example.com/r", Nodes: []*ir.Node{
+		mod("l", "//lib:module", "example.com/lib", gospec.Requirement{Path: "golang.org/x/text", Version: "v0.1.0"}),
+		mod("t", "//tools:module", "example.com/tools"),
+	}}
+	raw, err := Ecosystem{}.Lock(context.Background(), engine.LockRequest{Graph: g, Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := Ecosystem{}.Native(context.Background(), engine.PlanRequest{Graph: g, Lock: raw, Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]string{}
+	for _, f := range files {
+		byPath[f.Path] = string(f.Content)
+		writeTree(t, root, map[string]string{f.Path: string(f.Content)})
+	}
+	toolsMod := byPath["tools/go.mod"]
+	for _, want := range []string{"\texample.com/lib v0.0.0\n", "\nreplace example.com/lib => ../lib\n", "golang.org/x/text v0.1.0"} {
+		if !strings.Contains(toolsMod, want) {
+			t.Errorf("tools/go.mod lacks %q:\n%s", want, toolsMod)
+		}
+	}
+	if strings.Contains(byPath["lib/go.mod"], "replace") {
+		t.Errorf("lib imports no workspace module but got a replace:\n%s", byPath["lib/go.mod"])
+	}
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("no go command")
+	}
+	env := append(os.Environ(), "GOPROXY=file://"+filepath.Join(cache, "bob", "goproxy"), "GOFLAGS=-mod=readonly",
+		"GOSUMDB=off", "GOTOOLCHAIN=local", "GOWORK=off", "GOMODCACHE="+t.TempDir(), "CGO_ENABLED=0")
+	run := func(args ...string) string {
+		cmd := exec.Command(goBin, args...)
+		cmd.Dir = filepath.Join(root, "tools")
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Errorf("go %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return string(out)
+	}
+	got := strings.TrimSpace(run("list", "-m", "all"))
+	want := "example.com/tools\nexample.com/lib v0.0.0 => ../lib\ngolang.org/x/text v0.1.0"
+	if got != want {
+		t.Errorf("go list -m all:\n%s\nwant:\n%s", got, want)
+	}
+	run("build", "./...")
+	run("vet", "./...")
+}

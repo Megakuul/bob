@@ -160,7 +160,8 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	url := indexURL()
 	ix := resolve.NewIndex(url, cacheDir(url))
 	ix.Client = &http.Client{Timeout: 60 * time.Second}
-	res, err := resolve.Resolve(ctx, ix, st.members, resolve.Options{RustVersion: rustVersion(ctx, req, toolchainAttrs(req.Graph, st.ws))})
+	res, err := resolve.Resolve(ctx, ix, st.members, resolve.Options{RustVersion: rustVersion(ctx, req, toolchainAttrs(req.Graph, st.ws)),
+		Locked: keptPins(prev, req.Update)})
 	if err != nil {
 		return nil, resolveError(st, err)
 	}
@@ -213,6 +214,30 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	}
 	sec.Crates = crates
 	return lock.EncodeSection(lock.SectionRust, sec)
+}
+
+// keptPins are the locked crates a re-resolution prefers (R-CLI-010: bob lock never moves an
+// existing pin unless asked): every previous crate without --update, none with --update of
+// everything or of "rust", all but the named crates ("serde", "crates.io:serde",
+// "serde@1.0.200") otherwise.
+func keptPins(prev *lock.RustSection, update []string) []string {
+	if prev == nil || update != nil && len(update) == 0 {
+		return nil
+	}
+	moved := map[string]bool{}
+	for _, u := range update {
+		if u == lock.SectionRust {
+			return nil
+		}
+		moved[strings.TrimPrefix(u, "crates.io:")] = true
+	}
+	var out []string
+	for _, c := range prev.Crates {
+		if !moved[c.Name] && !moved[c.Name+"@"+c.Version] {
+			out = append(out, c.Name+"@"+c.Version)
+		}
+	}
+	return out
 }
 
 // resolveError is BOB-E-1015 naming the first workspace crate.

@@ -341,11 +341,12 @@ func (x *IndexRepair) addMissingMembers(ctx context.Context) (int, error) {
 		var n int
 		_, err := store.CAS(ctx, x.Control, store.RoleMembersKey(role), func(cur *store.RoleMembers) (*store.RoleMembers, error) {
 			next := store.RoleMembersKey(role)
+			var members []string
 			if cur != nil {
 				*next = *cur
+				members = slices.Clone(cur.Principals.Value())
 			}
 			n = 0
-			members := slices.Clone(next.Principals.Value())
 			for _, p := range ps {
 				if !slices.Contains(members, p) {
 					members = append(members, p)

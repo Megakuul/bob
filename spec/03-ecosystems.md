@@ -625,7 +625,8 @@ own template (fast, no cmd/go loading).
 - **Acceptance:** On a corpus of ≥ 10 real modules (incl. the fixture, bob itself,
   kubernetes/client-go, grpc-go), with bob's generated go.mod/go.sum and its GOPROXY dir,
   `go list -m all` (GOFLAGS=-mod=readonly, GOSUMDB=off, GOTOOLCHAIN=local) exits 0 and lists
-  exactly bob's build list; `go build ./... && go vet ./...` succeed without network.
+  exactly bob's build list, plus one `<path> v0.0.0 => <dir>` line per workspace module of the
+  repository it imports (§03.2.5); `go build ./... && go vet ./...` succeed without network.
 - **Source:** R-GO-002, R-GO-003, S2 §3.5.
 
 `lock.GoModule` and the `go` section:
@@ -675,8 +676,12 @@ the zip is never the imported path (S2 §3.6).
 1. go.mod: the two header lines (§03.0.2), `module <Path>`, `go <X.Y.Z>`, one `require` block
    of direct requirements (Require + codegen runtimes §03.6.4 + the build-definition
    requirements §01 contributes for the module containing `bob.go` files), one block of
-   indirect requirements with `// indirect`, both sorted by path. No `toolchain`, `replace`,
-   `exclude`, `retract`.
+   indirect requirements with `// indirect`, both sorted by path. Another workspace module of
+   this repository whose packages the module imports (directly or through that module's
+   packages) is required at `v0.0.0` in the direct block and replaced by its relative
+   directory (`replace example.com/lib => ../lib`, one line each, after the blocks): the only
+   `replace` bob writes, so the go command finds it [A-I-M5c]. No `toolchain`, other
+   `replace`, `exclude`, `retract`.
 2. go.sum: `<path> <version> <h1>` for each `packages:true` module and `<path> <version>/go.mod <modH1>`
    for every module of the pruned graph, sorted bytewise by line, `\n` endings.
 3. User environment (`bob env`, shims, `bob dev`; §02): `GOPROXY=file://$XDG_CACHE_HOME/bob/goproxy`

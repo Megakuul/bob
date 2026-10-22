@@ -65,18 +65,28 @@ func (r *SigningKeyIndex) Draft() *SigningKeyIndex {
 
 func indexKey() *SigningKeyIndex { return &SigningKeyIndex{Name: store.ID("all")} }
 
+// Entries returns the key entries of a fetched index (none for the empty index of a server
+// without keys, which Index returns as a key value).
+func (x *SigningKeyIndex) Entries() []KeyEntry {
+	if x == nil || x.Keys == nil {
+		return nil
+	}
+	return x.Keys.Value()
+}
+
 // Active returns the ACTIVE entry (nil when none).
 func (x *SigningKeyIndex) Active() *KeyEntry {
-	for i := range x.Keys.Value() {
-		if x.Keys.Value()[i].State == KeyActive {
-			return &x.Keys.Value()[i]
+	keys := x.Entries()
+	for i := range keys {
+		if keys[i].State == KeyActive {
+			return &keys[i]
 		}
 	}
 	return nil
 }
 
 func (x *SigningKeyIndex) find(name string) int {
-	return slices.IndexFunc(x.Keys.Value(), func(e KeyEntry) bool { return e.Name == name })
+	return slices.IndexFunc(x.Entries(), func(e KeyEntry) bool { return e.Name == name })
 }
 
 // Errors of key management callers act on.
@@ -141,7 +151,7 @@ func (k *Keys) Create(ctx context.Context) (KeyEntry, error) {
 
 func nextN(x *SigningKeyIndex) int {
 	n := 0
-	for _, e := range x.Keys.Value() {
+	for _, e := range x.Entries() {
 		n = max(n, e.N)
 	}
 	return n + 1
@@ -170,25 +180,21 @@ func (k *Keys) create(ctx context.Context, want func(*SigningKeyIndex) bool) (Ke
 		entry := KeyEntry{Name: name, N: n, Public: sk.Public(), State: KeyActive, Created: k.now()}
 		var out KeyEntry
 		_, err = store.CAS(ctx, k.Control, indexKey(), func(cur *SigningKeyIndex) (*SigningKeyIndex, error) {
-			next := &SigningKeyIndex{Name: store.ID("all")}
-			if cur != nil {
-				next.Keys = store.Set(slices.Clone(cur.Keys.Value()))
-			}
-			if i := next.find(name); i >= 0 { // a concurrent create of the same name won
-				out = next.Keys.Value()[i]
+			if i := cur.find(name); i >= 0 { // a concurrent create of the same name won
+				out = cur.Entries()[i]
 				return nil, store.ErrNoChange
 			}
-			if nextN(next) != n || !want(next) {
+			if nextN(cur) != n || !want(cur) {
 				return nil, errRetryCreate
 			}
-			for i := range next.Keys.Value() {
-				if next.Keys.Value()[i].State == KeyActive {
-					next.Keys.Value()[i].State = KeyVerifyOnly
+			keys := slices.Clone(cur.Entries())
+			for i := range keys {
+				if keys[i].State == KeyActive {
+					keys[i].State = KeyVerifyOnly
 				}
 			}
-			next.Keys = store.Set(append(next.Keys.Value(), entry))
 			out = entry
-			return next, nil
+			return &SigningKeyIndex{Name: store.ID("all"), Keys: store.Set(append(keys, entry))}, nil
 		})
 		if errors.Is(err, errRetryCreate) {
 			continue
@@ -275,7 +281,7 @@ func (k *Keys) PublicKeys(ctx context.Context) ([]string, error) {
 	if a := x.Active(); a != nil {
 		out = append(out, a.Public)
 	}
-	for _, e := range x.Keys.Value() {
+	for _, e := range x.Entries() {
 		if e.State != KeyActive && e.State != KeyRetired {
 			out = append(out, e.Public)
 		}
@@ -304,10 +310,10 @@ func (k *Keys) SetState(ctx context.Context, name, to string, from ...string) (K
 		if !slices.Contains(from, out.State) {
 			return nil, store.ErrNoChange
 		}
-		next := &SigningKeyIndex{Name: store.ID("all"), Keys: store.Set(slices.Clone(cur.Keys.Value()))}
-		next.Keys.Value()[i].State = to
-		out = next.Keys.Value()[i]
-		return next, nil
+		keys := slices.Clone(cur.Keys.Value())
+		keys[i].State = to
+		out = keys[i]
+		return &SigningKeyIndex{Name: store.ID("all"), Keys: store.Set(keys)}, nil
 	})
 	if err != nil {
 		return KeyEntry{}, err

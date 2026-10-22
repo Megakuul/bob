@@ -115,19 +115,22 @@ func (k *Keys) Rotate(ctx context.Context, now time.Time) ([]store.FleetKey, err
 	}
 	got, err := store.CAS(ctx, k.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := store.FleetConfigKey()
+		var keys []store.FleetKey
+		var gen int64
 		if cur != nil {
 			*next = *cur
+			keys, gen = cur.Keys.Value(), cur.Gen.Value()
 		}
-		had := slices.ContainsFunc(next.Keys.Value(), fresh) // another orchestrator may have rotated meanwhile
-		ks := slices.DeleteFunc(slices.Clone(next.Keys.Value()), retire)
+		had := slices.ContainsFunc(keys, fresh) // another orchestrator may have rotated meanwhile
+		ks := slices.DeleteFunc(slices.Clone(keys), retire)
 		if add != nil && !had {
 			ks = append(ks, *add)
 		}
-		if len(ks) == len(next.Keys.Value()) && (add == nil || had) {
+		if len(ks) == len(keys) && (add == nil || had) {
 			return nil, store.ErrNoChange
 		}
 		next.Keys = store.Set(ks)
-		next.Gen = store.Set(next.Gen.Value() + 1)
+		next.Gen = store.Set(gen + 1)
 		return next, nil
 	})
 	if err != nil || got == nil {
@@ -145,11 +148,11 @@ func (k *Keys) next(ctx context.Context, top int, now time.Time) (*OrchKeyRecord
 		if _, err := rand.Read(seed); err != nil {
 			return nil, err
 		}
-		rec := &OrchKeyRecord{Kid: store.ID(rotatedKid(n)), Seed: store.Set(seed), Created: store.Set(now), NotAfter: store.Set(now.Add(KeyLifetime))}
-		err := store.Create(ctx, k.Control, rec)
-		if errors.Is(err, store.ErrExists) {
-			rec, err = store.Get(ctx, k.Control, &OrchKeyRecord{Kid: store.ID(rotatedKid(n))})
+		err := store.Create(ctx, k.Control, &OrchKeyRecord{Kid: store.ID(rotatedKid(n)), Seed: store.Set(seed), Created: store.Set(now), NotAfter: store.Set(now.Add(KeyLifetime))})
+		if err != nil && !errors.Is(err, store.ErrExists) {
+			return nil, err
 		}
+		rec, err := store.Get(ctx, k.Control, &OrchKeyRecord{Kid: store.ID(rotatedKid(n))})
 		if err != nil {
 			return nil, err
 		}

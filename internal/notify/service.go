@@ -98,16 +98,21 @@ func (s Service) CreateNotifyWebhook(ctx context.Context, req *connect.Request[n
 		return nil, err
 	}
 	h := HookKey("wh-" + hex.EncodeToString(b[:8]))
-	h.URL, h.Secret, h.Events, h.Projects, h.Enabled, h.Created = store.Set(in.GetUrl()), store.Set(hex.EncodeToString(b[8:])), store.Set(dedupe(in.GetEvents())),
+	secret := hex.EncodeToString(b[8:])
+	h.URL, h.Secret, h.Events, h.Projects, h.Enabled, h.Created = store.Set(in.GetUrl()), store.Set(secret), store.Set(dedupe(in.GetEvents())),
 		store.Set(dedupe(in.GetProjects())), store.Set(in.GetEnabled()), store.Set(s.N.Now().UTC())
 	if _, err := store.CAS(ctx, s.N.Control, HookIndexKey(), func(cur *HookIndex) (*HookIndex, error) {
+		var vals []string
 		if cur == nil {
 			cur = HookIndexKey()
+		} else {
+			vals = cur.IDs.Value()
 		}
-		if len(cur.IDs.Value()) >= MaxHooks {
+		if len(vals) >= MaxHooks {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d notification webhooks", MaxHooks))
 		}
-		cur.IDs = store.Set(append(cur.IDs.Value(), h.ID.Value()))
+		vals = append(vals, h.ID.Value())
+		cur.IDs = store.Set(vals)
 		return cur, nil
 	}); err != nil {
 		return nil, storageErr(err)
@@ -115,7 +120,11 @@ func (s Service) CreateNotifyWebhook(ctx context.Context, req *connect.Request[n
 	if err := store.Create(ctx, s.N.Control, h); err != nil {
 		return nil, storageErr(err)
 	}
-	return connect.NewResponse(&notifyv1.CreateNotifyWebhookResponse{Webhook: msg(h), Secret: h.Secret.Value()}), nil
+	created, err := s.get(ctx, h.ID.Value())
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&notifyv1.CreateNotifyWebhookResponse{Webhook: msg(created), Secret: secret}), nil
 }
 
 func (s Service) get(ctx context.Context, id string) (*HookRecord, error) {

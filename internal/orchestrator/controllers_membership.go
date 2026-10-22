@@ -108,15 +108,18 @@ func (m *Membership) listed(fc *store.FleetConfig) bool {
 func (m *Membership) join(ctx context.Context, now time.Time) error {
 	_, err := store.CAS(ctx, m.Fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 		next := store.FleetConfigKey()
+		var members []store.FleetMember
+		var gen int64
 		if cur != nil {
+			if m.listed(cur) {
+				return nil, store.ErrNoChange
+			}
 			*next = *cur
+			members, gen = cur.Members.Value(), cur.Gen.Value()
 		}
-		if m.listed(next) {
-			return nil, store.ErrNoChange
-		}
-		members := slices.DeleteFunc(slices.Clone(next.Members.Value()), func(x store.FleetMember) bool { return x.Orch == m.ID })
+		members = slices.DeleteFunc(slices.Clone(members), func(x store.FleetMember) bool { return x.Orch == m.ID })
 		next.Members = store.Set(append(members, store.FleetMember{Orch: m.ID, Endpoint: m.Endpoint, SPKIPin: m.SPKIPin, Since: now}))
-		next.Gen = store.Set(next.Gen.Value() + 1)
+		next.Gen = store.Set(gen + 1)
 		return next, nil
 	})
 	if err == nil {

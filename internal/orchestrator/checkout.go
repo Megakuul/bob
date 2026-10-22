@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"strings"
 	"time"
@@ -127,15 +128,12 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 	forge, _, _ := strings.Cut(spec.Repo, "/")
 	entry := CheckoutRecord{Epoch: epoch, Forge: forge, Handle: handle, Expires: now.Add(CheckoutTTL), ForgeExpires: co.Expires.UTC()}
 	_, err = store.CAS(ctx, c.Control, key, func(cur *checkoutShard) (*checkoutShard, error) {
-		next := checkoutShard{Shard: key.Shard, Jobs: store.Set(map[string][]CheckoutRecord{})}
+		jobs := map[string][]CheckoutRecord{}
 		if cur != nil {
-			next.ETag = cur.ETag
-			for k, v := range cur.Jobs.Value() {
-				next.Jobs.Value()[k] = v
-			}
+			maps.Copy(jobs, cur.Jobs.Value())
 		}
-		next.Jobs.Value()[jobID] = append(append([]CheckoutRecord(nil), next.Jobs.Value()[jobID]...), entry)
-		return &next, nil
+		jobs[jobID] = append(append([]CheckoutRecord(nil), jobs[jobID]...), entry)
+		return &checkoutShard{Shard: key.Shard, Jobs: store.Set(jobs)}, nil
 	})
 	if err != nil {
 		// No record means no sweeper: revoke now rather than leak the token.
@@ -232,7 +230,7 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		next := checkoutShard{Shard: key.Shard, ETag: cur.ETag, Jobs: store.Set(map[string][]CheckoutRecord{})}
+		jobs := map[string][]CheckoutRecord{}
 		for jobID, entries := range cur.Jobs.Value() {
 			var keep []CheckoutRecord
 			for _, e := range entries {
@@ -241,13 +239,13 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 				}
 			}
 			if len(keep) > 0 {
-				next.Jobs.Value()[jobID] = keep
+				jobs[jobID] = keep
 			}
 		}
-		if len(next.Jobs.Value()) == 0 {
+		if len(jobs) == 0 {
 			return nil, nil // last entry: delete the shard document
 		}
-		return &next, nil
+		return &checkoutShard{Shard: key.Shard, Jobs: store.Set(jobs)}, nil
 	})
 	if err != nil {
 		errs = append(errs, err)

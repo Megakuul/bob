@@ -326,20 +326,21 @@ func (q *Queue) summarise(ctx context.Context, buildID string, rec *store.JobRec
 		if !rec.Claimed.Value().IsZero() && !rec.Changed.Value().IsZero() {
 			row.Duration = rec.Changed.Value().Sub(rec.Claimed.Value())
 		}
-		next.Jobs = store.Set(append([]store.BuildJob(nil), cur.Jobs.Value()...))
-		for i := range next.Jobs.Value() {
-			if next.Jobs.Value()[i].ID == rec.ID.Value() {
-				if next.Jobs.Value()[i] == row {
+		jobs := append([]store.BuildJob(nil), cur.Jobs.Value()...)
+		for i := range jobs {
+			if jobs[i].ID == rec.ID.Value() {
+				if jobs[i] == row {
 					return nil, store.ErrNoChange
 				}
-				next.Jobs.Value()[i] = row
+				jobs[i] = row
+				next.Jobs = store.Set(jobs)
 				return &next, nil
 			}
 		}
-		if len(next.Jobs.Value()) >= store.MaxBuildJobs {
-			return nil, fmt.Errorf("orchestrator: build %s has %d jobs, the limit is %d", buildID, len(next.Jobs.Value()), store.MaxBuildJobs)
+		if len(jobs) >= store.MaxBuildJobs {
+			return nil, fmt.Errorf("orchestrator: build %s has %d jobs, the limit is %d", buildID, len(jobs), store.MaxBuildJobs)
 		}
-		next.Jobs = store.Set(append(next.Jobs.Value(), row))
+		next.Jobs = store.Set(append(jobs, row))
 		return &next, nil
 	})
 	return err

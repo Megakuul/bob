@@ -187,3 +187,41 @@ func mustEncode(t *testing.T, f *File) []byte {
 }
 
 func regexpMatch(re, s string) bool { return regexp.MustCompile(re).MatchString(s) }
+
+// Real crates: weak dependency features ("memchr?/std" of aho-corasick) and long cfg() targets
+// (rustix: 851 bytes) are valid; invalid registry data is BOB-E-1023 naming the crate, never an
+// internal error.
+func TestRustSectionRealCrates(t *testing.T) {
+	longCfg := "cfg(all(not(rustix_use_libc), not(miri), target_os = \"linux\", any(" +
+		strings.Repeat("target_arch = \"x86\", ", 40) + "target_arch = \"aarch64\")))"
+	if len(longCfg) < 851 {
+		t.Fatalf("test target too short: %d", len(longCfg))
+	}
+	crate := func(feature, target string) *RustSection {
+		return &RustSection{Inputs: strings.Repeat("a", 64), Crates: []Crate{{
+			Name: "aho-corasick", Version: "1.1.3", Checksum: sriHash, NarHash: sriHash,
+			Deps:     []CrateDep{{Name: "memchr", Crate: "memchr@2.7.4", Optional: true, Target: target}},
+			Features: map[string][]string{"std": {feature}},
+			Meta:     CrateMeta{Edition: "2021"},
+		}}}
+	}
+	if _, err := EncodeSection(SectionRust, crate("memchr?/std", longCfg)); err != nil {
+		t.Fatalf("weak feature + long cfg: %v", err)
+	}
+	for name, sec := range map[string]*RustSection{
+		"feature": crate("memchr?/st d", ""),
+		"target":  crate("std", strings.Repeat("x", maxTarget+1)),
+	} {
+		_, err := EncodeSection(SectionRust, sec)
+		var de *diag.Error
+		if !errors.As(err, &de) || de.Code != 1023 || de.Args["package"] != "crates.io:aho-corasick@1.1.3" {
+			t.Errorf("%s: err = %#v, want BOB-E-1023 for crates.io:aho-corasick@1.1.3", name, err)
+		}
+		f := &File{LockVersion: 1, Sections: map[string]json.RawMessage{}}
+		raw, _ := json.Marshal(sec)
+		f.Sections[SectionRust] = raw
+		if _, err := f.Encode(); !errors.As(err, &de) || de.Code != 1023 {
+			t.Errorf("%s: File.Encode err = %v, want BOB-E-1023", name, err)
+		}
+	}
+}

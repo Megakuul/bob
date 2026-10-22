@@ -26,7 +26,7 @@ func (p *Promoter) RetireKeys(ctx context.Context, list NarInfoLister) error {
 		return err
 	}
 	var retiring []string
-	for _, e := range x.Keys.Value() {
+	for _, e := range x.Entries() {
 		if e.State == KeyRetiring {
 			retiring = append(retiring, e.Name)
 		}

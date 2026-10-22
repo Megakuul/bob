@@ -162,6 +162,13 @@ func TestRGO002bBuildListEqualsGoCommand(t *testing.T) {
 				return
 			}
 			lists := lockedBuildLists(t, dir)
+			// The repository's other workspace modules a module imports are required at
+			// v0.0.0 with a directory replace (SPEC §03.2.5); go list prints them as
+			// "<path> v0.0.0 => <dir>", they are not part of bob's build list.
+			workspace := map[string]string{}
+			for _, m := range e.mods {
+				workspace[modulePath(t, filepath.Join(dir, m))] = m
+			}
 			for _, m := range e.mods {
 				modDir := filepath.Join(dir, m)
 				path := modulePath(t, modDir)
@@ -180,6 +187,10 @@ func TestRGO002bBuildListEqualsGoCommand(t *testing.T) {
 					f := strings.Fields(l)
 					if i == 0 && len(f) == 1 { // the main module has no version
 						continue
+					}
+					if len(f) == 4 && f[1] == "v0.0.0" && f[2] == "=>" && workspace[f[0]] != "" &&
+						filepath.Clean(filepath.Join(m, f[3])) == filepath.Clean(workspace[f[0]]) {
+						continue // another workspace module of the repository
 					}
 					if len(f) != 2 {
 						t.Errorf("go list -m all: unexpected line %q", l)

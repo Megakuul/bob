@@ -84,9 +84,10 @@ func (p *Projects) Evaluated(ctx context.Context, rec *store.BuildRecord, r *job
 	}
 	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
 		next := PipelinesRecord{Project: store.ID(rec.Project.Value())}
+		last := map[string]LastRun{}
 		if cur != nil {
 			next = *cur
-			next.Last = store.Set(maps.Clone(cur.Last.Value()))
+			maps.Copy(last, cur.Last.Value())
 		}
 		changed := false
 		if cur == nil || def && (!cur.Default.Value() || rec.Number.Value() >= cur.N.Value()) || !def && !cur.Default.Value() && rec.Number.Value() >= cur.N.Value() {
@@ -94,8 +95,9 @@ func (p *Projects) Evaluated(ctx context.Context, rec *store.BuildRecord, r *job
 			changed = true
 		}
 		for _, name := range r.Matched {
-			changed = setLast(&next, name, LastRun{Build: rec.ID.Value(), N: rec.Number.Value(), State: "running"}) || changed
+			changed = setLast(last, name, LastRun{Build: rec.ID.Value(), N: rec.Number.Value(), State: "running"}) || changed
 		}
+		next.Last = store.Set(last)
 		if !changed {
 			return nil, store.ErrNoChange
 		}
@@ -111,14 +113,16 @@ func (p *Projects) Finished(ctx context.Context, rec *store.BuildRecord) error {
 	}
 	_, err := store.CAS(ctx, p.cfg.Control, &PipelinesRecord{Project: store.ID(rec.Project.Value())}, func(cur *PipelinesRecord) (*PipelinesRecord, error) {
 		next := PipelinesRecord{Project: store.ID(rec.Project.Value())}
+		last := map[string]LastRun{}
 		if cur != nil {
 			next = *cur
-			next.Last = store.Set(maps.Clone(cur.Last.Value()))
+			maps.Copy(last, cur.Last.Value())
 		}
 		changed := false
 		for _, run := range rec.Pipelines.Value() {
-			changed = setLast(&next, run.Name, LastRun{Build: rec.ID.Value(), N: rec.Number.Value(), State: run.State}) || changed
+			changed = setLast(last, run.Name, LastRun{Build: rec.ID.Value(), N: rec.Number.Value(), State: run.State}) || changed
 		}
+		next.Last = store.Set(last)
 		if !changed {
 			return nil, store.ErrNoChange
 		}
@@ -127,27 +131,24 @@ func (p *Projects) Finished(ctx context.Context, rec *store.BuildRecord) error {
 	return err
 }
 
-// setLast makes run the last build of pipeline name unless a newer build already is.
-func setLast(r *PipelinesRecord, name string, run LastRun) bool {
+// setLast makes run the last build of pipeline name in last unless a newer build already is.
+func setLast(last map[string]LastRun, name string, run LastRun) bool {
 	if name == "" {
 		return false
 	}
 	name = clip(name)
-	old, ok := r.Last.Value()[name]
+	old, ok := last[name]
 	if ok && (old.N > run.N || old == run) {
 		return false
 	}
-	if !ok && len(r.Last.Value()) >= maxPipelines {
+	if !ok && len(last) >= maxPipelines {
 		// drop the pipeline whose last build is the oldest
-		oldest := slices.MinFunc(slices.Collect(maps.Keys(r.Last.Value())), func(a, b string) int {
-			return cmp.Compare(r.Last.Value()[a].N, r.Last.Value()[b].N)
+		oldest := slices.MinFunc(slices.Collect(maps.Keys(last)), func(a, b string) int {
+			return cmp.Compare(last[a].N, last[b].N)
 		})
-		delete(r.Last.Value(), oldest)
+		delete(last, oldest)
 	}
-	if r.Last.Value() == nil {
-		r.Last = store.Set(map[string]LastRun{})
-	}
-	r.Last.Value()[name] = run
+	last[name] = run
 	return true
 }
 

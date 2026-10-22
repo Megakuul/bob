@@ -63,7 +63,11 @@ func newErr(code diag.Code, args map[string]string) *diag.Error {
 	for _, k := range slices.Sorted(maps.Keys(args)) {
 		kv = append(kv, k, args[k])
 	}
+	// Only the selected variant's template must be complete (diag.New picks it by "variant").
 	for _, v := range ent.Variants {
+		if v.Name != args["variant"] && len(ent.Variants) > 1 {
+			continue
+		}
 		for _, a := range diag.TemplateArgs(v.Message) {
 			if _, ok := args[a]; !ok {
 				kv = append(kv, a, missingArg)

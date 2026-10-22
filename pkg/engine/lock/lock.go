@@ -258,7 +258,7 @@ func (f *File) Encode() ([]byte, error) {
 	}
 	for k, raw := range f.Sections {
 		if _, err := DecodeSection(k, raw); err != nil {
-			return nil, fmt.Errorf("lock: %w", err)
+			return nil, unpinnable(k, err)
 		}
 		top[k] = raw
 	}

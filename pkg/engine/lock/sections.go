@@ -205,7 +205,8 @@ func DecodeSection(key string, raw json.RawMessage) (any, error) {
 }
 
 // EncodeSection encodes a section decoded by DecodeSection (or a value of a section type)
-// canonically: compact JSON, keys sorted, arrays in schema order.
+// canonically: compact JSON, keys sorted, arrays in schema order. Content that fails
+// validation is a *diag.Error BOB-E-1023 naming the item.
 func EncodeSection(key string, v any) (json.RawMessage, error) {
 	ok := false
 	switch key {
@@ -230,6 +231,10 @@ func EncodeSection(key string, v any) (json.RawMessage, error) {
 	b, err := marshalCanonical(v)
 	if err != nil {
 		return nil, fmt.Errorf("section %s: %w", key, err)
+	}
+	// bob never writes what it cannot read back: an invalid item is BOB-E-1023.
+	if _, err := DecodeSection(key, b); err != nil {
+		return nil, unpinnable(key, err)
 	}
 	return b, nil
 }
@@ -319,65 +324,73 @@ func (s *RustSection) validate() error {
 		}
 	}
 	for _, c := range s.Crates {
-		if !crateRe.MatchString(c.Name) {
-			return fmt.Errorf("crate name %q is invalid", clip(c.Name))
+		if err := validateCrate(c); err != nil {
+			return &ItemError{Item: "crates.io:" + clip(c.Name) + "@" + clip(c.Version), Err: err}
 		}
-		if !semverRe.MatchString(c.Version) {
-			return fmt.Errorf("crate %s: version %q is not a semantic version", c.Name, clip(c.Version))
+	}
+	return nil
+}
+
+// validateCrate checks one locked crate (registry metadata: hostile input).
+func validateCrate(c Crate) error {
+	if !crateRe.MatchString(c.Name) {
+		return fmt.Errorf("crate name %q is invalid", clip(c.Name))
+	}
+	if !semverRe.MatchString(c.Version) {
+		return fmt.Errorf("crate %s: version %q is not a semantic version", c.Name, clip(c.Version))
+	}
+	if err := checkSRI("crate "+c.Name+" checksum", c.Checksum, "sha256"); err != nil {
+		return err
+	}
+	if err := checkSRI("crate "+c.Name+" narHash", c.NarHash, "sha256"); err != nil {
+		return err
+	}
+	if c.Links != "" && !crateRe.MatchString(c.Links) {
+		return fmt.Errorf("crate %s: links %q is invalid", c.Name, clip(c.Links))
+	}
+	for _, d := range c.Deps {
+		if !crateRe.MatchString(d.Name) {
+			return fmt.Errorf("crate %s: dependency name %q is invalid", c.Name, clip(d.Name))
 		}
-		if err := checkSRI("crate "+c.Name+" checksum", c.Checksum, "sha256"); err != nil {
-			return err
+		n, v, ok := strings.Cut(d.Crate, "@")
+		if !ok || !crateRe.MatchString(n) || !semverRe.MatchString(v) {
+			return fmt.Errorf("crate %s: dependency %q is not name@version", c.Name, clip(d.Crate))
 		}
-		if err := checkSRI("crate "+c.Name+" narHash", c.NarHash, "sha256"); err != nil {
-			return err
+		if !slices.Contains([]string{"", "build", "dev"}, d.Kind) {
+			return fmt.Errorf("crate %s: dependency kind %q is invalid", c.Name, clip(d.Kind))
 		}
-		if c.Links != "" && !crateRe.MatchString(c.Links) {
-			return fmt.Errorf("crate %s: links %q is invalid", c.Name, clip(c.Links))
-		}
-		for _, d := range c.Deps {
-			if !crateRe.MatchString(d.Name) {
-				return fmt.Errorf("crate %s: dependency name %q is invalid", c.Name, clip(d.Name))
+		if d.Target != "" {
+			if err := checkTarget("crate "+c.Name+" dependency target", d.Target); err != nil {
+				return err
 			}
-			n, v, ok := strings.Cut(d.Crate, "@")
-			if !ok || !crateRe.MatchString(n) || !semverRe.MatchString(v) {
-				return fmt.Errorf("crate %s: dependency %q is not name@version", c.Name, clip(d.Crate))
-			}
-			if !slices.Contains([]string{"", "build", "dev"}, d.Kind) {
-				return fmt.Errorf("crate %s: dependency kind %q is invalid", c.Name, clip(d.Kind))
-			}
-			if d.Target != "" {
-				if err := checkText("crate "+c.Name+" dependency target", d.Target); err != nil {
-					return err
-				}
-			}
-			for _, f := range d.Features {
-				if !featureRe.MatchString(f) {
-					return fmt.Errorf("crate %s: feature %q is invalid", c.Name, clip(f))
-				}
-			}
 		}
-		for f, fs := range c.Features {
+		for _, f := range d.Features {
 			if !featureRe.MatchString(f) {
 				return fmt.Errorf("crate %s: feature %q is invalid", c.Name, clip(f))
 			}
-			for _, x := range fs {
-				if !featureRe.MatchString(x) {
-					return fmt.Errorf("crate %s: feature %q enables invalid %q", c.Name, f, clip(x))
-				}
+		}
+	}
+	for f, fs := range c.Features {
+		if !featureRe.MatchString(f) {
+			return fmt.Errorf("crate %s: feature %q is invalid", c.Name, clip(f))
+		}
+		for _, x := range fs {
+			if !featureRe.MatchString(x) {
+				return fmt.Errorf("crate %s: feature %q enables invalid %q", c.Name, f, clip(x))
 			}
 		}
-		m := c.Meta
-		if !slices.Contains(editions, m.Edition) {
-			return fmt.Errorf("crate %s: edition %q is invalid", c.Name, clip(m.Edition))
-		}
-		if m.LibName != "" && !crateRe.MatchString(m.LibName) {
-			return fmt.Errorf("crate %s: libName %q is invalid", c.Name, clip(m.LibName))
-		}
-		for _, p := range []string{m.LibPath, m.Build} {
-			if p != "" {
-				if err := checkRelDir("crate "+c.Name+" path", p); err != nil {
-					return err
-				}
+	}
+	m := c.Meta
+	if !slices.Contains(editions, m.Edition) {
+		return fmt.Errorf("crate %s: edition %q is invalid", c.Name, clip(m.Edition))
+	}
+	if m.LibName != "" && !crateRe.MatchString(m.LibName) {
+		return fmt.Errorf("crate %s: libName %q is invalid", c.Name, clip(m.LibName))
+	}
+	for _, p := range []string{m.LibPath, m.Build} {
+		if p != "" {
+			if err := checkRelDir("crate "+c.Name+" path", p); err != nil {
+				return err
 			}
 		}
 	}

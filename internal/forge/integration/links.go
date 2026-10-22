@@ -68,12 +68,14 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 		if len(cur.Repos.Value()) >= MaxLinkedRepos {
 			return nil, fmt.Errorf("forge: integration %s links %d repositories already", forgeID, len(cur.Repos.Value()))
 		}
-		if cur.Repos.Value() == nil {
-			cur.Repos = store.Set(map[string]string{})
+		repos := cur.Repos.Value()
+		if repos == nil {
+			repos = map[string]string{}
 		}
-		if _, taken := cur.Repos.Value()[rid]; !taken {
-			cur.Repos.Value()[rid] = project
+		if _, taken := repos[rid]; !taken {
+			repos[rid] = project
 		}
+		cur.Repos = store.Set(repos)
 		return cur, nil
 	}); err != nil {
 		return Linked{}, err

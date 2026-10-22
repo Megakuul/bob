@@ -56,12 +56,13 @@ func (id *Identity) createSession(ctx context.Context, uid, kind, userAgent stri
 	rec.ID = store.Set(newID(now))
 	rec.User, rec.Kind, rec.UserAgent = store.Set(uid), store.Set(kind), store.Set(truncate(userAgent, 200))
 	rec.Created, rec.LastUsed = store.Set(now), store.Set(now)
-	rec.IdleUntil, rec.MaxUntil = store.Set(now.Add(idle)), store.Set(now.Add(maxAge))
+	maxUntil := now.Add(maxAge)
+	rec.IdleUntil, rec.MaxUntil = store.Set(now.Add(idle)), store.Set(maxUntil)
 	if kind == "cli" {
 		out.download = newToken(PrefixDownload)
 		dt := store.TokenKey(out.download.reveal())
 		dt.Owner, dt.Kind, dt.Scope, dt.Session = store.Set("user:"+uid), store.Set[string]("dt"), store.Set[string]("download"), store.Set(rec.Hash.Value())
-		dt.Expires, dt.Created = store.Set(rec.MaxUntil.Value()), store.Set(now)
+		dt.Expires, dt.Created = store.Set(maxUntil), store.Set(now)
 		if err := store.Create(ctx, id.control, dt); err != nil {
 			return nil, storageError(err)
 		}
@@ -70,18 +71,22 @@ func (id *Identity) createSession(ctx context.Context, uid, kind, userAgent stri
 	if err := store.Create(ctx, id.control, rec); err != nil {
 		return nil, storageError(err)
 	}
-	out.rec = rec
+	var err error
+	if out.rec, err = store.Get(ctx, id.control, store.SessionKey(out.session.reveal())); err != nil {
+		return nil, storageError(err)
+	}
 	var evicted []string
 	u, err := store.CAS(ctx, id.control, store.UserKey(uid), func(cur *store.UserRecord) (*store.UserRecord, error) {
 		if cur == nil {
 			return nil, store.ErrNoChange
 		}
-		cur.Sessions = store.Set(append(cur.Sessions.Value(), store.SessionRef{ID: rec.ID.Value(), Hash: rec.Hash.Value()}))
+		sessions := append(cur.Sessions.Value(), store.SessionRef{ID: out.rec.ID.Value(), Hash: out.rec.Hash.Value()})
 		evicted = nil
-		for len(cur.Sessions.Value()) > maxSessions {
-			evicted = append(evicted, cur.Sessions.Value()[0].Hash)
-			cur.Sessions = store.Set(cur.Sessions.Value()[1:])
+		for len(sessions) > maxSessions {
+			evicted = append(evicted, sessions[0].Hash)
+			sessions = sessions[1:]
 		}
+		cur.Sessions = store.Set(sessions)
 		cur.LastLogin = store.Set(now)
 		return cur, nil
 	})
@@ -107,7 +112,8 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 	at := newToken(PrefixAccess)
 	rec := store.TokenKey(at.reveal())
 	rec.Owner, rec.Kind, rec.Scope, rec.Session = store.Set("user:"+s.User.Value()), store.Set[string]("at"), store.Set[string]("api"), store.Set(s.Hash.Value())
-	rec.Expires, rec.Created = store.Set(now.Add(accessTTL)), store.Set(now)
+	expires := now.Add(accessTTL)
+	rec.Expires, rec.Created = store.Set(expires), store.Set(now)
 	if err := store.Create(ctx, id.control, rec); err != nil {
 		return "", storageError(err)
 	}
@@ -125,7 +131,7 @@ func (id *Identity) issueAccess(ctx context.Context, s *store.SessionRecord) (Se
 				expired = append(expired, t.Hash)
 			}
 		}
-		cur.Access = store.Set(append(live, store.TokenRef{Hash: rec.Hash.Value(), Expires: rec.Expires.Value()}))
+		cur.Access = store.Set(append(live, store.TokenRef{Hash: rec.Hash.Value(), Expires: expires}))
 		cur.LastUsed = store.Set(now)
 		cur.IdleUntil = store.Set(minTime(now.Add(cliIdle), cur.MaxUntil.Value()))
 		return cur, nil

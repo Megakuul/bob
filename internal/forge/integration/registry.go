@@ -93,11 +93,11 @@ func (r *Registry) adapters(ctx context.Context, id string) (*ForgeRecord, built
 		return rec, b, nil
 	}
 	b := built{fingerprint: fp, prevUntil: rec.PrevUntil.Value()}
-	if b.cur, err = NewAdapter(rec, rec.Secret.Value()); err != nil {
+	if b.cur, err = NewAdapter(ConfigOf(rec), rec.Secret.Value()); err != nil {
 		return nil, built{}, err
 	}
 	if rec.PrevSecret.Value() != "" {
-		if b.prev, err = NewAdapter(rec, rec.PrevSecret.Value()); err != nil {
+		if b.prev, err = NewAdapter(ConfigOf(rec), rec.PrevSecret.Value()); err != nil {
 			return nil, built{}, err
 		}
 	}
@@ -135,23 +135,49 @@ func fingerprint(rec *ForgeRecord) string {
 }
 
 // NewAdapter builds the adapter of rec with webhook secret secret.
-func NewAdapter(rec *ForgeRecord, secret string) (forge.Adapter, error) {
-	switch forge.Kind(rec.Kind.Value()) {
+func NewAdapter(c Config, secret string) (forge.Adapter, error) {
+	switch forge.Kind(c.Kind) {
 	case forge.GitHub:
-		base := rec.BaseURL.Value()
+		base := c.BaseURL
 		if base == "" {
 			base = GitHubAPI
 		}
-		return github.New(github.Config{BaseURL: base, AppID: rec.AppID.Value(), InstallationID: rec.InstallationID.Value(),
-			PrivateKeyPEM: forge.NewSecret(rec.PrivateKeyPEM.Value()), WebhookSecret: forge.NewSecret(secret)})
+		return github.New(github.Config{BaseURL: base, AppID: c.AppID, InstallationID: c.InstallationID,
+			PrivateKeyPEM: forge.NewSecret(c.PrivateKeyPEM), WebhookSecret: forge.NewSecret(secret)})
 	case forge.Forgejo:
-		return forgejo.New(forgejo.Config{BaseURL: rec.BaseURL.Value(), BotLogin: rec.BotLogin.Value(),
-			BotPassword: forge.NewSecret(rec.BotPassword.Value()), WebhookSecret: forge.NewSecret(secret)})
+		return forgejo.New(forgejo.Config{BaseURL: c.BaseURL, BotLogin: c.BotLogin,
+			BotPassword: forge.NewSecret(c.BotPassword), WebhookSecret: forge.NewSecret(secret)})
 	case forge.GitLab:
-		return gitlab.New(gitlab.Config{BaseURL: rec.BaseURL.Value(), AccessToken: forge.NewSecret(rec.AccessToken.Value()),
-			SigningToken: forge.NewSecret(secret), AllowPlaintextSecret: rec.AllowPlaintext.Value()})
+		return gitlab.New(gitlab.Config{BaseURL: c.BaseURL, AccessToken: forge.NewSecret(c.AccessToken),
+			SigningToken: forge.NewSecret(secret), AllowPlaintextSecret: c.AllowPlaintext})
 	}
-	return nil, fmt.Errorf("forge: unknown kind %q", rec.Kind.Value())
+	return nil, fmt.Errorf("forge: unknown kind %q", c.Kind)
+}
+
+// Config is the adapter configuration of an integration: the kind, display name, base URL and
+// credential fields of a ForgeRecord as plain values (API handlers edit and validate it before
+// it is written).
+type Config struct {
+	Kind, DisplayName, BaseURL                        string
+	AppID, InstallationID                             int64
+	PrivateKeyPEM, BotLogin, BotPassword, AccessToken string
+	AllowPlaintext                                    bool
+}
+
+// ConfigOf reads the configuration of a fetched record.
+func ConfigOf(rec *ForgeRecord) Config {
+	return Config{Kind: rec.Kind.Value(), DisplayName: rec.DisplayName.Value(), BaseURL: rec.BaseURL.Value(),
+		AppID: rec.AppID.Value(), InstallationID: rec.InstallationID.Value(), PrivateKeyPEM: rec.PrivateKeyPEM.Value(),
+		BotLogin: rec.BotLogin.Value(), BotPassword: rec.BotPassword.Value(), AccessToken: rec.AccessToken.Value(),
+		AllowPlaintext: rec.AllowPlaintext.Value()}
+}
+
+// apply writes c into rec (update operators).
+func (c Config) apply(rec *ForgeRecord) {
+	rec.Kind, rec.DisplayName, rec.BaseURL = store.Set(c.Kind), store.Set(c.DisplayName), store.Set(c.BaseURL)
+	rec.AppID, rec.InstallationID, rec.PrivateKeyPEM = store.Set(c.AppID), store.Set(c.InstallationID), store.Set(c.PrivateKeyPEM)
+	rec.BotLogin, rec.BotPassword, rec.AccessToken = store.Set(c.BotLogin), store.Set(c.BotPassword), store.Set(c.AccessToken)
+	rec.AllowPlaintext = store.Set(c.AllowPlaintext)
 }
 
 // NewSecret generates a webhook secret: 32 random bytes, hex; GitLab signing tokens are

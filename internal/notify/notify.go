@@ -99,8 +99,8 @@ type Pending struct {
 
 // outboxShard is one shard nout/<sh2> of the outbox: delivery id -> pending delivery.
 type outboxShard struct {
-	Shard   store.KeyField                       `pk:"nout" cbor:"-"`
-	ETag    store.ETagField                      `etag:"true" cbor:"-"`
+	Shard   store.KeyField                      `pk:"nout" cbor:"-"`
+	ETag    store.ETagField                     `etag:"true" cbor:"-"`
 	Pending store.DataField[map[string]Pending] `cbor:"m,omitempty"`
 }
 

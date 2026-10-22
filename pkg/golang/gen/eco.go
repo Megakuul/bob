@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/golang/internal/gospec"
+	"github.com/megakuul/bob/pkg/golang/resolve"
 
 	// The Go API registers the go.* kinds the IR names.
 	_ "github.com/megakuul/bob/pkg/golang"
@@ -59,15 +61,67 @@ func (Ecosystem) Native(_ context.Context, req engine.PlanRequest) ([]engine.Gen
 			}
 		}
 	}
+	wsDeps, err := workspaceDeps(pl.mods, req.Root)
+	if err != nil {
+		return nil, err
+	}
 	var out []engine.GeneratedFile
 	for _, mp := range sortedKeys(pl.mods) {
 		m := pl.mods[mp]
 		if m.node == nil || !strings.HasPrefix(m.node.Label, "//") {
 			continue // modules of dependency repositories keep their own files
 		}
-		out = append(out, goModFiles(m, pl.lock, declared)...)
+		var local []localModule
+		for _, dp := range wsDeps[mp] {
+			if d := pl.mods[dp]; d != nil {
+				local = append(local, localModule{path: dp, dir: replaceDir(m.dir, d.dir)})
+			}
+		}
+		out = append(out, goModFiles(m, pl.lock, declared, local)...)
 	}
 	return out, nil
+}
+
+// workspaceDeps finds, per workspace module of this repository, the other workspace modules
+// whose packages it imports (resolve.WorkspaceDeps); nothing without the repository root.
+func workspaceDeps(mods map[string]*wsModule, root string) (map[string][]string, error) {
+	if root == "" {
+		return nil, nil
+	}
+	var wss []resolve.Workspace
+	for _, mp := range sortedKeys(mods) {
+		m := mods[mp]
+		if m.node == nil || !strings.HasPrefix(m.node.Label, "//") {
+			continue
+		}
+		w, err := workspaceOf(m.node, root)
+		if err != nil {
+			return nil, err
+		}
+		wss = append(wss, w)
+	}
+	return resolve.WorkspaceDeps(wss)
+}
+
+// replaceDir is the replace target of the module at repo-relative dir to, seen from the
+// module at from: a relative path starting with ./ or ../ (the go command reads anything
+// else as a module path).
+func replaceDir(from, to string) string {
+	if from == "" {
+		from = "."
+	}
+	if to == "" {
+		to = "."
+	}
+	rel, err := filepath.Rel(filepath.FromSlash(from), filepath.FromSlash(to))
+	if err != nil {
+		return "./" + to
+	}
+	rel = filepath.ToSlash(rel)
+	if rel != ".." && !strings.HasPrefix(rel, "../") {
+		rel = "./" + rel
+	}
+	return rel
 }
 
 // declaration is what the go section is resolved from (R-FW-062): per workspace module its

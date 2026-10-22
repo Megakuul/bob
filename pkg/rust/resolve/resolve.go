@@ -27,6 +27,11 @@ type Options struct {
 	RustVersion string
 	// MaxSteps bounds the work (activations) of one resolution; 0 means 200000.
 	MaxSteps int
+	// Locked are previously locked crates ("name@version"; bob lock with an existing bob.lock).
+	// A locked version that satisfies a requirement is tried before every other candidate,
+	// even when yanked, so a re-resolution moves only what it must (Cargo's preference for the
+	// versions in Cargo.lock).
+	Locked []string
 }
 
 // ErrUnresolvable wraps every "no version satisfies" outcome.
@@ -54,7 +59,11 @@ func (r *Resolution) Edges(e *Entry) []Edge { return r.edges[e] }
 // first, with Cargo's dependency order and backtracking.
 func Resolve(ctx context.Context, reg Registry, members []Member, o Options) (*Resolution, error) {
 	r := &resolver{ctx: ctx, reg: reg, opts: o, versions: map[string][]*Entry{}, query: map[string][]*Entry{},
-		members: map[string]*Entry{}, act: map[string]*activation{}, links: map[string]*Entry{}, feats: map[*Entry]map[string]bool{}}
+		members: map[string]*Entry{}, act: map[string]*activation{}, links: map[string]*Entry{}, feats: map[*Entry]map[string]bool{},
+		locked: map[string]bool{}}
+	for _, l := range o.Locked {
+		r.locked[l] = true
+	}
 	if o.RustVersion != "" {
 		v, err := parsePartial(o.RustVersion)
 		if err != nil {
@@ -176,6 +185,7 @@ type resolver struct {
 	reg         Registry
 	opts        Options
 	rustVersion *Version
+	locked      map[string]bool // Options.Locked
 
 	versions map[string][]*Entry // crate -> all versions (one fetch per crate)
 	query    map[string][]*Entry // dependency -> candidates, best first
@@ -507,11 +517,14 @@ func (r *resolver) candidates(d Dep) ([]*Entry, error) {
 	}
 	var out []*Entry
 	for _, e := range all {
-		if !e.Yanked && e.Name == d.Package && d.Req.Matches(e.Version) {
+		if (!e.Yanked || r.isLocked(e)) && e.Name == d.Package && d.Req.Matches(e.Version) {
 			out = append(out, e)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
+		if li, lj := r.isLocked(out[i]), r.isLocked(out[j]); li != lj {
+			return li
+		}
 		if r.rustVersion != nil {
 			ci, cj := r.rustCompatible(out[i]), r.rustCompatible(out[j])
 			if ci != cj {
@@ -522,6 +535,11 @@ func (r *resolver) candidates(d Dep) ([]*Entry, error) {
 	})
 	r.query[qk] = out
 	return out, nil
+}
+
+// isLocked reports whether e is one of Options.Locked.
+func (r *resolver) isLocked(e *Entry) bool {
+	return len(r.locked) > 0 && r.locked[e.Name+"@"+e.Vers]
 }
 
 // rustCompatible reports whether e's rust_version is at most the toolchain's.

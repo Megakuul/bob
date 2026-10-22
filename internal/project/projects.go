@@ -186,51 +186,75 @@ func (p *Projects) Health(ctx context.Context, rec *Record) projectv1.LinkHealth
 	return storedHealth(rec)
 }
 
-func storedHealth(rec *Record) projectv1.LinkHealth {
+func storedHealth(rec *Record) projectv1.LinkHealth { return healthOf(rec.Forge.Value(), rec.HookErr.Value()) }
+
+func healthOf(forgeID, hookErr string) projectv1.LinkHealth {
 	switch {
-	case rec.Forge.Value() == "":
+	case forgeID == "":
 		return projectv1.LinkHealth_LINK_HEALTH_UNSPECIFIED
-	case rec.HookErr.Value() != "":
+	case hookErr != "":
 		return projectv1.LinkHealth_LINK_HEALTH_WEBHOOK_MISSING
 	}
 	return projectv1.LinkHealth_LINK_HEALTH_OK
 }
 
 func entryOf(rec *Record, pending bool, at time.Time) Entry {
-	return Entry{ID: rec.ID.Value(), Pending: pending, At: at, DisplayName: rec.DisplayName.Value(), Description: rec.Description.Value(),
-		Forge: rec.Forge.Value(), RepoName: rec.RepoName.Value(), RepoID: rec.RepoID.Value(), DefaultBranch: rec.DefaultBranch.Value(),
-		WebURL: rec.WebURL.Value(), Health: int32(storedHealth(rec)), Created: rec.Created.Value()}
+	return makeEntry(rec.ID.Value(), rec.DisplayName.Value(), rec.Description.Value(), linkOf(rec), rec.Created.Value(), pending, at)
 }
 
-// link links repository repo of integration forgeID to rec's project and copies what the
-// forge says about it into rec.
-func (p *Projects) link(ctx context.Context, rec *Record, forgeID, repo string) error {
+func makeEntry(id, displayName, description string, l repoLink, created time.Time, pending bool, at time.Time) Entry {
+	return Entry{ID: id, Pending: pending, At: at, DisplayName: displayName, Description: description,
+		Forge: l.Forge, RepoName: l.RepoName, RepoID: l.RepoID, DefaultBranch: l.DefaultBranch,
+		WebURL: l.WebURL, Health: int32(healthOf(l.Forge, l.HookErr)), Created: created}
+}
+
+// repoLink is the linked repository of a project as plain values (the link fields of Record).
+type repoLink struct {
+	Forge, RepoName       string
+	RepoID                int64
+	DefaultBranch, WebURL string
+	HookErr               string
+}
+
+func linkOf(rec *Record) repoLink {
+	return repoLink{Forge: rec.Forge.Value(), RepoName: rec.RepoName.Value(), RepoID: rec.RepoID.Value(),
+		DefaultBranch: rec.DefaultBranch.Value(), WebURL: rec.WebURL.Value(), HookErr: rec.HookErr.Value()}
+}
+
+// apply writes l into rec (update operators; an empty link clears the fields).
+func (l repoLink) apply(rec *Record) {
+	rec.Forge, rec.RepoName, rec.RepoID = store.Set(l.Forge), store.Set(l.RepoName), store.Set(l.RepoID)
+	rec.DefaultBranch, rec.WebURL, rec.HookErr = store.Set(l.DefaultBranch), store.Set(l.WebURL), store.Set(l.HookErr)
+}
+
+// link links repository repo of integration forgeID to project id and returns what the forge
+// says about it.
+func (p *Projects) link(ctx context.Context, id, forgeID, repo string) (repoLink, error) {
 	if p.cfg.Links == nil {
-		return invalid("project.forgeIntegrationId", "forge integrations are not available on this server")
+		return repoLink{}, invalid("project.forgeIntegrationId", "forge integrations are not available on this server")
 	}
-	l, err := p.cfg.Links.LinkRepo(ctx, forgeID, repo, rec.ID.Value(), p.cfg.BaseURL)
+	l, err := p.cfg.Links.LinkRepo(ctx, forgeID, repo, id, p.cfg.BaseURL)
 	switch {
 	case errors.Is(err, integration.ErrLinked):
-		return &LinkError{Linked: true, Msg: "repository " + repo + " is already linked to another project"}
+		return repoLink{}, &LinkError{Linked: true, Msg: "repository " + repo + " is already linked to another project"}
 	case errors.Is(err, integration.ErrUnknown):
-		return invalid("project.forgeIntegrationId", "forge integration %s not found", forgeID)
+		return repoLink{}, invalid("project.forgeIntegrationId", "forge integration %s not found", forgeID)
 	case errors.Is(err, forge.ErrNotFound):
-		return invalid("project.repoFullName", "repository %s not found on forge integration %s", repo, forgeID)
+		return repoLink{}, invalid("project.repoFullName", "repository %s not found on forge integration %s", repo, forgeID)
 	case errors.Is(err, forge.ErrAuth):
-		return &LinkError{Msg: fmt.Sprintf("forge: integration %s: forge rejected bob's credentials (HTTP 401); re-enter the credentials in Settings → Forges", forgeID)}
+		return repoLink{}, &LinkError{Msg: fmt.Sprintf("forge: integration %s: forge rejected bob's credentials (HTTP 401); re-enter the credentials in Settings → Forges", forgeID)}
 	case err != nil:
-		p.cfg.Log.Warn("project: linking the repository failed", "project", rec.ID.Value(), "integration", forgeID, "repository", repo, "err", err.Error())
-		return &LinkError{Msg: fmt.Sprintf("forge integration %s: the repository could not be linked, try again", forgeID)}
+		p.cfg.Log.Warn("project: linking the repository failed", "project", id, "integration", forgeID, "repository", repo, "err", err.Error())
+		return repoLink{}, &LinkError{Msg: fmt.Sprintf("forge integration %s: the repository could not be linked, try again", forgeID)}
 	}
-	rec.Forge, rec.RepoName, rec.RepoID = store.Set(forgeID), store.Set(l.Repo.FullName), store.Set(l.Repo.ID)
-	if rec.RepoName.Value() == "" {
-		rec.RepoName = store.Set(repo)
+	out := repoLink{Forge: forgeID, RepoName: l.Repo.FullName, RepoID: l.Repo.ID, DefaultBranch: l.Repo.DefaultBranch, WebURL: l.Repo.WebURL}
+	if out.RepoName == "" {
+		out.RepoName = repo
 	}
-	rec.DefaultBranch, rec.WebURL, rec.HookErr = store.Set(l.Repo.DefaultBranch), store.Set(l.Repo.WebURL), store.Set[string]("")
 	if l.HookErr != nil {
-		rec.HookErr = store.Set[string]("bob's webhook could not be created on the repository; add it by hand or give the integration admin rights")
+		out.HookErr = "bob's webhook could not be created on the repository; add it by hand or give the integration admin rights"
 	}
-	return nil
+	return out, nil
 }
 
 func (p *Projects) unlink(ctx context.Context, forgeID string, repoID int64) {
@@ -245,12 +269,11 @@ func (p *Projects) unlink(ctx context.Context, forgeID string, repoID int64) {
 // allocate takes the next slot of the projects index.
 func (p *Projects) allocate(ctx context.Context) (uint64, error) {
 	c, err := store.CAS(ctx, p.cfg.Control, &IndexCounter{Name: store.ID("all")}, func(cur *IndexCounter) (*IndexCounter, error) {
-		next := IndexCounter{Name: store.ID("all")}
+		var count uint64
 		if cur != nil {
-			next.Count = store.Set(cur.Count.Value())
+			count = cur.Count.Value()
 		}
-		next.Count = store.Set(next.Count.Value() + 1)
-		return &next, nil
+		return &IndexCounter{Name: store.ID("all"), Count: store.Set(count + 1)}, nil
 	})
 	if err != nil {
 		return 0, fmt.Errorf("pidxm/all: %w", err)
@@ -270,12 +293,14 @@ func (p *Projects) Create(ctx context.Context, s Spec) (*Record, error) {
 		return nil, err
 	}
 	now := p.now()
-	rec := &Record{ID: store.ID(s.ID), DisplayName: store.Set(s.DisplayName), Description: store.Set(s.Description), Created: store.Set(now)}
-	if rec.DisplayName.Value() == "" {
-		rec.DisplayName = store.Set(s.ID)
+	display := s.DisplayName
+	if display == "" {
+		display = s.ID
 	}
+	var l repoLink
 	if s.Forge != "" {
-		if err := p.link(ctx, rec, s.Forge, s.RepoName); err != nil {
+		var err error
+		if l, err = p.link(ctx, s.ID, s.Forge, s.RepoName); err != nil {
 			return nil, err
 		}
 	}
@@ -283,9 +308,13 @@ func (p *Projects) Create(ctx context.Context, s Spec) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	rec.Slot = store.Set(slot + 1)
-	if err := p.idx.Set(ctx, slot, entryOf(rec, true, now)); err != nil {
+	if err := p.idx.Set(ctx, slot, makeEntry(s.ID, display, s.Description, l, now, true, now)); err != nil {
 		return nil, fmt.Errorf("pidx: %w", err)
+	}
+	rec := &Record{ID: store.ID(s.ID), DisplayName: store.Set(display), Description: store.Set(s.Description), Created: store.Set(now),
+		Slot: store.Set(slot + 1)}
+	if l.Forge != "" {
+		l.apply(rec)
 	}
 	if err := store.Create(ctx, p.cfg.Control, rec); err != nil {
 		if errors.Is(err, store.ErrExists) {
@@ -294,11 +323,11 @@ func (p *Projects) Create(ctx context.Context, s Spec) (*Record, error) {
 		}
 		return nil, err
 	}
-	if err := p.idx.Set(ctx, slot, entryOf(rec, false, now)); err != nil {
-		p.cfg.Log.Warn("project: index entry left pending; index repair shows it", "project", rec.ID.Value(), "err", err.Error())
+	if err := p.idx.Set(ctx, slot, makeEntry(s.ID, display, s.Description, l, now, false, now)); err != nil {
+		p.cfg.Log.Warn("project: index entry left pending; index repair shows it", "project", s.ID, "err", err.Error())
 	}
-	p.cfg.Log.Info("project created", "project", rec.ID.Value(), "integration", rec.Forge.Value(), "repository", rec.RepoName.Value())
-	return rec, nil
+	p.cfg.Log.Info("project created", "project", s.ID, "integration", l.Forge, "repository", l.RepoName)
+	return store.Get(ctx, p.cfg.Control, &Record{ID: store.ID(s.ID)})
 }
 
 // Update changes the fields named in mask (display_name, description, forge_integration_id,
@@ -337,13 +366,15 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 	}
 	want.DisplayName, want.Description = store.Set(next.DisplayName), store.Set(next.Description)
 	relink = relink && (next.Forge != cur.Forge.Value() || !strings.EqualFold(next.RepoName, cur.RepoName.Value()))
+	newLink := linkOf(cur)
 	if relink {
-		want.Forge, want.RepoName, want.RepoID, want.DefaultBranch, want.WebURL, want.HookErr = store.Set[string](""), store.Set[string](""), store.Set[int64](0), store.Set[string](""), store.Set[string](""), store.Set[string]("")
+		newLink = repoLink{}
 		if next.Forge != "" {
-			if err := p.link(ctx, &want, next.Forge, next.RepoName); err != nil {
+			if newLink, err = p.link(ctx, cur.ID.Value(), next.Forge, next.RepoName); err != nil {
 				return nil, err
 			}
 		}
+		newLink.apply(&want)
 	}
 	rec, err := store.CAS(ctx, p.cfg.Control, &Record{ID: store.ID(s.ID)}, func(c *Record) (*Record, error) {
 		if c == nil {
@@ -356,8 +387,8 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 		return &w, nil
 	})
 	if err != nil {
-		if relink && (want.Forge.Value() != cur.Forge.Value() || want.RepoID.Value() != cur.RepoID.Value()) {
-			p.unlink(ctx, want.Forge.Value(), want.RepoID.Value()) // the new link must not outlive a refused update
+		if relink && (newLink.Forge != cur.Forge.Value() || newLink.RepoID != cur.RepoID.Value()) {
+			p.unlink(ctx, newLink.Forge, newLink.RepoID) // the new link must not outlive a refused update
 		}
 		switch {
 		case errors.Is(err, ErrNotFound), errors.Is(err, ErrConflict):
@@ -367,7 +398,7 @@ func (p *Projects) Update(ctx context.Context, s Spec, mask []string, etag strin
 		}
 		return nil, err
 	}
-	if relink && (want.Forge.Value() != cur.Forge.Value() || want.RepoID.Value() != cur.RepoID.Value()) {
+	if relink && (newLink.Forge != cur.Forge.Value() || newLink.RepoID != cur.RepoID.Value()) {
 		p.unlink(ctx, cur.Forge.Value(), cur.RepoID.Value())
 	}
 	if rec.Slot.Value() > 0 {

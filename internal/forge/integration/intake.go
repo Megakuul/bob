@@ -110,10 +110,13 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 		h := sha256.Sum256(body)
 		did = "body-" + hex.EncodeToString(h[:])
 	}
-	key := DeliveryKey(id, did)
-	rec := *key
-	rec.Received, rec.Event, rec.Result = store.Set(in.Registry.now().UTC()), store.Set(string(ev.Type)), store.Set[string](resultPending)
-	err := store.Create(ctx, in.Registry.Control, &rec)
+	received := in.Registry.now().UTC()
+	fresh := func() *DeliveryRecord {
+		rec := DeliveryKey(id, did)
+		rec.Received, rec.Event, rec.Result = store.Set(received), store.Set(string(ev.Type)), store.Set[string](resultPending)
+		return rec
+	}
+	err := store.Create(ctx, in.Registry.Control, fresh())
 	if errors.Is(err, store.ErrExists) {
 		cur, gerr := store.Get(ctx, in.Registry.Control, DeliveryKey(id, did))
 		if gerr != nil {
@@ -123,7 +126,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 		if cur.Result.Value() != resultPending {
 			return http.StatusOK, "duplicate"
 		}
-		rec = *cur // unfinished: finish it (the build creation is idempotent on the key)
+		// unfinished: finish it (the build creation is idempotent on the key)
 	} else if err != nil {
 		log.Error("webhook intake: delivery record", "integration", id, "err", err)
 		return http.StatusServiceUnavailable, "storage unavailable"
@@ -146,7 +149,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 		case in.Builds == nil:
 			return http.StatusServiceUnavailable, "builds are not available on this server yet"
 		default:
-			build, err = in.Builds.CreateFromEvent(ctx, link.Project.Value(), rec.Key.Value(), ev)
+			build, err = in.Builds.CreateFromEvent(ctx, link.Project.Value(), DeliveryKey(id, did).Key.Value(), ev)
 			if err != nil {
 				log.Error("webhook intake: create build", "integration", id, "project", link.Project.Value(), "err", err)
 				return http.StatusServiceUnavailable, "build not created, retry"
@@ -156,7 +159,7 @@ func (in *Intake) deliver(ctx context.Context, id string, ev forge.Event, body [
 	}
 	if _, err := store.CAS(ctx, in.Registry.Control, DeliveryKey(id, did), func(cur *DeliveryRecord) (*DeliveryRecord, error) {
 		if cur == nil {
-			cur = &rec
+			cur = fresh()
 		}
 		cur.Result, cur.Build = store.Set(result), store.Set(build)
 		return cur, nil
@@ -178,13 +181,17 @@ func (in *Intake) ring(ctx context.Context, id string, e RingEntry) {
 		e.ID = e.ID[:255]
 	}
 	_, err := store.CAS(ctx, in.Registry.Control, &DeliveryRing{Forge: store.ID(id)}, func(cur *DeliveryRing) (*DeliveryRing, error) {
+		var vals []RingEntry
 		if cur == nil {
 			cur = &DeliveryRing{Forge: store.ID(id)}
+		} else {
+			vals = cur.Entries.Value()
 		}
-		cur.Entries = store.Set(append(cur.Entries.Value(), e))
-		if n := len(cur.Entries.Value()); n > RingSize {
-			cur.Entries = store.Set(append([]RingEntry(nil), cur.Entries.Value()[n-RingSize:]...))
+		vals = append(vals, e)
+		if n := len(vals); n > RingSize {
+			vals = append([]RingEntry(nil), vals[n-RingSize:]...)
 		}
+		cur.Entries = store.Set(vals)
 		return cur, nil
 	})
 	if err != nil {

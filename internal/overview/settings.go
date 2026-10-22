@@ -214,10 +214,12 @@ func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[sett
 	etag := in.GetEtag()
 	rec, err := store.CAS(ctx, s.Control, &SettingsRecord{Name: store.ID("server")}, func(cur *SettingsRecord) (*SettingsRecord, error) {
 		next := SettingsRecord{Name: store.ID("server")}
+		var cliIdle, cliMax, browserIdle, browserMax int32
 		if cur != nil {
 			next = *cur
+			cliIdle, cliMax, browserIdle, browserMax = cur.CLIIdleDays.Value(), cur.CLIMaxDays.Value(), cur.BrowserIdleH.Value(), cur.BrowserMaxD.Value()
 		}
-		if etag != "" && etag != store.ETagOf(next.ETag) {
+		if etag != "" && etag != store.ETagOf(next.ETag) { // next.ETag: cur's, or nil
 			return nil, api.Aborted("the settings were changed by someone else (etag mismatch); reload and retry")
 		}
 		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
@@ -230,6 +232,7 @@ func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[sett
 				next.LogsDays, next.AnalyticsDay, next.BuildsDays = store.Set(r.GetLogsDays()), store.Set(r.GetAnalyticsDays()), store.Set(r.GetBuildsDays())
 				next.CacheDays, next.StagingDays = store.Set(r.GetCacheUnreferencedDays()), store.Set(r.GetStagingDays())
 			case "sessions":
+				cliIdle, cliMax, browserIdle, browserMax = ss.GetCliIdleDays(), ss.GetCliMaxDays(), ss.GetBrowserIdleHours(), ss.GetBrowserMaxDays()
 				next.CLIIdleDays, next.CLIMaxDays, next.BrowserIdleH = store.Set(ss.GetCliIdleDays()), store.Set(ss.GetCliMaxDays()), store.Set(ss.GetBrowserIdleHours())
 				next.BrowserMaxD, next.SATokenMaxD = store.Set(ss.GetBrowserMaxDays()), store.Set(ss.GetSaTokenMaxDays())
 			case "live_log_enabled", "liveLogEnabled":
@@ -238,10 +241,10 @@ func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[sett
 				next.MaxDownloads = store.Set(in.GetMaxParallelDownloads())
 			}
 		}
-		if pick(next.CLIIdleDays.Value(), defaultCLIIdle) > pick(next.CLIMaxDays.Value(), defaultCLIMax) {
+		if pick(cliIdle, defaultCLIIdle) > pick(cliMax, defaultCLIMax) {
 			return nil, api.InvalidArgument("settings.sessions.cliIdleDays", "cli_idle_days must not exceed cli_max_days")
 		}
-		if pick(next.BrowserIdleH.Value(), defaultBrowserIdle) > 24*pick(next.BrowserMaxD.Value(), defaultBrowserMax) {
+		if pick(browserIdle, defaultBrowserIdle) > 24*pick(browserMax, defaultBrowserMax) {
 			return nil, api.InvalidArgument("settings.sessions.browserIdleHours", "browser_idle_hours must not exceed browser_max_days")
 		}
 		if cur != nil && next == *cur {

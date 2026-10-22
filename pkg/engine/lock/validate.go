@@ -2,6 +2,7 @@ package lock
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -9,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/megakuul/bob/pkg/bob/diag"
 )
 
 // Everything in bob.lock is hostile input (SPEC §03.7, AGENTS 5.4): these checks bound and
@@ -18,6 +21,7 @@ const (
 	maxLockBytes = 64 << 20 // one bob.lock
 	maxName      = 512      // names, paths, versions, keys
 	maxURL       = 4096
+	maxTarget    = 4096 // a dependency's cfg() target (rustix has one of 851 bytes)
 )
 
 var (
@@ -28,7 +32,8 @@ var (
 	goVerRe    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?((rc|beta)[1-9][0-9]*)?$`)
 	goElemRe   = regexp.MustCompile(`^[A-Za-z0-9._~+-]+$`)
 	crateRe    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-	featureRe  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+./:-]{0,127}$`)
+	// '?' appears in weak dependency features ("memchr?/std", Cargo's dep?/feature).
+	featureRe  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+./:?-]{0,127}$`)
 	npmNameRe  = regexp.MustCompile(`^(@[a-z0-9-~][a-z0-9-._~]*/)?[a-z0-9-~][a-z0-9-._~]*$`)
 	opamNameRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_+-]*$`)
 	opamVerRe  = regexp.MustCompile(`^[A-Za-z0-9_+.~-]+$`)
@@ -117,6 +122,39 @@ func checkText(what, s string) error {
 		return fmt.Errorf("%s %q is invalid", what, clip(s))
 	}
 	return nil
+}
+
+// checkTarget validates a crate dependency's target: a triple or a cfg() expression, which
+// real crates write far longer than a name.
+func checkTarget(what, s string) error {
+	if s == "" || len(s) > maxTarget || !utf8.ValidString(s) || strings.ContainsAny(s, "\x00\n\r") {
+		return fmt.Errorf("%s %q is invalid", what, clip(s))
+	}
+	return nil
+}
+
+// ItemError is a validation failure of one locked item (a crate, a package): the ecosystem's
+// resolution produced something bob.lock cannot hold, which names that item.
+type ItemError struct {
+	Item string // "crates.io:serde@1.0.0"
+	Err  error
+}
+
+func (e *ItemError) Error() string { return e.Item + ": " + e.Err.Error() }
+func (e *ItemError) Unwrap() error { return e.Err }
+
+// unpinnable converts a section validation failure while encoding (bob lock writing a section
+// an ecosystem resolved) into BOB-E-1023 naming the item: registry metadata bob refuses is a
+// definition problem of that package, not an internal Nix failure.
+func unpinnable(key string, err error) error {
+	item, reason := "the "+key+" section", err
+	var ie *ItemError
+	if errors.As(err, &ie) {
+		item, reason = ie.Item, ie.Err
+	}
+	e := diag.New(1023, "package", item, "reason", reason.Error())
+	e.Raw = []string{err.Error()}
+	return e
 }
 
 // clip shortens hostile strings for error messages.

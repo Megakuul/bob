@@ -92,44 +92,44 @@ func (s *Service) msg(rec *ForgeRecord) *forgev1.ForgeIntegration {
 
 // setCredentials copies the request's credentials into rec; a credential of another kind is
 // refused. Empty secret fields keep the stored value (they are input only).
-func setCredentials(rec *ForgeRecord, in *forgev1.ForgeIntegration) error {
+func setCredentials(rec *Config, in *forgev1.ForgeIntegration) error {
 	switch c := in.GetCredentials().(type) {
 	case nil:
 	case *forgev1.ForgeIntegration_Github:
-		if rec.Kind.Value() != string(forge.GitHub) {
-			return api.InvalidArgument("integration.github", "GitHub credentials on a "+rec.Kind.Value()+" integration")
+		if rec.Kind != string(forge.GitHub) {
+			return api.InvalidArgument("integration.github", "GitHub credentials on a "+rec.Kind+" integration")
 		}
-		rec.AppID, rec.InstallationID = store.Set(c.Github.GetAppId()), store.Set(c.Github.GetInstallationId())
+		rec.AppID, rec.InstallationID = c.Github.GetAppId(), c.Github.GetInstallationId()
 		if c.Github.GetPrivateKeyPem() != "" {
-			rec.PrivateKeyPEM = store.Set(c.Github.GetPrivateKeyPem())
+			rec.PrivateKeyPEM = c.Github.GetPrivateKeyPem()
 		}
 	case *forgev1.ForgeIntegration_Forgejo:
-		if rec.Kind.Value() != string(forge.Forgejo) {
-			return api.InvalidArgument("integration.forgejo", "Forgejo credentials on a "+rec.Kind.Value()+" integration")
+		if rec.Kind != string(forge.Forgejo) {
+			return api.InvalidArgument("integration.forgejo", "Forgejo credentials on a "+rec.Kind+" integration")
 		}
-		rec.BotLogin = store.Set(c.Forgejo.GetBotLogin())
+		rec.BotLogin = c.Forgejo.GetBotLogin()
 		if c.Forgejo.GetBotPassword() != "" {
-			rec.BotPassword = store.Set(c.Forgejo.GetBotPassword())
+			rec.BotPassword = c.Forgejo.GetBotPassword()
 		}
 	case *forgev1.ForgeIntegration_Gitlab:
-		if rec.Kind.Value() != string(forge.GitLab) {
-			return api.InvalidArgument("integration.gitlab", "GitLab credentials on a "+rec.Kind.Value()+" integration")
+		if rec.Kind != string(forge.GitLab) {
+			return api.InvalidArgument("integration.gitlab", "GitLab credentials on a "+rec.Kind+" integration")
 		}
-		rec.AllowPlaintext = store.Set(c.Gitlab.GetAllowPlaintextSecret())
+		rec.AllowPlaintext = c.Gitlab.GetAllowPlaintextSecret()
 		if c.Gitlab.GetAccessToken() != "" {
-			rec.AccessToken = store.Set(c.Gitlab.GetAccessToken())
+			rec.AccessToken = c.Gitlab.GetAccessToken()
 		}
 	}
 	return nil
 }
 
-// validate builds the adapter of rec: the constructors check the base URL and the shape of
+// validate builds the adapter of c: the constructors check the base URL and the shape of
 // the credentials.
-func validate(rec *ForgeRecord) error {
-	if len(rec.DisplayName.Value()) > 100 {
+func validate(c Config, secret string) error {
+	if len(c.DisplayName) > 100 {
 		return api.InvalidArgument("integration.displayName", "display name longer than 100 characters")
 	}
-	if _, err := NewAdapter(rec, rec.Secret.Value()); err != nil {
+	if _, err := NewAdapter(c, secret); err != nil {
 		return api.InvalidArgument("integration", err.Error())
 	}
 	return nil
@@ -149,30 +149,36 @@ func (s *Service) CreateForgeIntegration(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return nil, err
 	}
+	c := Config{Kind: string(kind), DisplayName: in.GetDisplayName(), BaseURL: in.GetBaseUrl()}
+	if kind == forge.GitHub && c.BaseURL == "" {
+		c.BaseURL = GitHubAPI
+	}
+	if err := setCredentials(&c, in); err != nil {
+		return nil, err
+	}
+	if err := validate(c, secret); err != nil {
+		return nil, err
+	}
 	rec := ForgeKey(in.GetId())
-	rec.Kind, rec.DisplayName, rec.BaseURL, rec.Secret, rec.Created = store.Set(string(kind)), store.Set(in.GetDisplayName()), store.Set(in.GetBaseUrl()), store.Set(secret), store.Set(s.Registry.now().UTC())
-	if kind == forge.GitHub && rec.BaseURL.Value() == "" {
-		rec.BaseURL = store.Set[string](GitHubAPI)
-	}
-	if err := setCredentials(rec, in); err != nil {
-		return nil, err
-	}
-	if err := validate(rec); err != nil {
-		return nil, err
-	}
+	c.apply(rec)
+	rec.Secret, rec.Created = store.Set(secret), store.Set(s.Registry.now().UTC())
 	// Index first (intent-first, R-SRV-101): readers skip ids without a record.
 	if _, err := store.CAS(ctx, s.Registry.Control, ForgeIndexKey(), func(cur *ForgeIndex) (*ForgeIndex, error) {
+		var vals []string
 		if cur == nil {
 			cur = ForgeIndexKey()
+		} else {
+			vals = cur.IDs.Value()
 		}
-		if slices.Contains(cur.IDs.Value(), rec.ID.Value()) {
+		if slices.Contains(vals, rec.ID.Value()) {
 			return nil, store.ErrNoChange
 		}
-		if len(cur.IDs.Value()) >= MaxIntegrations {
+		if len(vals) >= MaxIntegrations {
 			return nil, api.FailedPrecondition(fmt.Sprintf("at most %d forge integrations", MaxIntegrations))
 		}
-		cur.IDs = store.Set(append(cur.IDs.Value(), rec.ID.Value()))
-		slices.Sort(cur.IDs.Value())
+		vals = append(vals, rec.ID.Value())
+		slices.Sort(vals)
+		cur.IDs = store.Set(vals)
 		return cur, nil
 	}); err != nil {
 		return nil, storageErr(err)
@@ -183,7 +189,11 @@ func (s *Service) CreateForgeIntegration(ctx context.Context, req *connect.Reque
 		}
 		return nil, storageErr(err)
 	}
-	return connect.NewResponse(&forgev1.CreateForgeIntegrationResponse{Integration: s.msg(rec), WebhookSecret: secret}), nil
+	created, err := s.get(ctx, in.GetId())
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&forgev1.CreateForgeIntegrationResponse{Integration: s.msg(created), WebhookSecret: secret}), nil
 }
 
 func (s *Service) get(ctx context.Context, id string) (*ForgeRecord, error) {
@@ -254,22 +264,24 @@ func (s *Service) UpdateForgeIntegration(ctx context.Context, req *connect.Reque
 		if in.GetEtag() != "" && in.GetEtag() != store.ETagOf(cur.ETag) {
 			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
 		}
+		c := ConfigOf(cur)
 		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
 			switch p {
 			case "displayName", "display_name":
-				cur.DisplayName = store.Set(in.GetDisplayName())
+				c.DisplayName = in.GetDisplayName()
 			case "baseUrl", "base_url":
-				cur.BaseURL = store.Set(in.GetBaseUrl())
+				c.BaseURL = in.GetBaseUrl()
 			default: // github | forgejo | gitlab
-				if err := setCredentials(cur, in); err != nil {
+				if err := setCredentials(&c, in); err != nil {
 					return nil, err
 				}
-				cur.Health, cur.HealthMsg = store.Set[int32](0), store.Set[string]("")
+				cur.Health, cur.HealthMsg = nil, nil
 			}
 		}
-		if err := validate(cur); err != nil {
+		if err := validate(c, cur.Secret.Value()); err != nil {
 			return nil, err
 		}
+		c.apply(cur)
 		return cur, nil
 	})
 	if err != nil {

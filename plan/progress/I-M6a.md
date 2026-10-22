@@ -112,3 +112,18 @@ the end), budgets, completion goldens candidates.
    project's go.mod no longer stops the parent's scan, and the parent fails with "bob.Repo is
    allowed only in the root bob.go --> sub/bob.go:9" (reproduced: acme-like repo + nested
    sub/ with bob.lock, `bob allow` in sub (= bob gen there), then any evaluation of the parent).
+
+## TEST PROBLEM
+1. tests/devenv/shim_test.go TestRDEV008ExecAndShims (and SPEC R-DEV-008 acceptance "`sh -c
+   '.bob/bin/go run ./x; echo $?'` with os.Exit(5) prints 5"): `go run` itself exits 1 when the
+   program fails (it prints "exit status 5"); measured with the pinned go 1.26.8 inside
+   `bob dev` without any shim: `go run ./x; echo $?` → "exit status 5", 1; Go source
+   cmd/go/internal/base/base.go sets exit status 1. The shim passes the tool's status through
+   (exit 7 of `sh -c 'exit 7'` via bob dev, 143 after SIGTERM). Fix: build the program and run
+   the binary through the shim (`.bob/bin/go build -o x5 ./x && ./x5`), or expect 1.
+2. tests/devenv/shim_test.go findTool panics ("index out of range [0] with length 0") on any
+   process whose /proc/<pid>/cmdline is empty — every kernel thread and zombie — via
+   `strings.Fields(c + " ")[0]`; TestRDEV008Signal can never pass on Linux. Fix: skip empty
+   cmdlines. With that one-line fix in a scratch copy, see results below.
+3. TestRDEV010LSPLocations' typescript case uses `bob dev --no-servers -- true` and `bob gen`
+   in vite-react: npm (other unit). clangd/rust-analyzer cases need cc/rust DevPreparers.

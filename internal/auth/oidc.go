@@ -608,11 +608,14 @@ func (s oidcService) CreateOidcMapping(ctx context.Context, req *connect.Request
 		Value: in.GetValue(), Role: in.GetRole(), Project: in.GetProject(),
 	}
 	if _, err := store.CAS(ctx, s.id.control, store.OidcMappingsKey(), func(cur *store.OidcMappings) (*store.OidcMappings, error) {
+		var vals []store.OidcMappingEntry
 		if cur == nil {
 			cur = store.OidcMappingsKey()
+		} else {
+			vals = cur.Mappings.Value()
 		}
 		n := 0
-		for _, m := range cur.Mappings.Value() {
+		for _, m := range vals {
 			if m.Provider == e.Provider {
 				n++
 			}
@@ -620,7 +623,8 @@ func (s oidcService) CreateOidcMapping(ctx context.Context, req *connect.Request
 		if n >= maxMappings {
 			return nil, api.FailedPrecondition(fmt.Sprintf("a provider has at most %d mappings", maxMappings))
 		}
-		cur.Mappings = store.Set(append(cur.Mappings.Value(), e))
+		vals = append(vals, e)
+		cur.Mappings = store.Set(vals)
 		return cur, nil
 	}); err != nil {
 		return nil, storageError(err)

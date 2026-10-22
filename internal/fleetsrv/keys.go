@@ -36,38 +36,42 @@ func EnsureKeys(ctx context.Context, control, fleet *store.Bucket, now time.Time
 		return nil, fmt.Errorf("fleet/cfg: %w", err)
 	}
 	if cfg == nil || !hasValid(cfg.Keys.Value(), now) || cfg.Params.Value().PollInterval == 0 {
-		var fresh *orchestrator.OrchKeyRecord
+		var fresh *store.FleetKey
 		if cfg == nil || !hasValid(cfg.Keys.Value(), now) {
 			pub, priv, err := ed25519.GenerateKey(rand.Reader)
 			if err != nil {
 				return nil, err
 			}
-			fresh = &orchestrator.OrchKeyRecord{Kid: store.ID(kidOf(pub)), Seed: store.Set(priv.Seed()), Created: store.Set(now.UTC()), NotAfter: store.Set(now.Add(orchestrator.KeyLifetime).UTC())}
+			fresh = &store.FleetKey{Kid: kidOf(pub), Pub: pub, NotAfter: now.Add(orchestrator.KeyLifetime).UTC()}
 			// The seed first: a published key whose seed is missing could never sign.
-			if err := store.Create(ctx, control, fresh); err != nil {
-				return nil, fmt.Errorf("okey/%s: %w", fresh.Kid.Value(), err)
+			if err := store.Create(ctx, control, &orchestrator.OrchKeyRecord{Kid: store.ID(fresh.Kid), Seed: store.Set(priv.Seed()),
+				Created: store.Set(now.UTC()), NotAfter: store.Set(fresh.NotAfter)}); err != nil {
+				return nil, fmt.Errorf("okey/%s: %w", fresh.Kid, err)
 			}
 		}
 		cfg, err = store.CAS(ctx, fleet, store.FleetConfigKey(), func(cur *store.FleetConfig) (*store.FleetConfig, error) {
 			next := store.FleetConfig{Name: store.ID("cfg")}
+			var keys []store.FleetKey
+			var p store.FleetParams
+			var gen int64
 			if cur != nil {
 				next = *cur
-				next.Keys = store.Set(slices.Clone(cur.Keys.Value()))
+				keys, p, gen = slices.Clone(cur.Keys.Value()), cur.Params.Value(), cur.Gen.Value()
 			}
 			changed := false
-			if fresh != nil && !hasValid(next.Keys.Value(), now) {
-				pub := ed25519.NewKeyFromSeed(fresh.Seed.Value()).Public().(ed25519.PublicKey)
-				next.Keys = store.Set(append(next.Keys.Value(), store.FleetKey{Kid: fresh.Kid.Value(), Pub: pub, NotAfter: fresh.NotAfter.Value()}))
+			if fresh != nil && !hasValid(keys, now) {
+				keys = append(keys, *fresh)
+				next.Keys = store.Set(keys)
 				changed = true
 			}
-			if next.Params.Value().PollInterval == 0 {
+			if p.PollInterval == 0 {
 				next.Params = store.Set(params)
 				changed = true
 			}
 			if !changed {
 				return nil, store.ErrNoChange
 			}
-			next.Gen = store.Set(next.Gen.Value() + 1)
+			next.Gen = store.Set(gen + 1)
 			return &next, nil
 		})
 		if err != nil {
