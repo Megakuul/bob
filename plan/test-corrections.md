@@ -24,3 +24,7 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    without seccomp. Ruling: seccomp is the only layer for socket families, so the layer-removal
    expectation for that one check must be "leaks when seccomp is removed" (the other layers still
    hold for the rest of the case). Evidence: plan/progress/I-M3b.md TEST PROBLEM.
+6. A72 `tests/nix/builder_test.go:61` TestRNIX016FuzzedJobsStayContained builds raw JSON by string
+   concatenation; the fuzz tokens `a\..\b` and `\x00` make the JSON invalid for every
+   implementation (seed 16). Fix: build the job with `raw(t, map[string]string{"path": path()})`
+   (proper JSON encoding). Evidence: plan/progress/I-M4a.md.

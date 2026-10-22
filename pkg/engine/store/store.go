@@ -346,9 +346,3 @@ func (s *Store) Import(ctx context.Context, items []ExportItem) error {
 	_, err := s.runStore(ctx, func() io.Reader { return bytes.NewReader(stream) }, "nix-store", "--import")
 	return err
 }
-
-// BuilderPath returns the recorded store path of the embedded bob-builder for a Nix system
-// ("aarch64-linux", "x86_64-linux"), from the generated table builders.go (R-NIX-015).
-func BuilderPath(system string) (string, error) {
-	return "", diag.NotImplemented("store.BuilderPath")
-}

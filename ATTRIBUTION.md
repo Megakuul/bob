@@ -11,10 +11,10 @@ decision.
 
 ## Embedded binaries
 
-| Item | Version | Licence | Where | Obligations | Decision |
-|---|---|---|---|---|---|
-| Static Nix (stripped, gzip-9, embedded in `bob`) | 2.34.9 (ADR 0002) | LGPL-2.1-or-later, plus the licences of its static dependencies | embedded in `cmd/bob` (path set when embedding lands) | Ship the licence text; offer the corresponding source of the exact Nix build (and the means to relink, LGPL-2.1 §6) with every release | D50, D52 |
-| busybox (sandbox shell of static Nix) | as pinned with Nix | GPL-2.0-only | inside the embedded Nix closure | Ship the licence text; provide the complete corresponding source with every release | D52 |
+| Item | Version | Licence | Where | Source | Obligations | Decision |
+|---|---|---|---|---|---|---|
+| Static Nix (stripped, gzip-9, embedded in `bob`) | 2.34.9 (ADR 0002) | LGPL-2.1-or-later, plus the licences of its static dependencies | `pkg/engine/store/nixbin/<arch>/nix.gz` (fetched by `scripts/fetch-nix.sh`), embedded in `cmd/bob` | https://github.com/NixOS/nix/tree/2.34.9; built by the derivations `s55n25gmlcyyhvchm0bdcfdqf2nqyxxp-nix-static-aarch64-unknown-linux-musl-2.34.9.drv` / `yxd2ay3ha18vcx4n0gw7f5d1f7xhps3w-nix-static-x86_64-unknown-linux-musl-2.34.9.drv` of nixpkgs https://github.com/NixOS/nixpkgs/tree/cd4ea8d57de16f4810bc5f14207bac45fbf19f67 | Ship the licence text; offer the corresponding source of the exact Nix build (and the means to relink, LGPL-2.1 §6) with every release | D50, D52 |
+| busybox (sandbox shell of static Nix) | as pinned with Nix (the version in the closure of the derivations above) | GPL-2.0-only | inside the embedded Nix binary | https://busybox.net/downloads/ (the version in the closure of the Nix derivations above) | Ship the licence text; provide the complete corresponding source with every release | D52 |
 
 **[open, release process]** The full list of static dependencies of the Nix build (and their
 licences) is generated from the pinned derivation when embedding lands; it is appended to the table
@@ -34,6 +34,8 @@ The AppImage runtime is bob's own static Go code, so no libfuse is shipped (A15)
 | Dependency | Licence | Note | Decision |
 |---|---|---|---|
 | `codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3` | MIT (checked against v3.0.0 `LICENSE`) | Forgejo adapter; MIT is on the allowlist, so it needs no exception | A12 |
+| `github.com/ulikunitz/xz` v0.5.17 | BSD-3-Clause (checked against `LICENSE`) | `.tar.xz` unpacking in `pkg/engine/fetch` (R-NIX-014) | I-M2a (plan/progress/I-M2a.md) |
+| `github.com/klauspost/compress` v1.20.3 (`zstd`) | BSD-3-Clause, with Apache-2.0 and MIT parts (checked against `LICENSE`) | `.tar.zst` unpacking in `pkg/engine/fetch` (R-NIX-014); all parts permissive and AGPL-compatible | I-M2a (plan/progress/I-M2a.md) |
 
 ## Assets
 
