@@ -27,7 +27,20 @@ func Register(k Kind) {}
 type Config struct{ axes []Axis }
 
 // Platform returns the node's platform; it panics if AxisPlatform is not declared.
-func (c Config) Platform() bob.Platform { return "" }
+func (c Config) Platform() bob.Platform {
+	_ = c.declares(AxisPlatform)
+	return ""
+}
+
+// declares reports whether the kind declared axis a.
+func (c Config) declares(a Axis) bool {
+	for _, x := range c.axes {
+		if x == a {
+			return true
+		}
+	}
+	return false
+}
 
 // Profile returns the node's profile; it panics if AxisProfile is not declared.
 func (c Config) Profile() bob.Profile { return "" }

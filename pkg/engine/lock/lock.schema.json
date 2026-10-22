@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bob.megakuul.ch/schema/lock-v1.json",
+  "title": "bob.lock v1 (SPEC R-FW-004, §03.7)",
+  "type": "object",
+  "required": ["lockVersion"],
+  "additionalProperties": false,
+  "properties": {
+    "lockVersion": {"type": "integer", "enum": [1]},
+    "nixpkgs": {
+      "type": "object",
+      "required": ["channel", "narHash", "rev", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "channel": {"type": "string"},
+        "inputs": {"type": "string"},
+        "narHash": {"type": "string"},
+        "rev": {"type": "string"},
+        "url": {"type": "string"}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["hash", "kind", "name", "strip", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "hash": {"type": "string"},
+          "kind": {"type": "string", "enum": ["file", "archive"]},
+          "name": {"type": "string"},
+          "narHash": {"type": "string"},
+          "strip": {"type": "integer"},
+          "url": {"type": "string"}
+        }
+      }
+    },
+    "go": {"$ref": "#/$defs/section"},
+    "rust": {"$ref": "#/$defs/section"},
+    "npm": {"$ref": "#/$defs/section"},
+    "opam": {"$ref": "#/$defs/section"},
+    "cc": {"$ref": "#/$defs/section"},
+    "nixpkgsFacts": {"type": "object"}
+  },
+  "$defs": {
+    "section": {"type": "object", "required": ["inputs"], "properties": {"inputs": {"type": "string"}}}
+  }
+}

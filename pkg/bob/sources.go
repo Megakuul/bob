@@ -22,7 +22,13 @@ func Files(paths ...string) Sources { return Sources{} }
 func Dir(path string) Sources { return Sources{} }
 
 // Union combines sources.
-func (s Sources) Union(o ...Sources) Sources { return s }
+func (s Sources) Union(o ...Sources) Sources {
+	all := append([]string(nil), s.patterns...)
+	for _, x := range o {
+		all = append(all, x.patterns...)
+	}
+	return Sources{patterns: all}
+}
 
 // FetchOpts declares one external file or archive.
 type FetchOpts struct {

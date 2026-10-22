@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bob.megakuul.ch/schema/ir-v1.json",
+  "title": "bob graph IR v1 (SPEC R-FW-047)",
+  "type": "object",
+  "required": ["irVersion", "bobVersion", "module", "repo", "configs", "nodes", "roots", "pipelines"],
+  "additionalProperties": false,
+  "properties": {
+    "irVersion": {"type": "integer", "enum": [1]},
+    "bobVersion": {"type": "string", "maxLength": 65536},
+    "module": {"type": "string", "maxLength": 65536},
+    "repo": {
+      "type": "object",
+      "required": ["nixpkgs", "variants"],
+      "additionalProperties": false,
+      "properties": {
+        "nixpkgs": {"type": "string"},
+        "variants": {"type": "array"}
+      }
+    },
+    "configs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "platform", "profile", "sanitizers", "race", "features", "named"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "platform": {"type": "string"},
+          "profile": {"type": "string"},
+          "sanitizers": {"type": "array", "items": {"type": "string"}},
+          "race": {"type": "boolean"},
+          "features": {"type": "object"},
+          "named": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "label", "definedAt", "proj", "deps", "srcs", "spec"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "maxLength": 65536},
+          "kind": {"type": "string", "maxLength": 65536},
+          "label": {"type": "string", "maxLength": 65536},
+          "definedAt": {
+            "type": "object",
+            "required": ["file", "line"],
+            "additionalProperties": false,
+            "properties": {"file": {"type": "string"}, "line": {"type": "integer"}}
+          },
+          "proj": {"type": "object"},
+          "deps": {"type": "array", "items": {"type": "string"}},
+          "srcs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["dir", "patterns"],
+              "additionalProperties": false,
+              "properties": {"dir": {"type": "string"}, "patterns": {"type": "array", "items": {"type": "string"}}}
+            }
+          },
+          "spec": {"type": "object"},
+          "nix": {
+            "type": "object",
+            "required": ["attr", "set", "outputs", "allow"],
+            "additionalProperties": false,
+            "properties": {
+              "attr": {"type": "string"},
+              "set": {"type": "string", "enum": ["host", "target", "cross"]},
+              "outputs": {"type": "array", "items": {"type": "string"}},
+              "allow": {
+                "type": "object",
+                "required": ["insecure", "unfree"],
+                "additionalProperties": false,
+                "properties": {"insecure": {"type": "array", "items": {"type": "string"}}, "unfree": {"type": "boolean"}}
+              }
+            }
+          }
+        }
+      }
+    },
+    "roots": {"type": "array", "items": {"type": "string"}},
+    "pipelines": {"type": "array"}
+  }
+}

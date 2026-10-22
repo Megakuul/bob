@@ -308,6 +308,12 @@ func replaceIn(t *testing.T, path, old, new string) {
 // file" checks.
 func treeHash(t *testing.T, dir string) string {
 	t.Helper()
+	return treeHashSkip(t, dir)
+}
+
+// treeHashSkip is treeHash without the repo-relative paths that start with one of skip.
+func treeHashSkip(t *testing.T, dir string, skip ...string) string {
+	t.Helper()
 	var b strings.Builder
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -316,6 +322,14 @@ func treeHash(t *testing.T, dir string) string {
 		rel, _ := filepath.Rel(dir, p)
 		if d.IsDir() && rel == ".git" {
 			return filepath.SkipDir
+		}
+		for _, s := range skip {
+			if strings.HasPrefix(rel, s) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 		}
 		info, err := d.Info()
 		if err != nil {
@@ -372,9 +386,10 @@ func runCmd(t *testing.T, cmd *exec.Cmd, args []string) harness.Result {
 	return r
 }
 
-// bobNoNetwork runs bob in a new user and network namespace that has no interface up and no
-// route, so any network request fails (§03.0.3 harness rule).
-func bobNoNetwork(t *testing.T, dir string, args ...string) harness.Result {
+// bobNoNetworkHome runs bob in a new user and network namespace that has no interface up and
+// no route, so any network request fails (§03.0.3 harness rule), with BOB_HOME=bobHome (caches
+// warmed by an earlier run with the same BOB_HOME); an empty bobHome means a fresh, empty home.
+func bobNoNetworkHome(t *testing.T, dir, bobHome string, args ...string) harness.Result {
 	t.Helper()
 	cmd := exec.Command(harness.Bin(t, "bob"), args...)
 	cmd.Dir = dir
@@ -383,6 +398,9 @@ func bobNoNetwork(t *testing.T, dir string, args ...string) harness.Result {
 		t.Fatalf("harness: %v", err)
 	}
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + home, "TZ=UTC", "LC_ALL=C"}
+	if bobHome != "" {
+		cmd.Env = append(cmd.Env, "BOB_HOME="+bobHome)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
 		UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
@@ -441,4 +459,17 @@ func lines(s string) []string {
 		}
 	}
 	return out
+}
+
+// execShim returns the gopls command of the .bob/bin shim of dir (written by bob env) with env.
+func execShim(t *testing.T, dir string, env []string) *exec.Cmd {
+	t.Helper()
+	home := filepath.Join(t.TempDir(), "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("harness: %v", err)
+	}
+	cmd := exec.Command(filepath.Join(dir, ".bob", "bin", "gopls"))
+	cmd.Dir = dir
+	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + home, "TZ=UTC", "LC_ALL=C"}, env...)
+	return cmd
 }

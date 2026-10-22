@@ -73,8 +73,8 @@ func startLSP(cmd *exec.Cmd, root string, settings any) (*lspClient, error) {
 	c.w = in
 	go c.read(out)
 	_, err = c.call("initialize", map[string]any{
-		"processId": os.Getpid(),
-		"rootUri":   "file://" + root,
+		"processId":        os.Getpid(),
+		"rootUri":          "file://" + root,
 		"workspaceFolders": []map[string]string{{"uri": "file://" + root, "name": filepath.Base(root)}},
 		"capabilities": map[string]any{
 			"workspace": map[string]any{"configuration": true},

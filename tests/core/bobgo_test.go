@@ -34,6 +34,10 @@ func runAs(t *testing.T, uid, gid uint32, home, dir string, env []string, path s
 	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + home, "TZ=UTC", "LC_ALL=C"}, env...)
 	if os.Geteuid() == 0 {
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid}}
+		// The harness builds its binaries into a 0700 temp directory; bobtest must reach them.
+		if info, err := os.Stat(filepath.Dir(path)); err == nil && info.Mode().Perm()&0o055 != 0o055 {
+			_ = os.Chmod(filepath.Dir(path), 0o755)
+		}
 	}
 	r := runCmd(t, cmd, args)
 	noLeak(t, r)

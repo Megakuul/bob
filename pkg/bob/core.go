@@ -58,7 +58,13 @@ func (n *Node) Label() Label { return n.label }
 func (n *Node) DefinedAt() Position { return n.pos }
 
 // Outputs lists the package's store outputs.
-func (n *Node) Outputs() []Output { return nil }
+func (n *Node) Outputs() []Output {
+	var out []Output
+	for _, name := range n.outs {
+		out = append(out, Output{Name: name})
+	}
+	return out
+}
 
 func (n *Node) bobNode() *Node { return n }
 
