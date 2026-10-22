@@ -1,0 +1,1 @@
+usage: bob log <label> [--build <id>] [-f] [--attempt N]

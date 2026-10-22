@@ -1,0 +1,1 @@
+usage: bob registry add <name> <url> | remove <name> | list | default <name>

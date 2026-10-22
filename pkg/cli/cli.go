@@ -67,8 +67,15 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		args = []string{name, "--help"}
 	}
 	cmd, ok := lookup(name)
+	if name == "__complete" { // hidden: the target of the completion scripts (R-CLI-004)
+		cmd, ok = command{name: name}, true
+	}
 	if !ok {
-		fmt.Fprintf(stderr, "error[BOB-E-0001]: unknown command %q\n  hint: run bob help\n", name)
+		hint := "run bob help"
+		if s := suggest(name); s != "" {
+			hint = "did you mean " + s + "?"
+		}
+		fmt.Fprintf(stderr, "error[BOB-E-0001]: unknown command %q\n  hint: %s\n", name, hint)
 		return 2
 	}
 	for _, a := range args[1:] {
@@ -115,4 +122,36 @@ func printHelp(w io.Writer) {
 	}
 	b.WriteString("\nrun 'bob <command> --help' for a command's flags\n")
 	io.WriteString(w, b.String())
+}
+
+// suggest returns the command closest to name within edit distance 2 (SPEC R-CLI-001), or "".
+func suggest(name string) string {
+	best, bestD := "", 3
+	for _, c := range commands {
+		if d := editDistance(name, c.name); d < bestD {
+			best, bestD = c.name, d
+		}
+	}
+	return best
+}
+
+// editDistance is the Levenshtein distance of a and b.
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(b)]
 }

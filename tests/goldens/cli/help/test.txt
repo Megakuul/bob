@@ -1,0 +1,1 @@
+usage: bob test [patterns…] [--remote] [--rerun] [--lock] [--require-all-tests] [-- test args]
