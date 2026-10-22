@@ -241,12 +241,36 @@ func (c *ruleCheck) checkImport(f *bobFile, d string, imp bobImport, realOf func
 	add(ir.Errors{ir.RuleError("R7", "dir", d, "path", p)})
 }
 
-// ownDir maps an import path of this repository's module to its directory.
+// ownDir maps an import path of this repository to its directory: a path of the root module,
+// or of a Go module of this repository whose go.mod bob generates (golang.NewModule; its
+// directories belong to the root module's build definitions, A103), the longest module path
+// first.
 func (c *ruleCheck) ownDir(p string) (string, bool) {
-	if p == c.module {
+	var nested map[string]string
+	if c.scan != nil {
+		nested = c.scan.nested
+	}
+	return ownDirOf(c.module, nested, p)
+}
+
+// ownDirOf is ownDir for a root module path and the nested modules of a scan.
+func ownDirOf(module string, nested map[string]string, p string) (string, bool) {
+	best, bestDir := "", ""
+	for mp, dir := range nested {
+		if (p == mp || strings.HasPrefix(p, mp+"/")) && len(mp) > len(best) {
+			best, bestDir = mp, dir
+		}
+	}
+	if best != "" && len(best) > len(module) || best != "" && !(p == module || strings.HasPrefix(p, module+"/")) {
+		if p == best {
+			return bestDir, true
+		}
+		return path.Join(bestDir, strings.TrimPrefix(p, best+"/")), true
+	}
+	if p == module {
 		return ".", true
 	}
-	if rel, ok := strings.CutPrefix(p, c.module+"/"); ok {
+	if rel, ok := strings.CutPrefix(p, module+"/"); ok {
 		return rel, true
 	}
 	return "", false

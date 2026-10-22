@@ -109,27 +109,28 @@ func (l *buildLog) lines() []string {
 // `nix build --log-format internal-json` (live or replayed), then call Finish once. It is not
 // safe for concurrent use.
 type Translator struct {
-	ctx      *Context
-	acts     map[uint64]*activity
-	builds   map[string]*activity // drv → last build activity
-	logs     map[string]*buildLog // drv → build log (ANSI stripped)
-	logBytes int                  // bytes kept in logs (≤ maxRunLog after each line)
-	stops    []string             // drvs whose build stopped, in order (eviction candidates)
-	shrunk   int                  // stops[:shrunk] were considered for cutting
-	dropped  int                  // stops[:dropped] were considered for dropping
-	hookLogs map[string][]string  // drv → post-build-hook lines
-	hookDrv  string               // drv of the last post-build-hook activity
-	from     map[string]string    // store path → substituter it was copied from
-	pkgs     map[string]*PkgState // label → state
-	order    []string             // labels, sorted
-	failed   map[string]bool      // drvs that failed with their own error
-	skipped  map[string]bool      // drvs that failed because a dependency failed
-	upstream map[string]bool      // non-bob drvs built from source
-	hints    map[*diag.Error]string
-	deferred map[*diag.Error]bool // errors of untrusted messages: emitted at Finish only
-	claim    *claim               // the untrusted message being translated (plainError)
-	claims   []*claim             // untrusted messages, settled at Finish
-	warns    []string
+	ctx       *Context
+	acts      map[uint64]*activity
+	builds    map[string]*activity // drv → last build activity
+	logs      map[string]*buildLog // drv → build log (ANSI stripped)
+	logBytes  int                  // bytes kept in logs (≤ maxRunLog after each line)
+	stops     []string             // drvs whose build stopped, in order (eviction candidates)
+	shrunk    int                  // stops[:shrunk] were considered for cutting
+	dropped   int                  // stops[:dropped] were considered for dropping
+	hookLogs  map[string][]string  // drv → post-build-hook lines
+	hookDrv   string               // drv of the last post-build-hook activity
+	from      map[string]string    // store path → substituter it was copied from
+	pkgs      map[string]*PkgState // label → state
+	order     []string             // labels, sorted
+	failed    map[string]bool      // drvs that failed with their own error
+	skipped   map[string]bool      // drvs that failed because a dependency failed
+	explained map[string]bool      // bob drvs whose builder failure has its error already
+	upstream  map[string]bool      // non-bob drvs built from source
+	hints     map[*diag.Error]string
+	deferred  map[*diag.Error]bool // errors of untrusted messages: emitted at Finish only
+	claim     *claim               // the untrusted message being translated (plainError)
+	claims    []*claim             // untrusted messages, settled at Finish
+	warns     []string
 	// builderWarns are bob-builder's warnings of successful builds (BOB-E-2016).
 	builderWarns []builderWarn
 	errs         []*diag.Error
@@ -149,7 +150,7 @@ func New(ctx *Context) *Translator {
 	}
 	t := &Translator{ctx: ctx, acts: map[uint64]*activity{}, builds: map[string]*activity{},
 		logs: map[string]*buildLog{}, hookLogs: map[string][]string{}, from: map[string]string{},
-		pkgs: map[string]*PkgState{}, failed: map[string]bool{}, skipped: map[string]bool{},
+		pkgs: map[string]*PkgState{}, failed: map[string]bool{}, skipped: map[string]bool{}, explained: map[string]bool{},
 		upstream: map[string]bool{}, hints: map[*diag.Error]string{}, deferred: map[*diag.Error]bool{}}
 	for _, d := range slices.Sorted(maps.Keys(ctx.Packages)) {
 		p := ctx.Packages[d]
@@ -751,6 +752,12 @@ func (t *Translator) cannotBuild(drv, reason, raw string) {
 		t.upstreamFailed(drv, reason, raw)
 		return
 	}
+	if t.explained[drv] {
+		// Nix repeats a failed build's message when a requested package depends on it (Nix
+		// 2.34 --keep-going): the failure is reported once.
+		return
+	}
+	t.explained[drv] = true
 	var e *diag.Error
 	if m := reSignal().FindStringSubmatch(reason); m != nil {
 		if m[1] == "9" {
@@ -1137,6 +1144,8 @@ func (t *Translator) packageResults(r *Report, valid map[string]bool, anyValid b
 		case t.skipped[d]:
 			st.Status = StSkipped
 		case valid[d] && st.Status == StBuilding:
+			st.Status = StBuilt
+		case valid[d] && st.Status == StPending && slices.Contains(t.ctx.PreBuilt, d):
 			st.Status = StBuilt
 		case valid[d] && st.Status == StCached:
 		case st.Status == StBuilding && cancelled:

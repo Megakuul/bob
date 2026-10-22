@@ -50,6 +50,8 @@ type planner struct {
 	// planBuilt counts the bob derivations built while planning (PlanRealiser): the
 	// translator only sees the build stage, run.finish counts.built includes these.
 	planBuilt int
+	// builtWhilePlanning are those derivations' paths: their packages are reported built.
+	builtWhilePlanning map[string]bool
 
 	nodes   map[string]engine.Resolved // node id → planned outputs
 	drvs    []*drv.Derivation          // every bob derivation, in planning order
@@ -143,7 +145,7 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 			err = internalf(nodes[0].Label, "ecosystem %s panicked: %v", name, v)
 		}
 	}()
-	res, err := eco.Plan(ctx, engine.PlanRequest{Graph: p.g, Nodes: nodes, Lock: p.lockf.Sections[name],
+	res, err := eco.Plan(ctx, engine.PlanRequest{Graph: p.g, Nodes: nodes, Lock: p.lockf.Sections[name], Locks: p.lockf.Sections,
 		Inputs: p.nodes, Sources: p.srcs, Nixpkgs: p.idx, Builder: p.builder,
 		Resolver: p.res, TestArgs: p.testArgs, Root: p.root, Store: planStore{st: p.st, f: p.fetcher, p: p},
 		Version: p.version})
@@ -713,6 +715,12 @@ func (s planStore) RealiseNow(ctx context.Context, drvs map[string]*drv.Derivati
 		}
 		if s.p != nil {
 			s.p.planBuilt += len(built)
+			if s.p.builtWhilePlanning == nil {
+				s.p.builtWhilePlanning = map[string]bool{}
+			}
+			for dp := range built {
+				s.p.builtWhilePlanning[dp] = true
+			}
 		}
 		for _, p := range paths {
 			if still[p] {

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
@@ -126,8 +127,27 @@ type TSConfig struct {
 	Extra            map[string]any // other compilerOptions
 }
 
-// Generated is a codegen output materialised into an importer (§03.6).
-type Generated interface{ npmGenerated() }
+// Generated is a codegen recipe for an importer (connect.TS, graphql.TS, openapi.TS): the
+// importer realises it as the package //<importer dir>:gen-<dir without a leading "gen/",
+// '/'→'-'> whose output is the content of Dir. Codegen packages fill it; users only pass it on.
+type Generated struct {
+	Kind    string        // node kind of the generator, registered by the codegen package
+	Dir     string        // owned directory relative to the importer ("gen/proto/greet/v1")
+	Deps    []bob.Package // the generator's inputs (proto libraries, schemas)
+	Tools   []string      // nixpkgs attributes of the generator's programs (added as nixpkgs.Tool deps after Deps)
+	Spec    any           // the generator's IR payload
+	Runtime []GenRuntime  // npm packages the generated code imports (§03.6.4)
+	At      ext.Site      // where the recipe was made (ext.Here): the package's definedAt
+	// Also are recipes the importer realises together with this one (the code of the proto
+	// libraries a library imports); a recipe for a directory already realised is left out.
+	Also []Generated
+}
+
+// GenRuntime is an npm package generated code imports, at the version of the generator
+// program Generator (a nixpkgs attribute) in bob's nixpkgs pin: bob lock adds it to the
+// importer at exactly that version (@bufbuild/protobuf = protoc-gen-es). An explicit npm.Dep
+// of Name whose range excludes that version fails bob lock with BOB-E-1021 (R-GEN-006).
+type GenRuntime struct{ Name, Generator string }
 
 // LibOpts configures Library. There is deliberately no Runtime field (R-NPM-009).
 type LibOpts struct {
@@ -430,9 +450,7 @@ func newImporter(p *bob.P, deps []Dependency, opts []Option, gen []Generated) *i
 	}
 	slices.Sort(allow)
 	b.spec.Options.AllowScripts = slices.Compact(allow)
-	if len(gen) > 0 {
-		b.problems = append(b.problems, "npm Generated outputs are not supported yet (codegen, §03.6)")
-	}
+	b.generated(p, gen)
 	b.spec.Tools.Node = b.tool(nixpkgs.Tool(p, "nodejs"))
 	b.spec.Tools.Bash = b.tool(nixpkgs.Tool(p, "bash"))
 	if len(b.spec.Options.AllowScripts) > 0 {
@@ -448,6 +466,67 @@ func newImporter(p *bob.P, deps []Dependency, opts []Option, gen []Generated) *i
 	}
 	return b
 }
+
+// generated realises the importer's codegen recipes as packages in its directory (and their
+// Also recipes), adds them as dependencies and the runtimes they need as dependencies that bob
+// lock pins at the generators' versions.
+func (b *importer) generated(p *bob.P, gen []Generated) {
+	b.spec.Generated = []npmspec.Generated{}
+	owned := map[string]bool{}
+	declared := map[string]bool{}
+	for _, d := range b.spec.Deps {
+		declared[d.Alias] = true
+	}
+	var realise func(g Generated, explicit bool)
+	realise = func(g Generated, explicit bool) {
+		dir := path.Clean(g.Dir)
+		if g.Kind == "" || g.Dir == "" || path.IsAbs(dir) || dir == "." || dir == ".." || strings.HasPrefix(dir, "../") || dir == "node_modules" || strings.HasPrefix(dir, "node_modules/") {
+			b.problems = append(b.problems, fmt.Sprintf("generated output %q needs a generator kind and a directory inside the importer", g.Dir))
+			return
+		}
+		if owned[dir] {
+			if explicit {
+				b.problems = append(b.problems, fmt.Sprintf("two generated outputs generate into %s/; give one of them another output directory", dir))
+			}
+			return
+		}
+		owned[dir] = true
+		deps := slices.Clone(g.Deps)
+		for _, t := range g.Tools {
+			deps = append(deps, nixpkgs.Tool(p, t))
+		}
+		name := "gen-" + strings.ReplaceAll(strings.TrimPrefix(dir, "gen/"), "/", "-")
+		n := &genOutput{Node: ext.NewAt(p, g.At, g.Kind, name, deps, nil, g.Spec)}
+		sg := npmspec.Generated{Dir: dir, Dep: b.tool(n), Runtime: []npmspec.Runtime{}}
+		for _, r := range g.Runtime {
+			sg.Runtime = append(sg.Runtime, npmspec.Runtime{Name: r.Name, Generator: r.Generator})
+			if !declared[r.Name] {
+				declared[r.Name] = true
+				b.spec.Deps = append(b.spec.Deps, npmspec.Dep{Alias: r.Name, Req: npmspec.GeneratorPrefix + r.Generator, Link: -1})
+			}
+		}
+		b.spec.Generated = append(b.spec.Generated, sg)
+		for _, a := range g.Also {
+			realise(a, false)
+		}
+	}
+	for _, g := range gen {
+		realise(g, true)
+	}
+	var nested []string
+	for a := range owned {
+		for c := range owned {
+			if a != c && strings.HasPrefix(c, a+"/") {
+				nested = append(nested, fmt.Sprintf("generated output %s/ is inside %s/; generated directories may not be nested", c, a))
+			}
+		}
+	}
+	slices.Sort(nested)
+	b.problems = append(b.problems, nested...)
+}
+
+// genOutput is a realised codegen recipe.
+type genOutput struct{ bob.Node }
 
 // tool appends a dependency and returns its index.
 func (b *importer) tool(pk bob.Package) int {

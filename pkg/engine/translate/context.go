@@ -18,6 +18,9 @@ type Context struct {
 	// ChainOf computes a missing Chains entry when a nixpkgs drv fails (the pipeline walks the
 	// input derivations only then); the result is recorded in Chains. Optional.
 	ChainOf func(drv string) []string `json:"-"`
+	// PreBuilt are bob drvs built while planning (codegen early cutoff, §03.6.3): Nix finds
+	// them valid, but this run built them, so their packages are reported "built".
+	PreBuilt []string `json:"preBuilt,omitempty"`
 }
 
 // Pkg is what bob knows about one derivation it generated.
@@ -29,6 +32,9 @@ type Pkg struct {
 	SrcDir    string `json:"srcDir,omitempty"` // repo-relative source dir (maps relative compiler paths)
 	URL       string `json:"url,omitempty"`    // fetch packages
 	LockHash  string `json:"lockHash,omitempty"`
+	// Codegen marks a code generator's derivation (engine.RegisterCodegenKind): its failure
+	// reads `✗ <label> code generation failed (defined at …)` with the generator's messages.
+	Codegen bool `json:"codegen,omitempty"`
 }
 
 // Substituter is a cache bob configured.

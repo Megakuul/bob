@@ -8,4 +8,4 @@ import (
 )
 
 // Common is the common.v1 protobuf library.
-var Common = bob.Define(func(p *bob.P) *proto.Library { return proto.Library(p, proto.LibraryOpts{}) })
+var Common = bob.Define(func(p *bob.P) *proto.Library { return proto.NewLibrary(p, proto.LibraryOpts{}) })

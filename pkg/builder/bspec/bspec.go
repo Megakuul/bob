@@ -7,9 +7,9 @@ import "encoding/json"
 // kinds of pkg/golang/bop; 4: test-run Copy; 5: the C/C++ kinds of pkg/cc/bop, test-run format
 // tap; 6: the npm kinds of pkg/npm/bop, Ctx.Unpack/Copy; 7: the OCaml kinds of
 // pkg/ocaml/bop; Go cross env, variant flags and the -asan compiler shim of pkg/golang/bop; 8: Rust
-// cross compiles (--sysroot, -C linker) and kind rust-std of pkg/rust/bop; 9: kind appimage of pkg/output/appimage/bop, Ctx.ReferencesGraph, CodedDiag, licences.json; 10: kinds oci-layer, oci-image, tarball, release of pkg/output/oci/bop, pkg/output/tarball/bop, pkg/release/bop, reproducible tar helpers, DecodeArgs; 11: OCI layer blobs as relative symlinks, oci-image Error, tarball placeholder kind). The CI stage "builder" fails when the builder changed since the last commit
+// cross compiles (--sysroot, -C linker) and kind rust-std of pkg/rust/bop; 9: kind appimage of pkg/output/appimage/bop, Ctx.ReferencesGraph, CodedDiag, licences.json; 10: kinds oci-layer, oci-image, tarball, release of pkg/output/oci/bop, pkg/output/tarball/bop, pkg/release/bop, reproducible tar helpers, DecodeArgs; 11: OCI layer blobs as relative symlinks, oci-image Error, tarball placeholder kind; 12: unpack accepts a repeated regular file, the last entry wins). The CI stage "builder" fails when the builder changed since the last commit
 // without a bump.
-const BuilderVersion = 11
+const BuilderVersion = 12
 
 // Job is one derivation's work. Kind selects the subcommand; Args is the kind's own schema.
 type Job struct {

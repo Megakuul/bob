@@ -198,8 +198,10 @@ func (pl *planner) resolve(main, importPath string) (pkgRef, error) {
 	var best *wsModule
 	for mp, m := range pl.mods {
 		if importPath == mp || strings.HasPrefix(importPath, mp+"/") {
-			if gi, ok := m.gens[importPath]; ok {
-				return pkgRef{kind: refGen, ws: m, gen: gi}, nil
+			for base, gi := range m.gens { // a generated tree may hold several packages
+				if importPath == base || strings.HasPrefix(importPath, base+"/") {
+					return pkgRef{kind: refGen, ws: m, gen: gi, rel: strings.TrimPrefix(strings.TrimPrefix(importPath, base), "/")}, nil
+				}
 			}
 			if best == nil || len(mp) > len(best.spec.Path) {
 				best = m
@@ -495,18 +497,20 @@ func (pl *planner) packageDir(ref pkgRef) (string, error) {
 		g := ref.ws.spec.Generated[ref.gen]
 		dep := ref.ws.node.Deps[g.Dep]
 		rv, ok := pl.req.Inputs[dep]
-		out := rv.Outputs["out"]
-		if !ok || out == "" {
+		if !ok {
 			return "", fmt.Errorf("generated package %s has no planned output", ref.ws.spec.Path+"/"+g.Dir)
 		}
 		if pl.req.Store == nil {
 			return "", fmt.Errorf("planning generated Go code needs the store (engine.PlanRequest.Store)")
 		}
-		host := pl.req.Store.HostPath(out)
-		if _, err := os.Stat(host); err != nil {
+		host, sp, ok := engine.CodegenOutput(pl.req.Store, rv)
+		if !ok {
 			return "", fmt.Errorf("generated package %s must be built before the Go code that imports it (codegen early cutoff, §03.6.3)", ref.ws.spec.Path+"/"+g.Dir)
 		}
-		pl.storeOf[host] = out
+		if ref.rel != "" {
+			host, sp = filepath.Join(host, filepath.FromSlash(ref.rel)), sp+"/"+ref.rel
+		}
+		pl.storeOf[host] = sp
 		return host, nil
 	default:
 		return filepath.Join(ref.modDir, filepath.FromSlash(ref.rel)), nil

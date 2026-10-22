@@ -65,6 +65,14 @@ func init() {
 		ss, _ := srcs.([]Sources)
 		return newNodeAt(pp, kind, &dir, name, ds, ss, spec)
 	}
+	graph.NewNodeAt = func(p any, at any, kind, name string, deps, srcs, spec any) any {
+		pp, _ := p.(*P)
+		ds, _ := deps.([]Package)
+		ss, _ := srcs.([]Sources)
+		st, _ := at.(site)
+		return newNode(pp, kind, name, ds, ss, spec, st)
+	}
+	graph.Site = func() any { return bobSite() }
 	graph.ConfigOf = func(n any) graph.Config {
 		nn, _ := n.(*Node)
 		return configOf(nn)
@@ -89,13 +97,14 @@ func init() {
 
 // newNode is ext.New: it creates (or, for an identical node of another configuration, reuses)
 // the node of kind for p. Errors are recorded on the evaluation and give a zero Node.
-func newNode(p *P, kindName, name string, deps []Package, srcs []Sources, spec any) Node {
-	return newNodeAt(p, kindName, nil, name, deps, srcs, spec)
+func newNode(p *P, kindName, name string, deps []Package, srcs []Sources, spec any, at ...site) Node {
+	return newNodeAt(p, kindName, nil, name, deps, srcs, spec, at...)
 }
 
 // newNodeAt is newNode with an optional label directory (ext.NewIn) replacing the calling
-// bob.go's directory.
-func newNodeAt(p *P, kindName string, dir *string, name string, deps []Package, srcs []Sources, spec any) Node {
+// bob.go's directory, and an optional earlier call site (ext.NewAt) whose position becomes the
+// node's definedAt.
+func newNodeAt(p *P, kindName string, dir *string, name string, deps []Package, srcs []Sources, spec any, at ...site) Node {
 	ev := active
 	if ev == nil || p == nil || p.ev != ev {
 		msg := fmt.Sprintf("ext.New(%q, %q) was called outside evaluation; call constructors only inside a bob.Define function", kindName, name)
@@ -144,7 +153,11 @@ func newNodeAt(p *P, kindName string, dir *string, name string, deps []Package, 
 	if k.Host {
 		pk = p.Host()
 	}
-	n := &node{kind: k, label: l, pos: s.pos, p: pk, evalP: p, evals: map[*P]bool{}}
+	pos := s.pos
+	if len(at) > 0 && at[0].ok && at[0].mod == s.mod {
+		pos = at[0].pos
+	}
+	n := &node{kind: k, label: l, pos: pos, p: pk, evalP: p, evals: map[*P]bool{}}
 	for i, dep := range deps {
 		dn := nodeOf(dep)
 		if dn == nil {

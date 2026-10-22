@@ -100,9 +100,13 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	if rq.Proxy, err = newProxy(used); err != nil {
 		return nil, diag.New(1015, "ecosystem", "Go", "root", "this repository", "reason", err.Error())
 	}
+	rt := runtimes{ctx: ctx, req: req}
 	for _, d := range decls {
 		w, err := workspaceOf(nodes[d.Path], req.Root)
 		if err != nil {
+			return nil, err
+		}
+		if err := rt.resolve(nodes[d.Path], &w); err != nil {
 			return nil, err
 		}
 		if prev != nil {
@@ -231,7 +235,7 @@ func treeHash(z *resolve.ModuleZip) (string, error) {
 // requirement its build list does not select at the declared version or higher (bob lock
 // --update may have moved it up). Only modules of the graph are compared, so a build of
 // part of the repository sees the same answer as one of all of it.
-func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Pos, error) {
+func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.Pos, error) {
 	decls, nodes, err := declarations(req.Graph)
 	if err != nil {
 		return "", ir.Pos{}, err
@@ -241,6 +245,23 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 		return "the go section cannot be read: " + err.Error(), ir.Pos{}, nil
 	}
 	sec := v.(*lock.GoSection)
+	rt := runtimes{ctx: ctx, req: req}
+	for _, d := range decls {
+		// A runtime pin that contradicts its generator is the R-GEN-006 error, not a stale lock.
+		w := resolve.Workspace{BobGo: path.Join(labelDir(nodes[d.Path].Label), "bob.go")}
+		var mismatch *diag.Error
+		if err := rt.resolve(nodes[d.Path], &w); errors.As(err, &mismatch) && mismatch.Code == 1021 {
+			return "", ir.Pos{}, mismatch
+		}
+		if req.Nixpkgs == nil {
+			// Without the nixpkgs index the generator versions are unknown: an explicit
+			// requirement of a generator's runtime is reported stale, so the caller asks again
+			// with the index (build.staleSections), which decides.
+			if r, ok := pinnedRuntime(nodes[d.Path]); ok {
+				return fmt.Sprintf("Go module %s requires %s, a code generator's runtime", d.Path, r), nodes[d.Path].DefinedAt, nil
+			}
+		}
+	}
 	for _, d := range decls {
 		at := nodes[d.Path].DefinedAt
 		bl, ok := sec.Workspaces[d.Path]
@@ -252,6 +273,9 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 		}
 		sel := selected(bl)
 		for _, r := range d.Require {
+			if strings.HasPrefix(r.Version, generatorPrefix) {
+				continue // a generator's runtime: its version comes from the nixpkgs pin
+			}
 			if resolve.Compare(sel[r.Path], r.Version) < 0 {
 				return fmt.Sprintf("Go module %s requires %s %s, which is not locked", d.Path, r.Path, r.Version), at, nil
 			}
@@ -269,4 +293,111 @@ func selected(bl lock.GoBuildList) map[string]string {
 		}
 	}
 	return out
+}
+
+// generatorPrefix marks a runtime requirement whose version is the generator's in the nixpkgs
+// pin (golang.GeneratorRuntime): "nixpkgs:<attr>" (at least) or "nixpkgs:=<attr>" (exact).
+const generatorPrefix = "nixpkgs:"
+
+// runtimes resolves the generator runtime requirements of workspace modules (§03.6.4).
+type runtimes struct {
+	ctx context.Context
+	req engine.LockRequest
+}
+
+// resolve replaces the generator versions of w's runtime requirements by the pinned
+// generators' versions and checks the module's explicit requirements against them (R-GEN-006):
+// a contradicting golang.Require is BOB-E-1021 before anything is built.
+func (rt runtimes) resolve(n *ir.Node, w *resolve.Workspace) error {
+	var s gospec.Module
+	if err := json.Unmarshal(n.Spec, &s); err != nil {
+		return internal(n, "module spec: %v", err)
+	}
+	declared := map[string]string{}
+	for _, r := range s.Require {
+		declared[r.Path] = r.Version
+	}
+	byID := map[string]*ir.Node{}
+	if rt.req.Graph != nil {
+		for _, x := range rt.req.Graph.Nodes {
+			byID[x.ID] = x
+		}
+	}
+	var keep []resolve.Module
+	for i := range w.Require {
+		if !strings.HasPrefix(w.Require[i].Version, generatorPrefix) {
+			keep = append(keep, w.Require[i])
+		}
+	}
+	w.Require = keep
+	for _, g := range s.Generated {
+		label, at := n.Label, n.DefinedAt
+		if g.Dep >= 0 && g.Dep < len(n.Deps) && byID[n.Deps[g.Dep]] != nil {
+			label, at = byID[n.Deps[g.Dep]].Label, byID[n.Deps[g.Dep]].DefinedAt
+		}
+		for _, r := range g.Require {
+			spec, ok := strings.CutPrefix(r.Version, generatorPrefix)
+			if !ok {
+				continue
+			}
+			attr, exact := strings.CutPrefix(spec, "=")
+			version, err := rt.version(attr)
+			if err != nil {
+				return internal(n, "%s: %v", label, err)
+			}
+			need := "v" + version
+			if have, ok := declared[r.Path]; ok {
+				bad := have != need
+				if !exact {
+					bad = resolve.Compare(have, need) < 0
+				}
+				if bad {
+					return engine.RuntimeMismatch(label, attr, version, r.Path, version, w.BobGo, have, at)
+				}
+			}
+			for j := range w.GenRequire {
+				if w.GenRequire[j].Path == r.Path && w.GenRequire[j].Version == r.Version {
+					w.GenRequire[j].Version = need
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// version is the version of nixpkgs attribute attr in the pin.
+func (rt runtimes) version(attr string) (string, error) {
+	if rt.req.Nixpkgs == nil {
+		return "", fmt.Errorf("the version of generator %s needs the nixpkgs index", attr)
+	}
+	es, err := rt.req.Nixpkgs.Lookup(rt.ctx, []string{attr})
+	if err != nil {
+		return "", err
+	}
+	e := es[attr]
+	if e.Missing || e.Version == "" {
+		return "", fmt.Errorf("nixpkgs has no generator %s", attr)
+	}
+	return e.Version, nil
+}
+
+// pinnedRuntime returns a module path that n's module both requires explicitly and needs as a
+// generator runtime (golang.GeneratorRuntime).
+func pinnedRuntime(n *ir.Node) (string, bool) {
+	var s gospec.Module
+	if err := json.Unmarshal(n.Spec, &s); err != nil {
+		return "", false
+	}
+	declared := map[string]bool{}
+	for _, r := range s.Require {
+		declared[r.Path] = true
+	}
+	for _, g := range s.Generated {
+		for _, r := range g.Require {
+			if strings.HasPrefix(r.Version, generatorPrefix) && declared[r.Path] {
+				return r.Path, true
+			}
+		}
+	}
+	return "", false
 }

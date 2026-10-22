@@ -1,9 +1,12 @@
 package orchestrator
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -37,6 +40,9 @@ type Reconciler struct {
 	held     map[string]heldJob   // claimed or running jobs
 	// leaseUntil is when the held ctl/job-reconciler lease expires (wall clock, as the lease).
 	leaseUntil time.Time
+	// active is kept across passes: its shard cache answers unchanged shards with a 304.
+	active    *store.ShardSet[store.ActiveJob]
+	lastSweep time.Time // wall clock of the last sweepHeld
 }
 
 type workerSeen struct {
@@ -74,8 +80,10 @@ func (r *Reconciler) now() time.Time {
 // next pass; Pass fails only when it cannot read the active-job set.
 //
 // The requeue bound is lease_ttl + interval + skew after the owner's last sign of life, so the
-// claimed jobs Pass already knows are checked first and again at the end: a lease that
-// expires while the pass reads the active set is not left for the next pass.
+// claimed jobs Pass already knows are checked first, every sweepEvery between the steps of the
+// pass and again at the end: a lease that expires while the pass reads the active set, the job
+// records or re-slots a backlog is not left for the next pass (measured on a loaded host: a pass
+// over 100 jobs took 4-17 s when the held jobs were only checked at its start and end).
 func (r *Reconciler) Pass(ctx context.Context) (PassResult, error) {
 	var res PassResult
 	if held, err := r.leader(ctx); err != nil || !held {
@@ -91,10 +99,14 @@ func (r *Reconciler) Pass(ctx context.Context) (PassResult, error) {
 	if shards <= 0 {
 		shards = 16
 	}
-	all, err := store.ActiveJobs(r.Fleet, shards).All(ctx)
+	if r.active == nil || r.active.N != shards {
+		r.active = store.ActiveJobs(r.Fleet, shards)
+	}
+	all, err := r.active.All(ctx)
 	if err != nil {
 		return res, err
 	}
+	r.sweepDue(ctx, &res)
 	now := r.now()
 	for id, at := range r.terminal {
 		if _, ok := all[id]; !ok || now.Sub(at) > terminalRecheck || now.Before(at) {
@@ -112,7 +124,15 @@ func (r *Reconciler) Pass(ctx context.Context) (PassResult, error) {
 			ids = append(ids, id)
 		}
 	}
-	recs := r.readJobs(ctx, ids)
+	recs := map[string]*store.JobRecord{}
+	for chunk := range slices.Chunk(ids, 2*readParallel) {
+		maps.Copy(recs, r.readJobs(ctx, chunk))
+		r.sweepDue(ctx, &res)
+	}
+	r.prefetch(ctx, slices.Collect(maps.Values(recs)))
+	// Held jobs first: a requeue is due within lease_ttl + interval + skew, re-slots and
+	// finalising are not (a backlog of re-slots must not delay the requeues behind it).
+	slices.SortStableFunc(ids, func(a, b string) int { return cmp.Compare(urgency(recs[a]), urgency(recs[b])) })
 	for _, id := range ids {
 		if ctx.Err() != nil {
 			return res, ctx.Err()
@@ -124,9 +144,18 @@ func (r *Reconciler) Pass(ctx context.Context) (PassResult, error) {
 		if err := r.job(ctx, rec, all[id], &res); err != nil && !errors.Is(err, store.ErrNotFound) {
 			slog.Warn("job-reconciler: job skipped this pass", "job", id, "err", err, "orchestrator", r.Name)
 		}
+		r.sweepDue(ctx, &res)
 	}
 	r.sweepHeld(ctx, &res)
 	return res, nil
+}
+
+// urgency orders the jobs of a pass: claimed and running jobs (requeue) before the rest.
+func urgency(rec *store.JobRecord) int {
+	if rec != nil && (rec.State.Value() == StateClaimed || rec.State.Value() == StateRunning) {
+		return 0
+	}
+	return 1
 }
 
 // heldJob is a claimed or running job as Pass last read it.
@@ -135,9 +164,34 @@ type heldJob struct {
 	class string
 }
 
+// sweepEvery is how often a pass checks the held jobs it knows between its other steps: the
+// requeue bound must not depend on how long the active set and the job reads take on a loaded
+// store.
+const sweepEvery = 100 * time.Millisecond
+
+// sweepDue runs sweepHeld when the last sweep is sweepEvery ago. The check is in memory; only
+// jobs whose lease looks expired by the cached heartbeats cost requests.
+func (r *Reconciler) sweepDue(ctx context.Context, res *PassResult) {
+	if time.Since(r.lastSweep) >= sweepEvery {
+		r.sweepHeld(ctx, res)
+	}
+}
+
 // sweepHeld requeues the known held jobs whose lease has expired by now.
 func (r *Reconciler) sweepHeld(ctx context.Context, res *PassResult) {
+	r.lastSweep = time.Now()
 	now := r.now()
+	var due []*store.JobRecord
+	for _, h := range r.held {
+		if r.deadByCache(h.rec, now) {
+			due = append(due, h.rec)
+		}
+	}
+	if len(due) == 0 {
+		return
+	}
+	r.prefetch(ctx, due)
+	now = r.now()
 	for id, h := range r.held {
 		if ctx.Err() != nil || !r.deadByCache(h.rec, now) {
 			continue
@@ -188,21 +242,91 @@ const readParallel = 16
 func (r *Reconciler) readJobs(ctx context.Context, ids []string) map[string]*store.JobRecord {
 	var mu sync.Mutex
 	out := make(map[string]*store.JobRecord, len(ids))
+	forEach(ids, func(id string) {
+		rec, _, err := store.GetCached(ctx, r.Fleet, &r.jobs, &store.JobRecord{ID: store.ID(id)})
+		if err != nil {
+			if !errors.Is(err, store.ErrNotFound) && ctx.Err() == nil {
+				slog.Warn("job-reconciler: job unreadable this pass", "job", id, "err", err)
+			}
+			return
+		}
+		mu.Lock()
+		out[id] = rec
+		mu.Unlock()
+	})
+	return out
+}
+
+// prefetch reads in parallel what leaseExpired would otherwise read one job at a time: the
+// heartbeat of every owner of a held job whose lease the cached heartbeats call expired, and
+// the owner records that are due for a re-read (revocation, heartbeat key). A fresh heartbeat
+// moves the cached one forward only when its signature verifies; an owner that still looks
+// dead is confirmed by leaseExpired's own read, so a requeue never rests on a prefetched value.
+func (r *Reconciler) prefetch(ctx context.Context, recs []*store.JobRecord) {
+	now := r.now()
+	needBeat := map[string]bool{}
+	for _, rec := range recs {
+		if st := rec.State.Value(); st != StateClaimed && st != StateRunning {
+			continue
+		}
+		o := rec.Owner.Value()
+		needBeat[o] = needBeat[o] || r.deadByCache(rec, now)
+	}
+	type read struct {
+		hb  *store.Heartbeat
+		rec *store.WorkerRecord
+		got bool // rec was read (or found missing)
+	}
+	var mu sync.Mutex
+	reads := map[string]read{}
+	owners := make([]string, 0, len(needBeat))
+	for o := range needBeat {
+		owners = append(owners, o)
+	}
+	forEach(owners, func(o string) {
+		var rd read
+		if w, ok := r.workers[o]; !ok || now.Sub(w.at) >= workerCheck || now.Before(w.at) {
+			rec, err := store.Get(ctx, r.Fleet, &store.WorkerRecord{Wid: store.ID(o)})
+			rd.rec, rd.got = rec, err == nil || errors.Is(err, store.ErrNotFound)
+		}
+		if needBeat[o] {
+			if hb, err := store.Get(ctx, r.Fleet, &store.Heartbeat{Wid: store.ID(o)}); err == nil {
+				rd.hb = hb
+			}
+		}
+		mu.Lock()
+		reads[o] = rd
+		mu.Unlock()
+	})
+	for o, rd := range reads {
+		if rd.got {
+			w := workerSeen{at: now}
+			if rd.rec != nil {
+				w.state, w.sigPub = rd.rec.State.Value(), rd.rec.SigPub.Value()
+			}
+			r.workers[o] = w
+		}
+		if rd.hb == nil || !rd.hb.At.Value().After(r.beats[o]) {
+			continue
+		}
+		if w := r.workers[o]; w.sigPub != nil && !fleet.VerifyHeartbeat(w.sigPub, rd.hb) {
+			continue
+		}
+		r.beats[o] = rd.hb.At.Value()
+	}
+}
+
+// forEach runs fn for every id with at most readParallel calls at once. A panic in fn is
+// logged and ends only that call.
+func forEach(ids []string, fn func(id string)) {
 	next := make(chan string)
 	var done []<-chan error
 	for range min(readParallel, len(ids)) {
 		done = append(done, safe.Go(func() error {
 			for id := range next {
-				rec, _, err := store.GetCached(ctx, r.Fleet, &r.jobs, &store.JobRecord{ID: store.ID(id)})
-				if err != nil {
-					if !errors.Is(err, store.ErrNotFound) && ctx.Err() == nil {
-						slog.Warn("job-reconciler: job unreadable this pass", "job", id, "err", err)
-					}
-					continue
+				if err := safe.Run(func() error { fn(id); return nil }); err != nil {
+					slog.Error("job-reconciler: read failed", "id", id, "err", err)
 				}
-				mu.Lock()
-				out[id] = rec
-				mu.Unlock()
 			}
 			return nil
 		}))
@@ -214,7 +338,6 @@ func (r *Reconciler) readJobs(ctx context.Context, ids []string) map[string]*sto
 	for _, d := range done {
 		<-d
 	}
-	return out
 }
 
 func (r *Reconciler) job(ctx context.Context, rec *store.JobRecord, aj store.ActiveJob, res *PassResult) error {

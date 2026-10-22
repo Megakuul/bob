@@ -170,6 +170,8 @@ type Builds struct {
 	pages   map[string]*store.PagedIndex[store.BuildEntry]
 	retry   map[string]statusRetry // status retry backoff per build|context
 	running store.Cache[store.RunningBuilds]
+
+	releaser Releaser // SetReleaser; nil = release pipelines publish nothing
 }
 
 // New performs no I/O.

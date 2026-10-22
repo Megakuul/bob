@@ -10,7 +10,7 @@ import (
 
 // Greet is the greet.v1 protobuf library; it imports common.v1.
 var Greet = bob.Define(func(p *bob.P) *proto.Library {
-	return proto.Library(p, proto.LibraryOpts{Deps: []*proto.Library{commonv1.Common(p)}})
+	return proto.NewLibrary(p, proto.LibraryOpts{Deps: []*proto.Library{commonv1.Common(p)}})
 })
 
 // Lint runs buf lint on greet.v1.

@@ -35,6 +35,10 @@ type repoScan struct {
 	// module of this repository (golang.NewModule, SPEC §03.2.5): their directories belong to
 	// the repository's build definitions, and the evaluator's overlay hides them.
 	bobMods []string
+	// nested maps the module path of each such go.mod to its directory: bob.go files may
+	// import a bob.go package of a Go module of this repository by that module's path
+	// (example.com/tools), like the module's Go code does.
+	nested map[string]string
 }
 
 // generatedGoMod is the first line of every go.mod bob writes (SPEC §03.0.2).
@@ -60,7 +64,7 @@ func skipDir(name string) bool {
 // scanRepo walks root. It reads each directory once (no per-directory stat for go.mod: the
 // eval key hit budget, SPEC §1.17, includes this walk).
 func scanRepo(root string) (*repoScan, error) {
-	s := &repoScan{goDirs: map[string][]string{}, content: map[string][]byte{}}
+	s := &repoScan{goDirs: map[string][]string{}, content: map[string][]byte{}, nested: map[string]string{}}
 	var walk func(dir string, depth int) error
 	walk = func(dir string, depth int) error {
 		if depth > maxScanDepth {
@@ -82,6 +86,11 @@ func scanRepo(root string) (*repoScan, error) {
 					return nil // another module
 				}
 				s.bobMods = append(s.bobMods, path.Join(dir, "go.mod"))
+				if b, err := readCapped(filepath.Join(root, filepath.FromSlash(dir), "go.mod"), path.Join(dir, "go.mod"), 1<<20); err == nil {
+					if mp := parseGoMod(b).module; mp != "" {
+						s.nested[mp] = dir
+					}
+				}
 				for _, o := range ents {
 					if o.Name() == "go.sum" {
 						s.bobMods = append(s.bobMods, path.Join(dir, "go.sum"))
@@ -226,3 +235,4 @@ func writeIfChanged(p string, content []byte) error {
 
 // errNoGoMod is a repository root without go.mod.
 var errNoGoMod = errors.New("the repository has no go.mod")
+

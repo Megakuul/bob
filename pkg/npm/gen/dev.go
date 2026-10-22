@@ -14,7 +14,7 @@ import (
 // node_modules/.bin as in-tree tools (tsc, vite, vitest: shims, R-NPM-008a). node_modules
 // itself is materialised by bob gen and local builds (§03.4.3); the Vite dev server is the bob
 // dev contract of §03.4.8 (M9.6).
-func (Ecosystem) PrepareDev(_ context.Context, req engine.DevRequest) (engine.DevPrep, error) {
+func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (engine.DevPrep, error) {
 	var prep engine.DevPrep
 	if req.Graph == nil {
 		return prep, nil
@@ -36,7 +36,19 @@ func (Ecosystem) PrepareDev(_ context.Context, req engine.DevRequest) (engine.De
 		out := rv.Outputs["out"]
 		version := out[strings.LastIndex(out, "-")+1:]
 		prep.Packages = append(prep.Packages, engine.DevPackage{Name: "node", Version: version, Path: out, Drv: rv.Drv})
-		return prep, nil // one nodejs per repository (the pinned one)
+		break // one nodejs per repository (the pinned one)
+	}
+	// TypeScript importers that do not depend on typescript themselves (an App compiled by
+	// esbuild, generated .ts code) still get tsc and tsserver for editors and type checks: the
+	// pinned nixpkgs typescript.
+	if _, ok := prep.Tools["tsc"]; !ok && len(ims) > 0 && req.Nixpkgs != nil {
+		entries, err := req.Nixpkgs.Lookup(ctx, []string{"typescript"})
+		if err != nil {
+			return prep, err
+		}
+		if e, ok := entries["typescript"]; ok && e.DrvPath != "" && !e.Missing {
+			prep.Packages = append(prep.Packages, engine.DevPackage{Name: "typescript", Version: e.Version, Path: e.Outputs["out"], Drv: e.DrvPath})
+		}
 	}
 	return prep, nil
 }

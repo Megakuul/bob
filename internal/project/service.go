@@ -70,7 +70,7 @@ func apiError(err error) error {
 		return api.AlreadyExists(err.Error())
 	case errors.Is(err, ErrConflict):
 		return api.Aborted(err.Error())
-	case errors.Is(err, ErrRunning):
+	case errors.Is(err, ErrRunning), errors.Is(err, ErrReleases):
 		return api.FailedPrecondition(err.Error())
 	}
 	return err

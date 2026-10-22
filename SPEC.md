@@ -454,7 +454,7 @@ Expected from other sections:
 | R4 | no top-level identifier of `bob.go` is declared in another file of the package | `<dir>/bob.go:<line>: <Name> is also declared at <file>:<line>; bob.go shares its package with that code, rename one of them` |
 | R5 | dir has `.c .cc .cpp .cxx .m .f .F .f90 .swig .swigcxx` files next to `bob.go` | not an error: bob materialises `<dir>/zz_bob_cgo.go` (gitignored): `//go:build bob && cgo` / `package <x>` / `import "C"` |
 | R6 | no import cycle that exists only under the tag (bob.go import graph ∪ real Go import graph) | `<dir>/bob.go imports <dir2>, whose Go code imports <dir> (cycle exists only for build definitions); move the definition` |
-| R7 | `bob.go` imports no `github.com/megakuul/bob/pkg/engine/...`, `.../pkg/builder/...`, `.../pkg/cli/...`, and no package outside the std library, the framework L0–L3 packages, and `bob.go` packages (own repo or bob-repo Go modules) | `<dir>/bob.go: imports <path>, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages` |
+| R7 | `bob.go` imports no `github.com/megakuul/bob/pkg/engine/...`, `.../pkg/builder/...`, `.../pkg/cli/...`, and no package outside the std library, the framework L0–L3 packages, and `bob.go` packages (own repo or bob-repo Go modules; a `bob.go` package in the directory of a Go module of this repository whose go.mod bob generates may be imported by that module's path, e.g. `example.com/tools`, as well as by the root module's path of its directory) | `<dir>/bob.go: imports <path>, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages` |
 
 - Repo root = the nearest ancestor directory that contains `bob.lock` (§02 `FindRoot`, error
   0002); the bob-generated root `go.mod` lives in the same directory.
@@ -4657,7 +4657,10 @@ Codegen values are recipes: a typed `golang.Generated` or `npm.Generated` that t
 Go module or npm importer realises in its own `Generated` list (the module supplies the Go
 import path, the importer the TS output location). A TS output cannot be passed to a Go
 module (R-FW-010). Each realised recipe is one package labelled
-`//<consumer dir>:gen-<owned dir relative to consumer, '/'→'-'>` (e.g. `//svc:gen-proto-greet-v1`).
+`//<consumer dir>:gen-<owned dir relative to consumer without a leading "gen/", '/'→'-'>` (e.g. `//svc:gen-proto-greet-v1`
+for `gen/proto/greet/v1`). A recipe's package is defined at the line of the recipe call
+(`connect.Go(…)`). `connect.Go`/`connect.TS` also realise the libraries the library imports, each
+into its default directory.
 
 ```go
 package proto // github.com/megakuul/bob/pkg/proto
@@ -4668,15 +4671,21 @@ type LibraryOpts struct {
 	Root string     // import root, repo-relative; default: nearest ancestor directory named "proto", else repo root
 }
 
-// Library is one proto package (one directory). .proto files need no go_package (bob sets M options).
+// Library is one proto package (one directory, label //<dir>:proto). .proto files need no
+// go_package (bob sets M options).
+type Library struct{ bob.Node }
+
+// NewLibrary declares the library of the calling bob.go's directory. (A Go function and a type
+// cannot share a name, so the constructor is NewLibrary, as npm.NewApp, A66/A123.)
 //
 //	var Greet = bob.Define(func(p *bob.P) *proto.Library {
-//		return proto.Library(p, proto.LibraryOpts{Deps: []*proto.Library{commonv1.Common(p)}})
+//		return proto.NewLibrary(p, proto.LibraryOpts{Deps: []*proto.Library{commonv1.Common(p)}})
 //	})
-func Library(p *bob.P, o LibraryOpts) *Library
+func NewLibrary(p *bob.P, o LibraryOpts) *Library
 
-// Lint and Breaking are check packages (buf lint / buf breaking) usable in pipelines.
-// Breaking compares with the library at a git revision of the same repo.
+// Lint and Breaking are check packages (buf lint / buf breaking) usable in pipelines: test
+// units (bob test runs them, bob build leaves them out), labelled //<dir>:lint and
+// //<dir>:breaking. Breaking compares with the library at a git revision of the same repo.
 //
 //	var GreetLint = bob.Define(func(p *bob.P) *proto.Check { return proto.Lint(p, Greet(p)) })
 func Lint(p *bob.P, lib *Library) *Check
@@ -4783,7 +4792,8 @@ func TS(s *Spec, o TSOpts) npm.Generated
   an e2e test calls the Go server from both clients successfully; each codegen derivation
   rebuilds bit-identically; a proto syntax error prints
   `✗ //svc:gen-proto-greet-v1 code generation failed (defined at svc/bob.go:<line>)` +
-  `│ proto/greet/v1/greet.proto:9:1:unexpected '}' after definition` (golden), no raw Nix text.
+  ``| proto/greet/v1/greet.proto:9:1:unexpected `}` after definition`` (golden; buf 1.73 of the pin,
+  fault F1 of S6: the `;` of `string name = 1;` removed), no raw Nix text.
 - **Source:** R-GEN-001, R-GEN-004, S6 §3.1, §3.4.
 
 #### R-GEN-002a GraphQL for Go and TypeScript

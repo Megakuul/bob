@@ -605,6 +605,9 @@ type PipelineRun struct {
 
 	Concurrency string `cbor:"cc,omitempty"` // queue|supersede|parallel ("" = per-ref default)
 	Releases    bool   `cbor:"rl,omitempty"` // a release pipeline (never superseded)
+	// ReleaseLabels are the release labels of the pipeline's definition (the release
+	// controller publishes one release per label when the build succeeds).
+	ReleaseLabels []string `cbor:"rls,omitempty"`
 }
 
 // BuildJob is one entry of BuildRecord.jb.

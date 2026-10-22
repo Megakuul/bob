@@ -49,14 +49,41 @@ type Requirement struct{ Path, Version string }
 func Require(path, version string) Requirement { return Requirement{Path: path, Version: version} }
 
 // Generated is a codegen recipe for a Go module (connect.Go, graphql.Gqlgen, openapi.Go): the
-// module realises it as the package //<module dir>:gen-<dir> whose output is the Go package in
-// Dir. Codegen packages fill it; users only pass it on.
+// module realises it as the package //<module dir>:gen-<dir without a leading "gen/", '/'→'-'>
+// whose output is the Go package tree in Dir. Codegen packages fill it; users only pass it on.
 type Generated struct {
 	Kind    string        // node kind of the generator, registered by the codegen package
 	Dir     string        // owned directory relative to the module ("gen/proto/greet/v1")
 	Deps    []bob.Package // the generator's inputs (proto libraries, schemas)
+	Tools   []string      // nixpkgs attributes of the generator's programs (added as nixpkgs.Tool deps after Deps)
 	Spec    any           // the generator's IR payload
-	Require []Requirement // runtime libraries the generated code imports (§03.6.4)
+	Require []Requirement // runtime libraries the generated code imports (§03.6.4); see GeneratorRuntime
+	At      ext.Site      // where the recipe was made (ext.Here): the package's definedAt
+	// Also are recipes the module realises together with this one (the Go packages of the proto
+	// libraries a library imports); a recipe for a directory the module already realises is
+	// left out.
+	Also []Generated
+}
+
+// ModuleAware is implemented by a Generated.Spec that needs its consuming module (the Go
+// import path of the generated code): NewModule stores spec.WithModule(<module path>) as the
+// codegen package's spec.
+type ModuleAware interface{ WithModule(path string) any }
+
+// generatorPrefix marks a requirement version that bob lock resolves from the nixpkgs pin.
+const generatorPrefix = "nixpkgs:"
+
+// GeneratorRuntime is the requirement of a generator's runtime module at the version of the
+// generator program in bob's nixpkgs pin (§03.6.4): bob lock looks up the nixpkgs attribute
+// attr and requires path at "v<version>". With exact the runtime must be exactly that version
+// (gqlgen), otherwise at least that version (google.golang.org/protobuf). An explicit
+// golang.Require of path that contradicts it fails bob lock with BOB-E-1021 (R-GEN-006).
+func GeneratorRuntime(path, attr string, exact bool) Requirement {
+	v := generatorPrefix + attr
+	if exact {
+		v = generatorPrefix + "=" + attr
+	}
+	return Requirement{Path: path, Version: v}
 }
 
 // Module is one Go module (label //<dir>:module).
@@ -110,20 +137,51 @@ func NewModule(p *bob.P, o ModuleOpts) *Module {
 	// The codegen packages are labelled in the module's directory: create them first, the
 	// module node depends on them.
 	var problems []string
-	for _, g := range o.Generated {
+	owned := map[string]bool{}
+	var realise func(g Generated, explicit bool)
+	realise = func(g Generated, explicit bool) {
 		dir := path.Clean(g.Dir)
 		if g.Kind == "" || !validRel(dir) || dir == "." {
 			problems = append(problems, fmt.Sprintf("generated package %q needs a generator kind and a directory inside the module", g.Dir))
-			continue
+			return
 		}
-		gen := &genPackage{Node: ext.New(p, g.Kind, "gen-"+strings.ReplaceAll(dir, "/", "-"), g.Deps, nil, g.Spec)}
+		if owned[dir] {
+			if explicit {
+				problems = append(problems, fmt.Sprintf("two generated packages generate into %s/; give one of them another output directory", dir))
+			}
+			return
+		}
+		owned[dir] = true
+		gdeps := slices.Clone(g.Deps)
+		for _, t := range g.Tools {
+			gdeps = append(gdeps, nixpkgs.Tool(p, t))
+		}
+		spec := g.Spec
+		if ma, ok := spec.(ModuleAware); ok {
+			spec = ma.WithModule(o.Path)
+		}
+		gen := &genPackage{Node: ext.NewAt(p, g.At, g.Kind, GenLabel(dir), gdeps, nil, spec)}
 		req := []gospec.Requirement{}
 		for _, r := range g.Require {
 			req = append(req, gospec.Requirement{Path: r.Path, Version: r.Version})
 		}
 		m.spec.Generated = append(m.spec.Generated, gospec.Generated{Dir: dir, Dep: len(deps), Require: req})
 		deps = append(deps, gen)
+		for _, a := range g.Also {
+			realise(a, false)
+		}
 	}
+	for _, g := range o.Generated {
+		realise(g, true)
+	}
+	for a := range owned {
+		for b := range owned {
+			if a != b && strings.HasPrefix(b, a+"/") {
+				problems = append(problems, fmt.Sprintf("generated package %s/ is inside %s/; generated directories may not be nested", b, a))
+			}
+		}
+	}
+	slices.Sort(problems)
 	m.Node = ext.New(p, gospec.KindModule, "module", deps, nil, m.spec)
 	m.dir = m.Label().Dir
 	pos := m.DefinedAt().String()
@@ -136,6 +194,13 @@ func NewModule(p *bob.P, o ModuleOpts) *Module {
 
 // genPackage is a realised codegen recipe.
 type genPackage struct{ bob.Node }
+
+// GenLabel is the label name of the codegen package realised into dir (relative to its
+// consumer): "gen-" + dir without a leading "gen/", '/' → '-' (SPEC §03.6.1:
+// gen/proto/greet/v1 → gen-proto-greet-v1).
+func GenLabel(dir string) string {
+	return "gen-" + strings.ReplaceAll(strings.TrimPrefix(dir, "gen/"), "/", "-")
+}
 
 func checkModule(o ModuleOpts, noToolchain bool) []string {
 	var out []string

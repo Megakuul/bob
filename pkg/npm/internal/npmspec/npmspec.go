@@ -81,7 +81,27 @@ type Importer struct {
 	Kit     bool   `json:"kit,omitempty"`     // sites: SvelteKit (adapter-static)
 	DevPort int    `json:"devPort,omitempty"` // sites: bob dev
 	DevHost string `json:"devHost,omitempty"`
+
+	Generated []Generated `json:"generated,omitempty"` // codegen outputs realised into the importer (§03.6)
 }
+
+// Generated is one realised codegen recipe: Dir (importer-relative) is the output of dep Dep.
+type Generated struct {
+	Dir     string    `json:"dir"`
+	Dep     int       `json:"dep"`
+	Runtime []Runtime `json:"runtime"`
+}
+
+// Runtime is an npm package the generated code imports, pinned to the version of the
+// generator program Generator (nixpkgs attribute) by bob lock.
+type Runtime struct {
+	Name      string `json:"name"`
+	Generator string `json:"generator"`
+}
+
+// GeneratorPrefix starts the Req of a Dep that bob lock replaces by the version of the
+// nixpkgs attribute that follows (a codegen runtime, §03.6.4).
+const GeneratorPrefix = "nixpkgs:"
 
 // Runtimes of an app.
 const (

@@ -159,7 +159,7 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		if err != nil {
 			return nil, err
 		}
-		stale, err := staleSections(ctx, g, lf, f, ecos)
+		stale, err := staleSections(ctx, g, lf, f, ecos, lazyIndex(st, f, g, lf))
 		if err != nil {
 			return nil, err
 		}

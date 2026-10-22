@@ -99,10 +99,14 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 		pl.cur = n
 		var err error
 		switch n.Kind {
-		case gospec.KindBinary:
-			err = pl.planBinary(n)
-		case gospec.KindTest:
-			err = pl.planTest(n)
+		case gospec.KindBinary, gospec.KindTest:
+			if failed := pl.failedCodegen(n); len(failed) > 0 {
+				err = pl.planBlocked(n, failed)
+			} else if n.Kind == gospec.KindBinary {
+				err = pl.planBinary(n)
+			} else {
+				err = pl.planTest(n)
+			}
 		case gospec.KindModule, gospec.KindPackage, gospec.KindTests:
 			pl.out.Nodes[n.ID] = engine.Resolved{} // declarations: nothing to build of their own
 		default:
@@ -116,6 +120,42 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 		return pl.out, joinErrs(errs)
 	}
 	return pl.out, nil
+}
+
+// failedCodegen lists the codegen derivations of n's module whose output could not be built
+// while planning (engine.PlanCodegen): their Go files do not exist, so n cannot be planned.
+func (pl *planner) failedCodegen(n *ir.Node) []string {
+	var out []string
+	for _, m := range pl.mods {
+		if m.node == nil || !slices.Contains(n.Deps, m.node.ID) {
+			continue
+		}
+		for _, g := range m.spec.Generated {
+			if g.Dep < 0 || g.Dep >= len(m.node.Deps) {
+				continue
+			}
+			rv := pl.req.Inputs[m.node.Deps[g.Dep]]
+			if _, _, ok := engine.CodegenOutput(pl.req.Store, rv); !ok && rv.Drv != "" {
+				out = append(out, rv.Drv)
+			}
+		}
+	}
+	sort.Strings(out)
+	return slices.Compact(out)
+}
+
+// planBlocked plans n as a derivation that waits for the failed codegen (engine.Blocked): the
+// build reports the generator's error and skips n.
+func (pl *planner) planBlocked(n *ir.Node, failed []string) error {
+	jobs := engine.NewJobs(pl.req)
+	_, name, _ := strings.Cut(n.Label, ":")
+	dp, out, err := engine.Blocked(jobs, n.Label, drv.Name("go-blocked", name), failed)
+	if err != nil {
+		return internal(n, "%v", err)
+	}
+	pl.out.Drvs = append(pl.out.Drvs, jobs.Drvs...)
+	pl.out.Nodes[n.ID] = engine.Resolved{Drv: dp, Outputs: map[string]string{"out": out}}
+	return nil
 }
 
 // internal is an error that is bob's bug (the engine reports it as such).
@@ -324,6 +364,10 @@ func newInputs(builder string) *inputs {
 
 // add records output o of rv and returns its path.
 func (in *inputs) add(rv engine.Resolved, o string) string {
+	if c, ok := rv.Cutoff[o]; ok { // codegen early cutoff (§03.6.3): depend on the content
+		in.srcs[c] = true
+		return c
+	}
 	sp := rv.Outputs[o]
 	if rv.Drv == "" {
 		in.srcs[sp] = true

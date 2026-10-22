@@ -559,7 +559,7 @@ func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetch
 			stale("the " + name + " section is no longer used")
 		}
 	}
-	ecoStale, err := staleSections(ctx, g, lf, f, ecos)
+	ecoStale, err := staleSections(ctx, g, lf, f, ecos, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -568,14 +568,26 @@ func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetch
 
 // staleSections asks every ecosystem that records its declarations (engine.LockFreshness)
 // whether its section still matches them (R-FW-062).
-func staleSections(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetcher, ecos []engine.Ecosystem) ([]*diag.Error, error) {
+//
+// index (optional) opens the nixpkgs index: a section found stale is asked again with it, so an
+// ecosystem can explain the staleness by a pinned tool (a codegen runtime that contradicts its
+// generator, R-GEN-006) without every fresh build opening the index.
+func staleSections(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetcher, ecos []engine.Ecosystem,
+	index func(context.Context) (*nixidx.Index, error)) ([]*diag.Error, error) {
 	var out []*diag.Error
 	for _, e := range ecos {
 		lfr, ok := e.(engine.LockFreshness)
 		if !ok || lf.Sections[e.Name()] == nil {
 			continue // a missing section is locked on demand (bob build) or reported as missing
 		}
-		what, at, err := lfr.Stale(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[e.Name()], Fetch: f})
+		req := engine.LockRequest{Graph: g, Prev: lf.Sections[e.Name()], Fetch: f}
+		what, at, err := lfr.Stale(ctx, req)
+		if err == nil && what != "" && index != nil {
+			if idx, ierr := index(ctx); ierr == nil && idx != nil {
+				req.Nixpkgs = idx
+				what, at, err = lfr.Stale(ctx, req)
+			}
+		}
 		if err != nil {
 			return nil, err
 		}

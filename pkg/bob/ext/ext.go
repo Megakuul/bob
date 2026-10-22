@@ -131,6 +131,29 @@ func New(p *bob.P, kind, name string, deps []bob.Package, srcs []bob.Sources, sp
 	return n
 }
 
+// Site is a bob.go call position captured by Here, for NewAt.
+type Site struct{ s any }
+
+// Here returns the bob.go position of the call that is running now (the first stack frame in
+// a bob.go file). Codegen recipes call it in their constructor (connect.Go, graphql.Gqlgen) so
+// the package the consumer creates from them later is defined at the recipe's line (R-FW-016).
+func Here() Site {
+	if graph.Site == nil {
+		return Site{}
+	}
+	return Site{s: graph.Site()}
+}
+
+// NewAt is New with the definedAt position of at (from Here) instead of the line of the call
+// that creates the node; a zero Site, or one of another module, keeps New's position.
+func NewAt(p *bob.P, at Site, kind, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node {
+	if graph.NewNodeAt == nil {
+		return bob.Node{}
+	}
+	n, _ := graph.NewNodeAt(p, at.s, kind, name, deps, srcs, spec).(bob.Node)
+	return n
+}
+
 // NewIn is New for a package whose label directory is dir (relative to the repository or, in a
 // dependency repo, to its module root; "" is the root) instead of the directory of the calling
 // bob.go: packages an ecosystem places below the declaring definition, such as a Go binary

@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/build/testrun"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/ir"
@@ -109,7 +110,8 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 		Requested: requested, Limits: r.o.Limits}
 	c.Limits.LocalBuilds = true
 	pkgOf := func(n *ir.Node, role string) translate.Pkg {
-		pk := translate.Pkg{Label: n.Label, DefinedAt: n.DefinedAt.String(), Kind: n.Kind, Role: role}
+		pk := translate.Pkg{Label: n.Label, DefinedAt: n.DefinedAt.String(), Kind: n.Kind, Role: role,
+			Codegen: engine.IsCodegenKind(n.Kind)}
 		if len(n.Srcs) > 0 {
 			pk.SrcDir = n.Srcs[0].Dir
 		}
@@ -185,6 +187,10 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 		direct = append(direct, d)
 	}
 	sort.Strings(direct)
+	for dp := range p.builtWhilePlanning {
+		c.PreBuilt = append(c.PreBuilt, dp)
+	}
+	sort.Strings(c.PreBuilt)
 	home := p.st.Home()
 	c.ChainOf = func(target string) []string { return chainOf(home, direct, target) }
 	return c

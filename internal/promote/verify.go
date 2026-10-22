@@ -25,6 +25,10 @@ func verifyFailed(format string, args ...any) error {
 	return &verifyError{msg: fmt.Sprintf(format, args...)}
 }
 
+// VerifyFailed is a verification failure for the Images hook (the registry, M16.3): the job's
+// promotion ends Failed instead of being retried.
+func VerifyFailed(format string, args ...any) error { return verifyFailed(format, args...) }
+
 func isVerify(err error) bool {
 	var v *verifyError
 	return errors.As(err, &v)

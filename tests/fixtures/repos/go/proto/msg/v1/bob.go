@@ -8,4 +8,4 @@ import (
 )
 
 // Msg is the msg.v1 protobuf library.
-var Msg = bob.Define(func(p *bob.P) *proto.Library { return proto.Library(p, proto.LibraryOpts{}) })
+var Msg = bob.Define(func(p *bob.P) *proto.Library { return proto.NewLibrary(p, proto.LibraryOpts{}) })

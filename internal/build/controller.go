@@ -508,7 +508,7 @@ func applyReport(pipes []store.PipelineRun, result store.BuildResult, errs []sto
 		p := byName[name]
 		if !slices.ContainsFunc(pipes, func(x store.PipelineRun) bool { return x.Name == name }) {
 			pipes = append(pipes, store.PipelineRun{Name: name, State: StateRunning,
-				Concurrency: p.Concurrency, Releases: len(p.Releases) > 0})
+				Concurrency: p.Concurrency, Releases: len(p.Releases) > 0, ReleaseLabels: slices.Clone(p.Releases)})
 		}
 	}
 	for _, p := range r.Packages {
@@ -604,6 +604,16 @@ func (b *Builds) finish(ctx context.Context, rec *store.BuildRecord) (*store.Bui
 	state := StateSucceeded
 	if sel := SelectionOf(rec); sel.Event != "" && rec.Evaluated.Value() && len(rec.Pipelines.Value()) == 0 {
 		state = StateSkipped // no pipeline matched the forge event (§6.9.4)
+	}
+	if state == StateSucceeded {
+		var err error
+		if rec, err = b.release(ctx, rec); err != nil {
+			var rf *ReleaseFailure
+			if errors.As(err, &rf) {
+				return b.fail(ctx, rec, "", rf.Msg)
+			}
+			return rec, err
+		}
 	}
 	now := b.now()
 	moved := false

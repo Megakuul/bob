@@ -9,7 +9,7 @@ import (
 
 // Greeting is the greeting.v1 protobuf library (proto package greeting.v1).
 var Greeting = bob.Define(func(p *bob.P) *proto.Library {
-	return proto.Library(p, proto.LibraryOpts{})
+	return proto.NewLibrary(p, proto.LibraryOpts{})
 })
 
 // Lint runs buf lint on the library.

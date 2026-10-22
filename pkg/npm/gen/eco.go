@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -144,6 +145,9 @@ func decodeSection(raw json.RawMessage) (*lock.NpmSection, error) {
 func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMessage, error) {
 	ims, byID, err := importers(req.Graph)
 	if err != nil {
+		return nil, err
+	}
+	if err := pinRuntimes(ctx, req, ims); err != nil {
 		return nil, err
 	}
 	in, err := resolveInput(ims, byID)
@@ -292,6 +296,11 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 	if sec == nil {
 		return "", ir.Pos{}, nil
 	}
+	// A runtime pin that contradicts its generator is the R-GEN-006 error, not a stale lock.
+	var mismatch *diag.Error
+	if err := pinRuntimes(context.Background(), req, ims); errors.As(err, &mismatch) && mismatch.Code == 1021 {
+		return "", ir.Pos{}, mismatch
+	}
 	for _, im := range ims {
 		if what := staleImporter(im, byID, sec); what != "" {
 			return what, im.node.DefinedAt, nil
@@ -391,4 +400,68 @@ func validRange(req string) bool {
 func (Ecosystem) Materialises(g *ir.Graph) bool {
 	ims, _, err := importers(g)
 	return err == nil && len(ims) > 0
+}
+
+// pinRuntimes replaces the generator placeholders of codegen runtime dependencies by the
+// versions of the generators in the nixpkgs pin (§03.6.4) and checks explicit dependencies on
+// a runtime against them (R-GEN-006): a range that excludes the generator's version is
+// BOB-E-1021 before anything is resolved or built.
+func pinRuntimes(ctx context.Context, req engine.LockRequest, ims []*importer) error {
+	nodes := map[string]*ir.Node{}
+	if req.Graph != nil {
+		for _, n := range req.Graph.Nodes {
+			nodes[n.ID] = n
+		}
+	}
+	versions := map[string]string{}
+	version := func(attr string) (string, error) {
+		if v, ok := versions[attr]; ok {
+			return v, nil
+		}
+		if req.Nixpkgs == nil {
+			return "", fmt.Errorf("the version of generator %s needs the nixpkgs index", attr)
+		}
+		es, err := req.Nixpkgs.Lookup(ctx, []string{attr})
+		if err != nil {
+			return "", err
+		}
+		e := es[attr]
+		if e.Missing || e.Version == "" {
+			return "", fmt.Errorf("nixpkgs has no generator %s", attr)
+		}
+		versions[attr] = e.Version
+		return e.Version, nil
+	}
+	for _, im := range ims {
+		for _, g := range im.spec.Generated {
+			label, at := im.node.Label, im.node.DefinedAt
+			if g.Dep >= 0 && g.Dep < len(im.node.Deps) && nodes[im.node.Deps[g.Dep]] != nil {
+				gn := nodes[im.node.Deps[g.Dep]]
+				label, at = gn.Label, gn.DefinedAt
+			}
+			for _, r := range g.Runtime {
+				v, err := version(r.Generator)
+				if err != nil {
+					return fmt.Errorf("%s: %w", label, err)
+				}
+				for i, d := range im.spec.Deps {
+					if d.Alias != r.Name || d.Link >= 0 && d.Alias == "" {
+						continue
+					}
+					if strings.HasPrefix(d.Req, npmspec.GeneratorPrefix) {
+						im.spec.Deps[i].Req = v
+						continue
+					}
+					if !validRange(d.Req) || !resolve.Satisfies(v, d.Req) {
+						file := path.Join(im.dir, "bob.go")
+						if im.dir == "." {
+							file = "bob.go"
+						}
+						return engine.RuntimeMismatch(label, r.Generator, v, r.Name, v, file, d.Req, at)
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

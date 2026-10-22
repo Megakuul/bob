@@ -112,6 +112,9 @@ type Worker struct {
 	killOnce sync.Once
 	cancel   context.CancelFunc
 	revoked  bool
+	// lostJobs are jobs whose lease this worker lost (it was paused or cut off longer than the
+	// lease): their next slot is left to the other workers (see skipLost).
+	lostJobs map[string]time.Time
 	jobs     sync.WaitGroup
 	backlog  atomic.Bool // the last finished job came from a poll: poll again at once
 
@@ -161,7 +164,7 @@ func New(cfg Config) (*Worker, error) {
 		cfg.Now = time.Now
 	}
 	w := &Worker{cfg: cfg, wakes: make(chan wake, wakeBuffer), freed: make(chan struct{}, 1),
-		keys: append([]ed25519.PublicKey(nil), cfg.Keys...), running: map[string]*job{}, killed: make(chan struct{}),
+		keys: append([]ed25519.PublicKey(nil), cfg.Keys...), running: map[string]*job{}, lostJobs: map[string]time.Time{}, killed: make(chan struct{}),
 		cursor: map[string]uint64{}, seen: map[wake]bool{}}
 	for _, c := range cfg.Classes {
 		ok, err := store.Satisfies(cfg.Profile, c)
@@ -377,6 +380,9 @@ func (w *Worker) onWake(ctx context.Context, wk wake) {
 		clear(w.seen)
 	}
 	w.seen[wk] = true
+	if w.skipLost(wk.job, false) {
+		return
+	}
 	w.claim(ctx, wk.class, wk.slot, wk.job, false)
 }
 
@@ -422,11 +428,12 @@ func (w *Worker) poll(ctx context.Context, class string) error {
 	// Backlog: try one random slot in (cursor, tail) before the cursor (spread, no herd).
 	if tail, err := q.Tail(ctx); err == nil && tail > c+spreadMin {
 		r := c + 1 + w.rng.Uint64N(tail-c-1)
-		if s, err := q.Read(ctx, r); err == nil && s.Taken.Value() == "" {
+		if s, err := q.Read(ctx, r); err == nil && s.Taken.Value() == "" && !w.skipLost(s.Job.Value(), false) {
 			w.claim(ctx, class, r, s.Job.Value(), true)
 		}
 	}
 	start := c
+	var skipped uint64 // first open slot left to the other workers: the head stays below it
 	for steps := 0; steps < maxWalk && w.FreeSlots() > 0 && ctx.Err() == nil; steps++ {
 		if slot == nil {
 			slot, err = q.Read(ctx, c)
@@ -439,16 +446,61 @@ func (w *Worker) poll(ctx context.Context, class string) error {
 			}
 		}
 		if slot.Taken.Value() == "" {
-			w.claim(ctx, class, c, slot.Job.Value(), true)
+			if w.skipLost(slot.Job.Value(), true) {
+				if skipped == 0 {
+					skipped = c
+				}
+			} else {
+				w.claim(ctx, class, c, slot.Job.Value(), true)
+			}
 		}
 		c++
 		slot = nil
 	}
 	w.cursor[class] = c
-	if c > start {
-		return q.AdvanceHead(ctx, c)
+	head := c
+	if skipped != 0 {
+		head = skipped
+	}
+	if head > start {
+		return q.AdvanceHead(ctx, head)
 	}
 	return nil
+}
+
+// lostMemory bounds how long a lost lease keeps the worker off the job.
+const lostMemory = 10 * time.Minute
+
+// skipLost reports whether the open slot of jobID is left to other workers because this
+// worker lost the job's lease: a worker that was paused or cut off for longer than the lease
+// is the least healthy candidate for the retry. The walk passing the slot ends the skip
+// (passed), so a fleet without another worker still runs the job from its next slot (the
+// reconciler re-slots it after fleet.reslot_after); the head hint stays below the skipped
+// slot, so the other workers' polls still read it.
+func (w *Worker) skipLost(jobID string, passed bool) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	at, ok := w.lostJobs[jobID]
+	if !ok {
+		return false
+	}
+	if passed || w.now().Sub(at) > lostMemory {
+		delete(w.lostJobs, jobID)
+	}
+	return w.now().Sub(at) <= lostMemory
+}
+
+// noteLost remembers a job whose lease this worker lost (skipLost).
+func (w *Worker) noteLost(jobID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	now := w.now()
+	for id, at := range w.lostJobs {
+		if now.Sub(at) > lostMemory {
+			delete(w.lostJobs, id)
+		}
+	}
+	w.lostJobs[jobID] = now
 }
 
 // claim tries to take job jobID through slot seq of class (SPEC §05.6.1): CAS the job record
@@ -587,7 +639,10 @@ func (w *Worker) update(ctx context.Context, j *job, fn func(cur, next *store.Jo
 
 func (w *Worker) runJob(ctx, jctx context.Context, j *job) {
 	id, ep := j.claim.JobID, j.claim.Epoch
-	lost := func() { w.emit(Event{Kind: "lease-lost", JobID: id, Epoch: ep, Err: ErrLeaseLost}) }
+	lost := func() {
+		w.noteLost(id)
+		w.emit(Event{Kind: "lease-lost", JobID: id, Epoch: ep, Err: ErrLeaseLost})
+	}
 	pub := w.cfg.SigKey.Public().(ed25519.PublicKey)
 	ok, err := w.update(ctx, j, func(cur, next *store.JobRecord) bool {
 		switch cur.State.Value() {

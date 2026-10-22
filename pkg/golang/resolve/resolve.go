@@ -352,7 +352,7 @@ func (r *resolver) loadPackages(ctx context.Context, s *state, wsByPath map[stri
 			if w.Path != s.ws.Path {
 				s.wsDeps[w.Path] = true
 			}
-			if contains(w.Generated, k.ip) {
+			if generated(w.Generated, k.ip) {
 				for _, m := range w.GenRequire {
 					genMods[m.Path] = true
 				}

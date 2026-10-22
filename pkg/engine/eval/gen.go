@@ -51,15 +51,38 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 		}
 		f := own[d]
 		imports = append(imports, relImport(rootMod.module, d))
-		if f.pkg != "main" {
-			continue
-		}
-		// A main package cannot be imported: the evaluator sees a copy whose package clause is
-		// renamed on the same line, so positions stay the same.
-		rn := "rename/" + strconv.Itoa(n) + ".go"
-		renamed, err := renamePackage(f, "bobmain"+strconv.Itoa(n))
+		// Imports of bob.go packages by the path of a Go module of this repository
+		// (example.com/tools) name the same package as the root module's path of its
+		// directory, which the evaluator compiles: the evaluator sees a copy with the import
+		// rewritten on the same line, so line positions stay the same.
+		rewritten, err := rewriteImports(f, func(p string) (string, bool) {
+			if p == rootMod.module || strings.HasPrefix(p, rootMod.module+"/") {
+				return "", false
+			}
+			dir, ok := ownDirOf(rootMod.module, s.nested, p)
+			if !ok {
+				return "", false
+			}
+			return relImport(rootMod.module, dir), true
+		})
 		if err != nil {
 			return nil, err
+		}
+		if f.pkg != "main" && rewritten == nil {
+			continue
+		}
+		rn := "rename/" + strconv.Itoa(n) + ".go"
+		renamed := rewritten
+		if f.pkg == "main" {
+			// A main package cannot be imported: the evaluator sees a copy whose package clause
+			// is renamed on the same line, so positions stay the same.
+			src := *f
+			if rewritten != nil {
+				src.src = rewritten // the package clause precedes the imports: its offset holds
+			}
+			if renamed, err = renamePackage(&src, "bobmain"+strconv.Itoa(n)); err != nil {
+				return nil, err
+			}
 		}
 		g.files[rn] = renamed
 		g.renames[path.Join(genDir, rn)] = f.shown
@@ -139,6 +162,47 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 // sandboxPath is a repo-relative path inside the sandbox.
 func sandboxPath(elem ...string) string {
 	return path.Join(append([]string{srcDir}, elem...)...)
+}
+
+// rewriteImports returns f's source with every import path that to maps replaced (the string
+// literal only, so lines do not move), or nil when no import changes.
+func rewriteImports(f *bobFile, to func(string) (string, bool)) ([]byte, error) {
+	if f.file == nil {
+		return nil, nil
+	}
+	type edit struct {
+		off, end int
+		lit      string
+	}
+	var edits []edit
+	for _, imp := range f.file.Imports {
+		p, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue
+		}
+		np, ok := to(p)
+		if !ok {
+			continue
+		}
+		off := f.fset.Position(imp.Path.Pos()).Offset
+		end := off + len(imp.Path.Value)
+		if off < 0 || end > len(f.src) || string(f.src[off:end]) != imp.Path.Value {
+			return nil, fmt.Errorf("%s: import %s not found", f.shown, imp.Path.Value)
+		}
+		edits = append(edits, edit{off, end, strconv.Quote(np)})
+	}
+	if len(edits) == 0 {
+		return nil, nil
+	}
+	var b bytes.Buffer
+	last := 0
+	for _, e := range edits { // in source order
+		b.Write(f.src[last:e.off])
+		b.WriteString(e.lit)
+		last = e.end
+	}
+	b.Write(f.src[last:])
+	return b.Bytes(), nil
 }
 
 // renamePackage returns f's source with the package clause's name replaced by name, in place:

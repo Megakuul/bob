@@ -99,8 +99,8 @@ func TestRGEN001aProtoSyntaxError(t *testing.T) {
 	if !ok {
 		return
 	}
-	// Lines 7-9 become "message GreetRequest {}", an empty line and a stray "}" on line 9.
-	ecotest.ReplaceIn(t, fixtureFile(dir, "proto/greet/v1/greet.proto"), "message GreetRequest {\n  string name = 1;\n}", "message GreetRequest {}\n\n}")
+	// S6 fault F1: the field on line 8 loses its ";", so buf stops at the "}" on line 9.
+	ecotest.ReplaceIn(t, fixtureFile(dir, "proto/greet/v1/greet.proto"), "  string name = 1;\n}", "  string name = 1\n}")
 	line := lineOf(t, fixtureFile(dir, "svc/bob.go"), "connect.Go(")
 	r := ecotest.BobEnv(t, dir, env, "build", "//svc:gen-proto-greet-v1")
 	if harness.Red(t, r) {
@@ -113,7 +113,9 @@ func TestRGEN001aProtoSyntaxError(t *testing.T) {
 	if !strings.Contains(r.Stderr, want) {
 		t.Errorf("stderr lacks %q:\n%s", want, r.Stderr)
 	}
-	if !strings.Contains(r.Stderr, "│ proto/greet/v1/greet.proto:9:1:unexpected '}' after definition") {
+	// buf 1.73 (the pin's) quotes with backticks; excerpt lines start with "|" (§02.5 rule 2;
+	// "│" only on a terminal).
+	if !strings.Contains(r.Stderr, "| proto/greet/v1/greet.proto:9:1:unexpected `}` after definition") {
 		t.Errorf("stderr lacks the buf message:\n%s", r.Stderr)
 	}
 	golden.Assert(t, "tests/goldens/gen/proto-syntax-error.txt", []byte(r.Stderr), golden.Human(), golden.Reqs("R-GEN-001a"))

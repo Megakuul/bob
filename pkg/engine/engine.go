@@ -46,9 +46,12 @@ type LockRequest struct {
 // PlanRequest asks an ecosystem for the derivations of its nodes. Plan must be deterministic
 // and run no processes.
 type PlanRequest struct {
-	Graph   *ir.Graph
-	Nodes   []*ir.Node          // this ecosystem's nodes (by kind prefix "<name>.")
-	Lock    json.RawMessage     // this ecosystem's section
+	Graph *ir.Graph
+	Nodes []*ir.Node      // this ecosystem's nodes (by kind prefix "<name>.")
+	Lock  json.RawMessage // this ecosystem's section
+	// Locks are all sections of bob.lock by key (read-only): a code generator that loads the
+	// consumer's packages reads the consumer's section (gqlgen, the Go build list, §03.6.2).
+	Locks   map[string]json.RawMessage
 	Inputs  map[string]Resolved // node id → resolved deps: drv paths/outputs, store paths, LinkInfo
 	Sources map[string]string   // node id → imported source store path (R-NIX-009)
 	Nixpkgs *nixidx.Index
@@ -87,6 +90,10 @@ type Resolved struct {
 	Outputs     map[string]string // output name → store path
 	LinkInfo    *bob.LinkInfo
 	MainProgram string
+	// Cutoff maps an output name to a content-addressed copy of that output (codegen early
+	// cutoff, §03.6.3): consumers depend on that store path (an input source) instead of on
+	// Drv, so a byte-identical regeneration rebuilds nothing downstream. Nil for most nodes.
+	Cutoff map[string]string
 }
 
 // GeneratedFile is one native tooling file an ecosystem writes (§03.0.2). bob writes it with

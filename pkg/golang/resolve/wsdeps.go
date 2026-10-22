@@ -56,7 +56,7 @@ func WorkspaceDeps(wss []Workspace) (map[string][]string, error) {
 			if w.Path != s.Path {
 				deps[w.Path] = true
 			}
-			if w.Dir == "" || contains(w.Generated, ip) {
+			if w.Dir == "" || generated(w.Generated, ip) {
 				continue
 			}
 			pi, err := readImports(diskDir(filepath.Join(w.Dir, filepath.FromSlash(strings.TrimPrefix(strings.TrimPrefix(ip, w.Path), "/")))))
@@ -70,4 +70,15 @@ func WorkspaceDeps(wss []Workspace) (map[string][]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// generated reports whether ip is inside one of the generated package trees gens (a codegen
+// output may hold several packages, e.g. greetv1 and greetv1/greetv1connect).
+func generated(gens []string, ip string) bool {
+	for _, g := range gens {
+		if ip == g || strings.HasPrefix(ip, g+"/") {
+			return true
+		}
+	}
+	return false
 }

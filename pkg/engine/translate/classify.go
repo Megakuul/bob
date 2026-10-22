@@ -48,6 +48,13 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 	if p.Kind == "fetch" && p.Role == "" {
 		return t.fetchFailed(drv, p, lines)
 	}
+	if p.Codegen && p.Role == "" {
+		// R-GEN-001a: the generator's own messages; its inputs are laid out at their repository
+		// paths, so they already name repository files.
+		e := t.pkgErr(cBuildFailed, drv, map[string]string{"phase": "codegen"})
+		e.Excerpt = lastN(plainLog(lines), 10)
+		return e
+	}
 	if p.Role == "unpack" {
 		e := t.pkgErr(cBuildFailed, drv, nil)
 		e.Cause = "unpacking the download failed"
@@ -118,13 +125,7 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 	}
 	e := t.pkgErr(cBuildFailed, drv, nil)
 	e.Cause = "the build step exited with status " + exit
-	var tail []string
-	for _, l := range lines {
-		if !reBobBuilder().MatchString(l) {
-			tail = append(tail, l)
-		}
-	}
-	e.Excerpt = lastN(tail, 10)
+	e.Excerpt = lastN(plainLog(lines), 10)
 	return e
 }
 

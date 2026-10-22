@@ -50,12 +50,18 @@ func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, loca
 		sel[bm.Path] = bm.Version
 	}
 	isDirect := map[string]bool{}
-	for i, r := range direct {
-		isDirect[r.Path] = true
+	var kept []gospec.Requirement
+	for _, r := range direct {
 		if v := sel[r.Path]; v != "" {
-			direct[i].Version = v // bob lock --update or a dependency moved it up
+			r.Version = v // bob lock --update or a dependency moved it up
 		}
+		if strings.HasPrefix(r.Version, generatorPrefix) {
+			continue // a generator runtime bob lock has not resolved yet
+		}
+		isDirect[r.Path] = true
+		kept = append(kept, r)
 	}
+	direct = kept
 	var indirect []gospec.Requirement
 	for _, r := range resolve.Roots(buildList, declared, packages) {
 		if !isDirect[r.Path] {

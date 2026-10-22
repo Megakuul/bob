@@ -309,6 +309,7 @@ func chaos(t *testing.T, leader bool) {
 		return
 	}
 	l.clk = realClock()
+	l.q.Now = l.clk.Now // newLab bound the queue to the injected clock it replaced
 	const jobs, nWorkers = 300, 20
 	const ttl, skew, interval = 3 * time.Second, time.Second, time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)

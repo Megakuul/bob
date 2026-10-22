@@ -28,6 +28,7 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	if err := buildParts(ctx, env, &parts, f, fw, pw); err != nil { // build controller, BuildService, JobService (I-B11)
 		return parts, err
 	}
+	registryParts(ctx, env, &parts, fw) // OCI registry, releases, image promotion, release hook (I-B18; last)
 	return parts, nil
 }
 

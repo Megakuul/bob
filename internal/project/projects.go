@@ -70,6 +70,8 @@ var (
 	ErrExists   = errors.New("project already exists")
 	ErrConflict = errors.New("the project was changed by someone else (etag mismatch); reload and retry")
 	ErrRunning  = errors.New("the project has builds that have not finished; cancel them first")
+	// ErrReleases: DeleteProject is refused while the project has releases (R-STORE-007).
+	ErrReleases = errors.New("the project has releases; delete them first (releases are never removed with their project)")
 )
 
 // InvalidError is a request the caller must fix; Field is the protojson path.
@@ -435,6 +437,11 @@ func (p *Projects) Delete(ctx context.Context, id, etag string) error {
 				return ErrRunning
 			}
 		}
+	}
+	if live, err := store.HasLiveReleases(ctx, p.cfg.Control, id); err != nil {
+		return err
+	} else if live {
+		return ErrReleases
 	}
 	if cur.Slot.Value() > 0 {
 		hidden := entryOf(cur, true, p.now())

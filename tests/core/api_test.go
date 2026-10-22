@@ -309,6 +309,8 @@ func checkSurface(t *testing.T, dir, rel string) (missingExamples []string) {
 var specSharedResults = map[string]map[string][]string{
 	"pkg/cc":   {"*Library": {"SharedLibrary", "StaticLibrary"}},
 	"pkg/rust": {"*Lib": {"Library", "ProcMacro"}, "*CLib": {"CDylib", "StaticLib"}},
+	// §03.6.1: proto.Lint and proto.Breaking are both "check packages" returning *proto.Check.
+	"pkg/proto": {"*Check": {"Breaking", "Lint"}},
 }
 
 func specShared(rel, ret string, names []string) bool {

@@ -100,6 +100,11 @@ var (
 	// NewNodeIn is NewNode with the label directory dir (repository- or module-relative)
 	// instead of the calling bob.go's directory.
 	NewNodeIn func(p any, kind, dir, name string, deps, srcs, spec any) any
+	// NewNodeAt is NewNode with the definedAt position taken from site (a value Site
+	// returned) instead of the call that creates the node.
+	NewNodeAt func(p any, site any, kind, name string, deps, srcs, spec any) any
+	// Site returns the bob.go position of the running call (an opaque value for NewNodeAt).
+	Site func() any
 	// ConfigOf returns the configuration of n, a *bob.Node.
 	ConfigOf func(n any) Config
 	// Misuse records a definition error caused by a constructor (for example reading an axis

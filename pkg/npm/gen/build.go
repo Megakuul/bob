@@ -32,6 +32,18 @@ func (pl *planner) workspace(n *ir.Node, im *importer, pi *platInfo, srcIDs []st
 		}
 		steps = append(steps, step{Op: "copy", From: from, Path: work})
 	}
+	// Codegen outputs (§03.6): the owned directories are not part of the sources (their
+	// .gitignore excludes them), the generated files come from the codegen packages.
+	for _, g := range im.spec.Generated {
+		if g.Dep < 0 || g.Dep >= len(im.node.Deps) {
+			return nil, "", internal(n, "generated output %s names no dependency", g.Dir)
+		}
+		rv, ok := pl.req.Inputs[im.node.Deps[g.Dep]]
+		if !ok || (rv.Outputs["out"] == "" && rv.Cutoff["out"] == "") {
+			return nil, "", internal(n, "generated output %s is not planned", g.Dir)
+		}
+		steps = append(steps, step{Op: "copy", From: in.add(rv, "out"), Path: work + "/" + g.Dir})
+	}
 	nm, err := pl.nodeModules(n, im, pi)
 	if err != nil {
 		return nil, "", err

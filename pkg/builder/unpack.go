@@ -289,9 +289,6 @@ func (u *unpacker) rel(name string) (string, bool, error) {
 			return "", false, fmt.Errorf("%s: path through a symlink or file", name)
 		}
 	}
-	if k := u.kinds[rel]; k != 0 && k != kDir {
-		return "", false, fmt.Errorf("%s: duplicate entry", name)
-	}
 	return rel, true, nil
 }
 
@@ -302,8 +299,12 @@ func (u *unpacker) dir(name string) error {
 	if err != nil || !ok {
 		return err
 	}
-	if u.kinds[rel] == kDir {
+	switch u.kinds[rel] {
+	case kDir:
 		return nil
+	case 0:
+	default:
+		return fmt.Errorf("%s: duplicate entry", name)
 	}
 	u.kinds[rel] = kDir
 	return u.c.MkdirAll(u.abs(rel))
@@ -319,6 +320,12 @@ func (u *unpacker) file(name string, exec bool, r io.Reader, size int64) error {
 	}
 	if u.kinds[rel] == kDir || size < 0 {
 		return fmt.Errorf("%s: invalid entry", name)
+	}
+	// A regular file may repeat (agent-base 7.1.4 has package/dist/index.js and
+	// package/./dist/index.js): the last entry wins, as with tar and npm. Replacing a symlink
+	// is refused: the write could go through it.
+	if u.kinds[rel] == kSymlink {
+		return fmt.Errorf("%s: duplicate entry", name)
 	}
 	u.total += size
 	if u.total > maxUnpacked {
@@ -343,7 +350,7 @@ func (u *unpacker) symlink(name, target string) error {
 	if t := path.Join(path.Dir(rel), target); t == ".." || strings.HasPrefix(t, "../") {
 		return fmt.Errorf("%s: symlink pointing outside the archive", name)
 	}
-	if u.kinds[rel] == kDir {
+	if u.kinds[rel] != 0 {
 		return fmt.Errorf("%s: duplicate entry", name)
 	}
 	u.kinds[rel] = kSymlink
@@ -356,6 +363,9 @@ func (u *unpacker) hardlink(name, link string) error {
 	target, ok, err := u.clean(link)
 	if err != nil || !ok || u.kinds[target] != kFile {
 		return errors.Join(fmt.Errorf("%s: hard link to a missing or non-regular entry", name), err)
+	}
+	if self, ok, _ := u.clean(name); ok && self == target {
+		return nil // a link to itself: copying would truncate the file it reads
 	}
 	src := u.abs(target)
 	fi, err := os.Lstat(src)

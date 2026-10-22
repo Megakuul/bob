@@ -365,6 +365,10 @@ func (pl *planner) newInputs() *inputs {
 
 // add records output o of rv and returns its path.
 func (in *inputs) add(rv engine.Resolved, o string) string {
+	if c, ok := rv.Cutoff[o]; ok { // codegen early cutoff (§03.6.3): depend on the content
+		in.srcs[c] = true
+		return c
+	}
 	sp := rv.Outputs[o]
 	if rv.Drv == "" {
 		in.srcs[sp] = true

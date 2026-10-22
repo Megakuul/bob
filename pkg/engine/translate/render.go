@@ -182,6 +182,16 @@ func definitionLine(e *diag.Error) (string, bool) {
 			return "cannot resolve opam packages: " + e.Args["reason"], true
 		}
 		return "", false
+	case cBuildFailed: // R-GEN-001a: a code generator failed
+		if e.Args["phase"] == "codegen" {
+			return fmt.Sprintf("%s code generation failed (defined at %s:%d)", e.Args["label"], e.DefinedAt.File, e.DefinedAt.Line), true
+		}
+		return "", false
+	case 1021: // R-GEN-006: a generator's runtime contradicts an explicit pin (§03.6.4)
+		if e.Args["runtime"] != "" && e.Args["reason"] != "" {
+			return e.Args["label"] + ": " + e.Args["reason"], true
+		}
+		return "", false
 	case cScriptDenied: // §03.4.4 runtime translations
 		return fmt.Sprintf("%s needs its %s script (%s). Add npm.AllowScripts(%q) to %s",
 			e.Args["package"], e.Args["script"], e.Args["reason"], e.Args["package"], e.Args["label"]), true
