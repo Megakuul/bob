@@ -24,3 +24,10 @@ DONE R-FLEET-003 → tests/store/fleet/lease_test.go::TestRFLEET003{LeaseAndRequ
 DONE R-FLEET-012 → tests/store/fleet/dispatch_test.go::TestRFLEET012{WakeLatency,PollingOnlyLatency,SelectionPolicy,NoHerdAndNoDoubleClaim,BacklogSpread}
 DONE R-FLEET-009 → tests/store/fleet/budget_test.go::TestRFLEET009RequestBudgetPerJob
 DONE R-FLEET-010 → budget_test.go::TestRFLEET010IdleRequestMix + idle_slow_test.go (slow tag, 100 workers x 10 min)
+DONE R-FLEET-002 → tests/store/fleet/identity_test.go::TestRFLEET002{Registration,TokenLifecycle,ConcurrentRegistrars,RegistrationBacklog,ForgedResultsAndSpecs,AttachIsolation} (S11's 31 checks: 19 behaviours of docs/spikes/s11 §3.4 ported)
+DONE R-FLEET-001(part) → identity_test.go::TestRFLEET002ConcurrentRegistrars; e2e p99 pending
+DONE R-FLEET-006 → tests/store/fleet/checkout_test.go::TestRFLEET006{CheckoutOnlyForTheHeldJob,RevokedAtJobEndAndExpiry} (live Forgejo bullets: forge-forgejo-live, T6b)
+DONE R-FLEET-001 → tests/store/fleet/e2e_test.go::TestRFLEET001ZeroSetupRegistration
+DONE R-FLEET-008/R-SEC-000 → e2e_test.go::TestRFLEET008{WorkerRefusesNonRoot,WorkerRefusesWithoutCgroupV2,BuildsAreIsolated}
+DONE R-FLEET-013 → e2e_test.go::TestRFLEET013ConcurrentJobsShareOneStore
+ALL DONE 2026-10-22: 28 R-ids covered, SEC-101 manual. go vet/lint/layering/parity ok for T5a packages.
