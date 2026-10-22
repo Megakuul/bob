@@ -28,3 +28,5 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    concatenation; the fuzz tokens `a\..\b` and `\x00` make the JSON invalid for every
    implementation (seed 16). Fix: build the job with `raw(t, map[string]string{"path": path()})`
    (proper JSON encoding). Evidence: plan/progress/I-M4a.md.
+7. A73 `pkg/layering_test.go` mayImport: E3 (`pkg/engine/translate` produces `pkg/bob/diag` errors)
+   may import L0: `mayImport[e3] = {e0, e1, e2, l0}`. SPEC R-ARCH-003 E3 row already updated.

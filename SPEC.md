@@ -399,7 +399,7 @@ Expected from other sections:
 | E0 engine primitives | `pkg/engine/drv`, `pkg/engine/nar`, `pkg/engine/ir` | L0 | **no** |
 | E1 engine services | `pkg/engine/store`, `pkg/engine/fetch`, `pkg/engine/lock`, `pkg/engine/nixidx`, `pkg/engine/srcs` | E0, L0; `golang.org/x/sys`, `github.com/klauspost/compress`, `github.com/ulikunitz/xz` | no |
 | E2 generators | `pkg/<eco>/gen` (one per L2/L3 package, implements `engine.Ecosystem`), `pkg/engine` (registry, types) | E0, E1, L0–L3 types | no |
-| E3 orchestration | `pkg/engine/eval`, `pkg/engine/build`, `pkg/engine/translate` | E0–E2 | no |
+| E3 orchestration | `pkg/engine/eval`, `pkg/engine/build`, `pkg/engine/translate` | E0–E2, L0 | no |
 | builder | `pkg/builder`, `pkg/builder/bspec`, `pkg/<eco>/bop` | E0, `bspec` | no (runs in Nix builds) |
 | glue | `cmd/bob`, `pkg/cli` (§02) | everything in `pkg/` | no |
 
