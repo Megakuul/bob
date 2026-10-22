@@ -22,30 +22,40 @@ func HookURL(baseURL, id string) string {
 	return strings.TrimSuffix(baseURL, "/") + "/hooks/" + id
 }
 
+// Linked is the outcome of LinkRepo.
+type Linked struct {
+	Repo forge.Repo
+	// HookErr is why bob's webhook could not be ensured (e.g. Forgejo serves hooks only to
+	// repository admins). The link stands; pushes trigger nothing until the hook exists, and
+	// ProjectService reports it.
+	HookErr error
+}
+
 // LinkRepo links repository fullName of integration forgeID to project (ProjectService,
 // R-PIPE-002): it resolves the repository at the forge, ensures bob's webhook on it (an
 // app-level GitHub hook needs none), and writes the link: the integration's Repos entry first
 // (intent-first, R-SRV-101), then the create-only link record. A repository linked to another
 // project is ErrLinked.
-func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, baseURL string) (forge.Repo, error) {
+func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, baseURL string) (Linked, error) {
 	rec, a, err := r.Adapter(ctx, forgeID)
 	if err != nil {
-		return forge.Repo{}, err
+		return Linked{}, err
 	}
 	repo, err := a.LookupRepo(ctx, fullName)
 	r.Report(ctx, forgeID, err)
 	if err != nil {
-		return forge.Repo{}, err
+		return Linked{}, err
 	}
 	if p, ok := rec.Repos[strconv.FormatInt(repo.ID, 10)]; ok && p != project {
 		if _, err := store.Get(ctx, r.Control, RepoLinkKey(forgeID, repo.ID)); err == nil {
-			return forge.Repo{}, fmt.Errorf("%w (project %s)", ErrLinked, p)
+			return Linked{}, fmt.Errorf("%w (project %s)", ErrLinked, p)
 		}
 	}
-	err = a.EnsureWebhook(ctx, repo, HookURL(baseURL, forgeID), forge.NewSecret(rec.Secret))
-	r.Report(ctx, forgeID, err)
-	if err != nil && !errors.Is(err, forge.ErrUnsupported) {
-		return forge.Repo{}, err
+	var hookErr error
+	if err := a.EnsureWebhook(ctx, repo, HookURL(baseURL, forgeID), forge.NewSecret(rec.Secret)); err != nil && !errors.Is(err, forge.ErrUnsupported) {
+		hookErr = err
+		r.log().Warn("forge: webhook not ensured; the repository is linked but pushes trigger nothing", "integration", forgeID,
+			"repository", repo.FullName, "err", err)
 	}
 	rid := strconv.FormatInt(repo.ID, 10)
 	if _, err := store.CAS(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
@@ -66,7 +76,7 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 		}
 		return cur, nil
 	}); err != nil {
-		return forge.Repo{}, err
+		return Linked{}, err
 	}
 	link := RepoLinkKey(forgeID, repo.ID)
 	link.Project, link.FullName, link.CloneURL, link.Created = project, repo.FullName, repo.CloneURL, r.now().UTC()
@@ -74,12 +84,12 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 	if errors.Is(err, store.ErrExists) {
 		cur, gerr := store.Get(ctx, r.Control, RepoLinkKey(forgeID, repo.ID))
 		if gerr == nil && cur.Project == project {
-			return repo, nil
+			return Linked{Repo: repo, HookErr: hookErr}, nil
 		}
-		return forge.Repo{}, ErrLinked
+		return Linked{}, ErrLinked
 	}
 	if err != nil {
-		return forge.Repo{}, err
+		return Linked{}, err
 	}
 	// The Repos entry may still name a stale project of a crashed link; make it this one.
 	_, err = store.CAS(ctx, r.Control, ForgeKey(forgeID), func(cur *ForgeRecord) (*ForgeRecord, error) {
@@ -89,7 +99,7 @@ func (r *Registry) LinkRepo(ctx context.Context, forgeID, fullName, project, bas
 		cur.Repos[rid] = project
 		return cur, nil
 	})
-	return repo, err
+	return Linked{Repo: repo, HookErr: hookErr}, err
 }
 
 // UnlinkRepo removes the link of repository repoID (project deletion or relinking): the link
@@ -126,4 +136,21 @@ func (r *Registry) Link(ctx context.Context, forgeID string, repoID int64) (*Rep
 		return nil, ErrNotLinked
 	}
 	return link, err
+}
+
+// SetStatus writes a commit status on linked repository repoID of integration forgeID with the
+// integration's credentials (the status controller, §6.9.4); ErrAuth also marks the
+// integration AUTH_FAILED. Status credentials never leave the orchestrator.
+func (r *Registry) SetStatus(ctx context.Context, forgeID string, repoID int64, s forge.Status) error {
+	link, err := r.Link(ctx, forgeID, repoID)
+	if err != nil {
+		return err
+	}
+	rec, a, err := r.Adapter(ctx, forgeID)
+	if err != nil {
+		return err
+	}
+	err = a.SetStatus(ctx, forge.Repo{Forge: forge.Kind(rec.Kind), ID: repoID, FullName: link.FullName, CloneURL: link.CloneURL}, s)
+	r.Report(ctx, forgeID, err)
+	return err
 }

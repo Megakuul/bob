@@ -65,6 +65,10 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
+15. A101 `tests/cache/big_slow_test.go` `assertNoDanglingReferences` requires a bob narinfo for every
+   reference, but references to skipped cache.nixos.org paths (R-REG-005) have none by design:
+   restrict the check to references that are not skipped nixpkgs paths (or to a fixture whose
+   closure has no nixpkgs references). Evidence plan/progress/I-B9.md.
 14. A97 (evidence plan/progress/I-B2.md TEST PROBLEM): (a) `TestRFLEET003Reslot`: `newLab` builds the
    Queue without a clock, so Enqueue stamps wall-clock time while the reconciler runs on the test's
    fixed clock; add `Now: l.clk.Now` in `newLab` (the optional `Queue.Now` exists); (b)

@@ -80,10 +80,10 @@ type Package struct {
 // Test is the spec of a go.test node: the tests of the package in Dir.
 type Test struct {
 	Build
-	Dir      string    `json:"dir"`
-	Args     []string  `json:"args"`
+	Dir      string        `json:"dir"`
+	Args     []string      `json:"args"`
 	Services []ext.Service `json:"services"`
-	TimeoutS int64     `json:"timeoutSeconds"`
+	TimeoutS int64         `json:"timeoutSeconds"`
 }
 
 // Tests is the spec of a go.tests node; its deps are its units.

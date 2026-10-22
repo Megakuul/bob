@@ -9,7 +9,6 @@ import (
 	"go/build"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -307,10 +306,6 @@ type buildCtx struct {
 	tc           *toolchain // the closure's toolchain (the main module's)
 }
 
-func (c buildCtx) key() string {
-	return strings.Join([]string{c.goos, c.goarch, strings.Join(c.tags, ","), fmt.Sprint(c.cgo), c.tc.out}, "|")
-}
-
 // goContext is the go/build context of c: the target, the build tags, the toolchain's
 // release tags (go1.1 … go1.<minor>), cgo; bob.go files are excluded by not setting "bob".
 func (c buildCtx) goContext() build.Context {
@@ -571,14 +566,6 @@ func sortedUnique(s []string) []string {
 	out := slices.Clone(s)
 	sort.Strings(out)
 	return slices.Compact(out)
-}
-
-// relPath is p relative to the module root, "" for the root.
-func relPath(p string) string {
-	if p == "." {
-		return ""
-	}
-	return path.Clean(p)
 }
 
 // sriHex turns "sha256-<base64>" into lowercase hex.

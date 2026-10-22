@@ -44,7 +44,7 @@ type Package struct {
 	Name       string `json:"name"` // package name (cgo -dynpackage)
 	// Flags are the planner's compile flags: "-p <path>" ("main" for commands) and -lang.
 	Flags []string `json:"flags"`
-	Dir        string `json:"dir"`  // source directory ("" = the work directory)
+	Dir   string   `json:"dir"` // source directory ("" = the work directory)
 	// Write holds generated sources (the test main): file name → content, written to the
 	// package's work directory; GoFiles names them relative to it when Dir is "".
 	Write     map[string]string `json:"write,omitempty"`

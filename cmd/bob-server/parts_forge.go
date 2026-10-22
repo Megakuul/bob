@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"github.com/megakuul/bob/internal/fleetsrv"
 	"github.com/megakuul/bob/internal/forge/integration"
@@ -35,7 +36,7 @@ func forgeParts(env *server.Env, parts *server.OrchestratorParts) *forgeWiring {
 	parts.Services.Forge = &integration.Service{Registry: reg, BaseURL: env.Config.BaseURL}
 	parts.Services.Notify = notify.Service{N: w.Notifier}
 	if parts.Routes == nil {
-		parts.Routes = map[string]httpHandler{}
+		parts.Routes = map[string]http.Handler{}
 	}
 	parts.Routes[integration.HookPattern] = w.Intake
 

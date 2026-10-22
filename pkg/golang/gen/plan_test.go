@@ -11,11 +11,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/megakuul/bob/pkg/builder/bspec"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/srcs"
+	"github.com/megakuul/bob/pkg/golang/bop"
 	"github.com/megakuul/bob/pkg/golang/internal/gospec"
 )
 
@@ -105,10 +107,10 @@ func testRequest(t *testing.T, root string, g *ir.Graph, st engine.PlanStore) en
 func testRepo(t *testing.T) string {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"m/lib/a/a.go":      "package a\n\nimport \"strings\"\n\nfunc Up(s string) string { return strings.ToUpper(s) }\n",
-		"m/lib/a/a_test.go": "package a\n\nimport \"testing\"\n\nfunc TestUp(t *testing.T) {}\n\nfunc Example() {\n\t// Output:\n}\n",
-		"m/lib/a/x_test.go": "package a_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/lib/a\"\n)\n\nfunc TestX(t *testing.T) { _ = a.Up(\"x\") }\n",
-		"m/cmd/x/main.go":   "package main\n\nimport (\n\t_ \"embed\"\n\t\"fmt\"\n\n\t\"example.com/m/lib/a\"\n)\n\n//go:embed banner.txt\nvar banner string\n\nvar version = \"dev\"\n\nfunc main() { fmt.Println(a.Up(banner), version) }\n",
+		"m/lib/a/a.go":       "package a\n\nimport \"strings\"\n\nfunc Up(s string) string { return strings.ToUpper(s) }\n",
+		"m/lib/a/a_test.go":  "package a\n\nimport \"testing\"\n\nfunc TestUp(t *testing.T) {}\n\nfunc Example() {\n\t// Output:\n}\n",
+		"m/lib/a/x_test.go":  "package a_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/lib/a\"\n)\n\nfunc TestX(t *testing.T) { _ = a.Up(\"x\") }\n",
+		"m/cmd/x/main.go":    "package main\n\nimport (\n\t_ \"embed\"\n\t\"fmt\"\n\n\t\"example.com/m/lib/a\"\n)\n\n//go:embed banner.txt\nvar banner string\n\nvar version = \"dev\"\n\nfunc main() { fmt.Println(a.Up(banner), version) }\n",
 		"m/cmd/x/banner.txt": "hi\n",
 		"m/cmd/x/notes.md":   "not a source\n",
 	})
@@ -243,4 +245,44 @@ func jobJSON(t *testing.T, d *drv.Derivation) string {
 func hostPlatformName() string {
 	goos, goarch := hostGo()
 	return goos + "-" + goarch
+}
+
+// TestJobsDecode decodes every job the planner writes with bob-builder's own types, strictly:
+// the generator cannot import the builder layer (R-ARCH-003), so this test keeps the two in
+// step.
+func TestJobsDecode(t *testing.T) {
+	res, err := Ecosystem{}.Plan(context.Background(), testRequest(t, testRepo(t), testGraph(t), &fakeStore{}))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	for _, d := range res.Drvs {
+		spec, _ := d.Structured["bobSpec"].(map[string]any)
+		kind, _ := spec["kind"].(string)
+		raw, err := json.Marshal(spec["args"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v any
+		switch kind {
+		case "go-std":
+			v = &bop.StdArgs{}
+		case "go-tools":
+			v = &bop.ToolsArgs{}
+		case "go-compile", "go-cgo", "go-link", "go-testmain":
+			v = &bop.BuildArgs{}
+		case "test-run":
+			v = &bspec.TestRunArgs{}
+		default:
+			t.Errorf("%s: unknown kind %q", d.Name, kind)
+			continue
+		}
+		dec := json.NewDecoder(strings.NewReader(string(raw)))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(v); err != nil {
+			t.Errorf("%s (%s): %v\n%s", d.Name, kind, err, raw)
+		}
+		if _, ok := bop.Kinds()[kind]; !ok && kind != "test-run" {
+			t.Errorf("%s: bob-builder has no kind %s", d.Name, kind)
+		}
+	}
 }

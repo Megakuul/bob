@@ -183,7 +183,13 @@ func (pl *planner) planTest(n *ir.Node) error {
 		Write: map[string]string{"_testmain.go": main}, GoFiles: []string{"_testmain.go"}, Imports: mainImports,
 		Trim: "_testmain", Out: mainArchive})
 	pack := ""
-	if res.packD != nil && (under.cgo() || len(bp.SFiles)+len(bp.SysoFiles) > 0) {
+	if under.cgo() || len(bp.SFiles)+len(bp.SysoFiles) > 0 {
+		if res.packD == nil {
+			if res.packDrv, res.packD, err = pl.tools(cl.ctx, t.system); err != nil {
+				return internal(n, "%v", err)
+			}
+			res.pack = outPath(res.packD) + "/bin/pack"
+		}
 		in.addDrv(res.packD, res.packDrv)
 		pack = res.pack
 	}

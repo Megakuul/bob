@@ -21,6 +21,7 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	if _, err := fleetParts(ctx, env, &parts, cs, live); err != nil {
 		return parts, err
 	}
+	forgeParts(env, &parts) // forges, /hooks/, checkout minter, notifications (after fleetParts)
 	return parts, nil
 }
 
