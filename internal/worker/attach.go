@@ -217,10 +217,15 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 			if w := p.cur.Load(); w != nil {
 				w.CheckJob(x.CancelJob.GetJobId())
 			}
+		case *workerv1.AttachResponse_Drain:
+			if w := p.cur.Load(); w != nil {
+				w.SetDraining(x.Drain.GetDrain())
+			}
 		case *workerv1.AttachResponse_Ping:
 			_ = send(&workerv1.AttachRequest{Msg: &workerv1.AttachRequest_Pong{Pong: &workerv1.Pong{UnixMs: x.Ping.UnixMs}}})
 		}
-		// CancelJob is a hint: the job watch then reads the cancel flag on job/<id> at once. Drain is
-		// not acted on yet (the loop has no drain state; NEEDS in plan/progress/I-B6.md).
+		// CancelJob and Drain are hints: the job watch then reads the cancel flag on job/<id> at
+		// once; the worker record's state (draining/active, read every RecordRefresh) stays the
+		// truth for draining.
 	}
 }

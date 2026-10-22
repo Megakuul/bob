@@ -64,12 +64,6 @@ func projectParts(ctx context.Context, env *server.Env, parts *server.Orchestrat
 		env.Log.Error("GetPath not available: artifacts bucket", "err", err.Error())
 	}
 	parts.Services.Cache = cs
-	if parts.Services.Release == nil {
-		parts.Services.Release = overview.Releases{}
-	}
-	if parts.Services.Registry == nil {
-		parts.Services.Registry = overview.Registry{}
-	}
 
 	for _, c := range parts.Controllers {
 		if ctl, ok := c.(*orchestrator.Controller); ok && ctl.ID == orchestrator.CtlIndexRepair {

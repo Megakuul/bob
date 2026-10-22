@@ -106,6 +106,7 @@ func Go(s *Spec, o GoOpts) golang.Generated {
 	if dir == "" {
 		dir = "gen/" + o.Package
 	}
+	spec.Dir = dir
 	return golang.Generated{Kind: oaspec.KindGo, Dir: dir, Spec: spec, At: ext.Here(),
 		Deps: []bob.Package{s}, Tools: []string{"oapi-codegen"},
 		Require: []golang.Requirement{golang.Require(oaspec.RuntimeModule, oaspec.RuntimeVersion)}}
@@ -128,5 +129,5 @@ func TS(s *Spec, o TSOpts) npm.Generated {
 		dir = "gen/openapi"
 	}
 	return npm.Generated{Kind: oaspec.KindTS, Dir: dir, Deps: []bob.Package{s}, Tools: []string{"nodejs", "bash"},
-		Spec: oaspec.TS{Spec: 0, Node: 1, Bash: 2}, At: ext.Here()}
+		Spec: oaspec.TS{Dir: dir, Spec: 0, Node: 1, Bash: 2}, At: ext.Here()}
 }

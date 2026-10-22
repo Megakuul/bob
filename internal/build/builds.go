@@ -267,6 +267,7 @@ type Request struct {
 	RetryOf   uint64
 	RerunOf   uint64
 	Attempt   int
+	Version   string // release version (CreateBuild{version}); "" = the tag's for a tag build
 }
 
 // InvalidError is a request the caller must fix; Field names the request field.
@@ -353,6 +354,9 @@ func (r *Request) validate() error {
 	if len(r.Reason) > maxReason {
 		return invalid("reason", "at most %d bytes", maxReason)
 	}
+	if r.Version != "" && !jobspec.ValidVersion(r.Version) {
+		return invalid("version", "invalid release version %q (1 to 64 letters, digits and . + _ - starting with a letter or digit)", r.Version)
+	}
 	sel := selectionOfRequest(r)
 	if !sel.RunsPipelines() && len(sel.Labels) == 0 {
 		return invalid("pipeline", "a pipeline or targets are required")
@@ -389,8 +393,12 @@ func refOf(tr store.BuildTrigger, src store.BuildSource, branch string) string {
 
 // selection derives what a build runs from its record (stable for the build's life):
 // explicit pipelines, else plain targets, else the forge event of its ref.
-func selection(pipelines string, targets []string, ref string, test bool, variants []string, upload string) jobspec.Selection {
-	s := jobspec.Selection{Test: test, Variants: variants, Upload: upload}
+func selection(pipelines string, targets []string, ref string, test bool, variants []string, upload, version string) jobspec.Selection {
+	s := jobspec.Selection{Test: test, Variants: variants, Upload: upload, Version: version}
+	if tag, ok := strings.CutPrefix(ref, "refs/tags/"); ok && s.Version == "" {
+		// a tag build (also its retry or re-run) builds its releases with the tag's version
+		s.Version = jobspec.TagVersion(tag)
+	}
 	switch {
 	case pipelines != "":
 		s.Pipelines = strings.Split(pipelines, ",")
@@ -407,12 +415,12 @@ func selection(pipelines string, targets []string, ref string, test bool, varian
 }
 
 func selectionOfRequest(r *Request) jobspec.Selection {
-	return selection(strings.Join(r.Pipelines, ","), r.Targets, refOf(r.Trigger, r.Source, r.Branch), r.Test, r.Variants, r.Source.Upload)
+	return selection(strings.Join(r.Pipelines, ","), r.Targets, refOf(r.Trigger, r.Source, r.Branch), r.Test, r.Variants, r.Source.Upload, r.Version)
 }
 
 // SelectionOf is what build rec runs.
 func SelectionOf(rec *store.BuildRecord) jobspec.Selection {
-	return selection(rec.Pipeline.Value(), rec.Targets.Value(), refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()), rec.Test.Value(), rec.Variants.Value(), rec.Source.Value().Upload)
+	return selection(rec.Pipeline.Value(), rec.Targets.Value(), refOf(rec.Trigger.Value(), rec.Source.Value(), rec.Branch.Value()), rec.Test.Value(), rec.Variants.Value(), rec.Source.Value().Upload, rec.Version.Value())
 }
 
 // Create creates a build in state pending (SPEC §05.6.2 trigger): CAS pctr.b+1 → n, then the
@@ -501,7 +509,7 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 		Author: store.Set(r.Author), Created: store.Set(now), Platforms: store.Set(platforms), RetryOf: store.Set(r.RetryOf),
 		RerunOf: store.Set(r.RerunOf), Source: store.Set(r.Source), Targets: store.Set(r.Targets), Variants: store.Set(r.Variants),
 		LogPartition: store.Set(lg), Attempt: store.Set(attempt), Pipeline: store.Set(strings.Join(r.Pipelines, ",")),
-		Test: store.Set(r.Test), Reason: store.Set(r.Reason)}); err != nil {
+		Test: store.Set(r.Test), Reason: store.Set(r.Reason), Version: store.Set(r.Version)}); err != nil {
 		return nil, fmt.Errorf("build/%s: %w", id, err)
 	}
 	rec, err := store.Get(ctx, b.cfg.Control, &store.BuildRecord{ID: store.ID(id)})
@@ -783,7 +791,8 @@ func (b *Builds) Rerun(ctx context.Context, id, by string) (*store.BuildRecord, 
 // again is a request repeating old: same source, ref, platforms, variants and selection.
 func again(old *store.BuildRecord, kind, by string) Request {
 	r := Request{Project: old.Project.Value(), Source: old.Source.Value(), Branch: old.Branch.Value(), Commit: old.Commit.Value(), Author: old.Author.Value(),
-		Targets: old.Targets.Value(), Platforms: slices.Clone(old.Platforms.Value()), Variants: old.Variants.Value(), Test: old.Test.Value()}
+		Targets: old.Targets.Value(), Platforms: slices.Clone(old.Platforms.Value()), Variants: old.Variants.Value(), Test: old.Test.Value(),
+		Version: old.Version.Value()}
 	r.Trigger = store.BuildTrigger{Kind: kind, By: by, Ref: refOf(old.Trigger.Value(), old.Source.Value(), old.Branch.Value()),
 		PR: old.Trigger.Value().PR, Fork: old.Trigger.Value().Fork}
 	if old.Pipeline.Value() != "" {

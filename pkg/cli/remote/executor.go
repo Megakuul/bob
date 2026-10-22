@@ -178,6 +178,9 @@ func (x *Executor) Build(ctx context.Context, req engine.RemoteRequest) (<-chan 
 		"test":      req.Test,
 		"reason":    reason,
 	}
+	if req.Version != "" {
+		create["version"] = req.Version
+	}
 	var resp struct {
 		Build Build `json:"build"`
 	}

@@ -1,6 +1,5 @@
 // Package overview serves the read-mostly RPCs of the UI's overview, analytics, cache and
-// settings pages (SPEC §6.5.10, §6.5.13, §6.5.16) over the §05 index documents, and the
-// placeholders of the release and registry lists until M16.3/M16.4.
+// settings pages (SPEC §6.5.10, §6.5.13, §6.5.16) over the §05 index documents.
 package overview
 
 import (

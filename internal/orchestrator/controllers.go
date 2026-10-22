@@ -252,9 +252,13 @@ func (c *Controller) pass(ctx context.Context, now time.Time) {
 	} else {
 		c.state = r.State
 	}
-	if !c.Persist || ctx.Err() != nil {
-		return
+	if !c.Persist || (err != nil && ctx.Err() != nil) {
+		return // an interrupted pass is not recorded: the next leader runs it
 	}
+	// A pass that completed is recorded even when the orchestrator is stopping right now
+	// (otherwise its successor repeats an hourly pass that just ran).
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 	body, err := cbor.Marshal(cursorDoc{Last: c.last, State: c.state})
 	if err != nil {
 		c.log().Warn("controller state not saved", "controller", c.ID, "err", err.Error())

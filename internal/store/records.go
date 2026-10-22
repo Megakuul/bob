@@ -512,6 +512,9 @@ type BuildRecord struct {
 	Errors    dynamitedb.DataField[[]BuildError]  `cbor:"er,omitempty"` // first failures, ≤ 20
 	// NonReproducible is JobRecord.nr of the finalised jobs, by job id (R-NFR-006).
 	NonReproducible dynamitedb.DataField[map[string][]string] `cbor:"nr,omitempty"`
+	// Version is the release version CreateBuild{version} asked for (bob build --remote
+	// --version); "" = the tag's version for a tag build, else none (R-OUT-022).
+	Version dynamitedb.DataField[string] `cbor:"vr,omitempty"`
 }
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
@@ -551,6 +554,7 @@ func (r *BuildRecord) Draft() *BuildRecord {
 		Counts:          Carry(r.Counts),
 		Errors:          Carry(r.Errors),
 		NonReproducible: Carry(r.NonReproducible),
+		Version:         Carry(r.Version),
 	}
 }
 

@@ -187,6 +187,7 @@ message CreateBuildRequest {
   repeated string variants = 6;
   bool test = 7; // targets are tests (bob test --remote)
   string reason = 8; // ≤ 200 bytes, shown in the UI
+  string version = 9; // release version (bob build --remote --version); default: the tag's version of a tag build, else 0.0.0-dev
 }
 message CreateBuildResponse {
   Build build = 1;

@@ -66,7 +66,7 @@ func (p *Process) stageOutputs(ctx context.Context, staging, project string, res
 	for _, pi := range res.Paths {
 		s.closure[strings.TrimPrefix(pi.Path, cache.StoreDir+"/")] = true
 	}
-	var plain []Output
+	var plain []BuiltOutput
 	for _, o := range res.Outputs {
 		dir, err := s.dir(o.Path)
 		if err != nil {
@@ -225,7 +225,7 @@ type releaseManifest struct {
 }
 
 // release stages the images and asset files a release output lists.
-func (s *outStager) release(ctx context.Context, o Output, dir string) error {
+func (s *outStager) release(ctx context.Context, o BuiltOutput, dir string) error {
 	b, err := s.readJSON(filepath.Join(dir, "release.json"))
 	if err != nil {
 		return err
@@ -246,7 +246,7 @@ func (s *outStager) release(ctx context.Context, o Output, dir string) error {
 	for _, a := range m.Artifacts {
 		switch a.Kind {
 		case "oci":
-			repo := ReleaseRepo(m.Project, s.project, a.Repo)
+			repo := releaseRepo(m.Project, s.project, a.Repo)
 			if !registry.ValidRepo(repo) || registry.RepoProject(repo) != s.project || !registry.ValidDigest(a.Index) {
 				return fmt.Errorf("image %s: repository %.300q or index %.80q", a.Name, repo, a.Index)
 			}
@@ -266,10 +266,10 @@ func (s *outStager) release(ctx context.Context, o Output, dir string) error {
 	return nil
 }
 
-// ReleaseRepo is the registry repository of a release image: release.json names it relative to
+// releaseRepo is the registry repository of a release image: release.json names it relative to
 // the project when the release was built without a server project ("" project, decision
 // D-IB20-1), so the server project is put in front.
-func ReleaseRepo(manifestProject, project, repo string) string {
+func releaseRepo(manifestProject, project, repo string) string {
 	if manifestProject == "" {
 		return project + "/" + repo
 	}

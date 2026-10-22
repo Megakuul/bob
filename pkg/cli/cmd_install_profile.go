@@ -88,8 +88,10 @@ func (e *env) profile() (*profile, error) {
 	return &profile{home: home, dir: filepath.Join(home, "install"), binDir: e.defaultBinDir()}, nil
 }
 
-func (p *profile) genDir() string   { return filepath.Join(p.dir, "generations") }
-func (p *profile) rootsDir() string { return filepath.Join(p.home, "nix", "var", "nix", "gcroots", "bob-install") }
+func (p *profile) genDir() string { return filepath.Join(p.dir, "generations") }
+func (p *profile) rootsDir() string {
+	return filepath.Join(p.home, "nix", "var", "nix", "gcroots", "bob-install")
+}
 
 // hostPath is where a store path lies outside bob's namespace.
 func (p *profile) hostPath(sp string) string { return filepath.Join(p.home, sp) }

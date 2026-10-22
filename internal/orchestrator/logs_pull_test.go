@@ -1,4 +1,4 @@
-package orchestrator
+package orchestrator_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/internal/logstore"
+	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/store/s3client"
 	"github.com/megakuul/bob/internal/worker"
 	"github.com/megakuul/bob/tests/serverenv/rustfs"
@@ -93,7 +94,7 @@ func TestLivePullEndToEnd(t *testing.T) {
 		defer jmu.Unlock()
 		return []logstore.JobState{{ID: "job1", Owner: "wA", Epoch: 3, Terminal: finished}}, finished, nil
 	}
-	live := NewLiveLogs("orch-0", nil, nil)
+	live := orchestrator.NewLiveLogs("orch-0", nil, nil)
 	src := logstore.NewSources(reader, live, jobs)
 
 	// the Attach stream: orchestrator → worker messages through a channel, worker → orchestrator

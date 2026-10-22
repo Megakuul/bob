@@ -1071,8 +1071,9 @@ type CreateBuildRequest struct {
 	Targets       []string               `protobuf:"bytes,4,rep,name=targets,proto3" json:"targets,omitempty"`     // build/test these labels (REMOTE when sent by the CLI)
 	Platforms     []string               `protobuf:"bytes,5,rep,name=platforms,proto3" json:"platforms,omitempty"` // default: pipeline/package defaults
 	Variants      []string               `protobuf:"bytes,6,rep,name=variants,proto3" json:"variants,omitempty"`
-	Test          bool                   `protobuf:"varint,7,opt,name=test,proto3" json:"test,omitempty"`    // targets are tests (bob test --remote)
-	Reason        string                 `protobuf:"bytes,8,opt,name=reason,proto3" json:"reason,omitempty"` // ≤ 200 bytes, shown in the UI
+	Test          bool                   `protobuf:"varint,7,opt,name=test,proto3" json:"test,omitempty"`      // targets are tests (bob test --remote)
+	Reason        string                 `protobuf:"bytes,8,opt,name=reason,proto3" json:"reason,omitempty"`   // ≤ 200 bytes, shown in the UI
+	Version       string                 `protobuf:"bytes,9,opt,name=version,proto3" json:"version,omitempty"` // release version (bob build --remote --version); default: the tag's version of a tag build, else 0.0.0-dev
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1159,6 +1160,13 @@ func (x *CreateBuildRequest) GetTest() bool {
 func (x *CreateBuildRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
+	}
+	return ""
+}
+
+func (x *CreateBuildRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
 	}
 	return ""
 }
@@ -2444,7 +2452,7 @@ const file_bob_build_v1_build_proto_rawDesc = "" +
 	"finishedAt\x12\x17\n" +
 	"\aweb_url\x18\x11 \x01(\tR\x06webUrl\x12\x12\n" +
 	"\x04etag\x18\x12 \x01(\tR\x04etag\x12.\n" +
-	"\x05phase\x18\x13 \x01(\x0e2\x18.bob.build.v1.BuildPhaseR\x05phase\"\xfd\x01\n" +
+	"\x05phase\x18\x13 \x01(\x0e2\x18.bob.build.v1.BuildPhaseR\x05phase\"\x97\x02\n" +
 	"\x12CreateBuildRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12,\n" +
@@ -2454,7 +2462,8 @@ const file_bob_build_v1_build_proto_rawDesc = "" +
 	"\tplatforms\x18\x05 \x03(\tR\tplatforms\x12\x1a\n" +
 	"\bvariants\x18\x06 \x03(\tR\bvariants\x12\x12\n" +
 	"\x04test\x18\a \x01(\bR\x04test\x12\x16\n" +
-	"\x06reason\x18\b \x01(\tR\x06reason\"@\n" +
+	"\x06reason\x18\b \x01(\tR\x06reason\x12\x18\n" +
+	"\aversion\x18\t \x01(\tR\aversion\"@\n" +
 	"\x13CreateBuildResponse\x12)\n" +
 	"\x05build\x18\x01 \x01(\v2\x13.bob.build.v1.BuildR\x05build\"!\n" +
 	"\x0fGetBuildRequest\x12\x0e\n" +

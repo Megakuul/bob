@@ -193,7 +193,12 @@ func runComplete(words []string, cwd string, w func(string)) {
 	case "registry":
 		if len(words) == 2 {
 			emit([]string{"add", "remove", "list", "default"})
+		} else if len(words) == 3 && (words[1] == "remove" || words[1] == "default") {
+			emit(registryNames())
 		}
+		return
+	case "uninstall", "upgrade":
+		emit(installedNames())
 		return
 	case "pipeline":
 		if len(words) == 2 {

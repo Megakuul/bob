@@ -83,7 +83,7 @@ func Gqlgen(s *Schema, o GqlgenOpts) golang.Generated {
 	}
 	return golang.Generated{Kind: gqlspec.KindGqlgen, Dir: dir, At: ext.Here(),
 		Deps: []bob.Package{s}, Tools: []string{"gqlgen", "go"},
-		Spec: gqlspec.Gqlgen{Schema: 0, Tool: 1, Go: 2, Models: models, Autobind: slices.Compact(auto)},
+		Spec: gqlspec.Gqlgen{Dir: dir, Schema: 0, Tool: 1, Go: 2, Models: models, Autobind: slices.Compact(auto)},
 		Require: []golang.Requirement{
 			golang.GeneratorRuntime(gqlspec.GqlgenModule, "gqlgen", true),
 			golang.Require(gqlspec.GqlparserModule, gqlspec.GqlparserVersion),
@@ -133,6 +133,7 @@ func TS(s *Schema, o TSOpts) npm.Generated {
 	if dir == "" {
 		dir = "gen/graphql"
 	}
+	spec.Dir = dir
 	return npm.Generated{Kind: gqlspec.KindTS, Dir: dir, Deps: deps, Tools: []string{"nodejs", "bash"}, Spec: spec, At: ext.Here()}
 }
 

@@ -44,11 +44,11 @@ type RunResult struct {
 	Paths  []PathInfo `json:"paths,omitempty"`  // the closure of the built outputs
 	// Outputs are the outputs of the built (or cached) requested packages: the worker process
 	// stages the OCI images and releases among them (R-OUT-013, §6.8).
-	Outputs []Output `json:"outputs,omitempty"`
+	Outputs []BuiltOutput `json:"outputs,omitempty"`
 }
 
-// Output is one output of a requested package.
-type Output struct {
+// BuiltOutput is one output of a requested package.
+type BuiltOutput struct {
 	Label string `json:"label"`
 	Path  string `json:"path"`
 }
@@ -158,7 +158,7 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 			if p.Status == "built" || p.Status == "cached" {
 				for _, path := range sortedValues(p.Outputs) {
 					outputs = append(outputs, path)
-					res.Outputs = append(res.Outputs, Output{Label: p.Label, Path: path})
+					res.Outputs = append(res.Outputs, BuiltOutput{Label: p.Label, Path: path})
 				}
 			}
 			if p.Status == "failed" {

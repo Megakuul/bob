@@ -305,3 +305,12 @@ access and the primitive constructors change.
    ``| proto/greet/v1/greet.proto:9:1:unexpected `}` after definition`` (measured with the pinned
    buf through bob); SPEC R-GEN-001a acceptance text amended. The same `│` problem exists in
    TestRGEN002aUndefinedTypeInSchema (`│ failed to load schema…`, I-M10b's area; not changed).
+33. APPLIED 2026-10-22 I-S3 (A141). tests/eco/npm/graphs_test.go `writeGraph` (two defects, both
+   seen as `bob lock` exit 3 in TestRNPM001aMatchesNpm on 8 of 10 graphs): (a) importer bob.go files
+   used `package g<i>` in directories named web/lib/api/…; SPEC R2 (A131): the package of a
+   directory without Go files is its name (`BOB-E-1024 web/bob.go: package g0, but … package
+   web`); now `package <base of the importer dir>`. (b) the root bob.go imported pkg/npm even when
+   no importer is the root, which Go refuses (`"github.com/megakuul/bob/pkg/npm" imported and not
+   used`); the import is now written only when the root declares an importer. I-S2's audit (item 25)
+   had only checked the root package. After the fix all 10 graphs, TestRNPM001aPeerSplit and the
+   hostile-document tests pass against the recorded snapshot.

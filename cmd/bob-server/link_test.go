@@ -48,7 +48,7 @@ func TestLinkedEcosystemsMatchCLI(t *testing.T) {
 
 // TestLinkedKinds: the kinds remote builds failed on are known to this binary.
 func TestLinkedKinds(t *testing.T) {
-	for _, k := range []string{"rust.crate", "oci.image", "go.binary", "npm.lib", "cc.library", "opam.library", "tarball.tarball", "release.release"} {
+	for _, k := range []string{"rust.crate", "oci.image", "go.binary", "npm.lib", "cc.library", "opam.library", "tarball.tarball", "release.release", "proto.library", "connect.go", "graphql.schema", "openapi.spec"} {
 		if !ir.KnownKind(k) {
 			t.Errorf("kind %q is not known to bob-server", k)
 		}

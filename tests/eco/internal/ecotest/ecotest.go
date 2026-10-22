@@ -44,10 +44,33 @@ func BobEnv(t *testing.T, dir string, env []string, args ...string) harness.Resu
 			return r
 		}
 	}
-	for _, l := range leakcheck.Check([]byte(r.Combined())) {
+	shown := r.Combined()
+	switch {
+	case len(args) > 0 && args[0] == "env":
+		// bob env prints the dev shell's environment for eval: its PATH and tool paths point
+		// into the store on purpose (SPEC §02.7.2); only its stderr is user-facing text.
+		shown = r.Stderr
+	case slicesContains(args, "--print-paths"):
+		// --print-paths prints host paths <home>/nix/store/<hash>-<name> on purpose (SPEC §02.6);
+		// they are not raw Nix text (same correction as tests/outputs, GH-B).
+		shown = r.Stderr + "\n" + printPathsRE.ReplaceAllString(r.Stdout, `"paths":[]`)
+	}
+	for _, l := range leakcheck.Check([]byte(shown)) {
 		t.Errorf("bob %s shows raw Nix text: %s", strings.Join(r.Args, " "), l)
 	}
 	return r
+}
+
+// printPathsRE matches the paths[] array of a package.finish event.
+var printPathsRE = regexp.MustCompile(`"paths"\s*:\s*\[[^\]]*\]`)
+
+func slicesContains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 // OK is the first check after a bob run that must succeed: false (and t failed) when the

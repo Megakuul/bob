@@ -20,6 +20,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/cli/remote"
 	"github.com/megakuul/bob/pkg/engine"
+	"github.com/megakuul/bob/pkg/engine/build"
 	"github.com/megakuul/bob/pkg/engine/store"
 	"github.com/megakuul/bob/pkg/engine/translate"
 )
@@ -94,6 +95,13 @@ func runRemote(e *env, test bool) int {
 		return e.out.fail(err)
 	}
 	patterns := e.patterns(root, e.a.pos)
+	version := ""
+	if e.a.has("version") { // release version (R-OUT-022): checked here, built with on the server
+		version = e.a.str("version")
+		if err := build.CheckVersion(version); err != nil {
+			return e.out.fail(err)
+		}
+	}
 	st, _, warns, exit, done := e.openStore(true)
 	if done {
 		return exit
@@ -113,7 +121,7 @@ func runRemote(e *env, test bool) int {
 	if e.a.bool("no-download") {
 		x.Fetch = nil
 	}
-	req := engine.RemoteRequest{Root: root, Patterns: patterns, Variants: variants(e.a.str("variant")), Test: test}
+	req := engine.RemoteRequest{Root: root, Patterns: patterns, Variants: variants(e.a.str("variant")), Test: test, Version: version}
 	req.Platforms = []bob.Platform{bob.Platform(e.a.str("platform"))}
 
 	// Ctrl-C detaches (the build keeps running); a second one within 2 s cancels it.

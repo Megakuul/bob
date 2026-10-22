@@ -207,7 +207,8 @@ type RemoteRequest struct {
 	Patterns  []string
 	Platforms []bob.Platform
 	Variants  []string
-	Test      bool // bob test --remote: the patterns name tests
+	Test      bool   // bob test --remote: the patterns name tests
+	Version   string // release version (bob build --remote --version, R-OUT-022); "" = none
 }
 
 // Event is one --json event of a build (SPEC §02.4).

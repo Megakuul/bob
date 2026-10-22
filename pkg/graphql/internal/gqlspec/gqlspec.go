@@ -23,8 +23,12 @@ const (
 // Schema is the spec of a graphql.schema node.
 type Schema struct{}
 
-// Gqlgen is the spec of a graphql.gqlgen node. Deps: the schema, gqlgen, go.
+// Gqlgen is the spec of a graphql.gqlgen node. Deps: the schema, gqlgen, go. Module is set by
+// the consuming module (golang.ModuleAware); Dir is the owned directory relative to it, so the
+// node plans the same with or without its consumer in the graph.
 type Gqlgen struct {
+	Module   string            `json:"module"`
+	Dir      string            `json:"dir"`
 	Schema   int               `json:"schema"`
 	Tool     int               `json:"tool"`
 	Go       int               `json:"go"`
@@ -32,9 +36,13 @@ type Gqlgen struct {
 	Autobind []string          `json:"autobind"` // Go packages
 }
 
+// WithModule records the consuming module's path (golang.ModuleAware).
+func (g Gqlgen) WithModule(path string) any { g.Module = path; return g }
+
 // TS is the spec of a graphql.ts node. Deps: the schema, the documents node when there are
 // documents (Documents = its index, -1 = none), nodejs, bash (the tool lock's installer).
 type TS struct {
+	Dir       string            `json:"dir"` // owned directory relative to the importer
 	Schema    int               `json:"schema"`
 	Documents int               `json:"documents"`
 	Node      int               `json:"node"`

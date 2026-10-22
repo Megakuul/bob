@@ -26,14 +26,10 @@ func planTS(ctx context.Context, req engine.PlanRequest, res *engine.PlanResult,
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
 		return engine.Resolved{}, nil, fmt.Errorf("%s: graphql.ts spec: %w", n.Label, err)
 	}
-	c, err := consumerOf(req.Graph, n)
+	owned, err := ownedDir(n, s.Dir)
 	if err != nil {
 		return engine.Resolved{}, nil, err
 	}
-	if c.Kind == "go.module" {
-		return engine.Resolved{}, nil, fmt.Errorf("%s: graphql.TS output is realised by %s, not an npm importer", n.Label, c.Label)
-	}
-	owned := c.Owned
 	tl, err := toolLock()
 	if err != nil {
 		return engine.Resolved{}, nil, err

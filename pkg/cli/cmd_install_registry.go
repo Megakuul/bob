@@ -72,8 +72,8 @@ func (c installConfig) lookupRegistry(name string) (registry, bool) {
 	return registry{}, false
 }
 
-// slug is a registry, project or release name.
-var slug = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`) })
+// nameSlug is a registry, project or release name.
+var nameSlug = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`) })
 
 // runRegistry is `bob registry add <name> <url> [--key K…] [--refresh-keys] | remove <name> |
 // list | default <name>` (R-INST-004).
@@ -165,7 +165,7 @@ func registryAdd(e *env, pos []string) int {
 		return e.out.fail(diag.New(4, "flag", "bob registry add", "what", "<name> <url>"))
 	}
 	name := pos[0]
-	if !slug().MatchString(name) {
+	if !nameSlug().MatchString(name) {
 		return e.out.fail(diag.New(4, "flag", "bob registry add", "what", "a registry name of letters, digits, '.', '_' and '-'"))
 	}
 	old, exists := e.installConfig().lookupRegistry(name)
@@ -251,4 +251,32 @@ func pathHint(e *env, binDir string) {
 	if !e.out.json {
 		fmt.Fprintf(e.out.errw, "hint: %s is not on PATH; add this line to your shell's rc file: export PATH=\"%s:$PATH\"\n", tildePath(binDir), dir)
 	}
+}
+
+// registryNames are the configured registries (completion, SPEC §02.9).
+func registryNames() []string {
+	e := &env{getenv: os.Getenv}
+	var out []string
+	for _, r := range e.installConfig().Registries {
+		out = append(out, r.Name)
+	}
+	return out
+}
+
+// installedNames are the entries of the current generation (completion, SPEC §02.9).
+func installedNames() []string {
+	e := &env{getenv: os.Getenv}
+	p, err := e.profile()
+	if err != nil {
+		return nil
+	}
+	g, err := p.current()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, en := range g.Entries {
+		out = append(out, en.Name)
+	}
+	return out
 }

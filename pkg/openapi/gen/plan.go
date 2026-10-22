@@ -10,6 +10,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	golanggen "github.com/megakuul/bob/pkg/golang/gen"
 	npmgen "github.com/megakuul/bob/pkg/npm/gen"
 	"github.com/megakuul/bob/pkg/openapi/internal/oaspec"
 )
@@ -22,12 +23,16 @@ func planGo(ctx context.Context, req engine.PlanRequest, jobs *engine.Jobs, n *i
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
 		return engine.Resolved{}, nil, fmt.Errorf("%s: openapi.go spec: %w", n.Label, err)
 	}
-	c, err := consumerOf(req.Graph, n)
+	if s.Module == "" {
+		return engine.Resolved{}, nil, fmt.Errorf("%s: no Go module realises it", n.Label)
+	}
+	owned, err := ownedDir(n, s.Dir)
 	if err != nil {
 		return engine.Resolved{}, nil, err
 	}
-	if c.Kind != "go.module" {
-		return engine.Resolved{}, nil, fmt.Errorf("%s: oapi-codegen output is realised by %s, not a Go module", n.Label, c.Label)
+	goVersion, err := golanggen.ModuleGoVersion(req, s.Module)
+	if err != nil {
+		return engine.Resolved{}, nil, err
 	}
 	file, err := specFile(req, n, s.Spec)
 	if err != nil {
@@ -58,12 +63,12 @@ func planGo(ctx context.Context, req engine.PlanRequest, jobs *engine.Jobs, n *i
 	steps := []any{
 		step("mkdir", map[string]any{"path": out}),
 		step("copy", map[string]any{"from": src, "to": buildSrc}),
-		step("write", map[string]any{"path": buildSrc + "/go.mod", "content": fmt.Sprintf("module %s\n\ngo %s\n", c.Path, c.Go)}),
+		step("write", map[string]any{"path": buildSrc + "/go.mod", "content": fmt.Sprintf("module %s\n\ngo %s\n", s.Module, goVersion)}),
 		step("write", map[string]any{"path": buildCfg + "/oapi-codegen.yaml", "content": cfg}),
 		step("exec", map[string]any{"argv": []string{"oapi-codegen", "-config", buildCfg + "/oapi-codegen.yaml", file},
 			"env": map[string]string{"HOME": buildTmp}, "cwd": buildSrc, "path": []string{tool + "/bin"}}),
 	}
-	return codegenJob(ctx, req, jobs, n, c.Owned, steps, drvs, srcs)
+	return codegenJob(ctx, req, jobs, n, owned, steps, drvs, srcs)
 }
 
 // specFile is the repository path of the OpenAPI document of dependency i.
@@ -116,12 +121,9 @@ func planTS(ctx context.Context, req engine.PlanRequest, res *engine.PlanResult,
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
 		return engine.Resolved{}, nil, fmt.Errorf("%s: openapi.ts spec: %w", n.Label, err)
 	}
-	c, err := consumerOf(req.Graph, n)
+	owned, err := ownedDir(n, s.Dir)
 	if err != nil {
 		return engine.Resolved{}, nil, err
-	}
-	if c.Kind == "go.module" {
-		return engine.Resolved{}, nil, fmt.Errorf("%s: openapi.TS output is realised by %s, not an npm importer", n.Label, c.Label)
 	}
 	file, err := specFile(req, n, s.Spec)
 	if err != nil {
@@ -164,7 +166,7 @@ func planTS(ctx context.Context, req engine.PlanRequest, res *engine.PlanResult,
 			"env": map[string]string{"HOME": buildTmp}, "cwd": buildSrc, "path": []string{node + "/bin"}}),
 	}
 	tool.Prepare(ctx, req.Store)
-	rv, m, err := codegenJob(ctx, req, jobs, n, c.Owned, steps, drvs, srcs)
+	rv, m, err := codegenJob(ctx, req, jobs, n, owned, steps, drvs, srcs)
 	res.Drvs = append(res.Drvs, jobs.Drvs...)
 	return rv, m, err
 }

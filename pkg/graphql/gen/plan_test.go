@@ -115,7 +115,7 @@ func gqlgenRequest(t *testing.T) engine.PlanRequest {
 	}
 	schema := &ir.Node{ID: "schema", Kind: gqlspec.KindSchema, Label: "//schema:graphql", Spec: json.RawMessage(`{}`)}
 	gen := &ir.Node{ID: "gen", Kind: gqlspec.KindGqlgen, Label: "//svc:gen-graph", Deps: []string{"schema", "gqlgen", "go"},
-		Spec: mustJSON(t, gqlspec.Gqlgen{Schema: 0, Tool: 1, Go: 2, Models: map[string]string{"UUID": "github.com/google/uuid.UUID"}, Autobind: []string{}})}
+		Spec: mustJSON(t, gqlspec.Gqlgen{Module: "example.com/svc", Dir: "gen/graph", Schema: 0, Tool: 1, Go: 2, Models: map[string]string{"UUID": "github.com/google/uuid.UUID"}, Autobind: []string{}})}
 	mod := &ir.Node{ID: "mod", Kind: "go.module", Label: "//svc:module", Deps: []string{"tc", "gen"},
 		Spec: json.RawMessage(`{"path":"example.com/svc","go":"1.26","generated":[{"dir":"gen/graph","dep":1}]}`)}
 	return engine.PlanRequest{Graph: &ir.Graph{Nodes: []*ir.Node{schema, gen, mod}}, Nodes: []*ir.Node{schema, gen},
@@ -187,7 +187,7 @@ func TestPlanGqlgen(t *testing.T) {
 	if strings.Join(log, "\n") != strings.Join(want, "\n") {
 		t.Errorf("steps:\n%s\nwant:\n%s", strings.Join(log, "\n"), strings.Join(want, "\n"))
 	}
-	if got := writes[buildSrc+"/go.mod"]; got != "module example.com/svc\n\ngo 1.26\n\nrequire (\n\tgithub.com/99designs/gqlgen v0.17.90\n\tgolang.org/x/tools v0.42.0\n\tgolang.org/x/tools/gopls v0.21.0\n)\n" {
+	if got := writes[buildSrc+"/go.mod"]; got != "module example.com/svc\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/99designs/gqlgen v0.17.90\n\tgolang.org/x/tools v0.42.0\n\tgolang.org/x/tools/gopls v0.21.0\n)\n" {
 		t.Errorf("go.mod:\n%s", got)
 	}
 	var mt strings.Builder

@@ -62,6 +62,8 @@ type Artifact struct {
 
 // ParseManifest decodes and validates release.json (hostile input: it comes out of a build)
 // for project and the pipeline's release entry (a release name, or a label "//pkg:name").
+// A manifest with project "" belongs to the building project, and its image repositories are
+// relative to it (the returned manifest names them in full).
 func ParseManifest(b []byte, project, entry string) (*Manifest, error) {
 	if len(b) > maxManifestJSON {
 		return nil, errors.New("release.json is too large")
@@ -96,7 +98,8 @@ func ParseManifest(b []byte, project, entry string) (*Manifest, error) {
 		return nil, fmt.Errorf("release version %q is not a semantic version (major.minor.patch)", m.Version)
 	}
 	files := map[string]bool{}
-	for _, a := range m.Artifacts {
+	for i := range m.Artifacts {
+		a := &m.Artifacts[i]
 		if !nameRE.MatchString(a.Name) || !cache.ValidStorePath(a.StorePath) {
 			return nil, fmt.Errorf("release.json: invalid artifact %.100q", a.Name)
 		}
@@ -115,6 +118,12 @@ func ParseManifest(b []byte, project, entry string) (*Manifest, error) {
 			}
 			files[a.File] = true
 		case "oci":
+			if m.Project == "" {
+				// built without a server project (bob.RepoOpts has none): the manifest names the
+				// repository relative to the project, the server puts its project in front
+				// (decision D-IB20-1; the worker stages the image under the same name)
+				a.Repo = project + "/" + a.Repo
+			}
 			if !registry.ValidRepo(a.Repo) || registry.RepoProject(a.Repo) != project || !registry.ValidDigest(a.Index) {
 				return nil, fmt.Errorf("release.json: image %s has repository %.300q or index %.80q (repositories are %s/<image>)", a.Name, a.Repo, a.Index, project)
 			}

@@ -85,7 +85,7 @@ func principal(ctx context.Context) string {
 func (s *Service) CreateBuild(ctx context.Context, req *connect.Request[buildv1.CreateBuildRequest]) (*connect.Response[buildv1.CreateBuildResponse], error) {
 	m := req.Msg
 	r := Request{Project: m.GetProjectId(), Targets: m.GetTargets(), Platforms: slices.Clone(m.GetPlatforms()),
-		Variants: m.GetVariants(), Test: m.GetTest(), Reason: m.GetReason()}
+		Variants: m.GetVariants(), Test: m.GetTest(), Reason: m.GetReason(), Version: m.GetVersion()}
 	if m.GetPipeline() != "" {
 		r.Pipelines = []string{m.GetPipeline()}
 	}

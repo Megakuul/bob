@@ -23,8 +23,8 @@ import (
 
 // registryParts wires the OCI pull registry (M16.3: /v2/, /oci/token, RegistryService, the
 // image step of the promotion) and releases (M16.4: ReleaseService, /r/ downloads, the build
-// controller's release hook). It runs last: it replaces the release/registry placeholders of
-// projectParts, hooks into the build controller of buildParts and gives the promotion
+// controller's release hook). It runs last: it hooks into the build controller of buildParts
+// and gives the promotion
 // controller of cacheParts a promoter with the Images hook.
 func registryParts(ctx context.Context, env *server.Env, parts *server.OrchestratorParts, fw *forgeWiring) {
 	var id *auth.Identity

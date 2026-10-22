@@ -29,15 +29,15 @@ func planGqlgen(ctx context.Context, req engine.PlanRequest, jobs *engine.Jobs, 
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
 		return engine.Resolved{}, nil, fmt.Errorf("%s: graphql.gqlgen spec: %w", n.Label, err)
 	}
-	c, err := consumerOf(req.Graph, n)
+	if s.Module == "" {
+		return engine.Resolved{}, nil, fmt.Errorf("%s: no Go module realises it", n.Label)
+	}
+	rel := path.Clean(s.Dir)
+	owned, err := ownedDir(n, rel)
 	if err != nil {
 		return engine.Resolved{}, nil, err
 	}
-	if c.Kind != "go.module" {
-		return engine.Resolved{}, nil, fmt.Errorf("%s: gqlgen output is realised by %s, not a Go module", n.Label, c.Label)
-	}
-	rel, owned := c.Dir, c.Owned
-	gm, err := golanggen.GeneratorModuleOf(ctx, req, c.Path, c.Go)
+	gm, err := golanggen.GeneratorModuleOf(ctx, req, s.Module)
 	if err != nil {
 		return engine.Resolved{}, nil, err
 	}

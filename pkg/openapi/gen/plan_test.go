@@ -13,6 +13,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/engine/srcs"
 	"github.com/megakuul/bob/pkg/openapi/internal/oaspec"
 )
@@ -49,8 +50,13 @@ func graph(t *testing.T, g oaspec.Go) (engine.PlanRequest, *ir.Node) {
 	gen := &ir.Node{ID: "gen", Kind: oaspec.KindGo, Label: "//svc:gen-rest", Deps: []string{"spec", "tool"}, Spec: mustJSON(t, g)}
 	mod := &ir.Node{ID: "mod", Kind: "go.module", Label: "//svc:module", Deps: []string{"go", "gen"},
 		Spec: json.RawMessage(`{"path":"example.com/svc","go":"1.26","generated":[{"dir":"gen/rest","dep":1}]}`)}
+	goLock, err := lock.EncodeSection(lock.SectionGo, &lock.GoSection{Inputs: strings.Repeat("ab", 32), Proxy: "https://proxy.golang.org",
+		Modules: []lock.GoModule{}, Workspaces: map[string]lock.GoBuildList{"example.com/svc": {Go: "1.26.0", Modules: []string{}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := engine.PlanRequest{Graph: &ir.Graph{Nodes: []*ir.Node{spec, tool, gen, mod}}, Nodes: []*ir.Node{spec, gen},
-		Sources: map[string]string{"spec": specSrc},
+		Sources: map[string]string{"spec": specSrc}, Locks: map[string]json.RawMessage{lock.SectionGo: goLock},
 		Inputs: map[string]engine.Resolved{"spec": {Outputs: map[string]string{"out": specSrc}},
 			"tool": {Outputs: map[string]string{"out": oapiPath}}},
 		Builder: builder, Store: fakeStore{}}
@@ -77,7 +83,7 @@ func steps(t *testing.T, d *drv.Derivation) []bspec.Step {
 // go.mod with the module's path and Go version, bob's config with the std-http server and
 // models, the output in $out; its output becomes svc/gen/rest.
 func TestPlanGo(t *testing.T) {
-	req, gen := graph(t, oaspec.Go{Spec: 0, Tool: 1, Package: "rest", Server: oaspec.ServerStdHTTP, Models: true})
+	req, gen := graph(t, oaspec.Go{Module: "example.com/svc", Dir: "gen/rest", Spec: 0, Tool: 1, Package: "rest", Server: oaspec.ServerStdHTTP, Models: true})
 	res, err := Ecosystem{}.Plan(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +112,7 @@ func TestPlanGo(t *testing.T) {
 			}
 		}
 	}
-	if got := writes[buildSrc+"/go.mod"]; got != "module example.com/svc\n\ngo 1.26\n" {
+	if got := writes[buildSrc+"/go.mod"]; got != "module example.com/svc\n\ngo 1.26.0\n" {
 		t.Errorf("go.mod %q", got)
 	}
 	cfg := writes[buildCfg+"/oapi-codegen.yaml"]
@@ -127,18 +133,32 @@ func TestPlanGo(t *testing.T) {
 	}
 }
 
-// The codegen node needs its consumer: without a Go module realising it there is nothing to
-// plan; an npm importer cannot realise Go code.
-func TestPlanGoConsumer(t *testing.T) {
-	req, _ := graph(t, oaspec.Go{Spec: 0, Tool: 1, Package: "rest", Models: true})
-	req.Graph.Nodes = req.Graph.Nodes[:3]
-	if _, err := (Ecosystem{}).Plan(context.Background(), req); err == nil || !strings.Contains(err.Error(), "no Go module or npm importer realises it") {
-		t.Errorf("no consumer: %v", err)
+// The codegen node plans without its consumer in the graph (bob build //svc:gen-rest): the
+// module path and the directory are in its own spec; without a module path (no consumer
+// recorded it) or with the module missing from bob.lock it cannot be planned.
+func TestPlanGoStandalone(t *testing.T) {
+	req, _ := graph(t, oaspec.Go{Module: "example.com/svc", Dir: "gen/rest", Spec: 0, Tool: 1, Package: "rest", Models: true})
+	full, err := Ecosystem{}.Plan(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	req, _ = graph(t, oaspec.Go{Spec: 0, Tool: 1, Package: "rest", Models: true})
-	req.Graph.Nodes[3].Kind = "npm.app"
-	if _, err := (Ecosystem{}).Plan(context.Background(), req); err == nil || !strings.Contains(err.Error(), "not a Go module") {
-		t.Errorf("npm consumer: %v", err)
+	req.Graph.Nodes = req.Graph.Nodes[:3]
+	alone, err := Ecosystem{}.Plan(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := full.Drvs[0].Path()
+	b, _ := alone.Drvs[0].Path()
+	if a != b || alone.Materialise[0].Dir != "svc/gen/rest" {
+		t.Errorf("with consumer %s, without %s (%+v)", a, b, alone.Materialise)
+	}
+	req, _ = graph(t, oaspec.Go{Dir: "gen/rest", Spec: 0, Tool: 1, Package: "rest", Models: true})
+	if _, err := (Ecosystem{}).Plan(context.Background(), req); err == nil || !strings.Contains(err.Error(), "no Go module realises it") {
+		t.Errorf("no module: %v", err)
+	}
+	req, _ = graph(t, oaspec.Go{Module: "example.com/other", Dir: "gen/rest", Spec: 0, Tool: 1, Package: "rest", Models: true})
+	if _, err := (Ecosystem{}).Plan(context.Background(), req); err == nil || !strings.Contains(err.Error(), "example.com/other is not locked") {
+		t.Errorf("not locked: %v", err)
 	}
 }
 
@@ -146,7 +166,7 @@ func TestPlanGoConsumer(t *testing.T) {
 func TestPlanDeterministic(t *testing.T) {
 	var paths []string
 	for i := 0; i < 2; i++ {
-		req, _ := graph(t, oaspec.Go{Spec: 0, Tool: 1, Package: "rest", Server: oaspec.ServerStdHTTP, Models: true, Client: true})
+		req, _ := graph(t, oaspec.Go{Module: "example.com/svc", Dir: "gen/rest", Spec: 0, Tool: 1, Package: "rest", Server: oaspec.ServerStdHTTP, Models: true, Client: true})
 		res, err := Ecosystem{}.Plan(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)

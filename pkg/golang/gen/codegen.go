@@ -19,7 +19,7 @@ import (
 // job lays them out as vendor/ so the go command runs offline (-mod=vendor).
 type GeneratorModule struct {
 	Path    string // module path
-	Go      string // "1.26"
+	Go      string // the module's go directive in bob.lock ("1.26.0")
 	Modules []VendorModule
 }
 
@@ -30,15 +30,17 @@ type VendorModule struct {
 	Packages      []string // import paths of its packages (directories with .go files), sorted
 }
 
-// GeneratorModuleOf returns the GeneratorModule of the workspace module modPath (Go version
-// goVersion). req is the generator's own PlanRequest; its Locks carry the Go section.
-func GeneratorModuleOf(ctx context.Context, req engine.PlanRequest, modPath, goVersion string) (gm GeneratorModule, err error) {
+// GeneratorModuleOf returns the GeneratorModule of the workspace module modPath from bob.lock
+// (its build list and go directive), so it is the same whether or not the module itself is in
+// the graph (bob build //svc:gen-graph). req is the generator's own PlanRequest; its Locks
+// carry the Go section.
+func GeneratorModuleOf(ctx context.Context, req engine.PlanRequest, modPath string) (gm GeneratorModule, err error) {
 	defer func() { // a planner bug must not crash bob
 		if v := recover(); v != nil {
 			err = fmt.Errorf("go planner: internal error: %v", v)
 		}
 	}()
-	gm = GeneratorModule{Path: modPath, Go: goVersion}
+	gm = GeneratorModule{Path: modPath}
 	r := req
 	r.Lock = req.Locks[lock.SectionGo]
 	pl := newPlanner(ctx, r)
@@ -46,9 +48,10 @@ func GeneratorModuleOf(ctx context.Context, req engine.PlanRequest, modPath, goV
 		return gm, err
 	}
 	sel, ok := pl.selected[modPath]
-	if !ok {
+	if !ok || pl.lock == nil {
 		return gm, diag.New(1012, "what", fmt.Sprintf("Go module %s is not locked", modPath))
 	}
+	gm.Go = pl.lock.Workspaces[modPath].Go
 	for _, p := range sortedKeys(sel) {
 		t := pl.third[p+"@"+sel[p]]
 		if t == nil {
@@ -118,4 +121,18 @@ func compactStrings(s []string) []string {
 		}
 	}
 	return out
+}
+
+// ModuleGoVersion is the go directive bob.lock records for the workspace module modPath
+// ("1.26.0"): generators that only need a go.mod (oapi-codegen reads the go version) use it.
+func ModuleGoVersion(req engine.PlanRequest, modPath string) (string, error) {
+	sec := req.Locks[lock.SectionGo]
+	if len(sec) > 0 {
+		if v, err := lock.DecodeSection(lock.SectionGo, sec); err == nil {
+			if bl, ok := v.(*lock.GoSection).Workspaces[modPath]; ok && bl.Go != "" {
+				return bl.Go, nil
+			}
+		}
+	}
+	return "", diag.New(1012, "what", fmt.Sprintf("Go module %s is not locked", modPath))
 }

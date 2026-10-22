@@ -117,6 +117,9 @@ type Worker struct {
 	lostJobs map[string]time.Time
 	jobs     sync.WaitGroup
 	backlog  atomic.Bool // the last finished job came from a poll: poll again at once
+	// draining: finish the running jobs, claim nothing new (worker record state "draining",
+	// Drain over Attach as a hint); FreeSlots reports 0 so nobody wakes this worker.
+	draining atomic.Bool
 
 	// Owned by the Run goroutine.
 	rng     *rand.Rand
@@ -196,7 +199,26 @@ func (w *Worker) FreeSlots() int {
 	return w.free()
 }
 
-func (w *Worker) free() int { return max(0, w.cfg.Slots-len(w.running)-w.claiming) }
+func (w *Worker) free() int {
+	if w.draining.Load() {
+		return 0
+	}
+	return max(0, w.cfg.Slots-len(w.running)-w.claiming)
+}
+
+// SetDraining switches draining on (finish the running jobs, then idle) or off.
+func (w *Worker) SetDraining(on bool) {
+	if w.draining.Swap(on) != on && !on {
+		select { // slots are free again: let the loop poll
+		case w.freed <- struct{}{}:
+		default:
+		}
+		w.backlog.Store(true)
+	}
+}
+
+// Draining reports whether the worker claims nothing new.
+func (w *Worker) Draining() bool { return w.draining.Load() }
 
 // Wake delivers a wake-up (class, slot, job): the worker GETs exactly that slot and tries to
 // claim it. It never blocks.
@@ -362,7 +384,7 @@ func (w *Worker) eligible(class string) bool {
 
 // onWake handles one wake-up: exactly that slot, nothing else (no herd).
 func (w *Worker) onWake(ctx context.Context, wk wake) {
-	if !w.eligible(wk.class) || wk.slot == 0 || w.seen[wk] {
+	if !w.eligible(wk.class) || wk.slot == 0 || w.seen[wk] || w.draining.Load() {
 		return
 	}
 	if w.FreeSlots() == 0 {
@@ -839,7 +861,18 @@ func (w *Worker) refresh(ctx context.Context) error {
 	}
 	readRec := func() {
 		rec, _, err := store.GetCached(ctx, w.cfg.Fleet, &recCache, &store.WorkerRecord{Wid: store.ID(w.cfg.ID)})
-		if err != nil || rec.State.Value() != "revoked" {
+		if err != nil {
+			return
+		}
+		switch rec.State.Value() {
+		case "draining":
+			w.SetDraining(true)
+			return
+		case "active":
+			w.SetDraining(false)
+			return
+		case "revoked":
+		default:
 			return
 		}
 		slog.Error("worker: revoked, exiting", "worker", w.cfg.ID)

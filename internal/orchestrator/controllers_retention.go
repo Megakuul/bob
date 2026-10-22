@@ -43,10 +43,13 @@ type Retention struct {
 	// DropPartitions drops the lake partitions of class ("log", "run", "job") older than
 	// before (the R-STORE-101 lake sweep); nil skips them.
 	DropPartitions func(ctx context.Context, class string, before time.Time) (int, error)
-	// CacheGC removes cache paths of promo/<day> logs older than before that no release or
-	// recent build references (§06); nil skips it.
-	CacheGC func(ctx context.Context, before time.Time) (int, error)
-	Log     *slog.Logger
+	// CacheGC removes the cache paths of promo/<day> logs older than the cache retention that
+	// no release or recent promotion references (§06 R-STORE-150); nil skips it.
+	CacheGC *CacheGC
+	// CacheSetting returns retention.cache_unreferenced_days from the server settings when they
+	// set it (an explicit 0 included: collect at the next run); ok false falls back to Cache.
+	CacheSetting func(ctx context.Context) (d time.Duration, ok bool)
+	Log          *slog.Logger
 }
 
 // retentionState is ctl/retention's persisted state: how far each walk got.
@@ -54,6 +57,7 @@ type retentionState struct {
 	Queues map[string]uint64 `cbor:"q,omitempty"` // class -> lowest slot not yet deleted
 	Reg    uint64            `cbor:"r,omitempty"` // lowest wrs slot not yet deleted
 	Pages  map[string]uint64 `cbor:"b,omitempty"` // project -> first bpage page with live entries
+	Cache  cacheGCState      `cbor:"c,omitempty"` // promotion log walk of the cache GC
 }
 
 // RetentionResult counts what one pass removed.
@@ -114,7 +118,13 @@ func (x *Retention) Collect(ctx context.Context, r *Run) (RetentionResult, error
 		add(&res.RegSlots, k, err)
 	}
 	if x.CacheGC != nil {
-		k, err := x.CacheGC(ctx, r.Now.Add(-orDefault(x.Cache, DefaultRetainCache)))
+		keep := orDefault(x.Cache, DefaultRetainCache)
+		if x.CacheSetting != nil {
+			if d, ok := x.CacheSetting(ctx); ok && d >= 0 {
+				keep = d
+			}
+		}
+		k, err := x.CacheGC.Collect(ctx, r.Now, r.Now.Add(-keep), &st.Cache)
 		add(&res.CachePaths, k, err)
 	}
 	if b, err := cbor.Marshal(st); err == nil {

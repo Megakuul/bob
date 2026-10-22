@@ -319,3 +319,27 @@ func TestPKCE(t *testing.T) {
 		t.Errorf("token %+v, verifier %q, challenge %q", tok, verifier, challenge)
 	}
 }
+
+// TestExecutorForwardsVersion: bob build --remote --version sends the release version in
+// CreateBuild{version}; without --version the field is left out.
+func TestExecutorForwardsVersion(t *testing.T) {
+	t.Setenv("PATH", "")
+	f := &fakeBuildServer{uploads: map[string][]byte{}}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	dir := writeRepo(t, map[string]string{"bob.lock": "{}", "rel/bob.go": "package rel"})
+	x := &Executor{Server: &Server{URL: srv.URL, Token: "tok"}, Project: "demo"}
+	for _, version := range []string{"1.4.2", ""} {
+		ch, err := x.Build(context.Background(), engine.RemoteRequest{Root: dir, Patterns: []string{"//rel:api"}, Version: version})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for range ch {
+		}
+		got, ok := f.created["version"]
+		if version != "" && got != version || version == "" && ok {
+			t.Errorf("--version %q: CreateBuild version %v (present %v)", version, got, ok)
+		}
+		f.created = nil
+	}
+}

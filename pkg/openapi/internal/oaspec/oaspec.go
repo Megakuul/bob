@@ -22,8 +22,12 @@ type Spec struct {
 	File string `json:"file"` // repository-relative path of the document
 }
 
-// Go is the spec of an openapi.go node. Deps: the spec node, oapi-codegen.
+// Go is the spec of an openapi.go node. Deps: the spec node, oapi-codegen. Module is set by
+// the consuming module (golang.ModuleAware); Dir is the owned directory relative to it, so the
+// node plans the same with or without its consumer in the graph.
 type Go struct {
+	Module  string `json:"module"`
+	Dir     string `json:"dir"`
 	Spec    int    `json:"spec"`
 	Tool    int    `json:"tool"`
 	Package string `json:"package"`
@@ -32,13 +36,17 @@ type Go struct {
 	Client  bool   `json:"client"`
 }
 
+// WithModule records the consuming module's path (golang.ModuleAware).
+func (g Go) WithModule(path string) any { g.Module = path; return g }
+
 // Servers.
 const ServerStdHTTP = "std-http"
 
 // TS is the spec of an openapi.ts node. Deps: the spec node, nodejs, bash (the tool lock's
 // installer).
 type TS struct {
-	Spec int `json:"spec"`
-	Node int `json:"node"`
-	Bash int `json:"bash"`
+	Dir  string `json:"dir"` // owned directory relative to the importer
+	Spec int    `json:"spec"`
+	Node int    `json:"node"`
+	Bash int    `json:"bash"`
 }
