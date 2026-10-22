@@ -10,3 +10,11 @@ DONE R-AUTH-005 → tests/auth/sa_test.go::TestRAUTH005ServiceAccounts
 DONE R-AUTH-007 → tests/auth/tokens_test.go::TestRAUTH007ServerIssuedTokens (needs BOB_TEST_CLOCK_FILE hook in bobtest build)
 DONE R-AUTH-150 → tests/auth/tokens_test.go::TestRAUTH150OAuthFlows
 DONE R-AUTH-151 → tests/auth/hygiene_test.go::TestRAUTH151CredentialHygiene + zz_logs_test.go::TestRAUTH151LogsStaySecretFree
+DONE R-API-001 → tests/auth/api_test.go::TestRAPI001ConnectAndBuf
+DONE R-API-002 → tests/auth/api_test.go::TestRAPI002Resources
+DONE R-API-003 → tests/auth/api_test.go::TestRAPI003BufBreaking
+DONE R-API-004 → tests/auth/uipaths_test.go::TestRAPI004UIUsesOnlyPublicAPI
+DONE R-API-150 → tests/auth/api_test.go::TestRAPI150ErrorModel (needs devstack seed.projects/seed.builds)
+DONE R-API-151 → tests/auth/api_test.go::TestRAPI151ListsAreGetOnly, zz_logs_test.go::TestRAPI151WholeSuite
+TODO self-tests of authenv plumbing; lint/ci stages; stubs in internal/{api,auth,rbac,http}
+DONE all 16 R-ids; self-tests tests/auth/authenv/authenv_test.go, tests/rbac/ref/ref_test.go; staticcheck/vet clean for tests/auth, tests/rbac; no stubs needed in internal/*

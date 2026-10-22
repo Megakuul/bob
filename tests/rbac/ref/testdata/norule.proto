@@ -1,0 +1,34 @@
+syntax = "proto3";
+package fixture.v1;
+
+// A fixture service without authz options: the rule check must flag every method.
+service NoRuleService {
+  rpc Open(OpenRequest) returns (OpenResponse);
+  rpc Unspec(OpenRequest) returns (OpenResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_UNSPECIFIED};
+  }
+  rpc BadField(OpenRequest) returns (OpenResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "missing"
+    };
+  }
+  rpc RepeatedField(OpenRequest) returns (OpenResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "many"
+    };
+  }
+  rpc Fine(OpenRequest) returns (OpenResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project"
+    };
+  }
+}
+
+message OpenRequest {
+  string project = 1;
+  repeated string many = 2;
+}
+message OpenResponse {}
