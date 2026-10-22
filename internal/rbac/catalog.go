@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/megakuul/bob/internal/api"
+	accessv1 "github.com/megakuul/bob/internal/gen/bob/access/v1"
 	authzv1 "github.com/megakuul/bob/internal/gen/bob/authz/v1"
 )
 
@@ -39,6 +40,16 @@ func NewCatalog(rules api.Rules) *Catalog {
 
 // Methods returns every method of the catalogue, sorted.
 func (c *Catalog) Methods() []string { return slices.Clone(c.methods) }
+
+// Entries is the catalogue as ListPermissionCatalog answers it, sorted by method. Descriptions
+// stay empty: the generated descriptors carry no comments.
+func (c *Catalog) Entries() []*accessv1.CatalogEntry {
+	out := make([]*accessv1.CatalogEntry, 0, len(c.methods))
+	for _, m := range c.methods {
+		out = append(out, &accessv1.CatalogEntry{Method: m, Kind: c.kinds[m]})
+	}
+	return out
+}
 
 // Kind is the rule kind of method ("" if it is not in the catalogue).
 func (c *Catalog) Kind(method string) string { return c.kinds[method] }

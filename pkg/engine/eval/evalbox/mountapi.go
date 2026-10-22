@@ -9,7 +9,7 @@ import (
 
 // Bind sources. stage1 runs in its own mount namespace, so it cannot bind-mount a descriptor
 // of the host namespace, and as an unprivileged uid it may not reach host paths below a 0700
-// directory (root's home). When bob runs as root it therefore clones each source with
+// directory (root's home). When the sandbox runs as nobody (bob runs as root) bob therefore clones each source with
 // open_tree(OPEN_TREE_CLONE), makes the detached copy read-only, and hands the descriptor to
 // stage1, which attaches it with move_mount. An unprivileged bob passes plain paths: it can
 // reach them itself, and stage1 is that same kernel uid.
@@ -32,7 +32,7 @@ type mountAttr struct {
 // bindSource prepares the source of one bind for stage1; detached trees are appended to files
 // (inherited from fd 3 on, in order).
 func bindSource(host, target string, rw bool, files *[]*os.File) (stageBind, error) {
-	if !hostRoot() {
+	if !asNobody() {
 		if _, err := os.Stat(host); err != nil {
 			return stageBind{}, fmt.Errorf("evaluation sandbox: %w", err)
 		}

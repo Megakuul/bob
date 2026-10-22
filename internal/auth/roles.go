@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/megakuul/bob/internal/api"
+	"github.com/megakuul/bob/internal/rbac"
 	accessv1 "github.com/megakuul/bob/internal/gen/bob/access/v1"
 	commonv1 "github.com/megakuul/bob/internal/gen/bob/common/v1"
 	"github.com/megakuul/bob/internal/store"
@@ -140,43 +141,19 @@ func roleMsg(r *store.RoleRecord) *accessv1.Role {
 	return m
 }
 
-// validPermissions checks method and project patterns of a role.
-func validPermissions(ps []*accessv1.Permission) ([]store.Permission, error) {
-	if len(ps) > maxRolePermissions {
-		return nil, api.InvalidArgument("role.permissions", fmt.Sprintf("a role has at most %d permissions", maxRolePermissions))
+// rolePermissions validates the permissions of a role against the catalogue (rbac).
+func (id *Identity) rolePermissions(ps []*accessv1.Permission) ([]store.Permission, error) {
+	in := make([]store.Permission, 0, len(ps))
+	for _, p := range ps {
+		in = append(in, store.Permission{Method: p.GetMethod(), Project: p.GetProject()})
 	}
-	out := make([]store.Permission, 0, len(ps))
-	for i, p := range ps {
-		field := fmt.Sprintf("role.permissions[%d]", i)
-		if !validMethodPattern(p.GetMethod()) {
-			return nil, api.InvalidArgument(field+".method", fmt.Sprintf("method %q is not \"*\", \"<package>.<Service>/*\" or \"<package>.<Service>/<Method>\"", p.GetMethod()))
-		}
-		if p.GetProject() != "*" && !slugRE.MatchString(p.GetProject()) {
-			return nil, api.InvalidArgument(field+".project", "project must be a project id or \"*\"")
-		}
-		out = append(out, store.Permission{Method: p.GetMethod(), Project: p.GetProject()})
-	}
-	return out, nil
+	return id.rbac.Catalog().CheckPermissions(in)
 }
 
-func validMethodPattern(m string) bool {
-	if m == "*" {
-		return true
-	}
-	svc, meth, ok := strings.Cut(m, "/")
-	if !ok || !strings.HasPrefix(svc, "bob.") || strings.Count(svc, ".") < 3 || meth == "" || len(m) > 200 {
-		return false
-	}
-	return meth == "*" || !strings.ContainsAny(meth, "/*.")
-}
-
-// roleService implements bob.access.v1.RoleService. RBAC's evaluation and the escalation
-// check of CreateRoleBinding (R-AUTH-152) belong to M15.4; until then only principals the
-// configured Authorizer allows reach these methods (admins with api.AdminBindings).
-type roleService struct {
-	id      *Identity
-	catalog func() []*accessv1.CatalogEntry
-}
+// roleService implements bob.access.v1.RoleService. Identity stores roles, bindings, the
+// member lists and the admin index; every decision (catalogue, escalation R-AUTH-152,
+// LIST_FILTERED scope) is internal/rbac's.
+type roleService struct{ id *Identity }
 
 func (s roleService) CreateRole(ctx context.Context, req *connect.Request[accessv1.CreateRoleRequest]) (*connect.Response[accessv1.CreateRoleResponse], error) {
 	in := req.Msg.GetRole()
@@ -189,7 +166,7 @@ func (s roleService) CreateRole(ctx context.Context, req *connect.Request[access
 	if len(in.GetDescription()) > 500 {
 		return nil, api.InvalidArgument("role.description", "description too long")
 	}
-	perms, err := validPermissions(in.GetPermissions())
+	perms, err := s.id.rolePermissions(in.GetPermissions())
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +261,7 @@ func (s roleService) UpdateRole(ctx context.Context, req *connect.Request[access
 	if err := api.CheckMask(req.Msg.GetUpdateMask(), in, "description", "permissions"); err != nil {
 		return nil, err
 	}
-	perms, err := validPermissions(in.GetPermissions())
+	perms, err := s.id.rolePermissions(in.GetPermissions())
 	if err != nil {
 		return nil, err
 	}
@@ -295,6 +272,24 @@ func (s roleService) UpdateRole(ctx context.Context, req *connect.Request[access
 		return nil, api.NotFound("role")
 	}
 	paths := req.Msg.GetUpdateMask().GetPaths()
+	if slices.Contains(paths, "permissions") {
+		// Permissions added to a role that may be bound anywhere must be held by the caller.
+		cur, err := s.id.role(ctx, in.GetId())
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, api.NotFound("role")
+		} else if err != nil {
+			return nil, storageError(err)
+		}
+		var added []store.Permission
+		for _, p := range perms {
+			if !slices.Contains(cur.Permissions, p) {
+				added = append(added, p)
+			}
+		}
+		if err := s.id.rbac.CheckRolePermissions(ctx, api.PrincipalFrom(ctx), added); err != nil {
+			return nil, err
+		}
+	}
 	next, err := store.CAS(ctx, s.id.control, store.RoleKey(in.GetId()), func(cur *store.RoleRecord) (*store.RoleRecord, error) {
 		if cur == nil {
 			return nil, api.NotFound("role")
@@ -362,11 +357,7 @@ func (s roleService) DeleteRole(ctx context.Context, req *connect.Request[access
 }
 
 func (s roleService) ListPermissionCatalog(context.Context, *connect.Request[accessv1.ListPermissionCatalogRequest]) (*connect.Response[accessv1.ListPermissionCatalogResponse], error) {
-	var entries []*accessv1.CatalogEntry
-	if s.catalog != nil {
-		entries = s.catalog()
-	}
-	return connect.NewResponse(&accessv1.ListPermissionCatalogResponse{Entries: entries}), nil
+	return connect.NewResponse(&accessv1.ListPermissionCatalogResponse{Entries: s.id.rbac.Catalog().Entries()}), nil
 }
 
 // bindingsOfPrincipal reads the `ro` bindings of "user:<id>" or "sa:<id>".
@@ -523,15 +514,11 @@ func bindingMsg(principal string, b store.RoleBindingEntry) *accessv1.RoleBindin
 func (s roleService) CreateRoleBinding(ctx context.Context, req *connect.Request[accessv1.CreateRoleBindingRequest]) (*connect.Response[accessv1.CreateRoleBindingResponse], error) {
 	m := req.Msg
 	principal, role, project := m.GetPrincipalId(), m.GetRole(), m.GetProject()
-	if project != "*" && !slugRE.MatchString(project) {
+	if !rbac.ValidProject(project) {
 		return nil, api.InvalidArgument("project", "project must be a project id or \"*\"")
 	}
-	if role != adminRole {
-		if _, err := s.id.role(ctx, role); errors.Is(err, store.ErrNotFound) {
-			return nil, api.NotFound("role")
-		} else if err != nil {
-			return nil, storageError(err)
-		}
+	if err := s.id.rbac.CheckGrant(ctx, api.PrincipalFrom(ctx), role, project); err != nil {
+		return nil, err
 	}
 	now := s.id.now()
 	entry := store.RoleBindingEntry{ID: bindingID(), Role: role, Project: project, Source: sourceManual, Created: now}
@@ -593,14 +580,12 @@ func (s roleService) ListRoleBindings(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, err
 	}
-	caller := api.PrincipalFrom(ctx)
-	const method = "bob.access.v1.RoleService/ListRoleBindings"
-	if p := m.GetProject(); p != "" {
-		if a, err := s.id.authz.Access(ctx, caller, method, p); err != nil {
-			return nil, err
-		} else if a != api.Allowed {
-			return nil, api.NotFound("project")
-		}
+	scope, err := s.id.rbac.Scope(ctx, api.PrincipalFrom(ctx), "bob.access.v1.RoleService/ListRoleBindings")
+	if err != nil {
+		return nil, err
+	}
+	if p := m.GetProject(); p != "" && !scope.Contains(p) {
+		return nil, api.NotFound("project")
 	}
 	var principals []string
 	switch {
@@ -633,7 +618,6 @@ func (s roleService) ListRoleBindings(ctx context.Context, req *connect.Request[
 		}
 		slices.Sort(principals)
 	}
-	allowed := map[string]bool{}
 	var all []*accessv1.RoleBinding
 	for _, p := range principals {
 		ro, err := s.id.bindingsOfPrincipal(ctx, p)
@@ -646,16 +630,7 @@ func (s roleService) ListRoleBindings(ctx context.Context, req *connect.Request[
 			if m.GetRole() != "" && b.Role != m.GetRole() || m.GetProject() != "" && b.Project != m.GetProject() {
 				continue
 			}
-			ok, seen := allowed[b.Project]
-			if !seen {
-				a, err := s.id.authz.Access(ctx, caller, method, b.Project)
-				if err != nil {
-					return nil, err
-				}
-				ok = a == api.Allowed
-				allowed[b.Project] = ok
-			}
-			if ok {
+			if scope.Contains(b.Project) {
 				all = append(all, bindingMsg(p, b))
 			}
 		}

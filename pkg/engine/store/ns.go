@@ -240,6 +240,12 @@ func prepareNamespace(cmd *exec.Cmd, home string, rest ...string) (*os.File, *os
 	attr.Cloneflags = syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS
 	attr.UidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getuid(), Size: 1}}
 	attr.GidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getgid(), Size: 1}}
+	if os.Getuid() == 0 && os.Getgid() == 0 && nobodyMapped() {
+		// Root may map more than itself: nobody too, so the evaluator sandbox inside this
+		// namespace can still drop to nobody instead of running as root (A94).
+		attr.UidMappings = append(attr.UidMappings, syscall.SysProcIDMap{ContainerID: nobody, HostID: nobody, Size: 1})
+		attr.GidMappings = append(attr.GidMappings, syscall.SysProcIDMap{ContainerID: nobody, HostID: nobody, Size: 1})
+	}
 	attr.GidMappingsEnableSetgroups = false
 	cmd.SysProcAttr = attr
 	return r, w, nil
@@ -363,4 +369,34 @@ func Enter(ctx context.Context, c Config) (inside bool, exit int, err error) {
 			return false, 0, nil
 		}
 	}
+}
+
+// nobody is the unprivileged id mapped next to root in a namespace host root enters.
+const nobody = 65534
+
+// nobodyMapped reports whether uid and gid 65534 exist in the current user namespace (always
+// in the initial one; in a container only when its maps include them).
+func nobodyMapped() bool {
+	for _, f := range []string{"/proc/self/uid_map", "/proc/self/gid_map"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return false
+		}
+		ok := false
+		for line := range strings.SplitSeq(string(b), "\n") {
+			x := strings.Fields(line)
+			if len(x) != 3 {
+				continue
+			}
+			in, e1 := strconv.ParseUint(x[0], 10, 32)
+			n, e2 := strconv.ParseUint(x[2], 10, 33)
+			if e1 == nil && e2 == nil && nobody >= in && nobody < in+n {
+				ok = true
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
 }

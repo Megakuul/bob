@@ -8,8 +8,10 @@ import (
 // orchestratorParts wires the feature packages into an orchestrator process: controllers
 // (internal/orchestrator), service implementations, identity, RBAC and worker
 // authentication. Each milestone adds its part here.
-func orchestratorParts(*server.Env) server.OrchestratorParts {
-	return server.OrchestratorParts{}
+func orchestratorParts(env *server.Env) server.OrchestratorParts {
+	var parts server.OrchestratorParts
+	rbacParts(env, &parts)
+	return parts
 }
 
 // workerParts wires the worker loop (internal/worker) into a worker process.

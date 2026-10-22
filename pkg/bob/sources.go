@@ -3,6 +3,7 @@ package bob
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"path"
@@ -287,11 +288,37 @@ type fileSpec struct {
 	Path string `json:"path"`
 }
 
+// undeclared explains why p is not one of the step's declared Outputs ("" when it is). Only
+// a declared output is known to exist after the step, and a path such as "../x" would name
+// something outside it (SPEC §1.4.2, R-FW-023).
+func (s *Step) undeclared(p string) string {
+	var spec struct {
+		Outputs []string `json:"outputs"`
+	}
+	if err := json.Unmarshal(s.n.spec, &spec); err != nil {
+		return "the step's outputs are unreadable"
+	}
+	if p != "" && path.Clean(p) == p && !path.IsAbs(p) && p != ".." && !strings.HasPrefix(p, "../") {
+		for _, o := range spec.Outputs {
+			if path.Clean(o) == p {
+				return ""
+			}
+		}
+	}
+	return fmt.Sprintf("%q is not one of the step's declared Outputs %q", p, spec.Outputs)
+}
+
 // File returns one declared output of the step as a Tree.
 func (s *Step) File(p string) Tree {
 	if s == nil || s.n == nil {
 		if active != nil {
 			active.misuse(fmt.Sprintf("Step.File(%q) of a step that was not created", p))
+		}
+		return &treeNode{}
+	}
+	if why := s.undeclared(p); why != "" {
+		if active != nil {
+			active.misuse(fmt.Sprintf("%s: Step.File(%q): %s", s.n.label, p, why))
 		}
 		return &treeNode{}
 	}

@@ -14,9 +14,13 @@ import (
 
 // Bounds on what the translator keeps (AGENTS.md §5.4: the stream carries builder output).
 const (
-	logHeadLines  = 2000 // first lines kept per build log (compiler diagnostics come early)
-	logTailLines  = 2000 // last lines kept per build log (excerpts are the tail)
-	maxLogLine    = 4096 // bytes kept of one build log line
+	logHeadLines  = 2000     // first lines kept per build log (compiler diagnostics come early)
+	logTailLines  = 2000     // last lines kept per build log (excerpts are the tail)
+	maxLogLine    = 4096     // bytes kept of one build log line
+	maxHeadBytes  = 1 << 20  // bytes kept of the head of one build log
+	maxTailBytes  = 1 << 20  // bytes kept of the tail of one build log
+	maxRunLog     = 64 << 20 // bytes of build logs kept for the whole run (F6)
+	keptOnEvict   = 16       // lines a log keeps when the run budget evicts it (excerpts use ≤ 8)
 	maxWarnings   = 10000
 	maxUnknown    = 64 // unknown level-0 messages kept as BOB-E-9999 errors
 	maxRawBytes   = 64 << 10
@@ -34,38 +38,68 @@ type activity struct {
 	done    int64 // file-transfer progress (bytes)
 }
 
-// buildLog keeps the first and the last lines of one build log.
+// buildLog keeps the first and the last lines of one build log, bounded in lines and bytes.
 type buildLog struct {
-	head    []string
-	tail    []string // ring buffer once full
-	next    int      // ring position
-	dropped int
+	head      []string
+	headBytes int
+	tail      []string // queue: tail[start:] are the kept lines
+	start     int
+	tailBytes int
+	dropped   int
 }
 
-func (l *buildLog) add(s string) {
+// add appends a line and returns the change of the bytes kept.
+func (l *buildLog) add(s string) int {
 	if len(s) > maxLogLine {
 		s = s[:maxLogLine]
 	}
-	switch {
-	case len(l.head) < logHeadLines:
+	before := l.size()
+	if len(l.tail) == 0 && len(l.head) < logHeadLines && l.headBytes+len(s) <= maxHeadBytes {
 		l.head = append(l.head, s)
-	case len(l.tail) < logTailLines:
-		l.tail = append(l.tail, s)
-	default:
-		l.tail[l.next] = s
-		l.next = (l.next + 1) % logTailLines
+		l.headBytes += len(s)
+		return len(s)
+	}
+	l.tail = append(l.tail, s)
+	l.tailBytes += len(s)
+	for len(l.tail)-l.start > logTailLines || l.tailBytes > maxTailBytes {
+		l.tailBytes -= len(l.tail[l.start])
+		l.tail[l.start] = ""
+		l.start++
 		l.dropped++
 	}
+	if l.start > logTailLines { // compact the queue
+		l.tail = append([]string(nil), l.tail[l.start:]...)
+		l.start = 0
+	}
+	return l.size() - before
+}
+
+func (l *buildLog) size() int { return l.headBytes + l.tailBytes }
+
+func (l *buildLog) lineCount() int { return len(l.head) + len(l.tail) - l.start }
+
+// shrink keeps only the last n lines and returns the change of the bytes kept.
+func (l *buildLog) shrink(n int) int {
+	if l.lineCount() <= n {
+		return 0
+	}
+	all := l.lines()
+	before := l.size()
+	keep := append([]string(nil), all[max(0, len(all)-n):]...)
+	*l = buildLog{tail: keep, dropped: l.dropped + len(all) - len(keep)}
+	for _, s := range keep {
+		l.tailBytes += len(s)
+	}
+	return l.size() - before
 }
 
 func (l *buildLog) lines() []string {
 	if l == nil {
 		return nil
 	}
-	out := make([]string, 0, len(l.head)+len(l.tail))
+	out := make([]string, 0, len(l.head)+len(l.tail)-l.start)
 	out = append(out, l.head...)
-	out = append(out, l.tail[l.next:]...)
-	return append(out, l.tail[:l.next]...)
+	return append(out, l.tail[l.start:]...)
 }
 
 // Translator turns one Nix run into bob errors and events. Feed it every stderr line of
@@ -76,6 +110,10 @@ type Translator struct {
 	acts     map[uint64]*activity
 	builds   map[string]*activity // drv → last build activity
 	logs     map[string]*buildLog // drv → build log (ANSI stripped)
+	logBytes int                  // bytes kept in logs (≤ maxRunLog after each line)
+	stops    []string             // drvs whose build stopped, in order (eviction candidates)
+	shrunk   int                  // stops[:shrunk] were considered for cutting
+	dropped  int                  // stops[:dropped] were considered for dropping
 	hookLogs map[string][]string  // drv → post-build-hook lines
 	hookDrv  string               // drv of the last post-build-hook activity
 	from     map[string]string    // store path → substituter it was copied from
@@ -85,6 +123,9 @@ type Translator struct {
 	skipped  map[string]bool      // drvs that failed because a dependency failed
 	upstream map[string]bool      // non-bob drvs built from source
 	hints    map[*diag.Error]string
+	deferred map[*diag.Error]bool // errors of untrusted messages: emitted at Finish only
+	claim    *claim               // the untrusted message being translated (plainError)
+	claims   []*claim             // untrusted messages, settled at Finish
 	warns    []string
 	errs     []*diag.Error
 	fatal    []string // drv-less fatal messages (timeouts, interrupts, plain lines)
@@ -104,7 +145,7 @@ func New(ctx *Context) *Translator {
 	t := &Translator{ctx: ctx, acts: map[uint64]*activity{}, builds: map[string]*activity{},
 		logs: map[string]*buildLog{}, hookLogs: map[string][]string{}, from: map[string]string{},
 		pkgs: map[string]*PkgState{}, failed: map[string]bool{}, skipped: map[string]bool{},
-		upstream: map[string]bool{}, hints: map[*diag.Error]string{}}
+		upstream: map[string]bool{}, hints: map[*diag.Error]string{}, deferred: map[*diag.Error]bool{}}
 	for _, d := range slices.Sorted(maps.Keys(ctx.Packages)) {
 		p := ctx.Packages[d]
 		if p.Role != "" {
@@ -151,6 +192,9 @@ func (t *Translator) feed(ev event) {
 	case actStop:
 		if a := t.acts[ev.ID]; a != nil {
 			a.stopped = true
+			if a.typ == atBuild && a.drv != "" {
+				t.stops = append(t.stops, a.drv)
+			}
 		}
 	case actResult:
 		t.result(ev)
@@ -211,6 +255,13 @@ func (t *Translator) start(ev event) {
 	case atPostBuildHook:
 		a.drv = ev.str(0)
 		t.hookDrv = a.drv
+		// A failing hook is attributed to the last hook activity: older hook logs are not
+		// needed any more (F6).
+		for d := range t.hookLogs {
+			if d != a.drv {
+				delete(t.hookLogs, d)
+			}
+		}
 	case atBuildWaiting:
 		// "waiting for lock on '<out>'": another process builds the same path.
 		if m := quotedPath.FindStringSubmatch(a.text); m != nil {
@@ -253,13 +304,18 @@ func (t *Translator) result(ev event) {
 			l = &buildLog{}
 			t.logs[a.drv] = l
 		}
-		l.add(line)
+		t.logBytes += l.add(line)
+		t.boundLogs()
 		if p, ok := t.ctx.Packages[a.drv]; ok && t.Sink != nil {
 			t.emit(Event{Event: "log", Label: p.Label, Line: t.mapPaths(line)})
 		}
 	case rtPostBuildLogLine:
 		if hl := t.hookLogs[a.drv]; len(hl) < logTailLines {
-			t.hookLogs[a.drv] = append(hl, stripANSI(ev.str(0)))
+			line := stripANSI(ev.str(0))
+			if len(line) > maxLogLine {
+				line = line[:maxLogLine]
+			}
+			t.hookLogs[a.drv] = append(hl, line)
 		}
 	case rtSetPhase:
 		if p, ok := t.ctx.Packages[a.drv]; ok && a.drv != "" {
@@ -271,6 +327,39 @@ func (t *Translator) result(ev event) {
 		if a.typ == atFileTransfer {
 			a.done = ev.num(0)
 		}
+	}
+}
+
+// boundLogs keeps the logs of the whole run within maxRunLog (F6). Over the budget, the logs of
+// builds that stopped longest ago without an error are first cut to their last keptOnEvict
+// lines (enough for excerpts), then dropped; then the largest remaining logs are cut.
+func (t *Translator) boundLogs() {
+	for t.logBytes > maxRunLog && t.shrunk < len(t.stops) {
+		d := t.stops[t.shrunk]
+		t.shrunk++
+		if l := t.logs[d]; l != nil && !t.failed[d] {
+			t.logBytes += l.shrink(keptOnEvict)
+		}
+	}
+	for t.logBytes > maxRunLog && t.dropped < len(t.stops) {
+		d := t.stops[t.dropped]
+		t.dropped++
+		if l := t.logs[d]; l != nil && !t.failed[d] {
+			t.logBytes -= l.size()
+			delete(t.logs, d)
+		}
+	}
+	for t.logBytes > maxRunLog {
+		var big *buildLog
+		for _, d := range slices.Sorted(maps.Keys(t.logs)) {
+			if l := t.logs[d]; big == nil || l.size() > big.size() {
+				big = l
+			}
+		}
+		if big == nil || big.lineCount() <= keptOnEvict {
+			return
+		}
+		t.logBytes += big.shrink(keptOnEvict)
 	}
 }
 
@@ -287,8 +376,85 @@ func (t *Translator) msg(ev event) {
 			t.warns = append(t.warns, strings.TrimPrefix(text, "warning: "))
 		}
 	case lvlError:
-		t.nixError(text)
+		if ev.hasRaw {
+			t.nixError(text)
+		} else {
+			t.plainError(text)
+		}
 	}
+}
+
+// plainError handles a level-0 message without raw_msg. Nix forwards a builder's
+// `@nix {"action":"msg",…}` lines in exactly this form (S15 §3.1, measured), so such a message
+// is untrusted (F7): it is translated like any other, but its error events are not emitted live,
+// and the packages it names fail only if Finish confirms it structurally: the output is not
+// valid and, for a bob package, Nix started building it. Otherwise its errors become warnings.
+func (t *Translator) plainError(text string) {
+	t.claim = &claim{}
+	defer func() {
+		t.claims = append(t.claims, t.claim)
+		t.claim = nil
+	}()
+	t.nixError(text)
+}
+
+// claim is what one untrusted message asserts: the drvs it fails or skips and its errors.
+type claim struct {
+	failed, skipped []string
+	errs            []*diag.Error
+}
+
+// fail marks drv failed (provisionally for an untrusted message).
+func (t *Translator) fail(drv string) {
+	if t.claim != nil {
+		t.claim.failed = append(t.claim.failed, drv)
+		return
+	}
+	t.failed[drv] = true
+}
+
+// skip marks drv skipped because a dependency failed (provisionally for an untrusted message).
+func (t *Translator) skip(drv string) {
+	if t.claim != nil {
+		t.claim.skipped = append(t.claim.skipped, drv)
+		return
+	}
+	t.skipped[drv] = true
+}
+
+// settleClaims decides the untrusted messages with the outcome: a claim about a drv whose output
+// is valid, or that a bob package Nix never started building failed, is false; its errors
+// become warnings.
+func (t *Translator) settleClaims(valid map[string]bool) (rejected []*diag.Error) {
+	for _, c := range t.claims {
+		ok := true
+		for _, d := range c.failed {
+			if _, mine := t.ctx.Packages[d]; valid[d] || mine && t.builds[d] == nil {
+				ok = false
+			}
+		}
+		for _, d := range c.skipped {
+			ok = ok && !valid[d]
+		}
+		if ok {
+			for _, d := range c.failed {
+				t.failed[d] = true
+			}
+			for _, d := range c.skipped {
+				t.skipped[d] = true
+			}
+			continue
+		}
+		for _, e := range c.errs {
+			if i := slices.Index(t.errs, e); i >= 0 {
+				t.errs = slices.Delete(t.errs, i, i+1)
+				e.Severity = diag.SeverityWarning
+				rejected = append(rejected, e)
+			}
+		}
+	}
+	t.claims = nil
+	return rejected
 }
 
 func capRaw(s string) string {
@@ -334,7 +500,7 @@ func (t *Translator) nixError(text string) {
 	switch {
 	case reHashFOD.MatchString(text):
 		m := reHashFOD.FindStringSubmatch(text)
-		t.failed[m[1]] = true
+		t.fail(m[1])
 		p := t.ctx.Packages[m[1]]
 		e := t.pkgErr(cHashMismatch, m[1], nil)
 		e.Excerpt = []string{"url:        " + p.URL, "bob.lock:   " + m[2], "downloaded: " + m[3]}
@@ -344,11 +510,11 @@ func (t *Translator) nixError(text string) {
 		t.fatal = append(t.fatal, text)
 	case reNoChroot.MatchString(text):
 		m := reNoChroot.FindStringSubmatch(text)
-		t.failed[m[1]] = true
+		t.fail(m[1])
 		t.add(t.pkgErr(cBadStep, m[1], map[string]string{"reason": "it asks to run outside the sandbox"}), text)
 	case reNoOutput.MatchString(text):
 		m := reNoOutput.FindStringSubmatch(text)
-		t.failed[m[1]] = true
+		t.fail(m[1])
 		e := t.pkgErr(cNoOutput, m[1], nil)
 		e.Cause = "the build step finished successfully but did not create its output"
 		e.Excerpt = t.tail(m[1], 5)
@@ -356,7 +522,7 @@ func (t *Translator) nixError(text string) {
 	case reDisallowed.MatchString(text):
 		m := reDisallowed.FindStringSubmatch(text)
 		d := t.ctx.Outputs[m[1]]
-		t.failed[d] = true
+		t.fail(d)
 		var refs []string
 		for r := range strings.FieldsSeq(m[2]) {
 			refs = append(refs, t.describePath(r))
@@ -366,7 +532,7 @@ func (t *Translator) nixError(text string) {
 		t.add(e, text)
 	case reLogLimit.MatchString(text):
 		m := reLogLimit.FindStringSubmatch(text)
-		t.failed[m[1]] = true
+		t.fail(m[1])
 		e := t.pkgErr(cLogLimit, m[1], map[string]string{"bytes": m[2]})
 		e.Excerpt = t.tail(m[1], 5)
 		t.add(e, text)
@@ -387,7 +553,7 @@ func (t *Translator) nixError(text string) {
 	case reNoSubstituter.MatchString(text), reBuildOf.MatchString(text):
 		// follow-up messages of an error that was already reported
 	case reSomeSubst.MatchString(text):
-		t.failed[reSomeSubst.FindStringSubmatch(text)[1]] = true
+		t.fail(reSomeSubst.FindStringSubmatch(text)[1])
 	case reIgnored.MatchString(text):
 		if reDiskFull.MatchString(text) {
 			t.diskFull(text)
@@ -397,14 +563,19 @@ func (t *Translator) nixError(text string) {
 	case reSQLiteBusy.MatchString(text):
 		t.add(newErr(cStoreBusy, nil), text)
 	default:
-		if t.unknown >= maxUnknown {
-			return
-		}
-		t.unknown++
-		e := newErr(cUnknown, nil)
-		e.Cause = t.safeCause(firstLine(text))
-		t.add(e, text)
+		t.unknownError(text)
 	}
+}
+
+// unknownError is BOB-E-9999 for a level-0 message the pattern table does not know.
+func (t *Translator) unknownError(text string) {
+	if t.unknown >= maxUnknown {
+		return
+	}
+	t.unknown++
+	e := newErr(cUnknown, nil)
+	e.Cause = t.safeCause(firstLine(text))
+	t.add(e, text)
 }
 
 // leakRe matches Nix vocabulary that must never reach default output (R-NIX-010). A cause
@@ -461,7 +632,11 @@ func (t *Translator) add(e *diag.Error, raw string) {
 		e.Raw = append(e.Raw, raw)
 	}
 	t.errs = append(t.errs, e)
-	if e.Code != cUnknown { // unknown messages are decided at Finish (a successful run demotes them)
+	// Unknown and untrusted messages are decided at Finish (a successful run demotes them).
+	if t.claim != nil {
+		t.claim.errs = append(t.claim.errs, e)
+		t.deferred[e] = true
+	} else if e.Code != cUnknown {
 		t.emit(Event{Event: "error", Error: e, Hint: t.hint(e)})
 	}
 }
@@ -520,22 +695,22 @@ func (t *Translator) cannotBuild(drv, reason, raw string) {
 	p, mine := t.ctx.Packages[drv]
 	switch {
 	case reDepsFailed.MatchString(reason):
-		t.skipped[drv] = true
+		t.skip(drv)
 		return
 	case rePlatform.MatchString(reason):
 		m := rePlatform.FindStringSubmatch(reason)
-		t.failed[drv] = true
+		t.fail(drv)
 		e := t.pkgErr(cNixpkgsUnbuildable, drv, map[string]string{"system": m[1]})
 		e.Log = ""
 		e.Cause = "this machine is " + m[2]
 		t.add(e, raw)
 		return
 	case reNoLocal.MatchString(reason):
-		t.failed[drv] = true
+		t.fail(drv)
 		t.add(t.cacheOnlyMiss(drv), raw)
 		return
 	}
-	t.failed[drv] = true
+	t.fail(drv)
 	if !mine {
 		t.upstreamFailed(drv, reason, raw)
 		return
@@ -762,6 +937,7 @@ func (t *Translator) Finish(o Outcome) *Report {
 	for _, d := range o.Valid {
 		valid[d] = true
 	}
+	notes := t.settleClaims(valid)
 	// drv-less fatal messages: attribute them to builds that stopped without output or error.
 	for _, f := range t.fatal {
 		t.fatalErr(f, o, valid)
@@ -784,7 +960,6 @@ func (t *Translator) Finish(o Outcome) *Report {
 	// R-NIX-018, ADR 0017 Decision 3: success is structural. Builders can print "@nix" lines
 	// that Nix forwards as level-0 messages (measured), so when Nix exits 0 and every bob
 	// output it touched is valid, no message fails the run: errors become warnings.
-	var notes []*diag.Error
 	if t.structuralSuccess(o, valid) {
 		for _, e := range t.errs {
 			e.Severity = diag.SeverityWarning
@@ -797,7 +972,7 @@ func (t *Translator) Finish(o Outcome) *Report {
 		}
 	}
 	for _, e := range t.errs {
-		if e.Code == cUnknown {
+		if e.Code == cUnknown || t.deferred[e] {
 			t.emit(Event{Event: "error", Error: e, Hint: t.hint(e)})
 		}
 	}

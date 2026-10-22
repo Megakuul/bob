@@ -90,6 +90,7 @@ type event struct {
 	Trace  []json.RawMessage `json:"trace"`
 
 	unknown []string // JSON keys not listed above (format drift)
+	hasRaw  bool     // the line has a raw_msg key: Nix's own error logger wrote it (F7)
 }
 
 func knownKey(k string) bool {
@@ -143,6 +144,7 @@ func parseLine(line []byte) event {
 	}
 	var keys map[string]json.RawMessage
 	if json.Unmarshal(js, &keys) == nil {
+		_, ev.hasRaw = keys["raw_msg"]
 		for k := range keys {
 			if !knownKey(k) {
 				ev.unknown = append(ev.unknown, k)

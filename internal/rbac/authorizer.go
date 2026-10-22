@@ -28,7 +28,7 @@ func (r *Roles) Permissions(ctx context.Context, id string) (perms []Permission,
 	if !ValidRoleID(id) {
 		return nil, false, nil
 	}
-	rec, _, err := store.GetCached(ctx, r.control, &r.cache, &store.RoleRecord{ID: id})
+	rec, _, err := store.GetCached(ctx, r.control, &r.cache, store.RoleKey(id))
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return nil, false, nil
@@ -38,13 +38,67 @@ func (r *Roles) Permissions(ctx context.Context, id string) (perms []Permission,
 	return rec.Permissions, true, nil
 }
 
-// Authorizer is the RBAC api.Authorizer (SPEC §6.4.1).
-type Authorizer struct{ roles *Roles }
+// Authorizer is the RBAC api.Authorizer (SPEC §6.4.1) and the escalation check of
+// CreateRoleBinding (R-AUTH-152).
+type Authorizer struct {
+	roles   RoleSource
+	catalog *Catalog
+}
+
+// RoleSource returns the permissions of a role; ok is false for a role that does not exist.
+// *Roles is the store-backed one.
+type RoleSource interface {
+	Permissions(ctx context.Context, id string) (perms []Permission, ok bool, err error)
+}
 
 var _ api.Authorizer = (*Authorizer)(nil)
 
-// NewAuthorizer evaluates bindings with the roles of r.
-func NewAuthorizer(r *Roles) *Authorizer { return &Authorizer{roles: r} }
+// NewAuthorizer evaluates bindings with the roles of r; c is the permission catalogue.
+func NewAuthorizer(r RoleSource, c *Catalog) *Authorizer { return &Authorizer{roles: r, catalog: c} }
+
+// Catalog is the permission catalogue.
+func (a *Authorizer) Catalog() *Catalog { return a.catalog }
+
+// CheckGrant is the escalation check of CreateRoleBinding (R-AUTH-152): binding role on
+// project is allowed only if every effective permission of the new binding is an effective
+// permission of the caller. It answers PermissionDenied "binding would grant permissions you
+// do not have" otherwise, and NotFound "role not found" for an unknown role.
+func (a *Authorizer) CheckGrant(ctx context.Context, caller *api.Principal, role, project string) error {
+	perms, ok, err := a.roles.Permissions(ctx, role)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return api.NotFound("role")
+	}
+	var held []Permission
+	if caller != nil {
+		if held, err = a.Effective(ctx, caller.Bindings); err != nil {
+			return err
+		}
+	}
+	if !a.catalog.Covers(held, Effective(perms, project)) {
+		return api.Forbidden("binding would grant permissions you do not have")
+	}
+	return nil
+}
+
+// CheckRolePermissions is the escalation check of a role change: permissions added to a role
+// that may already be bound on every project must each be held by the caller on every project
+// ("*"). UpdateRole should call it with the permissions it adds.
+func (a *Authorizer) CheckRolePermissions(ctx context.Context, caller *api.Principal, added []Permission) error {
+	var held []Permission
+	if caller != nil {
+		var err error
+		if held, err = a.Effective(ctx, caller.Bindings); err != nil {
+			return err
+		}
+	}
+	if !a.catalog.Covers(held, added) {
+		return api.Forbidden("role would grant permissions you do not have")
+	}
+	return nil
+}
 
 // Effective returns the union of the effective permissions of bindings. A binding of a role
 // that does not exist grants nothing.
@@ -116,4 +170,17 @@ func (a *Authorizer) Scope(ctx context.Context, p *api.Principal, method string)
 	}
 	slices.Sort(s.Projects)
 	return s, nil
+}
+
+// New returns the authorizer of an orchestrator: roles from the control bucket, the
+// catalogue of every RPC the API serves (api.AllRules).
+func New(control *store.Bucket) (*Authorizer, error) {
+	if control == nil {
+		return nil, errors.New("rbac: the control bucket is required")
+	}
+	rules, err := api.AllRules()
+	if err != nil {
+		return nil, err
+	}
+	return NewAuthorizer(NewRoles(control), NewCatalog(rules)), nil
 }

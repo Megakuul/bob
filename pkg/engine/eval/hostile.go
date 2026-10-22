@@ -131,7 +131,7 @@ func replaceDir(root, mp, target string, untrusted bool) (string, error) {
 	}
 	refuse := ir.Errors{ir.DefinitionError("go.mod", 0, 0, "",
 		fmt.Sprintf("replace %s => %s: the directory must be inside the repository", mp, clip(target)))}
-	if filepath.IsAbs(target) {
+	if filepath.IsAbs(target) || !within(filepath.Clean(root), filepath.Clean(src)) {
 		return "", refuse
 	}
 	realRoot, err := filepath.EvalSymlinks(root)
@@ -221,4 +221,23 @@ func tooDeep(shown string) error {
 
 func tooMany(shown string) error {
 	return ir.Errors{ir.DefinitionError(shown, 0, 0, "", fmt.Sprintf("has more than %d bob.go files", maxBobFiles))}
+}
+
+// checkGenDir refuses a repository whose .bob or .bob/eval is not a plain directory: bob writes
+// the generated evaluator sources there, and a committed symlink would redirect those writes
+// outside the repository.
+func checkGenDir(root string) error {
+	for _, d := range []string{path.Dir(genDir), genDir} {
+		fi, err := os.Lstat(filepath.Join(root, filepath.FromSlash(d)))
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !fi.IsDir() {
+			return ir.Errors{ir.DefinitionError(d, 0, 0, "", "is not a directory; remove it (bob keeps its own files there)")}
+		}
+	}
+	return nil
 }

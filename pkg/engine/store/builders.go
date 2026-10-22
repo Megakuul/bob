@@ -6,9 +6,9 @@ package store
 func builderTable(system string) string {
 	switch system {
 	case "aarch64-linux":
-		return "/nix/store/ihm0v89fl3gv8whblg2fad8pdwqvs6p4-bob-builder-1"
+		return "/nix/store/rnpvpakgphxzbk6ak7ly58wq9mkknqn0-bob-builder-1"
 	case "x86_64-linux":
-		return "/nix/store/4d3bqpb9vcv7xp4ng5absg9pkabg7rw5-bob-builder-1"
+		return "/nix/store/z31pl3cbzqldq4bxh0a2zjb5g0h1a3nk-bob-builder-1"
 	}
 	return ""
 }

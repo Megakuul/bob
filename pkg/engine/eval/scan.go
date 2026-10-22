@@ -39,8 +39,11 @@ func skipDir(name string) bool {
 // eval key hit budget, SPEC §1.17, includes this walk).
 func scanRepo(root string) (*repoScan, error) {
 	s := &repoScan{goDirs: map[string][]string{}, content: map[string][]byte{}}
-	var walk func(dir string) error
-	walk = func(dir string) error {
+	var walk func(dir string, depth int) error
+	walk = func(dir string, depth int) error {
+		if depth > maxScanDepth {
+			return tooDeep(".")
+		}
 		ents, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
 		if err != nil {
 			return err
@@ -60,11 +63,14 @@ func scanRepo(root string) (*repoScan, error) {
 				if skipDir(name) {
 					continue
 				}
-				if err := walk(rel); err != nil {
+				if err := walk(rel, depth+1); err != nil {
 					return err
 				}
 			case !e.Type().IsRegular():
 			case name == "bob.go":
+				if len(s.bobDirs) >= maxBobFiles {
+					return tooMany(".")
+				}
 				s.bobDirs = append(s.bobDirs, dir)
 			case dir == "." && (name == "go.mod" || name == "go.sum"):
 				s.content[rel] = nil
@@ -74,7 +80,7 @@ func scanRepo(root string) (*repoScan, error) {
 		}
 		return nil
 	}
-	if err := walk("."); err != nil {
+	if err := walk(".", 0); err != nil {
 		return nil, err
 	}
 	sort.Strings(s.bobDirs)
@@ -108,7 +114,7 @@ func (s *repoScan) hashes(root string, prev map[string]indexEntry, need bool) (m
 			next[rel] = old
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		b, err := readCapped(filepath.Join(root, filepath.FromSlash(rel)), rel, capOf(rel))
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +132,7 @@ func (s *repoScan) load(root string) error {
 		if c != nil {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		b, err := readCapped(filepath.Join(root, filepath.FromSlash(rel)), rel, capOf(rel))
 		if err != nil {
 			return err
 		}

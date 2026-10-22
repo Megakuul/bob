@@ -8,7 +8,7 @@ import (
 
 // Permission is {method, project} of SPEC §6.4.1. Method is "<pkg>.<Service>/<Method>",
 // "<pkg>.<Service>/*" or "*"; Project is a project id or "*".
-type Permission = store.RolePermission
+type Permission = store.Permission
 
 // Any is the wildcard of methods and projects.
 const Any = "*"

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/megakuul/bob/internal/api"
+	"github.com/megakuul/bob/internal/rbac"
 	"github.com/megakuul/bob/internal/store"
 )
 
@@ -21,7 +23,9 @@ type Config struct {
 	Now     func() time.Time // the process clock (bobtest builds can move it); nil = time.Now
 	Log     *slog.Logger     // nil = slog.Default()
 	Info    api.Info         // GetServerInfo / WhoAmI; Info.BaseURL "" = derived per request
-	Authz   api.Authorizer   // filters LIST_FILTERED results; nil = api.AdminBindings
+	// RBAC (required) decides grants, role permissions, the catalogue and LIST_FILTERED
+	// scopes; it must be the API's authorizer too.
+	RBAC *rbac.Authorizer
 }
 
 // Identity is the identity service of an orchestrator (SPEC §6.3): it authenticates API and
@@ -32,7 +36,7 @@ type Identity struct {
 	now     func() time.Time
 	log     *slog.Logger
 	info    api.Info
-	authz   api.Authorizer
+	rbac    *rbac.Authorizer
 
 	hasher   *hasher
 	throttle *throttle
@@ -45,9 +49,12 @@ type Identity struct {
 }
 
 // New returns the identity service. It performs no I/O.
-func New(cfg Config) *Identity {
+func New(cfg Config) (*Identity, error) {
+	if cfg.Control == nil || cfg.RBAC == nil {
+		return nil, errors.New("auth: Config.Control and Config.RBAC are required")
+	}
 	id := &Identity{
-		control: cfg.Control, now: cfg.Now, log: cfg.Log, info: cfg.Info, authz: cfg.Authz,
+		control: cfg.Control, now: cfg.Now, log: cfg.Log, info: cfg.Info, rbac: cfg.RBAC,
 		hasher: newHasher(), throttle: newThrottle(), oidc: newProviders(),
 	}
 	if id.now == nil {
@@ -56,10 +63,7 @@ func New(cfg Config) *Identity {
 	if id.log == nil {
 		id.log = slog.Default()
 	}
-	if id.authz == nil {
-		id.authz = api.AdminBindings{}
-	}
-	return id
+	return id, nil
 }
 
 // Cache lifetimes (SPEC §6.3.1): positive token lookups ≤ 10 s, negative ≤ 2 s. Records of
@@ -223,6 +227,11 @@ func (id *Identity) tokenPrincipal(ctx context.Context, tok Secret) (*api.Princi
 			return nil, errInvalidToken
 		} else if err != nil {
 			return nil, storageError(err)
+		}
+		// The SA record's list is the truth: a token whose record survived a revocation (the
+		// delete failed) is still refused.
+		if !slices.ContainsFunc(sa.Tokens, func(t store.SATokenEntry) bool { return t.ID == rec.TokenID && t.Hash == rec.Hash }) {
+			return nil, errInvalidToken
 		}
 		p = saPrincipal(sa)
 		id.touchSAToken(ctx, sa, rec.TokenID, now)

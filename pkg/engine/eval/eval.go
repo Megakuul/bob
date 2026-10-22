@@ -29,6 +29,9 @@ type Request struct {
 	// GoRoot is the pinned Go toolchain (its GOROOT, e.g. a store path realised from the
 	// nixpkgs pin). Empty: the go on PATH, which must be at least the framework's Go version.
 	GoRoot string
+	// Untrusted marks a repository bob does not trust (a worker evaluating pushed commits):
+	// directory replace targets of its go.mod must stay inside Root (review F2).
+	Untrusted bool
 }
 
 // Limits bound one evaluation inside the evaluator sandbox (R-FW-045, S13 §5.3). Wall clock,
@@ -99,6 +102,9 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 		return nil, err
 	}
 	gen := filepath.Join(root, genDir)
+	if err := checkGenDir(root); err != nil {
+		return nil, err
+	}
 	scanStart := time.Now()
 	scan, err := scanRepo(root)
 	if err != nil {
@@ -107,6 +113,9 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 	prevIndex := readIndex(filepath.Join(gen, indexFile))
 	index, err := scan.hashes(root, prevIndex, false)
 	if err != nil {
+		return nil, err
+	}
+	if err := addReplaceKeys(root, prevIndex, index, r.Untrusted); err != nil {
 		return nil, err
 	}
 	key := evalKey(index, fw.version, fw.h1, tc.version, runtime.GOARCH)
@@ -166,7 +175,7 @@ func compile(ctx context.Context, r Request, root string, tc toolchain, fw *fram
 	for _, d := range scan.bobDirs {
 		own[d] = parseBob(d, bobPath(d), scan.content[bobPath(d)])
 	}
-	deps, err := resolveDeps(ctx, tc, root, rootMod, own, fw.version)
+	deps, err := resolveDeps(ctx, tc, root, rootMod, own, fw.version, r.Untrusted)
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,8 @@
   TestRFLEET003Reslot and TestRFLEET005Planner (TEST PROBLEM 1, 2) and TestRFLEET012WakeLatency
   under load (p99 1.1–2.0 s at load 15–19; 77 s run, green, at lower load). Process-level tests
   (R-FLEET-001 e2e, R-FLEET-008 ×3, R-FLEET-013) need cmd/bob-server wiring (I-B3, NEEDS).
-  TestRFLEET003Chaos green 3 runs in a row (both modes). TestRFLEET010IdleRequestMix and
+  TestRFLEET003Chaos green 3 runs in a row (both modes) at load ~10–15; one re-run at load 25
+  (other agents' Nix builds) missed the 5 s requeue bound (6.1 s) — timing budget, rerun quiet. TestRFLEET010IdleRequestMix and
   TestRFLEET009 green.
 - CI: `go run ./tools/ci -only fmt,vet,lint,layering`: fmt, lint, layering ok; vet fails only on
   `out/uicheck` (another unit's package outside the R-ARCH-001 roots). boblint on my packages clean.

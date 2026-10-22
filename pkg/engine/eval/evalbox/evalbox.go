@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -185,11 +186,9 @@ type run struct {
 }
 
 func start(s Spec, l Limits, cg *cgroup) (*run, error) {
-	uid, gid := os.Getuid(), os.Getgid()
-	if hostRoot() {
-		// Never run the sandbox as host root: an escape lands as nobody, and RLIMIT_NPROC does
-		// not apply to root.
-		uid, gid = 65534, 65534
+	uid, gid, err := rootIDs()
+	if err != nil {
+		return nil, err
 	}
 	cfg := stageConfig{WorkBytes: l.WorkBytes, Dir: s.Dir, Steps: s.Steps, Strict: s.Strict}
 	if cg == nil {
@@ -217,7 +216,7 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 		if b.Sandbox == "/work" || strings.HasPrefix(b.Sandbox, "/work/") {
 			return fail(fmt.Errorf("evaluation sandbox: bind target %s is below /work", b.Sandbox))
 		}
-		if b.Writable && hostRoot() {
+		if b.Writable && asNobody() {
 			if err := os.Chown(b.Host, uid, gid); err != nil {
 				return fail(err)
 			}
@@ -237,7 +236,7 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 		rules = append(rules, landlockRule{b.Sandbox, acc})
 	}
 	if s.Seed != "" {
-		if s.SeedRW && hostRoot() {
+		if s.SeedRW && asNobody() {
 			if err := os.Chown(s.Seed, uid, gid); err != nil {
 				return fail(err)
 			}
@@ -252,7 +251,7 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 				if err := os.MkdirAll(s.CacheDir+"/"+d, 0o755); err != nil {
 					return fail(err)
 				}
-				if hostRoot() {
+				if asNobody() {
 					if err := os.Chown(s.CacheDir+"/"+d, uid, gid); err != nil {
 						return fail(err)
 					}
@@ -517,18 +516,71 @@ func (t *tailBuffer) bytes() []byte {
 	return append([]byte(nil), t.buf...)
 }
 
-// hostRoot reports whether bob runs as root of the initial user namespace. Root inside bob's
-// own namespace (a bob command after store.Enter) has a single mapped uid: it cannot hand
-// files to nobody (65534 is unmapped there, chown fails with EINVAL), so it takes the
-// unprivileged path; its uid 0 is the invoking user's.
-func hostRoot() bool {
-	if os.Getuid() != 0 {
-		return false
+// nobody is the id the sandbox runs as when bob runs as root.
+const nobody = 65534
+
+// asNobody reports whether the sandbox runs as nobody: bob runs as uid 0 and nobody (uid and
+// gid 65534) is mapped in bob's user namespace, so files can be handed to it and the sandbox's
+// own namespace can map to it. That holds for host root and for root inside bob's namespace
+// entered by host root (store.Enter maps 65534 next to 0 then). Root of a namespace without
+// nobody (bob's namespace of an unprivileged user: its uid 0 is that user) runs the sandbox as
+// itself, see rootIDs for the case where that would be host root.
+func asNobody() bool {
+	return os.Getuid() == 0 && idMapped("/proc/self/uid_map", nobody) && idMapped("/proc/self/gid_map", nobody)
+}
+
+// rootIDs returns the uid and gid the sandbox's own namespace maps to. The sandbox never runs
+// as host root (an escape would land as root, and RLIMIT_NPROC does not apply to root): uid 0
+// that maps to the parent namespace's uid 0 without nobody being mapped is refused.
+func rootIDs() (int, int, error) {
+	if asNobody() {
+		return nobody, nobody, nil
 	}
-	b, err := os.ReadFile("/proc/self/uid_map")
+	uid, gid := os.Getuid(), os.Getgid()
+	if uid == 0 && mapsToParent("/proc/self/uid_map", 0, 0) {
+		return 0, 0, fmt.Errorf("evaluation sandbox: bob runs as root in a user namespace without the unprivileged id %d; refusing to evaluate as root", nobody)
+	}
+	return uid, gid, nil
+}
+
+// idMapped reports whether id is inside one of the ranges of the id map file (an absent or
+// unreadable map counts as not mapped).
+func idMapped(file string, id uint64) bool {
+	b, err := os.ReadFile(file)
 	if err != nil {
 		return false
 	}
-	f := strings.Fields(string(b))
-	return len(f) == 3 && f[0] == "0" && f[1] == "0" && f[2] == "4294967295"
+	for line := range strings.SplitSeq(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 {
+			continue
+		}
+		in, e1 := strconv.ParseUint(f[0], 10, 32)
+		n, e2 := strconv.ParseUint(f[2], 10, 33)
+		if e1 == nil && e2 == nil && id >= in && id < in+n {
+			return true
+		}
+	}
+	return false
+}
+
+// mapsToParent reports whether id maps to parent in the parent namespace.
+func mapsToParent(file string, id, parent uint64) bool {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return false
+	}
+	for line := range strings.SplitSeq(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 {
+			continue
+		}
+		in, e1 := strconv.ParseUint(f[0], 10, 32)
+		out, e2 := strconv.ParseUint(f[1], 10, 32)
+		n, e3 := strconv.ParseUint(f[2], 10, 33)
+		if e1 == nil && e2 == nil && e3 == nil && id >= in && id < in+n {
+			return out+(id-in) == parent
+		}
+	}
+	return false
 }

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -128,7 +128,15 @@ func (s *depSet) sorted() []*depModule {
 }
 
 // resolveDeps loads the dependency bob repositories the bob.go files import, transitively.
-func resolveDeps(ctx context.Context, tc toolchain, root string, rootMod goMod, own map[string]*bobFile, bobVersion string) (*depSet, error) {
+// The root go.mod's module path and go line are validated first: generate writes them into
+// the evaluator's go.mod. untrusted refuses local replace directories outside root.
+func resolveDeps(ctx context.Context, tc toolchain, root string, rootMod goMod, own map[string]*bobFile, bobVersion string, untrusted bool) (*depSet, error) {
+	if err := checkModulePath(rootMod.module, true); err != nil {
+		return nil, goModError(err)
+	}
+	if err := checkGoLine(rootMod.goDir); err != nil {
+		return nil, goModError(err)
+	}
 	s := &depSet{mods: map[string]*depModule{}}
 	var queue []string
 	for _, f := range own {
@@ -151,11 +159,18 @@ func resolveDeps(ctx context.Context, tc toolchain, root string, rootMod goMod, 
 		if mp == "" {
 			continue // not required by any go.mod: R7 reports it
 		}
+		// mp and version name directories (module cache, .bob/eval/mods) and go.mod lines.
+		if err := checkModulePath(mp, false); err != nil {
+			return nil, goModError(err)
+		}
+		if err := checkVersion(mp, version); err != nil {
+			return nil, goModError(err)
+		}
 		var src string
 		if dir, ok := rootMod.replace[mp]; ok {
-			src = dir
-			if !filepath.IsAbs(src) {
-				src = filepath.Join(root, src)
+			var err error
+			if src, err = replaceDir(root, mp, dir, untrusted); err != nil {
+				return nil, err
 			}
 		} else {
 			if modcache == "" {
@@ -206,47 +221,43 @@ func requiredModule(p string, rootMod goMod, s *depSet) (string, string) {
 	return best, version
 }
 
-// loadDep reads the go.mod and bob.go files of a dependency module at src.
+// loadDep reads the go.mod and bob.go files of a dependency module at src (size-capped).
 func loadDep(mp, version, src string) (*depModule, error) {
-	gm, err := os.ReadFile(filepath.Join(src, "go.mod"))
+	shown := mp + "@" + version
+	gm, err := readCapped(filepath.Join(src, "go.mod"), shown+"/go.mod", maxGoModBytes)
 	if err != nil {
-		return nil, fmt.Errorf("bob repository %s@%s: %w", mp, version, err)
+		return nil, depError(shown, err)
 	}
 	m := &depModule{path: mp, version: version, src: src, gomod: parseGoMod(gm), bob: map[string]*bobFile{}}
-	err = filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if p != src && skipDir(d.Name()) {
-				return filepath.SkipDir
-			}
-			if p != src {
-				if _, err := os.Lstat(filepath.Join(p, "go.mod")); err == nil {
-					return filepath.SkipDir
-				}
-			}
-			return nil
-		}
-		if d.Name() != "bob.go" || !d.Type().IsRegular() {
-			return nil
-		}
-		rel, err := filepath.Rel(src, filepath.Dir(p))
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		m.bob[rel] = parseBob(rel, mp+"@"+version+"/"+bobPath(rel), b)
-		return nil
-	})
+	if err := checkGoLine(m.gomod.goDir); err != nil {
+		return nil, ir.Errors{ir.DefinitionError(shown+"/go.mod", 0, 0, "", err.Error())}
+	}
+	dirs, err := walkBobRepo(src, shown)
 	if err != nil {
-		return nil, fmt.Errorf("bob repository %s@%s: %w", mp, version, err)
+		return nil, depError(shown, err)
+	}
+	for _, rel := range dirs {
+		b, err := readCapped(filepath.Join(src, filepath.FromSlash(bobPath(rel))), shown+"/"+bobPath(rel), maxBobGoBytes)
+		if err != nil {
+			return nil, depError(shown, err)
+		}
+		m.bob[rel] = parseBob(rel, shown+"/"+bobPath(rel), b)
 	}
 	return m, nil
+}
+
+// depError wraps a dependency loading failure; definition errors stay as they are.
+func depError(shown string, err error) error {
+	var errs ir.Errors
+	if errors.As(err, &errs) {
+		return err
+	}
+	return fmt.Errorf("bob repository %s: %w", shown, err)
+}
+
+// goModError is an invalid line of the repository's go.mod.
+func goModError(err error) error {
+	return ir.Errors{ir.DefinitionError("go.mod", 0, 0, "", err.Error())}
 }
 
 // hostModCache is the user's Go module cache (where go mod download puts modules).

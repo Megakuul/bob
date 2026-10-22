@@ -103,6 +103,12 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 	g.files["go.mod"] = []byte(mod.String())
 	g.files["go.sum"] = []byte(fw.sumLines())
 
+	for name := range g.files {
+		// Names hold module paths and versions from go.mod files: never write outside out.
+		if err := genName(name); err != nil {
+			return nil, err
+		}
+	}
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return nil, err
 	}
