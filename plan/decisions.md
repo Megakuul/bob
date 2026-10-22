@@ -76,3 +76,5 @@
 | A72 | 2026-10-22 | TestRNIX016FuzzedJobsStayContained JSON construction bug; fix pending permission (plan/test-corrections.md item 6). | Test defect. |
 | A73 | 2026-10-22 | Layer E3 may import L0 (diag): translate must produce diag errors; E0-E2 already may. SPEC row updated; pkg/layering_test.go edit pending permission. | Architecture row was too narrow for its own package. |
 | A74 | 2026-10-22 | I-M4b: Nix success is structural; run-specific hints carried by Report.Hint until diag.Error gets an optional hint override (NEEDS for M4.6). Recorded goldens' summary line omits zero counts ("bob: 1 failed (exit 1)"), unlike the SPEC 02.5 sample: goldens bind. | Goldens are evidence. |
+| A75 | 2026-10-22 | E2 generators may import pkg/builder/bspec (types only); layering test edit pending (test-corrections item 8). | Needed by builder kinds and test-run services. |
+| A76 | 2026-10-22 | `--rerun` of a test unit uses a nonce attribute (`bobRerun`), not `nix-store --realise --check` (outputs hold timings so --check always reports non-determinism). Test unit = test-run derivation; BuilderVersion stays 1. | Measured by I-M4c (O-02-9). |

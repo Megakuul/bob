@@ -30,3 +30,6 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    (proper JSON encoding). Evidence: plan/progress/I-M4a.md.
 7. A73 `pkg/layering_test.go` mayImport: E3 (`pkg/engine/translate` produces `pkg/bob/diag` errors)
    may import L0: `mayImport[e3] = {e0, e1, e2, l0}`. SPEC R-ARCH-003 E3 row already updated.
+8. A75 `pkg/layering_test.go`: E2 ecosystem generators may import `pkg/builder/bspec` (the job
+   format is the contract between generators and bob-builder; it has no behaviour, only types).
+   Both I-M4a and I-M4c need it. SPEC R-ARCH-003 gets one sentence; test edit pending.

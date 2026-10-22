@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/builder/bspec"
@@ -184,19 +183,9 @@ func (c *Ctx) Exec(a bspec.ExecArgs) error {
 	if err != nil {
 		return err
 	}
-	env := map[string]string{
-		"PATH": strings.Join(a.Path, ":"), "HOME": "/homeless-shelter", "TMPDIR": tmp,
-		"NIX_BUILD_CORES": c.cores, "SOURCE_DATE_EPOCH": "1", "TZ": "UTC", "LC_ALL": "C",
-	}
-	for _, o := range c.Job.Outputs {
-		env[o] = c.Outputs[o]
-	}
+	env := c.baseEnv(a.Path, tmp)
 	maps.Copy(env, a.Env)
-	list := make([]string, 0, len(env))
-	for _, k := range slices.Sorted(maps.Keys(env)) {
-		list = append(list, k+"="+env[k])
-	}
-	cmd := &exec.Cmd{Path: prog, Args: a.Argv, Env: list, Dir: dir, Stdout: c.stdout, Stderr: c.stderr}
+	cmd := &exec.Cmd{Path: prog, Args: a.Argv, Env: envList(env), Dir: dir, Stdout: c.stdout, Stderr: c.stderr}
 	if err := cmd.Run(); err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {

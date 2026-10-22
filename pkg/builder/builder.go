@@ -43,6 +43,7 @@ func Core() map[string]Kind {
 		"run":       {Run: runKind},
 		"unpack":    {Run: unpackKind},
 		"copy-tree": {Run: copyTreeKind},
+		"test-run":  {Run: testRunKind, NoFixup: true},
 	}
 }
 
