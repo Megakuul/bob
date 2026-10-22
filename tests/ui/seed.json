@@ -10,11 +10,13 @@
     "/bob.build.v1.BuildService/ListBuilds": {"builds": [
       {"id": "01jbq7k2p4m8x0c3v5n7r9t1y6", "number": 412, "project": "api", "pipeline": "ci", "trigger": "push", "actor": "alice", "ref": "main", "sha": "3f2a91c", "state": "RUNNING", "done": 41, "total": 120, "createTime": "2026-03-02T09:58:00Z"},
       {"id": "01jbq7aa0d2f4h6k8m0p2r4t6v", "number": 411, "project": "web", "pipeline": "ci", "trigger": "push", "actor": "alice", "ref": "pr/88", "sha": "77c0e1b", "state": "FAILED", "errorCode": "BOB-E-2005", "createTime": "2026-03-02T09:46:00Z"}]},
-    "/bob.build.v1.BuildService/GetBuild": {"id": "01jbq7k2p4m8x0c3v5n7r9t1y6", "number": 412, "project": "api", "pipeline": "ci", "ref": "main", "sha": "3f2a91c", "state": "RUNNING", "platforms": ["linux/amd64", "linux/arm64"], "variant": "release", "attempt": 1, "done": 41, "total": 120, "cached": 63},
+    "/bob.build.v1.BuildService/GetBuild": {"id": "01jbq7k2p4m8x0c3v5n7r9t1y6", "number": 412, "project": "api", "pipeline": "ci", "ref": "main", "sha": "3f2a91c", "state": "RUNNING", "platforms": ["linux/amd64", "linux/arm64"], "variant": "release", "attempt": 1, "done": 41, "total": 120, "cached": 63, "artifacts": [{"storePath": "/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server", "sizeBytes": "1258291", "image": "api/server:b-01jbq7k2p4m8x0c3v5n7r9t1y6"}]},
     "/bob.build.v1.JobService/ListJobs": {"jobs": [
-      {"id": "01jbq7k2p4j0b00000000000s1", "label": "//svc/api:server", "platform": "linux/amd64", "state": "BUILDING"},
-      {"id": "01jbq7k2p4j0b00000000000d1", "label": "//lib/db:db", "platform": "linux/amd64", "state": "CACHED"},
-      {"id": "01jbq7k2p4j0b00000000000a1", "label": "//lib/auth:test", "platform": "linux/amd64", "state": "FAILED", "errorCode": "BOB-E-2005"}]},
+      {"id": "01jbq7k2p4j0b00000000000s1", "label": "//svc/api:server", "platform": "linux/amd64", "state": "BUILDING", "claimedAt": "2026-03-02T09:59:18Z"},
+      {"id": "01jbq7k2p4j0b00000000000d1", "label": "//lib/db:db", "platform": "linux/amd64", "state": "CACHED", "claimedAt": "2026-03-02T09:58:05Z", "finishedAt": "2026-03-02T09:58:20Z"},
+      {"id": "01jbq7k2p4j0b00000000000a1", "label": "//lib/auth:test", "platform": "linux/amd64", "state": "FAILED", "errorCode": "BOB-E-2005", "claimedAt": "2026-03-02T09:58:30Z", "finishedAt": "2026-03-02T09:58:39Z"}]},
+    "/bob.log.v1.LogService/GetLog": {"lines": [{"package": "//svc/api:server", "seq": "41", "stream": "STREAM_STDOUT", "tsUnixNano": "1772445558000000000", "text": "0041 compiling internal/http"}]},
+    "/bob.log.v1.LogService/FollowLog": {"stream": [{"lines": [{"package": "//svc/api:server", "seq": "42", "stream": "STREAM_STDOUT", "tsUnixNano": "1772445559000000000", "text": "0042 linking server"}]}, {"waitRelease": true, "lines": [{"package": "//svc/api:server", "seq": "43", "stream": "STREAM_STDOUT", "tsUnixNano": "1772445560000000000", "text": "0043 LIVE-LINE-LATE"}]}]},
     "/bob.fleet.v1.FleetService/ListWorkers": {"workers": [{"id": "w3kq8p0q", "platform": "linux/amd64", "state": "ACTIVE", "jobs": 1, "cpu": 8, "memoryBytes": "16106127360", "labels": ["ssd"]}]},
     "/bob.fleet.v1.FleetService/GetWorker": {"id": "w3kq8p0q", "platform": "linux/amd64", "state": "ACTIVE", "jobs": 1, "cpu": 8, "memoryBytes": "16106127360", "labels": ["ssd"]},
     "/bob.fleet.v1.FleetService/ListOrchestrators": {"orchestrators": [{"id": "o-1", "endpoint": "https://10.0.0.5:8443", "version": "0.1.0", "leaderOf": ["promotion", "gc"]}]},

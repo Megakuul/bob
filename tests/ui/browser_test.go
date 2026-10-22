@@ -361,7 +361,7 @@ func (e *env) assertGolden(t *testing.T, name string, got image.Image, raw []byt
 	}
 	e.candidate(t, rel, raw)
 	if !golden.Updating() {
-		t.Errorf("%s: no approved golden (%v); candidate written", rel, err)
+		t.Errorf("%s: no golden yet: not implemented (%v); candidate written", rel, err)
 	}
 }
 

@@ -259,8 +259,12 @@ func TestFirstLoadBudget(t *testing.T) {
 	}
 
 	tb := e.newTab(t, "", Sizes[0])
-	if _, err := tb.open(e, "/", "overview"); err != nil {
+	html0, err := tb.open(e, "/", "overview")
+	if err != nil {
 		t.Fatalf("harness: %v", err)
+	}
+	if NotImplemented([]byte(html0), "overview") {
+		t.Fatalf("not implemented: / renders no data-page=\"overview\"; the paint of a skeleton proves nothing")
 	}
 	fcp, err := chromedp.Run(tb.ctx, chromedp.Evaluate[float64](
 		`(performance.getEntriesByName('first-contentful-paint')[0] || {startTime: -1}).startTime`))

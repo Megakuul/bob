@@ -28,6 +28,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Page is one route of SPEC §6.10.3.
@@ -130,12 +132,25 @@ func LoadSeed(file string) (*Seed, error) {
 
 // Handler serves the static build in dir with the R-UI-001 rules (unknown paths get 200.html
 // with no-cache, /_app/immutable/* is immutable) and answers connect RPCs from the seed.
+//
+// Server streams (FollowLog) are seeded as {"stream": [{"lines": …, "waitRelease": bool}]}: the
+// handler sends each step as a connect+json envelope; a waitRelease step is held back until the
+// test calls POST /__test/release, which also records the release time (GET /__test/released
+// answers it in unix milliseconds), so a test can measure the line-to-screen latency.
 func Handler(dir string, seed *Seed) http.Handler {
 	files := http.FileServer(http.Dir(dir))
+	rel := &release{ch: make(chan struct{})}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := path.Clean(r.URL.Path)
-		if strings.HasPrefix(p, "/bob.") {
-			serveRPC(w, r, p, seed)
+		switch {
+		case p == "/__test/release" && r.Method == http.MethodPost:
+			rel.fire()
+			return
+		case p == "/__test/released":
+			fmt.Fprint(w, rel.at().UnixMilli())
+			return
+		case strings.HasPrefix(p, "/bob."):
+			serveRPC(w, r, p, seed, rel)
 			return
 		}
 		if strings.HasPrefix(p, "/_app/immutable/") {
@@ -155,8 +170,12 @@ func Handler(dir string, seed *Seed) http.Handler {
 
 // serveRPC answers unary connect calls (GET for lists per R-API-151, POST otherwise) with the
 // seeded message, and everything else with the connect error a stub server returns.
-func serveRPC(w http.ResponseWriter, r *http.Request, proc string, seed *Seed) {
+func serveRPC(w http.ResponseWriter, r *http.Request, proc string, seed *Seed, rel *release) {
 	msg, ok := seed.RPC[proc]
+	if ok && strings.HasPrefix(r.Header.Get("Content-Type"), "application/connect+json") {
+		serveStream(w, r, msg, rel)
+		return
+	}
 	if !ok || (r.Method != http.MethodGet && r.Method != http.MethodPost) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
@@ -165,6 +184,67 @@ func serveRPC(w http.ResponseWriter, r *http.Request, proc string, seed *Seed) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(msg)
+}
+
+// release is the broadcast behind POST /__test/release.
+type release struct {
+	mu   sync.Mutex
+	ch   chan struct{}
+	time time.Time
+}
+
+func (r *release) fire() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.time = time.Now()
+	close(r.ch)
+	r.ch = make(chan struct{})
+}
+
+func (r *release) at() time.Time {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.time
+}
+
+func (r *release) next() <-chan struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.ch
+}
+
+// serveStream answers a server-streaming call from a seeded {"stream": [...]} message.
+func serveStream(w http.ResponseWriter, r *http.Request, msg json.RawMessage, rel *release) {
+	var spec struct {
+		Stream []struct {
+			WaitRelease bool            `json:"waitRelease"`
+			Lines       json.RawMessage `json:"lines"`
+		} `json:"stream"`
+	}
+	if err := json.Unmarshal(msg, &spec); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/connect+json")
+	fl, _ := w.(http.Flusher)
+	send := func(flags byte, body []byte) {
+		hdr := []byte{flags, byte(len(body) >> 24), byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}
+		w.Write(append(hdr, body...))
+		if fl != nil {
+			fl.Flush()
+		}
+	}
+	for _, step := range spec.Stream {
+		if step.WaitRelease {
+			select {
+			case <-rel.next():
+			case <-r.Context().Done():
+				return
+			}
+		}
+		send(0, []byte(`{"lines":`+string(step.Lines)+`}`))
+	}
+	<-r.Context().Done() // the build is still running: keep the stream open
 }
 
 // Tolerance is the screenshot comparison bound of HARNESS.md §9: at most MaxDiffRatio of the
