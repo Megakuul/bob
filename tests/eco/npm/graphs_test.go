@@ -123,7 +123,11 @@ func writeGraph(t *testing.T, g graph) string {
 		}
 		w(im.dir+"/bob.go", "//go:build bob\n\npackage "+pkg+"\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/npm\"\n)\n\n"+body)
 	}
-	w("bob.go", "//go:build bob\n\npackage root\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/npm\"\n)\n\n"+rootDecl)
+	imports := "import \"github.com/megakuul/bob/pkg/bob\"\n\n"
+	if strings.Contains(rootDecl, "npm.") { // Go refuses an unused import
+		imports = "import (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/npm\"\n)\n\n"
+	}
+	w("bob.go", "//go:build bob\n\npackage root\n\n"+imports+rootDecl)
 	return dir
 }
 
