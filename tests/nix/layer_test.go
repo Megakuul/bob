@@ -322,8 +322,9 @@ func TestRNIX003StandardStorePathsAndCaches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("running api from the fresh store: %v: %s", err, out)
 	}
-	if !strings.Contains(string(out), "digest="+hex.EncodeToString(sum[:])) || !strings.Contains(string(out), "numhex=2a") {
-		t.Errorf("api output = %q", out)
+	// The line SPEC §01 R-FW-013 gives for //cmd/api:api (the digest is sha256("bob")).
+	if want := "digest=" + hex.EncodeToString(sum[:]) + " numhex=3432 proto_bytes=116"; !strings.Contains(string(out), want) {
+		t.Errorf("api output = %q, want a line containing %q", out, want)
 	}
 }
 
