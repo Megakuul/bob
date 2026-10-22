@@ -17,3 +17,10 @@ DONE R-SEC-100 → tests/policy/sec_test.go::TestRSEC100NoCredentialMintingInSou
 DONE R-SEC-102(+) → tests/policy/sec_test.go::TestRSEC102PositivePathAndRefusal
 SKIP R-SEC-101 (manual: runbook docs/operations/worker-compromise.md)
 DONE R-FLEET-005 → tests/store/fleet/planner_test.go::TestRFLEET005Planner (real-run 4-worker/73-drv bullet blocked: no raw-graph submit API/fixture)
+DONE R-FLEET-004 → tests/store/fleet/class_test.go::TestRFLEET004ClassEligibility (+ worker-side in queue_test.go, pending)
+DONE R-FLEET-011 → tests/store/fleet/queue_test.go::TestRFLEET011{QueueLiveness,SlotFirstLosesAJob,OrphanAndStaleSlots}
+DONE R-FLEET-004 (worker side) → queue_test.go::TestRFLEET004WorkerIgnoresOtherClasses
+DONE R-FLEET-003 → tests/store/fleet/lease_test.go::TestRFLEET003{LeaseAndRequeue,ClaimGrace,Cancel,Reslot,Chaos} (process kill -9 half: tests/chaos, T5b)
+DONE R-FLEET-012 → tests/store/fleet/dispatch_test.go::TestRFLEET012{WakeLatency,PollingOnlyLatency,SelectionPolicy,NoHerdAndNoDoubleClaim,BacklogSpread}
+DONE R-FLEET-009 → tests/store/fleet/budget_test.go::TestRFLEET009RequestBudgetPerJob
+DONE R-FLEET-010 → budget_test.go::TestRFLEET010IdleRequestMix + idle_slow_test.go (slow tag, 100 workers x 10 min)
