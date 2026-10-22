@@ -112,7 +112,7 @@ func TestComposeOutsideRules(t *testing.T) {
 	}
 	read := func(p string) string { return filepath.Join(dir, p) }
 	f := Compose(Spec{Root: "/r", Shell: "default", Packages: []engine.DevPackage{{Name: "go", Path: "/nix/store/aaa-go-1.26.8", Drv: "/nix/store/x.drv"}},
-		Env: map[string]string{"CGO_ENABLED": "0", "EDITOR_GO": "/nix/store/aaa-go-1.26.8/bin/go", "CFLAGS": "-I/nix/store/bbb/include", "PATH": "/x"},
+		Env:       map[string]string{"CGO_ENABLED": "0", "EDITOR_GO": "/nix/store/aaa-go-1.26.8/bin/go", "CFLAGS": "-I/nix/store/bbb/include", "PATH": "/x"},
 		InsideEnv: map[string]string{"GOROOT": "/nix/store/aaa-go-1.26.8/share/go", "GOTOOLCHAIN": "local"},
 		ToolEnv:   map[string]map[string]string{"gopls": {"GOFLAGS": "-tags=bob"}}}, read)
 	if f.Outside.Set["CGO_ENABLED"] != "0" || f.Outside.Set["EDITOR_GO"] != "/r/.bob/bin/go" {

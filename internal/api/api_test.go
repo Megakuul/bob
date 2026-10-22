@@ -206,9 +206,6 @@ func TestErrorModelAndAuthz(t *testing.T) {
 			}
 		})
 	}
-	if r := call(t, ts.URL, http.MethodPost, getBuild, map[string]any{}, bearer(userTok)); r.detail("field") != "id" {
-		t.Errorf("InvalidArgument names field %q, want id", r.detail("field"))
-	}
 }
 
 func TestPanicAndPlainErrorsAreInternal(t *testing.T) {

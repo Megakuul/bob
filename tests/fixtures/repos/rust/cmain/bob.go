@@ -11,5 +11,5 @@ import (
 
 // Main is a C binary linking a Rust cdylib and staticlib (label //cmain:cmain).
 var Main = bob.Define(func(p *bob.P) *cc.Binary {
-	return cc.Binary(p, "cmain", cc.BinaryOpts{Srcs: bob.Glob("*.c"), Deps: []cc.Linkable{rdyn.Lib(p), rcore.Crate(p)}})
+	return cc.NewBinary(p, "cmain", cc.BinaryOpts{Srcs: bob.Glob("*.c"), Deps: []cc.Linkable{rdyn.Lib(p), rcore.Crate(p)}})
 })

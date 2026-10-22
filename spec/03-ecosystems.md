@@ -287,7 +287,7 @@ func StaticLibrary(p *bob.P, name string, o LibraryOpts) *Library
 //	})
 func SharedLibrary(p *bob.P, name string, o LibraryOpts) *Library
 
-// BinaryOpts configures Binary and Test.
+// BinaryOpts configures NewBinary and NewTest.
 type BinaryOpts struct {
 	Srcs     bob.Sources
 	Std      Std
@@ -298,20 +298,20 @@ type BinaryOpts struct {
 	Platforms []bob.Platform
 }
 
-// Binary builds bin/<name>.
+// NewBinary builds bin/<name> (type Binary).
 //
 //	var Tool = bob.Define(func(p *bob.P) *cc.Binary {
-//		return cc.Binary(p, "tool", cc.BinaryOpts{Srcs: bob.Glob("*.c"), Deps: []cc.Linkable{foo.Foo(p)}})
+//		return cc.NewBinary(p, "tool", cc.BinaryOpts{Srcs: bob.Glob("*.c"), Deps: []cc.Linkable{foo.Foo(p)}})
 //	})
-func Binary(p *bob.P, name string, o BinaryOpts) *Binary
+func NewBinary(p *bob.P, name string, o BinaryOpts) *Binary
 
-// Test builds a binary and runs it in a test-run derivation; exit 0 = pass. Output is parsed
-// as TAP if it starts with "TAP version", else one case named <name>.
+// NewTest builds a binary (type Test) and runs it in a test-run derivation; exit 0 = pass.
+// Output is parsed as TAP if it starts with "TAP version", else one case named <name>.
 //
 //	var FooTest = bob.Define(func(p *bob.P) *cc.Test {
-//		return cc.Test(p, "foo_test", cc.BinaryOpts{Srcs: bob.Files("foo_test.cpp"), Deps: []cc.Linkable{Foo(p)}})
+//		return cc.NewTest(p, "foo_test", cc.BinaryOpts{Srcs: bob.Files("foo_test.cpp"), Deps: []cc.Linkable{Foo(p)}})
 //	})
-func Test(p *bob.P, name string, o BinaryOpts) *Test
+func NewTest(p *bob.P, name string, o BinaryOpts) *Test
 
 // Library implements Linkable. Shared libraries also expose the .so for bundling.
 type Library struct{ /* unexported */ }

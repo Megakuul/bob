@@ -14,5 +14,5 @@ var Lib = bob.Define(func(p *bob.P) *cc.Library {
 
 // Test runs the TAP test (label //libs/mathx:mathx_test).
 var Test = bob.Define(func(p *bob.P) *cc.Test {
-	return cc.Test(p, "mathx_test", cc.BinaryOpts{Srcs: bob.Files("test/mathx_test.c"), Deps: []cc.Linkable{Lib(p)}})
+	return cc.NewTest(p, "mathx_test", cc.BinaryOpts{Srcs: bob.Files("test/mathx_test.c"), Deps: []cc.Linkable{Lib(p)}})
 })

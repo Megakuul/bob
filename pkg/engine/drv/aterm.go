@@ -152,7 +152,30 @@ func Parse(aterm []byte) (*Derivation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse derivation: %w", err)
 	}
+	structure(d)
 	return d, nil
+}
+
+// structure moves the `__json` variable of a structured-attrs derivation into Structured, so
+// a parsed derivation reads like one bob built (Structured["bobSpec"]). It does so only when
+// printing Structured gives back exactly the same `__json` (no floats, Nix's canonical form),
+// so Parse then ATerm stays the identity; otherwise `__json` stays in Env.
+func structure(d *Derivation) {
+	js, ok := d.Env["__json"]
+	if !ok {
+		return
+	}
+	dec := json.NewDecoder(strings.NewReader(js))
+	dec.UseNumber()
+	var m map[string]any
+	if dec.Decode(&m) != nil || m == nil || dec.More() {
+		return
+	}
+	if out, err := canonicalJSON(m); err != nil || string(out) != js {
+		return
+	}
+	d.Structured = m
+	delete(d.Env, "__json")
 }
 
 type parser struct {

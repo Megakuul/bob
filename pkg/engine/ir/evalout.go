@@ -54,7 +54,12 @@ type diagLine struct {
 	File     string `json:"file"`
 	Line     int    `json:"line"`
 	Msg      string `json:"msg"`
+	// Chain is the path from a requested package to the one the error is about (BOB-E-0006).
+	Chain []string `json:"chain"`
 }
+
+// maxChain bounds the dependency chain shown with an error (hostile evaluator output).
+const maxChain = 64
 
 var codeRe = regexp.MustCompile(`^BOB-E-([0-9]{4})$`)
 
@@ -102,6 +107,9 @@ func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
 			if pos.File != "" {
 				e.DefinedAt = pos
 			}
+			if len(d.Chain) > 1 && len(d.Chain) <= maxChain {
+				e.Excerpt = []string{strings.Join(d.Chain, " → ")}
+			}
 			return e
 		}
 	}
@@ -109,6 +117,7 @@ func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
 	// pkg/bob writes code-less messages as "<file>:<line>: text"; the position is shown once.
 	if pos.File != "" {
 		msg = strings.TrimPrefix(msg, fmt.Sprintf("%s:%d: ", pos.File, pos.Line))
+		msg = strings.TrimPrefix(msg, fmt.Sprintf("%s:%d: ", d.File, pos.Line))
 	}
 	return DefinitionError(pos.File, pos.Line, 0, d.Label, msg)
 }

@@ -59,7 +59,8 @@ type PlanRequest struct {
 	// TestArgs are the arguments after `--` of bob test; they become part of every test unit
 	// planned here (so its result is cached per argument set).
 	TestArgs []string
-	// Root is the repository root (working tree) the graph was evaluated from; "" in Native.
+	// Root is the repository root (working tree) the graph was evaluated from (also in Native;
+	// "" when the caller has none).
 	Root string
 	// Store gives Plan the store access it may need: reading store paths, importing source
 	// trees it selected itself, realising pinned inputs it must read (planstore.go). nil in

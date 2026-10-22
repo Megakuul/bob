@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -72,13 +73,32 @@ func (ev *evaluation) errorf(d *definition, format string, args ...any) {
 	ev.diags = append(ev.diags, dg)
 }
 
-// misuse records an error of the constructor that is running.
+// misuse records an error of the constructor that is running. A message that starts with
+// "<file>:<line>: " (ext.Errorf's convention, from Node.DefinedAt) carries that position, and
+// a following "//<label>: " that label.
 func (ev *evaluation) misuse(msg string) {
-	var d *definition
+	dg := diagnostic{msg: msg}
 	if top := ev.top(); top != nil {
-		d = top.def
+		dg.defs = []*definition{top.def}
 	}
-	ev.errorf(d, "%s", msg)
+	dg.pos, dg.label = misusePos(msg)
+	ev.diags = append(ev.diags, dg)
+}
+
+// misusePosRe matches the "<file>.go:<line>: " position and the optional "//<dir>:<name>: "
+// label at the start of a misuse message.
+var misusePosRe = regexp.MustCompile(`^([^\s:]+\.go):([0-9]+): (?:(//[^\s:]*:[^\s:]+): )?`)
+
+func misusePos(msg string) (Position, string) {
+	m := misusePosRe.FindStringSubmatch(msg)
+	if m == nil {
+		return Position{}, ""
+	}
+	line, err := strconv.Atoi(m[2])
+	if err != nil || line <= 0 {
+		return Position{}, ""
+	}
+	return Position{File: m[1], Line: line}, m[3]
 }
 
 // coded records an error with a code of the SPEC table, attributed to the running constructor.

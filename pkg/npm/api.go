@@ -281,10 +281,14 @@ func Vite(p *bob.P, o ViteOpts) *Site {
 	if o.Dev.Port < 0 || o.Dev.Port > 65535 {
 		b.problems = append(b.problems, fmt.Sprintf("npm.DevServer.Port %d is not a port", o.Dev.Port))
 	}
+	inherit := false
 	if o.Kit && o.TSConfig.Extends == "" {
+		// svelte-kit sync writes the include list (src, ambient types); overriding it loses them.
 		o.TSConfig.Extends = "./.svelte-kit/tsconfig.json"
+		inherit = o.TSConfig.Include == nil && o.TSConfig.Exclude == nil
 	}
 	b.spec.TSConfig = tsconfig(o.TSConfig, "ESNext", "Bundler")
+	b.spec.TSConfig.Inherit = inherit
 	name := b.defaultName(o.Name, "site")
 	b.spec.Name = name
 	s := &Site{}
@@ -295,10 +299,13 @@ func Vite(p *bob.P, o ViteOpts) *Site {
 // Runner selects the test runner.
 type Runner int
 
-// Runners.
+// Runners. SvelteCheck and ESLint are checks run as tests (SPEC R-NPM-007a, Gate H G24):
+// `svelte-check --fail-on-warnings` (after `svelte-kit sync` for SvelteKit) and `eslint .`.
 const (
 	Vitest Runner = iota
 	NodeTest
+	SvelteCheck
+	ESLint
 )
 
 // TestOpts configures Test. Of names the importer whose deps and sources are used.
@@ -313,7 +320,8 @@ type TestOpts struct {
 type Test struct{ bob.Node }
 
 // NewTest declares a test of an importer (SPEC §03.4.1 calls it Test; see NewApp). Label
-// //<dir>:test.
+// //<dir>:test (//<dir>:svelte-check, //<dir>:eslint for those runners). The checks use the
+// importer's sources; Files adds to them (default for Vitest and NodeTest: src/**/*.test.ts).
 //
 //	var WebTest = bob.Define(func(p *bob.P) *npm.Test { return npm.NewTest(p, npm.TestOpts{Of: Web(p)}) })
 func NewTest(p *bob.P, o TestOpts) *Test {
@@ -342,18 +350,32 @@ func NewTest(p *bob.P, o TestOpts) *Test {
 	case Vitest:
 	case NodeTest:
 		spec.Runner = npmspec.RunnerNodeTest
+	case SvelteCheck:
+		spec.Runner = npmspec.RunnerSvelteCheck
+	case ESLint:
+		spec.Runner = npmspec.RunnerESLint
 	default:
-		problems = append(problems, fmt.Sprintf("npm.TestOpts.Runner %d is neither npm.Vitest nor npm.NodeTest", o.Runner))
+		problems = append(problems, fmt.Sprintf("npm.TestOpts.Runner %d is not npm.Vitest, npm.NodeTest, npm.SvelteCheck or npm.ESLint", o.Runner))
 	}
 	deps := []bob.Package{of}
 	spec.Node = len(deps)
 	deps = append(deps, nixpkgs.Tool(p, "nodejs"))
 	spec.Services, deps = ext.Services(o.Services, deps)
-	files := o.Files
-	if isZero(files) {
-		files = bob.Glob("src/**/*.test.ts")
+	var srcs []bob.Sources
+	switch {
+	case !isZero(o.Files):
+		srcs = []bob.Sources{o.Files}
+	case o.Runner == Vitest || o.Runner == NodeTest:
+		srcs = []bob.Sources{bob.Glob("src/**/*.test.ts")}
 	}
-	t := &Test{Node: ext.New(p, npmspec.KindTest, "test", deps, []bob.Sources{files}, spec)}
+	name := "test"
+	switch o.Runner {
+	case SvelteCheck:
+		name = "svelte-check"
+	case ESLint:
+		name = "eslint"
+	}
+	t := &Test{Node: ext.New(p, npmspec.KindTest, name, deps, srcs, spec)}
 	for _, pr := range problems {
 		ext.Errorf("%s: %s: %s", t.DefinedAt(), t.Label(), pr)
 	}

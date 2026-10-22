@@ -308,9 +308,24 @@ func (pl *planner) planTest(n *ir.Node) (engine.Resolved, error) {
 		return engine.Resolved{}, err
 	}
 	in := pl.newInputs()
-	steps, _, err := pl.workspace(of, im, pi, []string{of.ID, n.ID}, in)
+	srcIDs := []string{of.ID}
+	if _, ok := pl.req.Sources[n.ID]; ok {
+		srcIDs = append(srcIDs, n.ID)
+	}
+	steps, _, err := pl.workspace(of, im, pi, srcIDs, in)
 	if err != nil {
 		return engine.Resolved{}, err
+	}
+	if im.spec.Kit {
+		node, dirs, err := pl.buildEnv(of, im, in)
+		if err != nil {
+			return engine.Resolved{}, err
+		}
+		kit, err := pl.binScript(of, im, "@sveltejs/kit", "svelte-kit", "a SvelteKit site")
+		if err != nil {
+			return engine.Resolved{}, err
+		}
+		steps = append(steps, step{Op: "exec", Path: work, Argv: []string{node, kit, "sync"}, Dirs: dirs})
 	}
 	out := drv.Placeholder("out")
 	steps = append(steps, step{Op: "copy", From: work, Path: out + "/w"})
@@ -333,6 +348,18 @@ func (pl *planner) planTest(n *ir.Node) (engine.Resolved, error) {
 	case npmspec.RunnerNodeTest:
 		a.Argv = []string{nodeOut + "/bin/node", "--test", "--test-reporter=tap"}
 		a.Format = "tap"
+	case npmspec.RunnerSvelteCheck:
+		check, err := pl.binScript(of, im, "svelte-check", "svelte-check", "npm.SvelteCheck")
+		if err != nil {
+			return engine.Resolved{}, err
+		}
+		a.Argv = []string{nodeOut + "/bin/node", check, "--tsconfig", "./tsconfig.json", "--fail-on-warnings"}
+	case npmspec.RunnerESLint:
+		eslint, err := pl.binScript(of, im, "eslint", "eslint", "npm.ESLint")
+		if err != nil {
+			return engine.Resolved{}, err
+		}
+		a.Argv = []string{nodeOut + "/bin/node", eslint, "--max-warnings=0", "."}
 	default:
 		vitest, err := pl.binScript(of, im, "vitest", "vitest", "npm.Vitest")
 		if err != nil {

@@ -80,7 +80,7 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := nativeFiles(ctx, g, lf, idx)
+	files, err := nativeFilesAt(ctx, o.Root, g, lf, idx)
 	if err == nil {
 		files, err = withRootGoMod(files, g, o.Root)
 	}
@@ -147,7 +147,7 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 // generate is Gen after evaluation (also the drift check of bob build/test, with force false).
 // g is the whole repository's graph.
 func generate(ctx context.Context, root string, g *ir.Graph, lf *lock.File, idx *nixidx.Index, force bool, now time.Time) ([]string, error) {
-	files, err := nativeFiles(ctx, g, lf, idx)
+	files, err := nativeFilesAt(ctx, root, g, lf, idx)
 	if err == nil {
 		files, err = withRootGoMod(files, g, root)
 	}
@@ -201,9 +201,16 @@ func nativeScope(o Options) bool {
 	return whole && o.Platform == "" && len(o.Variants) == 0
 }
 
-// nativeFiles asks every ecosystem of g for its generated files, sorted by path. Paths must be
-// local, clean and unique, and never inside .git or bob's own state.
+// nativeFiles is nativeFilesAt without a repository root (ecosystems that need the working
+// tree, like cc's compile_commands.json, then generate nothing).
 func nativeFiles(ctx context.Context, g *ir.Graph, lf *lock.File, idx *nixidx.Index) ([]engine.GeneratedFile, error) {
+	return nativeFilesAt(ctx, "", g, lf, idx)
+}
+
+// nativeFilesAt asks every ecosystem of g for its generated files, sorted by path; root is the
+// repository root the graph was evaluated from (engine.PlanRequest.Root). Paths must be
+// local, clean and unique, and never inside .git or bob's own state.
+func nativeFilesAt(ctx context.Context, root string, g *ir.Graph, lf *lock.File, idx *nixidx.Index) ([]engine.GeneratedFile, error) {
 	ecos, err := ecosystemsOf(g)
 	if err != nil {
 		return nil, err
@@ -218,7 +225,7 @@ func nativeFiles(ctx context.Context, g *ir.Graph, lf *lock.File, idx *nixidx.In
 				nodes = append(nodes, n)
 			}
 		}
-		files, err := e.Native(ctx, engine.PlanRequest{Graph: g, Nodes: nodes, Lock: lf.Sections[name], Nixpkgs: idx})
+		files, err := e.Native(ctx, engine.PlanRequest{Graph: g, Nodes: nodes, Lock: lf.Sections[name], Nixpkgs: idx, Root: root})
 		if err != nil {
 			return nil, err
 		}

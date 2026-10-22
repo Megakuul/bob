@@ -87,6 +87,23 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	return fmt.Errorf("redirect to %s is not an https URL: %w", req.URL.Redacted(), errRedirect)
 }
 
+// plainHTTPAllowed reports whether a requested plain http URL of host may be downloaded: only
+// with a pinned hash, except loopback hosts in test builds (testLoopbackHTTP). Redirects keep
+// the strict rule (checkRedirect).
+func plainHTTPAllowed(host string, pinned bool) bool {
+	if pinned {
+		return true
+	}
+	if !testLoopbackHTTP {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // errDenied marks a connection the egress policy refused (never retried).
 var errDenied = errors.New("not allowed by the egress policy")
 
@@ -127,7 +144,7 @@ func (c *client) download(ctx context.Context, p *prepared, file, algo string) (
 		switch pu.Scheme {
 		case "https":
 		case "http":
-			if !pinned {
+			if !plainHTTPAllowed(pu.Hostname(), pinned) {
 				return "", nil, diag.New(3002, "label", p.Label, "reason", u+" uses plain http and the request has no pinned hash")
 			}
 		default:

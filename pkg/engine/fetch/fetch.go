@@ -336,11 +336,13 @@ func (f *fetcher) workDir() (string, error) {
 	return os.MkdirTemp(base, "fetch-")
 }
 
-// mismatch is BOB-E-3001 with the URL, the recorded hash and the hash bob got.
+// mismatch is BOB-E-3001 with the URL, the recorded hash and the hash bob got, in the
+// arguments and in the excerpt (the layout of the S15 golden of fault 16-wrong-hash).
 func mismatch(label, url, want, got string) error {
 	e := diag.New(3001, "label", label)
 	e.Args["url"], e.Args["expected"], e.Args["got"] = url, want, got
-	e.Cause = fmt.Sprintf("%s: bob.lock has %s, the download has %s", url, want, got)
+	e.Cause = "the downloaded file has a different hash than bob.lock pins"
+	e.Excerpt = []string{"url:        " + url, "bob.lock:   " + want, "downloaded: " + got}
 	return e
 }
 

@@ -115,7 +115,11 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 	if e.Severity == diag.SeverityWarning {
 		head, color = "warning", cYellowBold
 	}
-	fmt.Fprintf(w, "%s %s\n", s.c(color, head+"["+e.Code.ID()+"]:"), s.c(cBold, e.Error()))
+	if line, ok := definitionLine(e); ok {
+		fmt.Fprintf(w, "%s %s\n", s.c(color, "✗"), s.c(cBold, line))
+	} else {
+		fmt.Fprintf(w, "%s %s\n", s.c(color, head+"["+e.Code.ID()+"]:"), s.c(cBold, e.Error()))
+	}
 	if e.Location != nil && e.Location.File != "" {
 		fmt.Fprintf(w, "  %s %s\n", s.c(cBlue, "-->"), PosString(*e.Location))
 	}
@@ -150,6 +154,27 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 			}
 		}
 	}
+}
+
+// definitionLine is the first line of the errors SPEC writes as `✗ <message>` lines (§03.1.3
+// R-CC-002a, §04 R-PLAT-006): a package's invalid option (BOB-E-1020) and a package that does
+// not support the requested platform (BOB-E-0006). A definition error without a code of its
+// own (option "build definition") shows its reason, since `-->` gives the position. Every other
+// error keeps the `error[CODE]:` head of the S15 goldens.
+func definitionLine(e *diag.Error) (string, bool) {
+	if e.Severity == diag.SeverityWarning {
+		return "", false
+	}
+	switch e.Code {
+	case 6:
+		return e.Error(), true
+	case 1020:
+		if e.Args["option"] == "build definition" && e.Location != nil && e.Args["reason"] != "" {
+			return e.Args["reason"], true
+		}
+		return e.Error(), true
+	}
+	return "", false
 }
 
 func summary(r *Report, s Style) string {

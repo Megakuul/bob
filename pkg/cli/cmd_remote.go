@@ -113,6 +113,9 @@ func runRemote(e *env, test bool) int {
 
 	events, err := x.Build(e.ctx, req)
 	if err != nil {
+		if e.ctx.Err() != nil { // Ctrl-C before the build existed: nothing runs on the server
+			return e.out.fail(diag.New(8001))
+		}
 		method := remote.CreateBuildMethod
 		if ae, ok := remote.AsError(err); ok && ae.Method != remote.UploadMethod {
 			method = ae.Method
@@ -262,7 +265,7 @@ func (r *remoteRun) finish(fin remote.Done) int {
 		d := diag.New(4009, "variant", "unreachable", "server", remote.Host(r.server), "reason", fin.Failure.Message)
 		errs = append(errs, d)
 	case fin.Failure != nil && fin.Failure.Code == "unauthenticated":
-		errs = append(errs, diag.New(4008, "server", remote.Host(r.server)))
+		errs = append(errs, diag.New(4008, "server", r.server))
 	case fin.Failure != nil:
 		fail("bob lost track of it ("+fin.Failure.Message+")", fin.Failure.Message)
 	case fin.State == "succeeded":

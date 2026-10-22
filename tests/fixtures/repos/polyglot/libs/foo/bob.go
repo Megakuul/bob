@@ -20,5 +20,5 @@ var Lib = bob.Define(func(p *bob.P) *cc.Library {
 
 // Test checks the digest (label //libs/foo:foo_test).
 var Test = bob.Define(func(p *bob.P) *cc.Test {
-	return cc.Test(p, "foo_test", cc.BinaryOpts{Srcs: bob.Files("test/foo_test.cpp"), Deps: []cc.Linkable{Lib(p)}})
+	return cc.NewTest(p, "foo_test", cc.BinaryOpts{Srcs: bob.Files("test/foo_test.cpp"), Deps: []cc.Linkable{Lib(p)}})
 })

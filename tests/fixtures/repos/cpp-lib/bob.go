@@ -16,10 +16,10 @@ var Ring = bob.Define(func(p *bob.P) *cc.Library {
 
 // Tool is bin/ringtool (label //:ringtool).
 var Tool = bob.Define(func(p *bob.P) *cc.Binary {
-	return cc.Binary(p, "ringtool", cc.BinaryOpts{Srcs: bob.Glob("tool/*.cpp"), Std: cc.CXX20, Deps: []cc.Linkable{Ring(p)}})
+	return cc.NewBinary(p, "ringtool", cc.BinaryOpts{Srcs: bob.Glob("tool/*.cpp"), Std: cc.CXX20, Deps: []cc.Linkable{Ring(p)}})
 })
 
 // Test runs the TAP test (label //:ring_test).
 var Test = bob.Define(func(p *bob.P) *cc.Test {
-	return cc.Test(p, "ring_test", cc.BinaryOpts{Srcs: bob.Files("test/ring_test.cpp"), Std: cc.CXX20, Deps: []cc.Linkable{Ring(p)}})
+	return cc.NewTest(p, "ring_test", cc.BinaryOpts{Srcs: bob.Files("test/ring_test.cpp"), Std: cc.CXX20, Deps: []cc.Linkable{Ring(p)}})
 })

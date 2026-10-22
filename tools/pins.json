@@ -51,6 +51,7 @@
     "fish": "fish",
     "strace": "strace",
     "bashInteractive": "bashInteractive",
+    "bash": "bashInteractive",
     "chromium": "chromium"
   }
 }

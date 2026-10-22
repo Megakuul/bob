@@ -12,7 +12,7 @@ import (
 
 // App is bin/app (label //app:app).
 var App = bob.Define(func(p *bob.P) *cc.Binary {
-	return cc.Binary(p, "app", cc.BinaryOpts{
+	return cc.NewBinary(p, "app", cc.BinaryOpts{
 		Srcs: bob.Glob("*.c"),
 		Std:  cc.C17,
 		Deps: []cc.Linkable{mathx.Lib(p), pack.Lib(p), zstd.Zstd(p)},

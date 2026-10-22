@@ -219,7 +219,10 @@ func tsconfigJSON(im *importer) ([]byte, error) {
 	for _, k := range keys {
 		opts = append(opts, kv{k, co[k]})
 	}
-	o = append(o, kv{"compilerOptions", opts}, kv{"include", t.Include}, kv{"exclude", t.Exclude})
+	o = append(o, kv{"compilerOptions", opts})
+	if !t.Inherit {
+		o = append(o, kv{"include", t.Include}, kv{"exclude", t.Exclude})
+	}
 	body, err := indent(o)
 	if err != nil {
 		return nil, err

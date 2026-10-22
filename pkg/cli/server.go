@@ -29,7 +29,7 @@ func apiDiag(server, method, project string, err error) *diag.Error {
 	host := remote.Host(server)
 	var oe *remote.OAuthError
 	if errors.As(err, &oe) {
-		d := diag.New(4008, "server", host)
+		d := diag.New(4008, "server", server)
 		d.Raw = []string{oe.Error()}
 		return d
 	}
@@ -55,7 +55,7 @@ func apiDiag(server, method, project string, err error) *diag.Error {
 		}
 		d = diag.New(4009, "variant", "unreachable", "server", host, "reason", reason)
 	case e.Code == "unauthenticated":
-		d = diag.New(4008, "server", host)
+		d = diag.New(4008, "server", server)
 	case e.Code == "permission_denied" || e.Code == "not_found":
 		action := method
 		if i := strings.LastIndexByte(method, '/'); i >= 0 {
@@ -255,7 +255,7 @@ func (e *env) session(ctx context.Context, arg string) (*remote.Server, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, diag.New(4008, "server", remote.Host(server))
+		return nil, diag.New(4008, "server", server)
 	}
 	return e.api(server, tok), nil
 }

@@ -49,6 +49,7 @@ type TSConfig struct {
 	Extends          string         `json:"extends,omitempty"`
 	Include          []string       `json:"include"`
 	Exclude          []string       `json:"exclude"`
+	Inherit          bool           `json:"inherit,omitempty"` // no include/exclude: Extends' apply (SvelteKit)
 	Extra            map[string]any `json:"extra"`
 }
 
@@ -90,8 +91,10 @@ const (
 
 // Runners of a test.
 const (
-	RunnerVitest   = "vitest"
-	RunnerNodeTest = "node-test"
+	RunnerVitest      = "vitest"
+	RunnerNodeTest    = "node-test"
+	RunnerSvelteCheck = "svelte-check"
+	RunnerESLint      = "eslint"
 )
 
 // Test is the spec of an npm.test node: Of is the dep index of the importer whose sources and

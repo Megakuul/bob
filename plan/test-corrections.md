@@ -65,6 +65,12 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    BuildHistory, RecentFailures; (5) serve TLS + HTTP/2 (six connections per host otherwise);
    (6) fontconfig generic aliases in the harness; (7) goldens do not exist yet (owner approves).
    Needs owner OK like the others (tests/ui is protected).
+18. A108 (evidence plan/progress/I-M7a.md TEST PROBLEM): five fixtures (cc/app, cc/libs/mathx,
+   cpp-lib, rust/cmain, polyglot/libs/foo) call `cc.Binary(p, ...)` / `cc.Test(p, ...)`: rename the
+   calls to `cc.NewBinary` / `cc.NewTest` (Go cannot have a function and a type named alike;
+   the types stay `cc.Binary` / `cc.Test`); the tests/eco/cc server uses plain http without pin for
+   `bob lock` (BOB-E-3002): bobtest builds allow http to loopback (A108), no test change needed
+   once the fetcher honours that (implementation task of unit I-P1).
 17. A104 forge test defects (evidence plan/progress/I-B10.md, problems 1-6): (1) `adapters_test.go`
    looks up GitHub fixtures as `"push.branch.json"` but `forgefix.Load` names them without `.json`
    (every GitHub row and TestFixturesRefused stop there); (2) the "github push" row's fixture has
