@@ -5,6 +5,8 @@ go 1.26.9
 require (
 	github.com/chromedp/cdproto v0.157.8
 	github.com/chromedp/chromedp v0.21.0
+	github.com/klauspost/compress v1.20.3
+	github.com/ulikunitz/xz v0.5.17
 )
 
 require (

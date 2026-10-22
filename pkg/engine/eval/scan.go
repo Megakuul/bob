@@ -1,0 +1,191 @@
+package eval
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"maps"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// The repository scan of R-FW-002: every bob.go below the root, skipping directories whose name
+// starts with "." or "_", node_modules, testdata and directories with their own go.mod.
+// The eval key (R-FW-043.1) is computed from the scan; a size+mtime index skips re-reading
+// unchanged files.
+
+// keyVersion changes whenever the evaluator generation changes in a way the key's inputs do
+// not show.
+const keyVersion = "bob-eval-key-2"
+
+// repoScan is what one scan found.
+type repoScan struct {
+	bobDirs []string            // repo-relative directories with a bob.go ("." = root), sorted
+	goDirs  map[string][]string // directory → its other files (names), for the rules
+	content map[string][]byte   // repo-relative path → content of bob.go, go.mod, go.sum
+}
+
+// skipDir reports whether the scan skips the directory name below the root.
+func skipDir(name string) bool {
+	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") || name == "node_modules" || name == "testdata"
+}
+
+// scanRepo walks root. It reads each directory once (no per-directory stat for go.mod: the
+// eval key hit budget, SPEC §1.17, includes this walk).
+func scanRepo(root string) (*repoScan, error) {
+	s := &repoScan{goDirs: map[string][]string{}, content: map[string][]byte{}}
+	var walk func(dir string) error
+	walk = func(dir string) error {
+		ents, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
+		if err != nil {
+			return err
+		}
+		if dir != "." {
+			for _, e := range ents {
+				if e.Name() == "go.mod" {
+					return nil // another module
+				}
+			}
+		}
+		for _, e := range ents {
+			name := e.Name()
+			rel := path.Join(dir, name)
+			switch {
+			case e.IsDir():
+				if skipDir(name) {
+					continue
+				}
+				if err := walk(rel); err != nil {
+					return err
+				}
+			case !e.Type().IsRegular():
+			case name == "bob.go":
+				s.bobDirs = append(s.bobDirs, dir)
+			case dir == "." && (name == "go.mod" || name == "go.sum"):
+				s.content[rel] = nil
+			default:
+				s.goDirs[dir] = append(s.goDirs[dir], name)
+			}
+		}
+		return nil
+	}
+	if err := walk("."); err != nil {
+		return nil, err
+	}
+	sort.Strings(s.bobDirs)
+	for _, d := range s.bobDirs {
+		s.content[bobPath(d)] = nil
+	}
+	return s, nil
+}
+
+// bobPath is the repo-relative path of the bob.go in dir.
+func bobPath(dir string) string { return path.Join(dir, "bob.go") }
+
+// indexEntry is one file of .bob/eval/index.json.
+type indexEntry struct {
+	Size   int64  `json:"size"`
+	MTime  int64  `json:"mtime"` // nanoseconds
+	SHA256 string `json:"sha256"`
+}
+
+// readContents fills s.content and returns the per-file hashes. Files whose size and mtime
+// match the previous index are not read unless need is true; their content stays nil.
+func (s *repoScan) hashes(root string, prev map[string]indexEntry, need bool) (map[string]indexEntry, error) {
+	next := make(map[string]indexEntry, len(s.content))
+	for rel := range s.content {
+		fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return nil, err
+		}
+		e := indexEntry{Size: fi.Size(), MTime: fi.ModTime().UnixNano()}
+		if old, ok := prev[rel]; ok && !need && old.Size == e.Size && old.MTime == e.MTime && old.SHA256 != "" {
+			next[rel] = old
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return nil, err
+		}
+		s.content[rel] = b
+		sum := sha256.Sum256(b)
+		e.SHA256 = hex.EncodeToString(sum[:])
+		next[rel] = e
+	}
+	return next, nil
+}
+
+// load reads every file of the scan that hashes left unread.
+func (s *repoScan) load(root string) error {
+	for rel, c := range s.content {
+		if c != nil {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return err
+		}
+		s.content[rel] = b
+	}
+	return nil
+}
+
+// evalKey is R-FW-043.1: sha256 over the sorted (path, content hash) of every bob.go, go.mod and
+// go.sum, bob's version (with the framework's own hash: a source build keeps its version),
+// the Go version and GOARCH.
+func evalKey(files map[string]indexEntry, bobVersion, frameworkH1, goVersion, goarch string) string {
+	names := make([]string, 0, len(files))
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, x := range []string{keyVersion, bobVersion, frameworkH1, goVersion, goarch} {
+		h.Write([]byte(x + "\x00"))
+	}
+	for _, n := range names {
+		h.Write([]byte(n + "\x00" + files[n].SHA256 + "\x00"))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func readIndex(p string) map[string]indexEntry {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	var m map[string]indexEntry
+	if json.Unmarshal(b, &m) != nil {
+		return nil
+	}
+	return m
+}
+
+func writeIndex(p string, old, m map[string]indexEntry) error {
+	if maps.Equal(old, m) {
+		return nil
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return writeIfChanged(p, append(b, '\n'))
+}
+
+func writeIfChanged(p string, content []byte) error {
+	if old, err := os.ReadFile(p); err == nil && string(old) == string(content) {
+		return nil
+	}
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, content, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, p)
+}
+
+// errNoGoMod is a repository root without go.mod.
+var errNoGoMod = errors.New("the repository has no go.mod")

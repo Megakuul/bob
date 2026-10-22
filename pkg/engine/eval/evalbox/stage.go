@@ -28,12 +28,15 @@ const (
 	evalUID = 1000 // the evaluator's uid inside the nested user namespace
 
 	graphFD = 3 // the evaluator writes graph IR here
+
+	cacheTarget = "/.gocache-upper" // mount point of Spec.CacheDir
 )
 
 // stageConfig is what the parent tells stage1 and stage2.
 type stageConfig struct {
 	Binds     []stageBind    `json:"binds"`     // read-only binds, sources are inherited fds
 	Seed      *stageBind     `json:"seed"`      // GOCACHE lower layer, or the cache itself when Seed.RW
+	Cache     *stageBind     `json:"cache"`     // persistent overlay upper/work dirs of the GOCACHE (Spec.CacheDir)
 	WorkBytes int64          `json:"workBytes"` // size of the /work tmpfs
 	Dir       string         `json:"dir"`       // working directory of the steps
 	Steps     []Step         `json:"steps"`
@@ -227,7 +230,15 @@ func gocache(cfg *stageConfig, r string) error {
 	if err := cfg.Seed.attach(lower); err != nil {
 		return err
 	}
-	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lower, r+"/work/.ov/up", r+"/work/.ov/wk")
+	ov := r + "/work/.ov"
+	if cfg.Cache != nil {
+		// Outside /work and without a Landlock rule: only the overlay reaches it.
+		ov = r + cacheTarget
+		if err := cfg.Cache.attach(ov); err != nil {
+			return err
+		}
+	}
+	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lower, ov+"/up", ov+"/wk")
 	return wrap(syscall.Mount("overlay", r+"/work/gocache", "overlay", syscall.MS_NOSUID|syscall.MS_NODEV, opts), "gocache overlay")
 }
 

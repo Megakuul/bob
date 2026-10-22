@@ -67,11 +67,14 @@ func (l Limits) WithDefaults() Limits {
 	return l
 }
 
-// Bind is a host directory made visible read-only inside the sandbox.
+// Bind is a host directory made visible inside the sandbox, read-only unless Writable.
 type Bind struct {
 	Host    string // host path
-	Sandbox string // absolute path inside the sandbox
+	Sandbox string // absolute path inside the sandbox, never below /work
 	Exec    bool   // Landlock allows executing files below it (toolchains)
+	// Writable makes the bind read-write (an output directory of a trusted step, such as the
+	// evaluator binary go build writes). Never give it to a step that runs untrusted code.
+	Writable bool
 }
 
 // Step is one command inside the sandbox. Args[0] is an absolute path inside the sandbox; Env
@@ -86,9 +89,13 @@ type Spec struct {
 	Binds  []Bind // read-only; /gomod is an empty directory unless bound
 	Seed   string // host directory of the trusted GOCACHE seed, mounted at /work/gocache
 	SeedRW bool   // trusted seed build only: Seed is mounted read-write instead of as overlay lower layer
-	Dir    string // working directory of the steps
-	Steps  []Step // run in order; the last one writes graph IR to fd 3
-	Limits Limits
+	// CacheDir, with a read-only Seed, is a host directory holding the overlay upper layer of
+	// /work/gocache (CacheDir/up, CacheDir/wk), so compile results outlive the run. It belongs
+	// to one repository and is given only to the go build step, which runs no user code.
+	CacheDir string
+	Dir      string // working directory of the steps
+	Steps    []Step // run in order; the last one writes graph IR to fd 3
+	Limits   Limits
 	// Strict is the worker mode (S13-3): refuse to run without a delegated cgroup and Landlock
 	// ABI >= 4 instead of falling back.
 	Strict bool
@@ -207,7 +214,15 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 		{"/dev/zero", llReadFile}, {"/dev/random", llReadFile}, {"/dev/urandom", llReadFile},
 	}
 	for _, b := range s.Binds {
-		sb, err := bindSource(b.Host, b.Sandbox, false, &files)
+		if b.Sandbox == "/work" || strings.HasPrefix(b.Sandbox, "/work/") {
+			return fail(fmt.Errorf("evaluation sandbox: bind target %s is below /work", b.Sandbox))
+		}
+		if b.Writable && os.Getuid() == 0 {
+			if err := os.Chown(b.Host, uid, gid); err != nil {
+				return fail(err)
+			}
+		}
+		sb, err := bindSource(b.Host, b.Sandbox, b.Writable, &files)
 		if err != nil {
 			return fail(err)
 		}
@@ -215,6 +230,9 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 		acc := uint64(llRead)
 		if b.Exec {
 			acc |= llExecute
+		}
+		if b.Writable {
+			acc |= llWrite | llRefer | llTruncate
 		}
 		rules = append(rules, landlockRule{b.Sandbox, acc})
 	}
@@ -229,6 +247,23 @@ func start(s Spec, l Limits, cg *cgroup) (*run, error) {
 			return fail(err)
 		}
 		cfg.Seed = &sb
+		if s.CacheDir != "" && !s.SeedRW {
+			for _, d := range []string{"up", "wk"} {
+				if err := os.MkdirAll(s.CacheDir+"/"+d, 0o755); err != nil {
+					return fail(err)
+				}
+				if os.Getuid() == 0 {
+					if err := os.Chown(s.CacheDir+"/"+d, uid, gid); err != nil {
+						return fail(err)
+					}
+				}
+			}
+			cb, err := bindSource(s.CacheDir, cacheTarget, true, &files)
+			if err != nil {
+				return fail(err)
+			}
+			cfg.Cache = &cb
+		}
 	}
 	cfg.Rules = rules
 	cj, err := json.Marshal(cfg)
