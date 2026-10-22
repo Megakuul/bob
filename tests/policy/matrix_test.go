@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"strings"
@@ -114,7 +115,7 @@ func TestRSEC002PolicyMatrix(t *testing.T) {
 		c      *client
 		policy []stmt
 	}{{"worker", ps.worker, workerPolicy}, {"orchestrator", ps.orch, orchestratorPolicy}} {
-		p := &probe{c: who.c, policy: docs}
+		p := &probe{c: who.c, id: who.name[:1], policy: docs}
 		for _, tg := range targets {
 			for _, o := range ops {
 				ps.seed(t)
@@ -123,6 +124,8 @@ func TestRSEC002PolicyMatrix(t *testing.T) {
 				cells++
 				want := expect(who.policy, o, tg)
 				switch {
+				case !want && o.name == "DeleteObjects" && deleteObjectsDenied(got, tg):
+					// S3 answers 200 with a per-key AccessDenied error in the body.
 				case want && !got.ok():
 					deviations = append(deviations, fmt.Sprintf("%s %s on %s: want allowed, got %d %.80s", who.name, o.name, tg.name, got.status, got.body))
 				case !want && got.status != http.StatusForbidden:
@@ -271,4 +274,30 @@ func TestMatrixMachineryWithRoot(t *testing.T) {
 			}
 		}
 	}
+}
+
+// deleteObjectsDenied reports whether a DeleteObjects response refuses the probe key: either a
+// plain 403, or HTTP 200 whose XML body carries an <Error> entry with Code AccessDenied for it.
+func deleteObjectsDenied(r resp, tg target) bool {
+	if r.status == http.StatusForbidden {
+		return true
+	}
+	if r.status != http.StatusOK {
+		return false
+	}
+	var res struct {
+		Errors []struct {
+			Key  string `xml:"Key"`
+			Code string `xml:"Code"`
+		} `xml:"Error"`
+	}
+	if xml.Unmarshal([]byte(r.body), &res) != nil {
+		return false
+	}
+	for _, e := range res.Errors {
+		if e.Code == "AccessDenied" && e.Key == tg.prefix+"obj" {
+			return true
+		}
+	}
+	return false
 }

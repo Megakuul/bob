@@ -132,13 +132,14 @@ func md5b64(b []byte) string {
 // interfere; the seed object tg.prefix+"obj" must exist (see seed).
 type probe struct {
 	c      *client
+	id     string // identity tag, keeps probe keys unique across identities
 	n      int
 	policy map[string]string // bucket -> bucket policy document to put back
 }
 
 func (p *probe) unique(tg target) string {
 	p.n++
-	return fmt.Sprintf("/%s/%sp%d", tg.bucket, tg.prefix, p.n)
+	return fmt.Sprintf("/%s/%sp%s%d", tg.bucket, tg.prefix, p.id, p.n)
 }
 
 const (
