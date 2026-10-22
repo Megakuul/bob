@@ -50,3 +50,8 @@ plan/decisions.md). Fixing them is not loosening: each makes the test match the 
    (c) add `--assume-depexts` to the dry-run (opam stops at the system-package prompt for conf-gmp:
    cohttp, dream).
    Without these the required 14/20 equality cannot hold for any resolver.
+10. A86 `tests/eco/npm/resolve_test.go` `npmResolution` reads only `dependencies` and
+   `optionalDependencies` of an importer's npm lock entry, but SPEC 03.4.2 puts Dev() dependencies
+   and peers in `deps`: read `devDependencies` and `peerDependencies` too (8 of 10 graphs report
+   false "edge bob has and npm lacks" otherwise; with them there are zero differences; evidence
+   plan/progress/I-R-npm.md).

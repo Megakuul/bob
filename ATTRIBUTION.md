@@ -35,6 +35,8 @@ The AppImage runtime is bob's own static Go code, so no libfuse is shipped (A15)
 |---|---|---|---|
 | `codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3` | MIT (checked against v3.0.0 `LICENSE`) | Forgejo adapter; MIT is on the allowlist, so it needs no exception | A12 |
 | `github.com/ulikunitz/xz` v0.5.17 | BSD-3-Clause (checked against `LICENSE`) | `.tar.xz` unpacking in `pkg/engine/fetch` (R-NIX-014) | I-M2a (plan/progress/I-M2a.md) |
+| `connectrpc.com/connect` v1.21.1 (+ `cmd/protoc-gen-connect-go` as a Go tool) | Apache-2.0 (checked against `LICENSE`) | connect API server (R-API-001, D5) and its code generator; v1 as in the S17 spike | I-B3 (plan/progress/I-B3.md) |
+| `google.golang.org/protobuf` v1.36.12 (+ `cmd/protoc-gen-go` as a Go tool) | BSD-3-Clause (checked against `LICENSE`) | generated protobuf messages in `internal/gen` and their generator | I-B3 (plan/progress/I-B3.md) |
 | `github.com/klauspost/compress` v1.20.3 (`zstd`) | BSD-3-Clause, with Apache-2.0 and MIT parts (checked against `LICENSE`) | `.tar.zst` unpacking in `pkg/engine/fetch` (R-NIX-014); all parts permissive and AGPL-compatible | I-M2a (plan/progress/I-M2a.md) |
 
 ## Assets
@@ -47,4 +49,6 @@ None yet. Fonts, icons and images under `assets/` or `web/static/` get a row her
 
 ## Code taken under the cleanroom exception (D42)
 
-None.
+| Where | Source | Licence | Reason (decision) |
+|---|---|---|---|
+| `pkg/npm/resolve` (tree building: `arborist.go`, `place.go`, `tree.go`; `semver.go` incl. its regular expressions) | translation to Go of npm 11.19.0 `@npmcli/arborist` and `node-semver` (github.com/npm/cli, github.com/npm/node-semver) | ISC (permissive, AGPL-compatible) | R-NPM-001a requires results equal to npm, including peer placement; the behaviour is defined by that code and cannot be matched from a spec alone (A85, I-R-npm). The licence notice of both projects stays in the file headers. |
