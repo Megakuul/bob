@@ -131,7 +131,8 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
 
   Ids: `ULID` = 26-char Crockford ULID (48-bit ms time + 80 random bits).
 - **Acceptance:** fuzz test: no input to the key builders yields an invalid or colliding
-  segment (10⁶ random strings, including `/`, empty, 1 KiB). An empty segment returns
+  segment (10⁶ random strings, including `/`, empty, 1 KiB). `sh2` is total over non-empty strings;
+  ids are validated at the API boundary, not in the key builders. An empty segment returns
   `store: key segment invalid: must match [A-Za-z0-9@._-]{1,100}`.
 - **Source:** S9 §5.1, B12.
 
@@ -611,7 +612,9 @@ keys are in `FleetConfig.k`); `ForgeIntegrationRecord` = `ForgeRecord`; `Setting
   The access plan per page is the table in §05.5.2. No list needs more than
   `1 + ceil(page size / P)` index GETs plus detail GETs for at most the visible rows.
 - **Acceptance:** for each row of §05.5.2, a test counts the requests through the proxy and
-  checks them against the column "requests (page 1)".
+  checks them against the column "requests (page 1)". Only rows reachable through the §06 API are
+  listed in the acceptance; "Build by number" and "Release by version" join it when the by-number
+  and by-version lookups exist (Gate H, G19; follow-up in `plan/m1.8-ledger.md`).
 - **Source:** R-STORE-004, D60.
 
 ---
@@ -807,12 +810,15 @@ CAS that is safe if two leaders overlap (S9 §3.3 measured no-leader runs as cor
 #### R-FLEET-005 Scheduling unit (resolved)
 - **Statement:** a job realises a set of ≤ 64 derivations on one worker. By default each build has
   one `evalbuild` closure job. The build controller splits the build into an `eval` job plus
-  ready-set `batch` jobs only when the S14 planner predicts ≥ 60 s **and** ≥ 30 % gain with the
-  idle eligible workers. Promotion is per job; jobs depend on each other only through promoted
+  ready-set `batch` jobs only when the S14 planner predicts a gain of ≥ max(10 s, 30 % of the closure-job time) with the
+  idle eligible workers (`split = I ≥ 2 and T1 − Tsplit ≥ max(10 s, 0.3 × T1)`; amended 2026-10-22,
+  ADR 0016). Promotion is per job; jobs depend on each other only through promoted
   paths, never through `staging/`.
 - **Acceptance:**
   - Planner unit tests on the S14 graphs: fixture → no split; go200, rust129 and wide2000 at
-    W = 100 with 2 slots → split.
+    W = 100 with 2 slots → split (fixture: 14.7 s vs 19.4 s, no split). Boundary rows: a predicted
+    gain of exactly 10 s and exactly 30 % splits; just below either bound does not; just above
+    both does.
   - The predicted gain is within 25 % of the S14 model.
   - A real-run test on 4 local workers: a split build of the 73-drv layer graph is faster than
     the closure job (S14 quiet: closure 20.6 s; per-drv 9.3 s; a batch build must be ≤ 15 s)
@@ -1103,8 +1109,9 @@ Orchestrator signing keys: the seeds are in control `okey/<kid>`, the public key
 - **Acceptance:**
   - `GetCheckoutCredential` with a job the caller does not own, or a stale epoch →
     `permission_denied: worker holds no lease on job <id>`.
-  - Live Forgejo: worker A with the lease gets a credential that clones repo R and gets 404 on
-    repo R2 the bot can read; after the job ends, the token returns 401 within 30 s.
+  - Live Forgejo: worker A with the lease gets a credential that clones repo R and gets 403 on
+    repo R2 the bot can read (the forge decides the status for a repository outside the token's
+    scope; Forgejo answers 403, measured in S16); after the job ends, the token returns 401 within 30 s.
   - Orchestrator killed between mint and revoke: the `forge-sweeper` (60 s, over `ftok/*`)
     revokes the token within 60 s + skew after the job is terminal; a token without a record is
     removed by the Forgejo name-timestamp sweep (§06 §6.9.6).
@@ -1236,7 +1243,9 @@ persisted seq (`JobResult.LogLast` of the previous attempt, or a lake read) and 
   and ≤ 1 MiB/s per worker (4 MiB burst). It drops a chunk that violates these limits and logs
   `invalid_argument: log line invalid: <package>/<seq>`. The UI renders log text inert.
 - **Acceptance:** S17's 14 security cases adapted to pull: oversize, flood, cross-job chunk and
-  stale epoch are all rejected, and follower output is unchanged.
+  stale epoch are all rejected, and follower output is unchanged. The forged-chunk tests need a
+  worker Attach client (`tests/serverenv/workerclient`, Gate H G20 follow-up for the milestone that
+  implements worker registration).
 
 ### 05.10.4 Reader API (for §06)
 
@@ -1387,7 +1396,10 @@ budgets file).
 - **Statement:** v1 targets ≤ 5,000 projects, ≤ 1,000 workers, ≤ 2,000 running builds and
   ≤ 1,024 jobs per build. Each limit is enforced, and a request over a limit is refused with an
   error that names the limit.
-- **Acceptance:** each limit has a test at limit and limit + 1.
+- **Acceptance:** each limit has a test at limit and limit + 1, at the lowest layer that enforces
+  it (store layer with in-process fakes for projects, workers and jobs; the 2,000 running builds
+  row stays black-box). The seeding hooks are built by the milestone that implements each limit
+  (Gate H, G18).
 
 ---
 

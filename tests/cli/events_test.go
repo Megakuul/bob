@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/megakuul/bob/tests/harness"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // knownEvents are the events of schema v1 (SPEC §02.4) with their required fields and the JSON
@@ -132,9 +134,13 @@ func checkStream(t testing.TB, r harness.Result, verbose bool) []event {
 		t.Errorf("bob %s: no events on stdout (exit %d, stderr %q)", strings.Join(r.Args, " "), r.Exit, r.Stderr)
 		return nil
 	}
+	sch := eventsSchema(t)
 	for i, e := range evs {
 		for _, p := range validateEvent(e, verbose) {
 			t.Errorf("bob %s: line %d: %s", strings.Join(r.Args, " "), i+1, p)
+		}
+		for _, p := range validateAgainstSchema(sch, e) {
+			t.Errorf("bob %s: line %d violates schema/events-v1.json: %s", strings.Join(r.Args, " "), i+1, p)
 		}
 	}
 	if evs[0]["event"] != "run.start" {
@@ -178,18 +184,49 @@ func checkStream(t testing.TB, r harness.Result, verbose bool) []event {
 	return evs
 }
 
-// checkSchemaFile checks the protected JSON Schema schema/events-v1.json when it exists: it must
-// parse and name every event of v1 (the full validation is validateEvent above).
+// eventsSchema compiles the protected JSON Schema schema/events-v1.json (draft 2020-12, no network
+// references). A missing or invalid schema file fails the test: the schema is part of the
+// repository (R-CLI-002).
+func eventsSchema(t testing.TB) *jsonschema.Schema {
+	t.Helper()
+	path := filepath.Join(harness.Root(t), "schema", "events-v1.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("schema/events-v1.json is required by R-CLI-002 and cannot be read: %v", err)
+	}
+	c := jsonschema.NewCompiler()
+	c.Draft = jsonschema.Draft2020
+	c.LoadURL = func(u string) (io.ReadCloser, error) {
+		return nil, fmt.Errorf("schema/events-v1.json must not reference %s (no external refs)", u)
+	}
+	const url = "mem:///events-v1.json"
+	if err := c.AddResource(url, strings.NewReader(string(b))); err != nil {
+		t.Fatalf("schema/events-v1.json is not a valid JSON document: %v", err)
+	}
+	sch, err := c.Compile(url)
+	if err != nil {
+		t.Fatalf("schema/events-v1.json does not compile as JSON Schema 2020-12: %v", err)
+	}
+	return sch
+}
+
+// validateAgainstSchema returns the schema violations of one decoded event.
+func validateAgainstSchema(sch *jsonschema.Schema, e event) []string {
+	if err := sch.Validate(map[string]any(e)); err != nil {
+		return []string{strings.ReplaceAll(fmt.Sprintf("%#v", err), "\n", " ")}
+	}
+	return nil
+}
+
+// checkSchemaFile checks the protected JSON Schema schema/events-v1.json: it must exist (the test
+// fails when it is missing), compile, name every event of v1, accept a valid sample of every event
+// and reject broken ones. Every real --json line is validated against it in checkStream.
 func checkSchemaFile(t testing.TB) {
 	t.Helper()
+	sch := eventsSchema(t)
 	b, err := os.ReadFile(filepath.Join(harness.Root(t), "schema", "events-v1.json"))
 	if err != nil {
-		return // reported as a SPEC problem: the schema file is not part of the repository yet
-	}
-	var doc any
-	if err := json.Unmarshal(b, &doc); err != nil {
-		t.Errorf("schema/events-v1.json is not JSON: %v", err)
-		return
+		t.Fatalf("schema/events-v1.json: %v", err)
 	}
 	var names []string
 	for n := range knownEvents() {
@@ -199,6 +236,50 @@ func checkSchemaFile(t testing.TB) {
 	for _, n := range names {
 		if !strings.Contains(string(b), `"`+n+`"`) {
 			t.Errorf("schema/events-v1.json does not mention event %q", n)
+		}
+	}
+	const ts = "2026-10-21T10:00:00.000Z"
+	errObj := `{"code":"BOB-E-2003","severity":"error","class":"build","message":"m","label":"//a:a","definedAt":"a/bob.go:1:1","location":null,"cause":"","excerpt":[],"hint":"","log":"","args":{}}`
+	good := []string{
+		`{"v":1,"event":"run.start","time":"` + ts + `","command":"build","args":[],"requested":["//a:a"],"bob":"0.1.0","nix":"2.34.9"}`,
+		`{"v":1,"event":"package.start","time":"` + ts + `","label":"//a:a","action":"build","cache":""}`,
+		`{"v":1,"event":"package.wait","time":"` + ts + `","label":"//a:a","reason":"r"}`,
+		`{"v":1,"event":"upstream.start","time":"` + ts + `","name":"hello"}`,
+		`{"v":1,"event":"log","time":"` + ts + `","label":"//a:a","line":"x"}`,
+		`{"v":1,"event":"error","time":"` + ts + `","error":` + errObj + `}`,
+		`{"v":1,"event":"warning","time":"` + ts + `","error":` + strings.Replace(errObj, `"severity":"error"`, `"severity":"warning"`, 1) + `,"raw":["x"]}`,
+		`{"v":1,"event":"test.result","time":"` + ts + `","label":"//a:t","status":"pass","durationMs":3}`,
+		`{"v":1,"event":"package.finish","time":"` + ts + `","label":"//a:a","status":"built"}`,
+		`{"v":1,"event":"remote.submitted","time":"` + ts + `","server":"s","buildId":"b","url":"u"}`,
+		`{"v":1,"event":"remote.state","time":"` + ts + `","buildId":"b","state":"running"}`,
+		`{"v":1,"event":"result","time":"` + ts + `","command":"version","data":{"bob":"1","nix":"2","nixpkgs":"3"}}`,
+		`{"v":1,"event":"run.finish","time":"` + ts + `","exitCode":0,"counts":{"built":0,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0},"drift":[],"durationMs":1}`,
+	}
+	bad := []string{
+		`{"v":2,"event":"run.finish"}`,
+		`{"v":1,"event":"nope","time":"` + ts + `"}`,
+		`{"v":1,"event":"package.start","time":"` + ts + `","label":"//a:a","action":"fly","cache":""}`,
+		`{"v":1,"event":"package.finish","time":"` + ts + `","status":"built"}`,
+		`{"v":1,"event":"run.start","time":"yesterday","command":"build","args":[],"requested":[],"bob":"0","nix":"2"}`,
+		`{"v":1,"event":"error","time":"` + ts + `","error":` + strings.Replace(errObj, `"severity":"error"`, `"severity":"warning"`, 1) + `}`,
+		`{"v":1,"event":"result","time":"` + ts + `","command":"version","data":{}}`,
+	}
+	for _, g := range good {
+		var e event
+		if err := json.Unmarshal([]byte(g), &e); err != nil {
+			t.Fatalf("harness: sample %s: %v", g, err)
+		}
+		if p := validateAgainstSchema(sch, e); len(p) > 0 {
+			t.Errorf("schema/events-v1.json rejects a valid event %s: %s", g, p[0])
+		}
+	}
+	for _, g := range bad {
+		var e event
+		if err := json.Unmarshal([]byte(g), &e); err != nil {
+			t.Fatalf("harness: sample %s: %v", g, err)
+		}
+		if p := validateAgainstSchema(sch, e); len(p) == 0 {
+			t.Errorf("schema/events-v1.json accepts an invalid event %s", g)
 		}
 	}
 }

@@ -844,7 +844,9 @@ Features also come from the variant (`bob.Variant.Features`, §04) and are added
   needed to plan, so evaluation needs no network and no crate sources.
 - **Acceptance:** Given the Rust fixture locked, with network disabled and an empty crate
   cache, `bob build --dry-run //...` (plan only) succeeds and prints the same derivation set
-  as with sources present.
+  as with sources present. *Clarification (Gate H, ruling G24):* `--dry-run` (plan only, no
+  build) is added to the `bob build` flags in §02 by the milestone that builds it; "empty crate
+  cache" means a fresh `BOB_HOME` in a user+net namespace.
 - **Source:** D58, O-S3-1 (a), S3-2.
 
 `lock.Crate` and the `rust` section:
@@ -1226,6 +1228,9 @@ non-optional package that does not match is an error naming it.
   fails with the `E-SCRIPT-DENIED` text above (golden) and no script ran (log has no
   `node-gyp`); with AllowScripts the addon builds offline, the test opens `:memory:`, and the
   runtime closure contains only the `.node` file, glibc and libgcc beyond node.
+  *Clarification (Gate H, G24):* the native fixture gets a `//native:test` target that opens
+  `:memory:`, and "builds offline" is observed with the build wrapped in a network namespace; both
+  are added by the milestone that builds R-NPM-004a.
 - **Source:** R-NPM-004, D31, S4 §3.2.
 
 ### §03.4.5 Quirks table (R-NPM-005)
@@ -1275,7 +1280,9 @@ with deny-or-allow alone; phantom dependencies are never quirks (S4-6).
 - **Acceptance:** Fixtures build: tsc library (dist + d.ts), fastify App (esbuild bundle,
   runs under `env -i`), Vite React site, Svelte site with a workspace library, SvelteKit with
   adapter-static (`.svelte-kit` written inside the build dir only), vitest and ESLint
-  (type-checked) as tests; rebuilds are bit-identical. **[open]** SvelteKit was not built in S4;
+  (type-checked) as tests (*clarification, Gate H G24:* the ESLint entry point, a runner or check
+  package of `pkg/npm`, is specified by the milestone that builds it; until then only vitest is
+  asserted); rebuilds are bit-identical. **[open]** SvelteKit was not built in S4;
   `Kit: true` runs `svelte-kit sync` before `vite build` and in `bob dev` — verify in Stage 3.
 - **Source:** R-NPM-007, S4 §3.2.
 
@@ -1299,7 +1306,7 @@ with deny-or-allow alone; phantom dependencies are never quirks (S4-6).
 5. Codegen outputs regenerate into the tree (§03.6) and reach Vite through its watcher.
 
 #### R-NPM-010a Live reload and dependency restarts
-- **Acceptance:** In the Vite fixture under `bob dev` as non-root: saving `src/App.tsx` emits an
+- **Acceptance:** In the Vite fixture under `bob dev` as non-root: saving `src/App.svelte` (the fixture is Svelte) emits an
   HMR update over the dev-server websocket within the budget (§03.8); adding a dependency in
   bob.go restarts Vite with the new package importable within 10 s [8c/15G]; editing a
   `.proto` used via `connect.TS` changes the served module.

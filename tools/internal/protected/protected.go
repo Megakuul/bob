@@ -44,6 +44,7 @@ var DefaultGlobs = []string{
 	"tools/pins.json",
 	"tools/go.mod",
 	"tools/go.sum",
+	"schema/events-v1.json",
 }
 
 // skipDirs are never walked: VCS data, dependency trees, build output and

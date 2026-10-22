@@ -207,6 +207,49 @@ func (c *Catalog) Field(m Method, name string) (string, bool) {
 	return t, ok
 }
 
+// PathField resolves a project_field that is a field name or a dotted path through singular
+// message fields ("project.id"), returning the type of the last element.
+func (c *Catalog) PathField(m Method, path string) (string, bool) {
+	msg := m.Package + "." + m.Request
+	parts := strings.Split(path, ".")
+	for i, name := range parts {
+		t, ok := c.fields[msg][name]
+		if !ok {
+			return "", false
+		}
+		if i == len(parts)-1 {
+			return t, true
+		}
+		// a nested step must be a singular message field: qualified or same-package name
+		if strings.HasPrefix(t, "repeated ") || strings.HasPrefix(t, "map<") {
+			return "", false
+		}
+		switch {
+		case c.fields[m.Package+"."+t] != nil:
+			msg = m.Package + "." + t
+		case c.fields[t] != nil:
+			msg = t
+		default:
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// SetPath stores value in body at a dotted path, creating nested JSON objects as needed.
+func SetPath(body map[string]any, path string, value any) {
+	parts := strings.Split(path, ".")
+	for _, k := range parts[:len(parts)-1] {
+		next, ok := body[k].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			body[k] = next
+		}
+		body = next
+	}
+	body[parts[len(parts)-1]] = value
+}
+
 // Find returns the method with the given full name.
 func (c *Catalog) Find(full string) (Method, bool) {
 	for _, m := range c.Methods {
@@ -218,8 +261,8 @@ func (c *Catalog) Find(full string) (Method, bool) {
 }
 
 // Problems lists every violation of R-AUTH-006: a method without a rule, with kind
-// UNSPECIFIED, or a PROJECT rule whose project_field is not a top-level string field of the
-// request. WORKER rules must sit on bob.worker.v1 only, and nothing else may live there.
+// UNSPECIFIED, or a PROJECT rule whose project_field is not a string field, or a dotted path to a
+// nested string field, of the request. WORKER rules must sit on bob.worker.v1 only, and nothing else may live there.
 func (c *Catalog) Problems() []string {
 	var out []string
 	for _, m := range c.Methods {
@@ -231,8 +274,8 @@ func (c *Catalog) Problems() []string {
 		case m.Kind == KindProject:
 			if m.ProjectField == "" {
 				out = append(out, m.Full()+": PROJECT rule without project_field")
-			} else if t, ok := c.Field(m, m.ProjectField); !ok || t != "string" {
-				out = append(out, fmt.Sprintf("%s: project_field %q is not a top-level string field of %s", m.Full(), m.ProjectField, m.Request))
+			} else if t, ok := c.PathField(m, m.ProjectField); !ok || t != "string" {
+				out = append(out, fmt.Sprintf("%s: project_field %q is not a string field (or dotted path to one) of %s", m.Full(), m.ProjectField, m.Request))
 			}
 		}
 		if (m.Kind == KindWorker) != (m.Package == "bob.worker.v1") {

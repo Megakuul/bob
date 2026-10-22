@@ -18,75 +18,89 @@ import (
 
 // labelCase is one row of the R-FW-015 table. For valid rows, want is the parsed label;
 // every valid row is canonical, so String() must give s back.
+//
+// Ruling G9 (plan/gate-h-rulings.md): bob.Parse accepts the union of label, pattern and
+// configured forms and returns a typed value; ParseLabel accepts labels only. valid is the
+// verdict of Parse; parseOnly marks the rows that are valid for Parse but not labels (their want
+// is unused, the type is checked instead). Bounds: whole string <= 1024 bytes, one seg <= 255.
 type labelCase struct {
-	s     string
-	valid bool
-	want  bob.Label
+	s         string
+	valid     bool
+	want      bob.Label
+	parseOnly bool
 }
 
 func labelTable() []labelCase {
+	seg := func(n int) string { return strings.Repeat("d", n) }
+	dir1000 := seg(250) + "/" + seg(250) + "/" + seg(250) + "/" + seg(247) // 1000 bytes, segs <= 255
 	name129 := strings.Repeat("a", 129)
 	name128 := strings.Repeat("a", 128)
 	return []labelCase{
-		{"//:x", true, bob.Label{Name: "x"}},
-		{"//api:api", true, bob.Label{Dir: "api", Name: "api"}},
-		{"//libs/foo:foo", true, bob.Label{Dir: "libs/foo", Name: "foo"}},
-		{"//a/b:c", true, bob.Label{Dir: "a/b", Name: "c"}},
-		{"//a/b/c/d:e", true, bob.Label{Dir: "a/b/c/d", Name: "e"}},
-		{"//third_party/zstd:zstd", true, bob.Label{Dir: "third_party/zstd", Name: "zstd"}},
-		{"//a-b/c.d/E_f:g", true, bob.Label{Dir: "a-b/c.d/E_f", Name: "g"}},
-		{"//a/.hidden:x", true, bob.Label{Dir: "a/.hidden", Name: "x"}},
-		{"//a:0", true, bob.Label{Dir: "a", Name: "0"}},
-		{"//a:1x", true, bob.Label{Dir: "a", Name: "1x"}},
-		{"//a:x_y-z.w", true, bob.Label{Dir: "a", Name: "x_y-z.w"}},
-		{"//a:" + name128, true, bob.Label{Dir: "a", Name: name128}},
-		{"example.com/o//libs/bar:bar", true, bob.Label{Module: "example.com/o", Dir: "libs/bar", Name: "bar"}},
-		{"example.com/o//:root", true, bob.Label{Module: "example.com/o", Name: "root"}},
-		{"github.com/megakuul/bob//cmd/bob:bob", true, bob.Label{Module: "github.com/megakuul/bob", Dir: "cmd/bob", Name: "bob"}},
-		{"nixpkgs:protobuf", true, bob.Label{Nix: "protobuf"}},
-		{"nixpkgs:python3Packages.numpy", true, bob.Label{Nix: "python3Packages.numpy"}},
-		{"nixpkgs:gnome-shell-extension_x", true, bob.Label{Nix: "gnome-shell-extension_x"}},
-		{"nixpkgs:perl5.40.0", true, bob.Label{Nix: "perl5.40.0"}},
-		{"nixpkgs:it's", true, bob.Label{Nix: "it's"}},
+		{"//:x", true, bob.Label{Name: "x"}, false},
+		{"//api:api", true, bob.Label{Dir: "api", Name: "api"}, false},
+		{"//libs/foo:foo", true, bob.Label{Dir: "libs/foo", Name: "foo"}, false},
+		{"//a/b:c", true, bob.Label{Dir: "a/b", Name: "c"}, false},
+		{"//a/b/c/d:e", true, bob.Label{Dir: "a/b/c/d", Name: "e"}, false},
+		{"//third_party/zstd:zstd", true, bob.Label{Dir: "third_party/zstd", Name: "zstd"}, false},
+		{"//a-b/c.d/E_f:g", true, bob.Label{Dir: "a-b/c.d/E_f", Name: "g"}, false},
+		{"//a/.hidden:x", true, bob.Label{Dir: "a/.hidden", Name: "x"}, false},
+		{"//a:0", true, bob.Label{Dir: "a", Name: "0"}, false},
+		{"//a:1x", true, bob.Label{Dir: "a", Name: "1x"}, false},
+		{"//a:x_y-z.w", true, bob.Label{Dir: "a", Name: "x_y-z.w"}, false},
+		{"//a:" + name128, true, bob.Label{Dir: "a", Name: name128}, false},
+		{"example.com/o//libs/bar:bar", true, bob.Label{Module: "example.com/o", Dir: "libs/bar", Name: "bar"}, false},
+		{"example.com/o//:root", true, bob.Label{Module: "example.com/o", Name: "root"}, false},
+		{"github.com/megakuul/bob//cmd/bob:bob", true, bob.Label{Module: "github.com/megakuul/bob", Dir: "cmd/bob", Name: "bob"}, false},
+		{"nixpkgs:protobuf", true, bob.Label{Nix: "protobuf"}, false},
+		{"nixpkgs:python3Packages.numpy", true, bob.Label{Nix: "python3Packages.numpy"}, false},
+		{"nixpkgs:gnome-shell-extension_x", true, bob.Label{Nix: "gnome-shell-extension_x"}, false},
+		{"nixpkgs:perl5.40.0", true, bob.Label{Nix: "perl5.40.0"}, false},
+		{"nixpkgs:it's", true, bob.Label{Nix: "it's"}, false},
 
-		{"", false, bob.Label{}},
-		{"//", false, bob.Label{}},
-		{":x", false, bob.Label{}},
-		{"//a", false, bob.Label{}}, // a label needs ":name"; "//a" is a pattern (= //a:a)
-		{"//a/b", false, bob.Label{}},
-		{"//a:", false, bob.Label{}},
-		{"//api:API", false, bob.Label{}},
-		{"//api:-x", false, bob.Label{}},
-		{"//api:_x", false, bob.Label{}},
-		{"//api:.x", false, bob.Label{}},
-		{"//a:" + name129, false, bob.Label{}},
-		{"//a/../b:x", false, bob.Label{}},
-		{"//a/./b:x", false, bob.Label{}},
-		{"//./a:x", false, bob.Label{}},
-		{"//a//b:x", false, bob.Label{}},
-		{"///a:x", false, bob.Label{}},
-		{"//a/:x", false, bob.Label{}},
-		{"//a b:x", false, bob.Label{}},
-		{"//a:b c", false, bob.Label{}},
-		{"//a:b+c", false, bob.Label{}},
-		{"//a:b:c", false, bob.Label{}},
-		{"//a:b/c", false, bob.Label{}},
-		{"//a/b$:x", false, bob.Label{}},
-		{"//api:api@linux-amd64+debug+asan", false, bob.Label{}}, // configured, not a label
-		{"//a:b\n", false, bob.Label{}},
-		{"//ä:x", false, bob.Label{}},
-		{"nixpkgs:", false, bob.Label{}},
-		{"nixpkgs:a b", false, bob.Label{}},
-		{"nixpkgs:a/b", false, bob.Label{}},
-		{"nixpkgs:a:b", false, bob.Label{}},
-		{"nixpkgs://a:b", false, bob.Label{}},
-		{"example.com/o//a:Bad", false, bob.Label{}},
-		{"example.com/o///a:b", false, bob.Label{}},
-		{"//" + strings.Repeat("d", 5000) + ":x", true, bob.Label{Dir: strings.Repeat("d", 5000), Name: "x"}},
+		{"", false, bob.Label{}, false},
+		{"//", false, bob.Label{}, false},
+		{":x", false, bob.Label{}, false},
+		{"//a", true, bob.Label{}, true}, // a pattern (= //a:a): valid for Parse, not a label
+		{"//a/b", true, bob.Label{}, true},
+		{"//..", false, bob.Label{}, false},
+		{"//a:", false, bob.Label{}, false},
+		{"//api:API", false, bob.Label{}, false},
+		{"//api:-x", false, bob.Label{}, false},
+		{"//api:_x", false, bob.Label{}, false},
+		{"//api:.x", false, bob.Label{}, false},
+		{"//a:" + name129, false, bob.Label{}, false},
+		{"//a/../b:x", false, bob.Label{}, false},
+		{"//a/./b:x", false, bob.Label{}, false},
+		{"//./a:x", false, bob.Label{}, false},
+		{"//a//b:x", false, bob.Label{}, false},
+		{"///a:x", false, bob.Label{}, false},
+		{"//a/:x", false, bob.Label{}, false},
+		{"//a b:x", false, bob.Label{}, false},
+		{"//a:b c", false, bob.Label{}, false},
+		{"//a:b+c", false, bob.Label{}, false},
+		{"//a:b:c", false, bob.Label{}, false},
+		{"//a:b/c", false, bob.Label{}, false},
+		{"//a/b$:x", false, bob.Label{}, false},
+		{"//api:api@linux-amd64+debug+asan", true, bob.Label{}, true}, // configured: valid for Parse only
+		{"//a:b\n", false, bob.Label{}, false},
+		{"//ä:x", false, bob.Label{}, false},
+		{"nixpkgs:", false, bob.Label{}, false},
+		{"nixpkgs:a b", false, bob.Label{}, false},
+		{"nixpkgs:a/b", false, bob.Label{}, false},
+		{"nixpkgs:a:b", false, bob.Label{}, false},
+		{"nixpkgs://a:b", false, bob.Label{}, false},
+		{"example.com/o//a:Bad", false, bob.Label{}, false},
+		{"example.com/o///a:b", false, bob.Label{}, false},
+		{"//" + dir1000 + ":x", true, bob.Label{Dir: dir1000, Name: "x"}, false},              // 1000-byte dir is valid
+		{"//" + seg(255) + ":x", true, bob.Label{Dir: seg(255), Name: "x"}, false},            // seg at the cap
+		{"//" + seg(256) + ":x", false, bob.Label{}, false},                                   // seg above the cap
+		{"//" + strings.Repeat(seg(250)+"/", 4) + seg(250) + ":x", false, bob.Label{}, false}, // segs fine, whole string > 1024
+		{"//" + strings.Repeat("d", 5000) + ":x", false, bob.Label{}, false},                  // 5000-byte dir is invalid
 	}
 }
 
-// R-FW-015: ≥ 30 valid and invalid label strings; Parse(s).String()==s for canonical inputs.
+// R-FW-015 (ruling G9): ≥ 30 valid and invalid strings through bob.Parse (union of label, pattern,
+// configured); ParseLabel accepts labels only; Parse(s).String()==s for canonical inputs.
 func TestRFW015LabelGrammar(t *testing.T) {
 	parity.Covers(t, "R-FW-015")
 	table := labelTable()
@@ -99,25 +113,52 @@ func TestRFW015LabelGrammar(t *testing.T) {
 			s = fmt.Sprintf("%.40s…(%d bytes)", s, len(c.s))
 		}
 		t.Run(fmt.Sprintf("%02d/%s", i, strings.ReplaceAll(s, "/", "|")), func(t *testing.T) {
-			got, err := bob.ParseLabel(c.s)
+			ref, err := bob.Parse(c.s)
 			if isNotImplemented(err) {
+				harness.RedFeature(t, "bob.Parse")
+				return
+			}
+			_, lerr := bob.ParseLabel(c.s)
+			if isNotImplemented(lerr) {
 				harness.RedFeature(t, "bob.ParseLabel")
 				return
 			}
 			if !c.valid {
 				if err == nil {
-					t.Errorf("ParseLabel(%q) = %+v, want an error", c.s, got)
+					t.Errorf("Parse(%q) = %#v, want an error", c.s, ref)
+				}
+				if lerr == nil {
+					t.Errorf("ParseLabel(%q) accepted an invalid string", c.s)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("ParseLabel(%q): %v", c.s, err)
+				t.Fatalf("Parse(%q): %v", c.s, err)
+			}
+			if ref == nil || ref.String() != c.s {
+				t.Errorf("round trip: Parse(%q).String() = %v", c.s, ref)
+			}
+			if c.parseOnly {
+				if _, isLabel := ref.(bob.Label); isLabel {
+					t.Errorf("Parse(%q) returned a Label, want a pattern or configured value", c.s)
+				}
+				if lerr == nil {
+					t.Errorf("ParseLabel(%q) accepted a non-label form", c.s)
+				}
+				return
+			}
+			got, isLabel := ref.(bob.Label)
+			if !isLabel {
+				t.Fatalf("Parse(%q) = %T, want a bob.Label", c.s, ref)
 			}
 			if got.Module != c.want.Module || got.Dir != c.want.Dir || got.Name != c.want.Name || got.Nix != c.want.Nix {
-				t.Errorf("ParseLabel(%q) = %+v, want %+v", c.s, got, c.want)
+				t.Errorf("Parse(%q) = %+v, want %+v", c.s, got, c.want)
 			}
-			if got.String() != c.s {
-				t.Errorf("round trip: Parse(%q).String() = %q", c.s, got.String())
+			if lerr != nil {
+				t.Fatalf("ParseLabel(%q): %v", c.s, lerr)
+			}
+			if lgot, _ := bob.ParseLabel(c.s); lgot != got {
+				t.Errorf("ParseLabel(%q) = %+v differs from Parse's %+v", c.s, lgot, got)
 			}
 		})
 	}
@@ -223,7 +264,10 @@ func TestRFW016DefinedAtIsConstructorLine(t *testing.T) {
 	}
 }
 
-// R-FW-016: a failing C++ build of //libs/foo:foo prints "(defined at libs/foo/bob.go:12)".
+// R-FW-016: a failing C++ build of //libs/foo:foo prints "(defined at libs/foo/bob.go:13)".
+// Ruling G8: definedAt is the line of the call to the ecosystem constructor (the first stack frame
+// outside github.com/megakuul/bob/), line 13 of libs/foo/bob.go; line 12 is the `var Lib =
+// bob.Define(` line that R-FW-001 uses. The test reads the constructor line from the file.
 func TestRFW016FailingBuildShowsDefinedAt(t *testing.T) {
 	parity.Covers(t, "R-FW-016")
 	dir := harness.Fixture(t, "acme")

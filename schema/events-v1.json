@@ -1,0 +1,1196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/megakuul/bob/schema/events-v1.json",
+  "title": "bob --json event stream, schema v1 (SPEC \u00a702.4)",
+  "description": "One schema for one NDJSON line. Within v1 fields and events are only added, never renamed or removed, so unknown extra properties are allowed (additionalProperties is not false). A line with an unknown event name is invalid.",
+  "type": "object",
+  "required": [
+    "v",
+    "event",
+    "time"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "event": {
+      "enum": [
+        "run.start",
+        "package.start",
+        "package.wait",
+        "upstream.start",
+        "log",
+        "error",
+        "warning",
+        "test.result",
+        "package.finish",
+        "remote.submitted",
+        "remote.state",
+        "result",
+        "run.finish"
+      ]
+    },
+    "time": {
+      "$ref": "#/$defs/time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run.start"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.run.start"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "package.start"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.package.start"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "package.wait"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.package.wait"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "upstream.start"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.upstream.start"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "log"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.log"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "error"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.error"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "warning"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.warning"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "test.result"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.test.result"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "package.finish"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.package.finish"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "remote.submitted"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.remote.submitted"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "remote.state"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.remote.state"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "result"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.result"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run.finish"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/ev.run.finish"
+      }
+    }
+  ],
+  "$defs": {
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^BOB-E-[0-9]{4}$"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning"
+          ]
+        },
+        "class": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "definedAt": {
+          "type": "string"
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cause": {
+          "type": "string"
+        },
+        "excerpt": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hint": {
+          "type": "string"
+        },
+        "log": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "class",
+        "message",
+        "label",
+        "definedAt",
+        "location",
+        "cause",
+        "excerpt",
+        "hint",
+        "log",
+        "args"
+      ]
+    },
+    "ev.run.start": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "run.start"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "command": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requested": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bob": {
+          "type": "string"
+        },
+        "nix": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "command",
+        "args",
+        "requested",
+        "bob",
+        "nix"
+      ]
+    },
+    "ev.package.start": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "package.start"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "enum": [
+            "build",
+            "download",
+            "test"
+          ]
+        },
+        "cache": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "label",
+        "action",
+        "cache"
+      ]
+    },
+    "ev.package.wait": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "package.wait"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "label",
+        "reason"
+      ]
+    },
+    "ev.upstream.start": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "upstream.start"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "name"
+      ]
+    },
+    "ev.log": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "log"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "label",
+        "line"
+      ]
+    },
+    "ev.error": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "error"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "error": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "properties": {
+                "severity": {
+                  "const": "error"
+                }
+              }
+            }
+          ]
+        },
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "error"
+      ]
+    },
+    "ev.warning": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "warning"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "error": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "properties": {
+                "severity": {
+                  "const": "warning"
+                }
+              }
+            }
+          ]
+        },
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "error"
+      ]
+    },
+    "ev.test.result": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "test.result"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "cached"
+          ]
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "label",
+        "status",
+        "durationMs"
+      ]
+    },
+    "ev.package.finish": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "package.finish"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "built",
+            "cached",
+            "failed",
+            "skipped",
+            "cancelled"
+          ]
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "label",
+        "status"
+      ]
+    },
+    "ev.remote.submitted": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "remote.submitted"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "server": {
+          "type": "string"
+        },
+        "buildId": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "server",
+        "buildId",
+        "url"
+      ]
+    },
+    "ev.remote.state": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "remote.state"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "buildId": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "buildId",
+        "state"
+      ]
+    },
+    "ev.result": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "result"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "command": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "command",
+        "data"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "graph"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "definedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "kind",
+                        "definedAt"
+                      ]
+                    }
+                  },
+                  "edges": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to"
+                      ]
+                    }
+                  },
+                  "why": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "nodes",
+                  "edges",
+                  "why"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "env"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "root": {
+                    "type": "string"
+                  },
+                  "shell": {
+                    "type": "string"
+                  },
+                  "outside": {
+                    "type": "object",
+                    "properties": {
+                      "set": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "prepend": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "required": []
+                  },
+                  "insideOnly": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "root",
+                  "shell",
+                  "outside",
+                  "insideOnly",
+                  "tools"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "check"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "findings": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/error"
+                    }
+                  }
+                },
+                "required": [
+                  "findings"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "lock"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "changes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ecosystem": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "from": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "enum": [
+                            "add",
+                            "update",
+                            "remove"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ecosystem",
+                        "name",
+                        "from",
+                        "to",
+                        "op"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "changes"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "list"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "installed": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "ref": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "generation": {
+                          "type": "integer"
+                        },
+                        "bins": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "ref",
+                        "version",
+                        "generation",
+                        "bins"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "installed"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "version"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "bob": {
+                    "type": "string"
+                  },
+                  "nix": {
+                    "type": "string"
+                  },
+                  "nixpkgs": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "bob",
+                  "nix",
+                  "nixpkgs"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "const": "login"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "server": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "type": "string"
+                  },
+                  "expires": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server",
+                  "user",
+                  "expires"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ev.run.finish": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "event": {
+          "const": "run.finish"
+        },
+        "time": {
+          "$ref": "#/$defs/time"
+        },
+        "exitCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counts": {
+          "type": "object",
+          "properties": {
+            "built": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cached": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "skipped": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cancelled": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "upstream": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "downloaded": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "built",
+            "cached",
+            "failed",
+            "skipped",
+            "cancelled",
+            "upstream",
+            "downloaded"
+          ]
+        },
+        "drift": {
+          "type": "array",
+          "items": {}
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "v",
+        "event",
+        "time",
+        "exitCode",
+        "counts",
+        "drift",
+        "durationMs"
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "built": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cached": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cancelled": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "upstream": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downloaded": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "built",
+        "cached",
+        "failed",
+        "skipped",
+        "cancelled",
+        "upstream",
+        "downloaded"
+      ]
+    }
+  }
+}

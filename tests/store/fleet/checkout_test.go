@@ -66,7 +66,7 @@ func (f *fakeForge) tokens() []string {
 // holds (owner + epoch, state claimed or running), for the job's one repository; the token
 // is revoked at job end; the forge-sweeper revokes what an orchestrator that died between
 // mint and revoke left behind; the record never holds the token value (D62).
-// The Forgejo-live bullets (clone of R works, R2 gives 404, 401 after the job, fork-PR ref)
+// The Forgejo-live bullets (clone of R works, R2 gives 403, 401 after the job, fork-PR ref)
 // belong to the forge-forgejo-live suite.
 func TestRFLEET006CheckoutOnlyForTheHeldJob(t *testing.T) {
 	parity.Covers(t, "R-FLEET-006")
@@ -78,6 +78,8 @@ func TestRFLEET006CheckoutOnlyForTheHeldJob(t *testing.T) {
 	defer cancel()
 	forge := &fakeForge{}
 	co := &orchestrator.Checkouts{Control: l.control, Queue: l.q, Forge: forge, Now: l.clk.Now}
+	// Ruling G3: the denial text is this one everywhere (SPEC §6.9.6 aligned); the forge status
+	// for a repo outside the token scope is 403 (forge-forgejo-live, tests/forge).
 	denied := func(job string) string { return "permission_denied: worker holds no lease on job " + job }
 
 	release := make(chan struct{})

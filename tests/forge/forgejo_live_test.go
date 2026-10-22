@@ -136,7 +136,7 @@ func startForgejoLive(t *testing.T) *fjLive {
 // states, a per-job repo-scoped checkout token, revoke, sweeper, fork PR ref, shallow fetch).
 // The webhook -> BuildRecord <= 500 ms part runs against the server (TestPIPE003...).
 func TestForgejoLive(t *testing.T) {
-	parity.Covers(t, "R-PIPE-001", "R-PIPE-007")
+	parity.Covers(t, "R-PIPE-001", "R-PIPE-007", "R-FLEET-006")
 	l := startForgejoLive(t)
 	if l == nil {
 		return
@@ -246,6 +246,9 @@ func TestForgejoLive(t *testing.T) {
 		if got, out, err := l.shallowFetch(co, sha); err != nil || got != sha {
 			t.Fatalf("shallow fetch of %s: %q %v: %s", sha, got, err, out)
 		}
+		// R-FLEET-006 (ruling G3): the forge decides the status for a repo outside the token scope;
+		// the measured Forgejo behaviour (S16) is HTTP 403, not 404. The worker-side denial text
+		// `permission_denied: worker holds no lease on job <id>` is asserted in tests/store/fleet.
 		// the token is limited to the one repository: the other private repo answers 403
 		if err := l.api(http.MethodGet, "/api/v1/repos/alice/other", forgejo.Auth{Token: co.Token.Reveal()}, nil, nil); !isStatus(err, http.StatusForbidden) {
 			t.Errorf("job token on alice/other: %v, want 403", err)

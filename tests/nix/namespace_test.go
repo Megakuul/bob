@@ -136,6 +136,8 @@ func (n *nonRoot) run(t testing.TB, dir string, args ...string) harness.Result {
 // and only loopback exists. The namespace entry takes <= 10 ms (budget B-009 in
 // tests/budgets/budgets.json, measured by the stage event "namespace"). Four parallel bob
 // builds on one state finish without lock errors.
+// Ruling G16: the 10 ms budget is observed as the durationMs of the `namespace` stage event; bob
+// runs as the user bobtest when the tests run as root (non-root bind mode).
 func TestRNIX021NamespaceProbes(t *testing.T) {
 	parity.Covers(t, "R-NIX-021")
 	if _, err := os.Stat("/nix"); err != nil {

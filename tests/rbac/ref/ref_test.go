@@ -33,11 +33,21 @@ func TestScanner(t *testing.T) {
 	if m.Kind != KindAuthenticated || !m.AllowDownload || !m.GetOK {
 		t.Fatalf("WhoAmI = %+v", m)
 	}
-	// Known proto problem (reported to the coordinator): these two rules name "id" but the
-	// request only has the nested project.id / release.id. The acceptance test of
-	// R-AUTH-006 (tests/rbac) demands zero problems and stays failing until proto/ is fixed.
-	if p := c.Problems(); len(p) != 2 || !strings.Contains(p[0], "UpdateProject") || !strings.Contains(p[1], "UpdateRelease") {
+	if p := c.Problems(); len(p) != 0 {
 		t.Fatalf("unexpected rule problems: %v", p)
+	}
+	for path, mname := range map[string]string{"project.id": "bob.project.v1.ProjectService/UpdateProject", "release.id": "bob.release.v1.ReleaseService/UpdateRelease"} {
+		m, ok := c.Find(mname)
+		if !ok || m.ProjectField != path {
+			t.Fatalf("%s project_field = %q, want %q", mname, m.ProjectField, path)
+		}
+	}
+	m, _ = c.Find("bob.project.v1.ProjectService/UpdateProject")
+	for path, want := range map[string]bool{"project.id": true, "project.nope": false, "project": false, "update_mask.paths": false, "project.id.x": false} {
+		typ, ok := c.PathField(m, path)
+		if got := ok && typ == "string"; got != want {
+			t.Errorf("PathField(%q) = %q, %v; string field = %v, want %v", path, typ, ok, got, want)
+		}
 	}
 }
 

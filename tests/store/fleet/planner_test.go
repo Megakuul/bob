@@ -20,7 +20,8 @@ func planInput(g *s14graph.Graph, workers, slots int) orchestrator.PlanInput {
 
 func within(got, want, frac float64) bool { return math.Abs(got-want) <= frac*want }
 
-// TestRFLEET005Planner runs the planner on the S14 graphs: the fixture is not split; go200,
+// TestRFLEET005Planner runs the planner on the S14 graphs (rule, ruling G2: split = I >= 2 and
+// T1 - Tsplit >= max(10 s, 0.3 x T1)): the fixture is not split; go200,
 // rust129 and wide2000 at W = 100 workers with 2 slots are split, and the predicted wall times
 // are within 25 % of the S14 model (docs/spikes/s14-sched.md §3.2, W = 100, 2-slot workers:
 // closure "a" and best split).
@@ -95,5 +96,79 @@ func TestRFLEET005Planner(t *testing.T) {
 		if err != nil || res.Split {
 			t.Errorf("%s with one idle worker: %+v, %v; want no split", g.Name, res, err)
 		}
+	}
+}
+
+// model is the S14 planner model (docs/spikes/s14-sched.md §5.1), written out for graphs of
+// independent equal-cost nodes (no dependencies: critical path = cost, depth = 1):
+//
+//	T1     = list-schedule makespan on S slots + 0.14 s per drv
+//	Tsplit = max(critical path + depth x 1.0 s, (sum est + 0.6 s x drvs) / (S x max(I,1)))
+//	split  = I >= 2 and T1 - Tsplit >= max(10 s, 0.3 x T1)       (ruling G2)
+func model(n int, cost float64, slots, idle int) (t1, tsplit, threshold float64) {
+	t1 = math.Ceil(float64(n)/float64(slots))*cost + 0.14*float64(n)
+	tsplit = math.Max(cost+1.0, (float64(n)*cost+0.6*float64(n))/float64(slots*max(idle, 1)))
+	return t1, tsplit, math.Max(10, 0.3*t1)
+}
+
+func independent(n int, cost float64) orchestrator.PlanInput {
+	in := orchestrator.PlanInput{}
+	for i := 0; i < n; i++ {
+		in.Nodes = append(in.Nodes, orchestrator.PlanNode{Cost: cost})
+	}
+	return in
+}
+
+// TestRFLEET005PlannerBoundaries pins both thresholds of the split rule at, just below and just
+// above the limit (the planner compares with a 1e-9 s tolerance, so "at" splits). The inputs are
+// built from the model above: absolute rule rows have gain 9.9 / 10.0 / 10.1 s (T1 = 11.9..13.5 s,
+// so 10 s binds); relative rule rows have gain 29.8 / 30.0 / 31.5 % of T1 (gain > 10 s, so 30 %
+// binds).
+func TestRFLEET005PlannerBoundaries(t *testing.T) {
+	parity.Covers(t, "R-FLEET-005")
+	cases := []struct {
+		name        string
+		n           int
+		cost        float64
+		slots, idle int
+		split       bool
+		gain        float64 // expected model gain (harness self-check)
+	}{
+		// 10 equal nodes, 2 slots, 100 idle workers: gain = 4 x cost + 0.4 s.
+		{"gain 9.9 s (below 10 s)", 10, 2.375, 2, 100, false, 9.9},
+		{"gain 10.0 s (at 10 s)", 10, 2.4, 2, 100, true, 10.0},
+		{"gain 10.1 s (above 10 s)", 10, 2.425, 2, 100, true, 10.1},
+		// 40 equal nodes, 1 slot, 2 idle workers.
+		{"gain 29.8 % (below 30 %)", 40, 1.0, 1, 2, false, 13.6},
+		{"gain 30.0 % (at 30 %)", 40, 1.01, 1, 2, true, 13.8},
+		{"gain 31.5 % (above 30 %)", 40, 1.1, 1, 2, true, 15.6},
+	}
+	for _, c := range cases {
+		t1, ts, thr := model(c.n, c.cost, c.slots, c.idle)
+		if math.Abs(t1-ts-c.gain) > 1e-9 || (t1-ts >= thr-1e-9) != c.split {
+			t.Fatalf("harness error: %s: model gain %.9f s, threshold %.9f s, split %v", c.name, t1-ts, thr, c.split)
+		}
+		in := independent(c.n, c.cost)
+		in.IdleWorkers, in.SlotsPerWorker = c.idle, c.slots
+		res, err := orchestrator.Plan(in)
+		if env.Red(t, err) {
+			return
+		}
+		if err != nil {
+			t.Errorf("%s: %v", c.name, err)
+			continue
+		}
+		if res.Split != c.split {
+			t.Errorf("%s: Split = %v, want %v (model: T1 %.3f s, Tsplit %.3f s, gain %.3f s, threshold %.3f s)", c.name, res.Split, c.split, t1, ts, t1-ts, thr)
+		}
+		if !within(res.ClosureS, t1, 0.001) {
+			t.Errorf("%s: predicted closure time %.3f s, the S14 formula gives %.3f s", c.name, res.ClosureS, t1)
+		}
+	}
+	// I >= 2 is part of the rule: one idle worker never splits.
+	in := independent(40, 1.01)
+	in.IdleWorkers, in.SlotsPerWorker = 1, 1
+	if res, err := orchestrator.Plan(in); err != nil || res.Split {
+		t.Errorf("one idle worker: %+v, %v; want no split", res, err)
 	}
 }

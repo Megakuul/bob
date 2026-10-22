@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -116,31 +117,125 @@ func TestRNIX010NoRawNixText(t *testing.T) {
 	checkEntries(t, func(e errorsuite.Entry) bool { return hasReplay(e) || e.ID == "74-unknown-nix-message" }, "R-NIX-010", 48)
 }
 
-// TestRNIX012FailuresInBobTerms covers faults 6–15 and 22–33: the recorded golden of each is
-// the byte-identical error block with code, `package defined at`, excerpt, hint and the log
-// pointer.
+// specHints reads the SPEC §01 error table (SPEC.md, "Code | Class | Message template | Default
+// hint") and returns the default hint of each code; a hint cell that is empty or starts with an
+// em dash means the row has no hint.
+func specHints(t testing.TB) map[string]string {
+	t.Helper()
+	b := mustRead(t, filepath.Join(harness.Root(t), "SPEC.md"))
+	row := regexp.MustCompile("^\\| (\\d{4})(?: \\*\\*new\\*\\*)? \\| [a-z]+ \\| `.*` \\| (.*) \\|$")
+	out := map[string]string{}
+	for _, l := range strings.Split(string(b), "\n") {
+		m := row.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		h := strings.TrimSpace(m[2])
+		if strings.HasPrefix(h, "—") || strings.HasPrefix(h, "(") {
+			h = ""
+		}
+		out["BOB-E-"+m[1]] = h
+	}
+	if len(out) < 60 {
+		t.Fatalf("harness: parsed %d rows of the SPEC error table, want at least 60", len(out))
+	}
+	return out
+}
+
+// noExcerptDocumented are recorded goldens that carry `full log:` (a builder log exists) but no
+// excerpt line. The R-NIX-012 rule is not loosened for them: they are documented exceptions and a
+// finding for the owner (ruling G4, plan/gate-h-rulings.md), keyed by fault number.
+var noExcerptDocumented = map[string]string{
+	"26": "BOB-E-9004: bob rejects the derivation before the builder ran, yet prints `full log:`",
+	"28": "BOB-E-9001: the builder binary is missing, yet `full log:` is printed without an excerpt",
+	"30": "BOB-E-9003: the disallowed reference is found after the build, no excerpt line",
+	"33": "BOB-E-6002: killed by SIGKILL, no log excerpt",
+}
+
+// TestRNIX012FailuresInBobTerms covers faults 6–15 and 22–33. Ruling G4 (R-NIX-012, conditional
+// rule): every recorded golden has `error[BOB-E-` and `package defined at`; the hint line is
+// present iff the SPEC §01 error table row of its code has a hint; excerpt lines and `full log:`
+// go together (a failure bob detects without a builder run has neither). Faults with `full log:`
+// but no excerpt are the documented exceptions above.
 func TestRNIX012FailuresInBobTerms(t *testing.T) {
 	parity.Covers(t, "R-NIX-012")
 	sel := ids("06", "07", "08", "09", "10", "11", "12", "13", "14", "15",
 		"22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33")
-	// The recorded goldens themselves must have the block's shape.
+	hints := specHints(t)
+	blockRe := regexp.MustCompile(`error\[(BOB-E-\d{4})\]`)
+	asserted := 0
+	var exceptions []string // logged in their own passing subtest (parent logs would hide red markers from CI)
 	for _, e := range catalogue(t) {
 		if !sel(e) {
 			continue
 		}
+		fault := strings.SplitN(e.ID, "-", 2)[0]
 		for _, nv := range e.NixVer {
 			d := e.ReplayDir(nv)
 			if d == "" {
+				t.Errorf("%s/%s: no recorded golden", e.ID, nv)
 				continue
 			}
 			g := string(mustRead(t, filepath.Join(d, "golden.txt")))
-			for _, want := range []string{"error[BOB-E-", "package defined at "} {
-				if !strings.Contains(g, want) {
-					t.Errorf("%s/%s golden lacks %q", e.ID, nv, want)
+			asserted++
+			// Split into error blocks (a block runs to the next `error[` or the summary line).
+			idx := blockRe.FindAllStringSubmatchIndex(g, -1)
+			if len(idx) == 0 {
+				t.Errorf("%s/%s golden lacks %q", e.ID, nv, "error[BOB-E-")
+				continue
+			}
+			for i, m := range idx {
+				end := len(g)
+				if i+1 < len(idx) {
+					end = idx[i+1][0]
+				}
+				code, block := g[m[2]:m[3]], g[m[0]:end]
+				name := e.ID + "/" + nv + "/" + code
+				if !strings.Contains(block, "package defined at ") {
+					t.Errorf("%s golden lacks %q", name, "package defined at ")
+				}
+				tableHint, known := hints[code]
+				if !known {
+					t.Errorf("%s: code is not in the SPEC error table", name)
+				}
+				hasHint := strings.Contains(block, "\n  hint: ")
+				switch {
+				case tableHint != "" && !hasHint:
+					t.Errorf("%s golden lacks the hint line, the error table gives %q", name, tableHint)
+				case tableHint == "" && hasHint:
+					t.Errorf("%s golden has a hint line but the error table row has none", name)
+				case hasHint && !strings.Contains(tableHint, "{"):
+					if !strings.Contains(block, "\n  hint: "+tableHint) {
+						t.Errorf("%s: hint line does not start with the table hint %q:\n%s", name, tableHint, block)
+					}
+				}
+				hasLog := strings.Contains(block, "\n  full log: bob log ")
+				hasExcerpt := regexp.MustCompile(`(?m)^   \| `).MatchString(block)
+				switch {
+				case hasLog && !hasExcerpt:
+					if why, ok := noExcerptDocumented[fault]; ok {
+						exceptions = append(exceptions, fmt.Sprintf("documented exception (fault %s, finding for the owner): `full log:` without an excerpt: %s", fault, why))
+					} else {
+						t.Errorf("%s golden has `full log:` but no excerpt line", name)
+					}
+				case !hasLog && hasExcerpt:
+					t.Errorf("%s golden has excerpt lines but no `full log:` (no builder log, so no excerpt)", name)
+				case hasLog && hasExcerpt:
+					if _, ok := noExcerptDocumented[fault]; ok {
+						exceptions = append(exceptions, fmt.Sprintf("fault %s is listed as an exception but its golden now has an excerpt; remove it from noExcerptDocumented", fault))
+					}
 				}
 			}
 		}
 	}
+	if asserted < 22 {
+		t.Errorf("only %d goldens asserted, want 22 (faults 6-15, 22-33)", asserted)
+	}
+	t.Run("documented-exceptions", func(t *testing.T) {
+		for _, x := range exceptions {
+			t.Log(x)
+		}
+	})
 	checkEntries(t, sel, "R-NIX-012", 22)
 }
 

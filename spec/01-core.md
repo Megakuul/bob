@@ -189,7 +189,7 @@ Expected from other sections:
   delegated cgroup is available; wall-clock timeout and output caps always apply. Worker limits
   are §05's.
 - **Local defaults [proposal]:** wall clock 120 s, IR output 64 MiB, stderr kept 1 MiB, pids 512,
-  memory 2 GiB (only with delegation).
+  memory 2 GiB (enforced always, by RLIMIT_AS or a polling watchdog, and by the cgroup when delegated).
 - **Acceptance:** the 15 S13 hostile cases (`bobtest/evalbox/`) each fail with their S13 error
   text locally without a delegated cgroup (except the three cgroup-only cases, which are skipped
   with a note), and all 15 on a machine with delegation.
@@ -225,6 +225,8 @@ configured = label "@" [platform] *("+" token)    ; §1.9
 pattern    = "//..." / "//" dir "/..." / "//" [dir] ":all" / label / "//" dir   ; "//a/b" = "//a/b:b"
 ```
 
+- **Bounds (hostile input):** the whole string is ≤ 1024 bytes and one `seg` ≤ 255 bytes; longer
+  is invalid (a 1000-byte `dir` is valid, a 5000-byte one is not).
 - `<dir>` is the directory of the `bob.go` that made the outermost constructor call (first stack
   frame outside `github.com/megakuul/bob/`); `<name>` is the constructor's name argument.
 - CLI relative forms (`:name`, `./...`, `.`) resolve against the current directory (§02).
@@ -232,7 +234,9 @@ pattern    = "//..." / "//" dir "/..." / "//" [dir] ":all" / label / "//" dir   
 - **Acceptance:** Table test `pkg/bob/label_test.go`: ≥ 30 valid and invalid strings incl.
   `//:x`, `//a/b`, `example.com/o//libs/bar:bar`, `nixpkgs:python3Packages.numpy`,
   `//api:api@linux-amd64+debug+asan`, `//api:API` (invalid), `//a/../b:x` (invalid),
-  `//a:b+c` (invalid). Round trip `Parse(s).String()==s` for canonical inputs.
+  `//a:b+c` (invalid). `Parse` accepts all the forms of the table (`//a/b`, `//api:api@linux-amd64+debug+asan` are valid
+  for `Parse`; `ParseLabel` accepts labels only). Round trip `Parse(s).String()==s` for canonical
+  inputs. A 1000-byte dir is valid, a 5000-byte dir is invalid.
 - **Source:** R-FW-015, ADR 0003 Decision 5, ADR 0009 Decision 5, S1 §5.4.
 
 #### R-FW-016 Source positions
@@ -240,8 +244,10 @@ pattern    = "//..." / "//" dir "/..." / "//" [dir] ":all" / label / "//" dir   
   outermost constructor call in a `bob.go` (with `-trimpath`: `<module>[@<version>]/<dir>/bob.go`);
   bob displays own-repo positions repo-relative (`cmd/api/bob.go:15`).
 - **Acceptance:** For each node in `examples/acme`'s IR, `definedAt` points at the line with the
-  constructor call (golden file). A failing C++ build of `//libs/foo:foo` prints
-  `(defined at libs/foo/bob.go:12)`.
+  constructor call (golden file). `definedAt` is the line of the call to the ecosystem
+  constructor (the first stack frame outside `github.com/megakuul/bob/`); in `libs/foo/bob.go`
+  that is line 13 (line 12 is the `var Lib = bob.Define(` line used by R-FW-001). A failing C++
+  build of `//libs/foo:foo` prints `(defined at libs/foo/bob.go:13)`.
 - **Source:** R-FW-016, R-NIX-012.
 
 ---
@@ -327,8 +333,21 @@ type LinkInfo struct {
 
 // Label identifies a package, e.g. //libs/foo:foo (see SPEC §1.3).
 type Label struct{ Module, Dir, Name string; Nix string }
+// ParseLabel accepts labels only (local, foreign, nixlabel).
 func ParseLabel(s string) (Label, error)
 func (l Label) String() string
+
+// Parse accepts the union of label, pattern and configured forms (R-FW-015) and returns a typed
+// value: a Label, a Pattern or a Configured label. Use ParseLabel when only a label is valid.
+func Parse(s string) (Ref, error)
+
+// Ref is the typed result of Parse: a Label, a Pattern or a Configured value; String() returns
+// the canonical form.
+type Ref interface{ String() string }
+
+// Pattern is a label pattern ("//...", "//dir/...", "//dir:all", a label, "//dir"); a string type
+// so that fixtures can write []bob.Pattern{"//..."}.
+type Pattern string
 
 // Position is a file and line in a bob.go file, module-relative.
 type Position struct{ File string; Line int }
@@ -537,8 +556,28 @@ type RepoOpts struct {
 	Variants []NamedVariant // see §1.9
 }
 
-// Pipeline registers a pipeline (R-FW-040). Triggers and steps are defined by SPEC §06.
+// Pipeline registers a pipeline (R-FW-040). Trigger semantics on the server are SPEC §06.
 func Pipeline(name string, o PipelineOpts) struct{}
+
+// PipelineOpts is typed; the zero value is valid and means a manual-only pipeline. It maps
+// 1:1 onto proto `Pipeline` (§6.5.6): triggers (human form), concurrency, releases.
+type PipelineOpts struct {
+	Triggers    []Trigger   // none = manual runs only
+	Concurrency Concurrency // unset = the per-ref default of §05.6.2
+	Targets     []Pattern   // packages to build
+	Tests       []Pattern   // packages to test
+	Releases    []string    // release names to publish; non-empty = release pipeline (proto releases=true)
+}
+
+// Trigger says when a pipeline starts.
+type Trigger struct{ /* unexported */ }
+func OnPush(branchGlob string) Trigger // human form "push <glob>"
+func OnPullRequest() Trigger           // "pull_request"
+func OnTag(glob string) Trigger        // "tag <glob>"
+
+// Concurrency says what happens to a run of the same pipeline and ref while one is active.
+type Concurrency int
+const ( Queue Concurrency = iota + 1; Supersede; Parallel ) // zero value = per-ref default
 ```
 
 - Repo errors: `Repo` outside the root `bob.go` or twice → definition error; missing →
@@ -616,7 +655,8 @@ func ConfigOf(n *bob.Node) Config
 | `pipelines` | array | §06 |
 
 - bob validates before use: size ≤ 64 MiB, ≤ 1,000,000 nodes, every dep id exists, no cycles
-  (error 1006 with the chain and each `definedAt`), unknown kinds rejected, every string ≤ 64 KiB.
+  (error 1006 with the chain and each `definedAt`), unknown kinds rejected, every string ≤ 64 KiB. The node cap shares the IR-invalid error of the
+  field validation: a rejection with any structured IR-invalid error satisfies the cap test.
 - **Acceptance:** JSON-schema file `pkg/engine/ir/ir.schema.json`; fuzz test of the IR parser
   (no panic, bounded memory); golden IR for `examples/polyglot`.
 - **Source:** R-FW-008, R-SEC-004, gen-b §1, S13 §5.2.
@@ -843,13 +883,18 @@ func WithRace() VariantMod
 func WithFeatures(crate Package, features ...string) VariantMod
 ```
 
+Named variants may also be written as `func(*bob.Variant)`; such a function sets
+`Variant.Features[bob.Label{Dir, Name}]` (a feature list per crate label) (R-FW-031, R-FW-038).
+
 #### R-FW-030 Platform-generic packages, host builds
-- **Statement:** Every package is defined once and built for any `Platform`. Every bob
-  derivation has the **host** Nix system; the target only changes toolchain, flags and target
-  libraries (§04 owns the toolchain table). Kinds may restrict platforms through their options
+- **Statement:** Every package is defined once and built for any `Platform`. Derivations of
+  host-side tools (bob-builder, generators) have the **host** Nix system; target libraries and
+  outputs have the **target** `system` (consistent with R-FW-032); the target also changes
+  toolchain and flags (§04 owns the toolchain table). Kinds may restrict platforms through their options
   (`Platforms []bob.Platform`); requesting another → `<label> does not support <platform>`.
 - **Acceptance:** S7 matrix: `examples/polyglot` cross-builds aarch64→x86_64 and the binary runs
-  under qemu-user with the expected output; every drv of the build has `system = "aarch64-linux"`.
+  under qemu-user with the expected output; every drv of a host-side tool has `system = "aarch64-linux"`, every drv of a target library or
+  output has the target `system`.
 - **Source:** R-FW-030, D3, ADR 0009 Decisions 1–2.
 
 #### R-FW-050 Configured labels
@@ -899,7 +944,9 @@ func WithFeatures(crate Package, features ...string) VariantMod
     `@` → `-`, any char outside `[A-Za-z0-9+._?=-]` → `-`; no leading `.`; > 200 bytes → cut to
     191 bytes + `-<hash8>` (first 8 nixbase32 chars of sha256 of the full name). bob's package
     names: `drv.Name(dir, name, ["host"], [platform if cross], [projection tag])` (§04 R-FW-038
-    tag rules), e.g. `libs-foo-foo-linux-amd64-address`.
+    tag rules), e.g. `libs-foo-foo-linux-amd64-address`. This is the fallback for packages without
+    an ecosystem name rule; the per-ecosystem names of §03 win for ecosystem packages (a local
+    crate's version in names is `0.0.0`).
 - **Acceptance:** (a) golden ATerm tests; (b) recomputing nixpkgs `hello` at the pin from its 187
   parsed input drvs gives the recorded output path; (c) cross-check suite: every drv of
   `examples/*` submitted with `nix derivation add` (Nix computes paths) yields the same drv and
@@ -1117,7 +1164,8 @@ type Fixup struct {
 #### R-NIX-020 Embedded static Nix
 - **Statement:** `bob` embeds nixpkgs `nixStatic` 2.34.9 (pin) for its own architecture, stripped,
   gzip-9 (13.8 MB), and extracts it on first use to `<home>/bin/nix-<first 12 hex of sha256>/bin/nix`
-  (temp dir + atomic rename) with symlinks `nix-store`, `nix-build`, `nix-instantiate`,
+  (temp dir + atomic rename; observable as a temporary entry that is renamed to the final
+  `nix-<12 hex>` name) with symlinks `nix-store`, `nix-build`, `nix-instantiate`,
   `nix-env`, `nix-hash`, `nix-daemon` → `nix`. Later runs only stat. The host's `nix` is never
   executed. `ATTRIBUTION.md` lists Nix (LGPL-2.1-or-later), its static dependencies and busybox
   (GPL-2.0) with source locations (D52).
@@ -1135,7 +1183,7 @@ type Fixup struct {
   command; Nix subprocesses inherit it.
 - **Acceptance:** S0b probes F1, F3 (network blocked, `/home` hidden, loopback present) pass in
   bind and pivot mode as non-root; 4 parallel `bob build` on one state finish without lock
-  errors; namespace entry ≤ 10 ms [8c/15G] and [2c/4G] (measured 5–7 ms).
+  errors; the `namespace` stage event carries `durationMs`; namespace entry ≤ 10 ms [8c/15G] and [2c/4G] (measured 5–7 ms).
 - **Source:** R-NIX-021, D11, ADR 0002 Decision 1, rootless-results.
 
 #### R-NIX-022 Refusal with the exact fix

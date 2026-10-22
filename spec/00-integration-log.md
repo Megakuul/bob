@@ -165,3 +165,16 @@ generated table of contents, Appendix A (38 open items), Appendix B (97 budget r
 once by `/root/scratch-specint/budgets.py` and then maintained by hand), then §01–§06 concatenated
 (the "Source of SPEC.md" note line of each file is stripped). Each `spec/0N-*.md` starts with that
 note. Regenerate with the Python block in the SPEC.md preamble (idempotent; checked twice).
+
+## 11. Gate H rulings (2026-10-22)
+
+Text changes from `plan/gate-h-rulings.md` (decisions A42–A64): G1 `project_field` dotted path (§6.4.2,
+§6.5, `UpdateProject` `project.id`, `UpdateRelease` `release.id`); G2 R-FLEET-005 split rule
+`max(10 s, 0.3 × T1)` (ADR 0016 amendment, S14 text); G3 R-FLEET-006 403 and denial text (§6.9.6);
+G4 R-NIX-012 conditional acceptance; G6 `PipelineOpts`, `Trigger`, `Concurrency` (§01.4); G7 exit 78
+for start-up refusals (§02); G8 R-FW-016 `:13`; G9 `Parse` vs `ParseLabel` and length bounds;
+G10 BOB-E-1019 hint; G11 R-FW-030 host/target `system`; G12 R-FW-047 node cap; G13 R-FW-045 memory;
+G14 derivation name precedence; G15 Rust features API (§1.9); G16 R-NIX-020/021 observation points;
+G17 R-STORE-104 `sh2`; G18 R-NFR-005; G19 R-STORE-004; G20 R-LOG-102 and R-PIPE-003 follow-up notes;
+G24 FIX-C clarifications; G21 `docs/operations/worker-compromise.md`; G23 HARNESS §10 row 27.
+SPEC.md regenerated (idempotent).

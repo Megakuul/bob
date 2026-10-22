@@ -229,7 +229,7 @@ S        = slots of the median eligible worker (platform, caps, labels)
 I        = eligible workers idle or finishing within 30 s (fleet records)
 T1       = list-schedule makespan of the graph on S slots, + 0.14 s per drv
 Tsplit   = max(critical path + depth × 1.0 s, (Σ est + 0.6 s × drvs) / (S × max(I,1)))
-split    = I ≥ 2 and T1 − Tsplit ≥ max(60 s, 0.3 × T1)
+split    = I ≥ 2 and T1 − Tsplit ≥ max(10 s, 0.3 × T1)
 not split → one closure job: kind=evalbuild, targets = requested targets
 split     → one eval job (uploads drv closure), then batch jobs as below
 ```
@@ -306,7 +306,7 @@ is promoted (so "promote only after the whole build" becomes "result = last prom
 | Claims per platform table | ≤ 30/s sustained (RustFS) — planner keeps ≤ 10 jobs/s per build | S9 32/s |
 | S3 requests per build | ≤ 15 per drv (closure job ~9, batch ~25 incl. promotion) | §3.2 |
 | Worker death, extra wall time | ≤ lease TTL + reconcile + lost batch (≤ 60 slot-s) for split builds | §3.6 |
-| Split speedup threshold | ≥ 60 s and ≥ 30 % predicted | §3.2 |
+| Split speedup threshold | ≥ max(10 s, 30 % of T1) predicted (amended 2026-10-22, was ≥ 60 s and ≥ 30 %) | §3.2 |
 
 ## 6. Decisions, risks, open points
 
@@ -330,7 +330,7 @@ is promoted (so "promote only after the whole build" becomes "result = last prom
   drv overhead, slower than a on 1 worker and on 8-slot workers, ~30 claims/s ceiling on
   RustFS (wide2000 ≥ 67 s regardless of fleet size), 3–7× the S3 requests and 2–4× the bytes.
 - **c)** Hybrid: one schema (job = set of ≤ 64 drvs). A closure job by default; the planner
-  splits a build into ready-set batch jobs only when it predicts ≥ 60 s and ≥ 30 % gain
+  splits a build into ready-set batch jobs only when it predicts a gain of ≥ max(10 s, 30 % of T1) (amended 2026-10-22; was ≥ 60 s and ≥ 30 %)
   (§5.1). Promotion per job.
 
 Recommendation: **c**. It is a with the same costs for most builds (fixture, small Go and Rust

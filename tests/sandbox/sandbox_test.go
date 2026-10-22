@@ -144,6 +144,9 @@ func materialise(t *testing.T, c evil.Case, b *bait, home string) string {
 // (the cgroup-only cases need a delegated cgroup and are skipped with a note without one),
 // and all 15 with delegation. Under the layer-removal build tags (eval.DisabledLayer) the
 // same expectations hold, because the remaining layers contain every case.
+// Ruling G13: exactly the three pids cases (forkbomb-chain, forkbomb-tree, threadbomb) are
+// cgroup-only skips. The membomb case is not skipped: the local default memory limit of 2 GiB is
+// enforced always (RLIMIT_AS or a polling watchdog) and by the cgroup when one is delegated.
 func TestRFW045HostileCases(t *testing.T) {
 	parity.Covers(t, "R-FW-045")
 	cases := evil.Cases()

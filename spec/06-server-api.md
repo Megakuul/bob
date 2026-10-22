@@ -282,7 +282,7 @@ Each RPC declares its authorization rule with the method option `bob.authz.v1.ru
 
 | Kind | Check |
 |---|---|
-| `PROJECT` | permission on the project named by `project_field` in the request (for ids like `build_id`, the handler resolves the build's project first; unknown id → NotFound) |
+| `PROJECT` | permission on the project named by `project_field` in the request (a top-level string field, or a dotted path to a nested one such as `project.id`; for ids like `build_id`, the handler resolves the build's project first; unknown id → NotFound) |
 | `GLOBAL` | permission with project `*` |
 | `LIST_FILTERED` | authenticated; results contain only projects where the principal has the method; an explicit `project_id` filter without permission → NotFound |
 | `AUTHENTICATED` | any valid API principal (own data only) |
@@ -416,7 +416,7 @@ enum Resolve {
 
 message Rule {
   Kind kind = 1;
-  string project_field = 2;        // KIND_PROJECT only; top-level string field of the request
+  string project_field = 2;        // KIND_PROJECT only; string field of the request, or a dotted path to a nested string field ("project.id")
   Resolve resolve = 3;
   bool allow_download_scope = 4;   // KIND_AUTHENTICATED: also accept bob_dt_ tokens
 }
@@ -744,7 +744,7 @@ service ProjectService {
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id"}; }  // GET
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) { option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED}; }          // GET
-  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id"}; }
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "project.id"}; }
   // Refused while non-terminal builds exist. Releases must be deleted first (R-STORE-007).
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
   // Pipelines from the newest evaluation of the default branch.
@@ -1148,7 +1148,7 @@ service ReleaseService {
   rpc GetRelease(GetReleaseRequest) returns (GetReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PUBLIC}; }         // GET
   // bob install: "<project>/<name>@<constraint>" + platform → release and closure roots.
   rpc ResolveRelease(ResolveReleaseRequest) returns (ResolveReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PUBLIC}; } // GET
-  rpc UpdateRelease(UpdateReleaseRequest) returns (UpdateReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id", resolve: RESOLVE_RELEASE}; }
+  rpc UpdateRelease(UpdateReleaseRequest) returns (UpdateReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "release.id", resolve: RESOLVE_RELEASE}; }
   // The only way a release is removed (R-STORE-007).
   rpc DeleteRelease(DeleteReleaseRequest) returns (DeleteReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id", resolve: RESOLVE_RELEASE}; }
 }
@@ -1941,7 +1941,8 @@ repo, err := a.LookupRepo(ctx, "acme/api")
   (tag v*) → only `bob/ci` appears, pending → running → success, target URL opens the build
   page (HTTP 200). A failing test → `failure` with description containing `BOB-E-2005`.
   A forged evaluation result that adds `release` → job result rejected, build FAILED with
-  `evaluation result rejected: pipeline match mismatch`.
+  `evaluation result rejected: pipeline match mismatch` (this test needs the worker Attach client of
+  Gate H G20: `tests/serverenv/workerclient`, built with worker registration).
 - **Source:** R-PIPE-003, R-FW-040, R-SEC-004.
 
 #### R-PIPE-004 Triggers by API, UI and --remote
@@ -1979,7 +1980,7 @@ pipeline are never superseded.
 
 ```
 worker holds lease (job J, epoch E) → WorkerControlService/GetCheckoutCredential(J, E)  (§05.9.1)
-orchestrator: GET JobRecord; owner = caller wid and epoch = E, state CLAIMED|RUNNING, else PermissionDenied "job not leased by this worker"
+orchestrator: GET JobRecord; owner = caller wid and epoch = E, state CLAIMED|RUNNING, else PermissionDenied `permission_denied: worker holds no lease on job <id>`
   CheckoutRecord(J) in ftok/<sh2(J)> exists (repeat call, e.g. worker restart of the fetch) → RevokeCheckout(old handle) first; token values are never stored
   adapter.IssueCheckout({Repo, JobID: J, TTL: min(1h, job deadline − now)})
   CAS-add CheckoutRecord{J, epoch E, handle, expiresAt, forgeExpires} to ftok/<sh2(J)> (no token value)

@@ -33,6 +33,8 @@ func s7Repo(t *testing.T) string {
 	t.Helper()
 	dir := harness.Fixture(t, "polyglot")
 	copyTree(t, filepath.Join(harness.Root(t), "tests", "core", "testdata", "repos", "s7extra"), dir)
+	// Ruling G15 (R-FW-031/038): named variants are func(*bob.Variant) that set
+	// Variant.Features[bob.Label{Dir, Name}] (a feature list per crate label), SPEC §1.9.
 	// Named variants that add Rust features (Variant.Features, SPEC §1.9): "shout" for rdemo
 	// (the "feature shout" configurations of S7 §3.3) and "xtra" for the proc-macro rmac.
 	replaceIn(t, filepath.Join(dir, "bob.go"), "Variants: []bob.NamedVariant{\n",
@@ -146,7 +148,9 @@ func qemuRun(t *testing.T, arch, home, binary string, args ...string) harness.Re
 const apiLine = "digest=81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9 numhex=3432 proto_bytes=116"
 
 // R-FW-030: polyglot cross-builds for the other platform and the binary runs under qemu-user
-// with the expected output; every derivation of the build has the host Nix system.
+// with the expected output. Ruling G11: derivations of host-side tools (bob-builder, generators)
+// have the host Nix system; target libraries and outputs have the target system (R-FW-032), so
+// the test checks the host system for the bob-builder derivations only.
 func TestRFW030CrossBuildKeepsHostSystem(t *testing.T) {
 	parity.Covers(t, "R-FW-030")
 	dir := harness.Fixture(t, "polyglot")
@@ -721,10 +725,11 @@ func TestRFW037CrossSanitiserRunpath(t *testing.T) {
 
 // rustUnitRe matches the store name of a local Rust crate unit (§03.3.3: units are named
 // <name>-<version>[-host][-<projection>], build scripts <name>-<version>[-host]-build-script
-// and -build-run; a local crate's version is "0.0.0", its Cargo.toml version, or "local" in the
-// unit key). §01 R-FW-038 prefixes the dir label, so an optional <dir>- prefix is accepted.
+// and -build-run). Ruling G14: §03 per-ecosystem names win for ecosystem packages, §01's generic
+// scheme (an optional <dir>- prefix) is the fallback; a local crate's version in names is
+// always 0.0.0 (the "local" form is dropped).
 func rustUnitRe(name, kind string) *regexp.Regexp {
-	pre := `^(?:[a-z0-9_.]+-)?` + regexp.QuoteMeta(name) + `-(?:0\.0\.0|local)`
+	pre := `^(?:[a-z0-9_.]+-)?` + regexp.QuoteMeta(name) + `-0\.0\.0`
 	switch kind {
 	case "host":
 		return regexp.MustCompile(pre + `-host(?:-[a-z0-9-]+)?$`)

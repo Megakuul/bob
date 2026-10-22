@@ -29,6 +29,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/megakuul/dynamitedb v0.6.1 // indirect
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect

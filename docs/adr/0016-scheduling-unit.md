@@ -18,7 +18,7 @@ overlay `/nix` (S13).
 2. Default: **one closure job per build** (`evalbuild`: evaluation and build in the same job,
    drvs never leave the worker).
 3. The build controller **splits** a build into batch jobs of ready derivations only when it
-   predicts ≥ 60 s and ≥ 30 % gain with the idle eligible workers (planner in the write-up
+   predicts a gain of ≥ max(10 s, 30 % of T1) (amended, see the end of this ADR) with the idle eligible workers (planner in the write-up
    §5.1). Batch size ≈ ready drvs / idle workers, ≤ 64 drvs, ≤ 60 estimated slot-s, affinity
    to the worker holding most inputs.
 4. **Promotion per job.** Dependencies between jobs pass only through promoted (signed) paths,
@@ -46,3 +46,11 @@ overlay `/nix` (S13).
   sequence-log queue per class (SPEC §05.4.1). The S14 fields are kept in the signed `JobSpec`.
   Affinity (`pw`/`pt`) only orders wake-ups and never restricts claims, because a claim
   restriction could strand a slot (SPEC R-FLEET-011).
+
+## Amendment 2026-10-22 (Gate H, plan/decisions.md A43)
+
+The split threshold of decision 3 ("≥ 60 s and ≥ 30 % gain") contradicted the S14 measurements
+the ADR rests on: go200 gains 13.6 s of 30.0 s (45 %) at W = 100 and R-FLEET-005 requires it to
+split. The rule is now `split = I ≥ 2 and T1 − Tsplit ≥ max(10 s, 0.3 × T1)`. The fixture (W = 100:
+14.7 s vs 19.4 s) still does not split; go200, rust129 and wide2000 at W = 100 split. The decision
+stays otherwise unchanged. The owner may overturn this amendment.

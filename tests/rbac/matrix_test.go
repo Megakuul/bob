@@ -207,13 +207,7 @@ func TestRBACMatrix(t *testing.T) {
 				for _, project := range projects {
 					body := map[string]any{}
 					if m.Kind == ref.KindProject && (m.Resolve == "" || m.Resolve == "UNSPECIFIED") {
-						if nested, ok := nestedProject[m.Full()]; ok {
-							// proto problem (R-AUTH-006): the rule names "id" but the request only has the
-							// nested message; the row still sends the intended project.
-							body[nested] = map[string]any{"id": project}
-						} else {
-							body[m.ProjectField] = project
-						}
+						ref.SetPath(body, m.ProjectField, project)
 					}
 					want := ref.Expect(m, p.cred, p.binds2(a, b), project)
 					tolerate := false
@@ -221,7 +215,7 @@ func TestRBACMatrix(t *testing.T) {
 					if resolved && resource[m.Resolve] != nil && resource[m.Resolve][project] != "" {
 						// the id names a real resource of this project: the outcome is the plain
 						// SPEC 6.4 evaluation with the resource's project, per principal
-						body[m.ProjectField] = resource[m.Resolve][project]
+						ref.SetPath(body, m.ProjectField, resource[m.Resolve][project])
 						seeded = true
 					}
 					switch {
@@ -250,9 +244,6 @@ func TestRBACMatrix(t *testing.T) {
 		})
 	}
 }
-
-// nestedProject lists PROJECT methods whose rule names a field that is not in the request.
-var nestedProject = map[string]string{"bob.project.v1.ProjectService/UpdateProject": "project"}
 
 func (p *principal) binds2(a, b ref.Permission) []ref.Binding {
 	if p.binds == nil {

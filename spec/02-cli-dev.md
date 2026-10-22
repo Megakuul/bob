@@ -190,7 +190,7 @@ added by §02.
 | 1016 **new** | definition | `{path} conflicts with generated output of {label}: {reason}` | move or delete the file, or run bob gen --force (keeps a backup) |
 | 1017 **new** | definition | `nixpkgs package "{attr}" cannot be evaluated on {system}` | pin another nixpkgs revision or use another package |
 | 1018 **new** | definition | `evaluating bob.go is not deterministic: {label}` | bob.go must not depend on time, randomness, environment or map order |
-| 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock |
+| 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go |
 | 1020 **new** | definition | `{label}: invalid {option}: {reason}` | — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
 | 1021 **new** | definition | `{label}: toolchain mismatch: {reason}` | align the versions named above (Go/Rust/generator runtime/target glibc) |
 | 1022 **new** | definition | `{label} is not a static binary (it needs {deps})` | use tarball.Closure |
@@ -256,7 +256,7 @@ added by §02.
 
 Warnings use the same codes with `severity: "warning"`. For example, 4001–4004 are warnings
 when Nix worked around the problem by building locally (S15 fault 43).
-S12's `BOB-AUTH-001` is renamed to `BOB-E-4008`. 7007–7010 are raised by `bob-server` (exit 7).
+S12's `BOB-AUTH-001` is renamed to `BOB-E-4008`. 7007–7010 are raised by `bob-server` (exit 7), except start-up refusals (unsupported backend, policy self-check), which exit 78 (`EX_CONFIG`).
 
 #### Cross-section code assignment (integration)
 
@@ -393,9 +393,12 @@ func ExitCode(errs []*Error) int
 - **Statement:** A build failure is reported with the package label, the `bob.go` position where
   the package was defined, a log excerpt with repo paths, and a hint where one is known.
 - **Acceptance:** For faults 6–15 and 22–33 of the catalogue, the golden output's error block
-  has `error[BOB-E-<code>]: <template>`, `package defined at <bob.go>:<line>:<col>`, ≥ 1
-  excerpt line, the hint from the table, and `full log: bob log <label>`. The block is
-  byte-identical to `fixtures/<fault>/<nixver>/golden.txt`.
+  always has `error[BOB-E-<code>]: <template>` and `package defined at <bob.go>:<line>:<col>`. The
+  hint line is present iff the error table row has a hint; the excerpt lines (≥ 1) and
+  `full log: bob log <label>` are present iff a builder log exists (a failure detected by bob
+  before or without a builder run has neither). The block is byte-identical to
+  `fixtures/<fault>/<nixver>/golden.txt`. A fault with `full log:` but no excerpt is a documented
+  exception in the test (listed with its fault number), not a loosened rule.
 - **Source:** R-NIX-012, S15 §5.4.
 
 #### R-NIX-028 Error code stability

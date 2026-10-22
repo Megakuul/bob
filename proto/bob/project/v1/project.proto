@@ -25,7 +25,7 @@ service ProjectService {
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) {
     option (bob.authz.v1.rule) = {
       kind: KIND_PROJECT
-      project_field: "id"
+      project_field: "project.id"
     };
   }
   // Refused while non-terminal builds exist. Releases must be deleted first (R-STORE-007).

@@ -24,7 +24,7 @@ service ReleaseService {
   rpc UpdateRelease(UpdateReleaseRequest) returns (UpdateReleaseResponse) {
     option (bob.authz.v1.rule) = {
       kind: KIND_PROJECT
-      project_field: "id"
+      project_field: "release.id"
       resolve: RESOLVE_RELEASE
     };
   }

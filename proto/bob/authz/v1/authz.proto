@@ -25,7 +25,7 @@ enum Resolve {
 
 message Rule {
   Kind kind = 1;
-  string project_field = 2; // KIND_PROJECT only; top-level string field of the request
+  string project_field = 2; // KIND_PROJECT only; a string field of the request, or a dotted path to a nested string field (e.g. "project.id")
   Resolve resolve = 3;
   bool allow_download_scope = 4; // KIND_AUTHENTICATED: also accept bob_dt_ tokens
 }

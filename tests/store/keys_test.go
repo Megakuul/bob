@@ -149,6 +149,8 @@ func TestRSTORE104KeySegmentBuilders(t *testing.T) {
 			t.Fatalf("Hash64 collision: %.30q and %.30q", prev, in)
 		}
 		seenHash[h] = in
+		// Ruling G17: sh2 is total over non-empty strings (fnv32a mod shards); ids are validated
+		// at the API boundary, not in key builders. Only "" may error. No behaviour change.
 		sh, err := store.Sh2(in, 16)
 		if err != nil || !sh2RE.MatchString(sh) || sh != refSh2(in, 16) {
 			if in == "" { // an empty id has no shard: an error is the right answer

@@ -510,7 +510,7 @@ Expected from other sections:
   delegated cgroup is available; wall-clock timeout and output caps always apply. Worker limits
   are §05's.
 - **Local defaults [proposal]:** wall clock 120 s, IR output 64 MiB, stderr kept 1 MiB, pids 512,
-  memory 2 GiB (only with delegation).
+  memory 2 GiB (enforced always, by RLIMIT_AS or a polling watchdog, and by the cgroup when delegated).
 - **Acceptance:** the 15 S13 hostile cases (`bobtest/evalbox/`) each fail with their S13 error
   text locally without a delegated cgroup (except the three cgroup-only cases, which are skipped
   with a note), and all 15 on a machine with delegation.
@@ -546,6 +546,8 @@ configured = label "@" [platform] *("+" token)    ; §1.9
 pattern    = "//..." / "//" dir "/..." / "//" [dir] ":all" / label / "//" dir   ; "//a/b" = "//a/b:b"
 ```
 
+- **Bounds (hostile input):** the whole string is ≤ 1024 bytes and one `seg` ≤ 255 bytes; longer
+  is invalid (a 1000-byte `dir` is valid, a 5000-byte one is not).
 - `<dir>` is the directory of the `bob.go` that made the outermost constructor call (first stack
   frame outside `github.com/megakuul/bob/`); `<name>` is the constructor's name argument.
 - CLI relative forms (`:name`, `./...`, `.`) resolve against the current directory (§02).
@@ -553,7 +555,9 @@ pattern    = "//..." / "//" dir "/..." / "//" [dir] ":all" / label / "//" dir   
 - **Acceptance:** Table test `pkg/bob/label_test.go`: ≥ 30 valid and invalid strings incl.
   `//:x`, `//a/b`, `example.com/o//libs/bar:bar`, `nixpkgs:python3Packages.numpy`,
   `//api:api@linux-amd64+debug+asan`, `//api:API` (invalid), `//a/../b:x` (invalid),
-  `//a:b+c` (invalid). Round trip `Parse(s).String()==s` for canonical inputs.
+  `//a:b+c` (invalid). `Parse` accepts all the forms of the table (`//a/b`, `//api:api@linux-amd64+debug+asan` are valid
+  for `Parse`; `ParseLabel` accepts labels only). Round trip `Parse(s).String()==s` for canonical
+  inputs. A 1000-byte dir is valid, a 5000-byte dir is invalid.
 - **Source:** R-FW-015, ADR 0003 Decision 5, ADR 0009 Decision 5, S1 §5.4.
 
 #### R-FW-016 Source positions
@@ -561,8 +565,10 @@ pattern    = "//..." / "//" dir "/..." / "//" [dir] ":all" / label / "//" dir   
   outermost constructor call in a `bob.go` (with `-trimpath`: `<module>[@<version>]/<dir>/bob.go`);
   bob displays own-repo positions repo-relative (`cmd/api/bob.go:15`).
 - **Acceptance:** For each node in `examples/acme`'s IR, `definedAt` points at the line with the
-  constructor call (golden file). A failing C++ build of `//libs/foo:foo` prints
-  `(defined at libs/foo/bob.go:12)`.
+  constructor call (golden file). `definedAt` is the line of the call to the ecosystem
+  constructor (the first stack frame outside `github.com/megakuul/bob/`); in `libs/foo/bob.go`
+  that is line 13 (line 12 is the `var Lib = bob.Define(` line used by R-FW-001). A failing C++
+  build of `//libs/foo:foo` prints `(defined at libs/foo/bob.go:13)`.
 - **Source:** R-FW-016, R-NIX-012.
 
 ---
@@ -648,8 +654,21 @@ type LinkInfo struct {
 
 // Label identifies a package, e.g. //libs/foo:foo (see SPEC §1.3).
 type Label struct{ Module, Dir, Name string; Nix string }
+// ParseLabel accepts labels only (local, foreign, nixlabel).
 func ParseLabel(s string) (Label, error)
 func (l Label) String() string
+
+// Parse accepts the union of label, pattern and configured forms (R-FW-015) and returns a typed
+// value: a Label, a Pattern or a Configured label. Use ParseLabel when only a label is valid.
+func Parse(s string) (Ref, error)
+
+// Ref is the typed result of Parse: a Label, a Pattern or a Configured value; String() returns
+// the canonical form.
+type Ref interface{ String() string }
+
+// Pattern is a label pattern ("//...", "//dir/...", "//dir:all", a label, "//dir"); a string type
+// so that fixtures can write []bob.Pattern{"//..."}.
+type Pattern string
 
 // Position is a file and line in a bob.go file, module-relative.
 type Position struct{ File string; Line int }
@@ -858,8 +877,28 @@ type RepoOpts struct {
 	Variants []NamedVariant // see §1.9
 }
 
-// Pipeline registers a pipeline (R-FW-040). Triggers and steps are defined by SPEC §06.
+// Pipeline registers a pipeline (R-FW-040). Trigger semantics on the server are SPEC §06.
 func Pipeline(name string, o PipelineOpts) struct{}
+
+// PipelineOpts is typed; the zero value is valid and means a manual-only pipeline. It maps
+// 1:1 onto proto `Pipeline` (§6.5.6): triggers (human form), concurrency, releases.
+type PipelineOpts struct {
+	Triggers    []Trigger   // none = manual runs only
+	Concurrency Concurrency // unset = the per-ref default of §05.6.2
+	Targets     []Pattern   // packages to build
+	Tests       []Pattern   // packages to test
+	Releases    []string    // release names to publish; non-empty = release pipeline (proto releases=true)
+}
+
+// Trigger says when a pipeline starts.
+type Trigger struct{ /* unexported */ }
+func OnPush(branchGlob string) Trigger // human form "push <glob>"
+func OnPullRequest() Trigger           // "pull_request"
+func OnTag(glob string) Trigger        // "tag <glob>"
+
+// Concurrency says what happens to a run of the same pipeline and ref while one is active.
+type Concurrency int
+const ( Queue Concurrency = iota + 1; Supersede; Parallel ) // zero value = per-ref default
 ```
 
 - Repo errors: `Repo` outside the root `bob.go` or twice → definition error; missing →
@@ -937,7 +976,8 @@ func ConfigOf(n *bob.Node) Config
 | `pipelines` | array | §06 |
 
 - bob validates before use: size ≤ 64 MiB, ≤ 1,000,000 nodes, every dep id exists, no cycles
-  (error 1006 with the chain and each `definedAt`), unknown kinds rejected, every string ≤ 64 KiB.
+  (error 1006 with the chain and each `definedAt`), unknown kinds rejected, every string ≤ 64 KiB. The node cap shares the IR-invalid error of the
+  field validation: a rejection with any structured IR-invalid error satisfies the cap test.
 - **Acceptance:** JSON-schema file `pkg/engine/ir/ir.schema.json`; fuzz test of the IR parser
   (no panic, bounded memory); golden IR for `examples/polyglot`.
 - **Source:** R-FW-008, R-SEC-004, gen-b §1, S13 §5.2.
@@ -1164,13 +1204,18 @@ func WithRace() VariantMod
 func WithFeatures(crate Package, features ...string) VariantMod
 ```
 
+Named variants may also be written as `func(*bob.Variant)`; such a function sets
+`Variant.Features[bob.Label{Dir, Name}]` (a feature list per crate label) (R-FW-031, R-FW-038).
+
 #### R-FW-030 Platform-generic packages, host builds
-- **Statement:** Every package is defined once and built for any `Platform`. Every bob
-  derivation has the **host** Nix system; the target only changes toolchain, flags and target
-  libraries (§04 owns the toolchain table). Kinds may restrict platforms through their options
+- **Statement:** Every package is defined once and built for any `Platform`. Derivations of
+  host-side tools (bob-builder, generators) have the **host** Nix system; target libraries and
+  outputs have the **target** `system` (consistent with R-FW-032); the target also changes
+  toolchain and flags (§04 owns the toolchain table). Kinds may restrict platforms through their options
   (`Platforms []bob.Platform`); requesting another → `<label> does not support <platform>`.
 - **Acceptance:** S7 matrix: `examples/polyglot` cross-builds aarch64→x86_64 and the binary runs
-  under qemu-user with the expected output; every drv of the build has `system = "aarch64-linux"`.
+  under qemu-user with the expected output; every drv of a host-side tool has `system = "aarch64-linux"`, every drv of a target library or
+  output has the target `system`.
 - **Source:** R-FW-030, D3, ADR 0009 Decisions 1–2.
 
 #### R-FW-050 Configured labels
@@ -1220,7 +1265,9 @@ func WithFeatures(crate Package, features ...string) VariantMod
     `@` → `-`, any char outside `[A-Za-z0-9+._?=-]` → `-`; no leading `.`; > 200 bytes → cut to
     191 bytes + `-<hash8>` (first 8 nixbase32 chars of sha256 of the full name). bob's package
     names: `drv.Name(dir, name, ["host"], [platform if cross], [projection tag])` (§04 R-FW-038
-    tag rules), e.g. `libs-foo-foo-linux-amd64-address`.
+    tag rules), e.g. `libs-foo-foo-linux-amd64-address`. This is the fallback for packages without
+    an ecosystem name rule; the per-ecosystem names of §03 win for ecosystem packages (a local
+    crate's version in names is `0.0.0`).
 - **Acceptance:** (a) golden ATerm tests; (b) recomputing nixpkgs `hello` at the pin from its 187
   parsed input drvs gives the recorded output path; (c) cross-check suite: every drv of
   `examples/*` submitted with `nix derivation add` (Nix computes paths) yields the same drv and
@@ -1438,7 +1485,8 @@ type Fixup struct {
 #### R-NIX-020 Embedded static Nix
 - **Statement:** `bob` embeds nixpkgs `nixStatic` 2.34.9 (pin) for its own architecture, stripped,
   gzip-9 (13.8 MB), and extracts it on first use to `<home>/bin/nix-<first 12 hex of sha256>/bin/nix`
-  (temp dir + atomic rename) with symlinks `nix-store`, `nix-build`, `nix-instantiate`,
+  (temp dir + atomic rename; observable as a temporary entry that is renamed to the final
+  `nix-<12 hex>` name) with symlinks `nix-store`, `nix-build`, `nix-instantiate`,
   `nix-env`, `nix-hash`, `nix-daemon` → `nix`. Later runs only stat. The host's `nix` is never
   executed. `ATTRIBUTION.md` lists Nix (LGPL-2.1-or-later), its static dependencies and busybox
   (GPL-2.0) with source locations (D52).
@@ -1456,7 +1504,7 @@ type Fixup struct {
   command; Nix subprocesses inherit it.
 - **Acceptance:** S0b probes F1, F3 (network blocked, `/home` hidden, loopback present) pass in
   bind and pivot mode as non-root; 4 parallel `bob build` on one state finish without lock
-  errors; namespace entry ≤ 10 ms [8c/15G] and [2c/4G] (measured 5–7 ms).
+  errors; the `namespace` stage event carries `durationMs`; namespace entry ≤ 10 ms [8c/15G] and [2c/4G] (measured 5–7 ms).
 - **Source:** R-NIX-021, D11, ADR 0002 Decision 1, rootless-results.
 
 #### R-NIX-022 Refusal with the exact fix
@@ -1884,7 +1932,7 @@ added by §02.
 | 1016 **new** | definition | `{path} conflicts with generated output of {label}: {reason}` | move or delete the file, or run bob gen --force (keeps a backup) |
 | 1017 **new** | definition | `nixpkgs package "{attr}" cannot be evaluated on {system}` | pin another nixpkgs revision or use another package |
 | 1018 **new** | definition | `evaluating bob.go is not deterministic: {label}` | bob.go must not depend on time, randomness, environment or map order |
-| 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock |
+| 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go |
 | 1020 **new** | definition | `{label}: invalid {option}: {reason}` | — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
 | 1021 **new** | definition | `{label}: toolchain mismatch: {reason}` | align the versions named above (Go/Rust/generator runtime/target glibc) |
 | 1022 **new** | definition | `{label} is not a static binary (it needs {deps})` | use tarball.Closure |
@@ -1950,7 +1998,7 @@ added by §02.
 
 Warnings use the same codes with `severity: "warning"`. For example, 4001–4004 are warnings
 when Nix worked around the problem by building locally (S15 fault 43).
-S12's `BOB-AUTH-001` is renamed to `BOB-E-4008`. 7007–7010 are raised by `bob-server` (exit 7).
+S12's `BOB-AUTH-001` is renamed to `BOB-E-4008`. 7007–7010 are raised by `bob-server` (exit 7), except start-up refusals (unsupported backend, policy self-check), which exit 78 (`EX_CONFIG`).
 
 #### Cross-section code assignment (integration)
 
@@ -2087,9 +2135,12 @@ func ExitCode(errs []*Error) int
 - **Statement:** A build failure is reported with the package label, the `bob.go` position where
   the package was defined, a log excerpt with repo paths, and a hint where one is known.
 - **Acceptance:** For faults 6–15 and 22–33 of the catalogue, the golden output's error block
-  has `error[BOB-E-<code>]: <template>`, `package defined at <bob.go>:<line>:<col>`, ≥ 1
-  excerpt line, the hint from the table, and `full log: bob log <label>`. The block is
-  byte-identical to `fixtures/<fault>/<nixver>/golden.txt`.
+  always has `error[BOB-E-<code>]: <template>` and `package defined at <bob.go>:<line>:<col>`. The
+  hint line is present iff the error table row has a hint; the excerpt lines (≥ 1) and
+  `full log: bob log <label>` are present iff a builder log exists (a failure detected by bob
+  before or without a builder run has neither). The block is byte-identical to
+  `fixtures/<fault>/<nixver>/golden.txt`. A fault with `full log:` but no excerpt is a documented
+  exception in the test (listed with its fault number), not a loosened rule.
 - **Source:** R-NIX-012, S15 §5.4.
 
 #### R-NIX-028 Error code stability
@@ -3902,7 +3953,9 @@ Features also come from the variant (`bob.Variant.Features`, §04) and are added
   needed to plan, so evaluation needs no network and no crate sources.
 - **Acceptance:** Given the Rust fixture locked, with network disabled and an empty crate
   cache, `bob build --dry-run //...` (plan only) succeeds and prints the same derivation set
-  as with sources present.
+  as with sources present. *Clarification (Gate H, ruling G24):* `--dry-run` (plan only, no
+  build) is added to the `bob build` flags in §02 by the milestone that builds it; "empty crate
+  cache" means a fresh `BOB_HOME` in a user+net namespace.
 - **Source:** D58, O-S3-1 (a), S3-2.
 
 `lock.Crate` and the `rust` section:
@@ -4284,6 +4337,9 @@ non-optional package that does not match is an error naming it.
   fails with the `E-SCRIPT-DENIED` text above (golden) and no script ran (log has no
   `node-gyp`); with AllowScripts the addon builds offline, the test opens `:memory:`, and the
   runtime closure contains only the `.node` file, glibc and libgcc beyond node.
+  *Clarification (Gate H, G24):* the native fixture gets a `//native:test` target that opens
+  `:memory:`, and "builds offline" is observed with the build wrapped in a network namespace; both
+  are added by the milestone that builds R-NPM-004a.
 - **Source:** R-NPM-004, D31, S4 §3.2.
 
 ### §03.4.5 Quirks table (R-NPM-005)
@@ -4333,7 +4389,9 @@ with deny-or-allow alone; phantom dependencies are never quirks (S4-6).
 - **Acceptance:** Fixtures build: tsc library (dist + d.ts), fastify App (esbuild bundle,
   runs under `env -i`), Vite React site, Svelte site with a workspace library, SvelteKit with
   adapter-static (`.svelte-kit` written inside the build dir only), vitest and ESLint
-  (type-checked) as tests; rebuilds are bit-identical. **[open]** SvelteKit was not built in S4;
+  (type-checked) as tests (*clarification, Gate H G24:* the ESLint entry point, a runner or check
+  package of `pkg/npm`, is specified by the milestone that builds it; until then only vitest is
+  asserted); rebuilds are bit-identical. **[open]** SvelteKit was not built in S4;
   `Kit: true` runs `svelte-kit sync` before `vite build` and in `bob dev` — verify in Stage 3.
 - **Source:** R-NPM-007, S4 §3.2.
 
@@ -4357,7 +4415,7 @@ with deny-or-allow alone; phantom dependencies are never quirks (S4-6).
 5. Codegen outputs regenerate into the tree (§03.6) and reach Vite through its watcher.
 
 #### R-NPM-010a Live reload and dependency restarts
-- **Acceptance:** In the Vite fixture under `bob dev` as non-root: saving `src/App.tsx` emits an
+- **Acceptance:** In the Vite fixture under `bob dev` as non-root: saving `src/App.svelte` (the fixture is Svelte) emits an
   HMR update over the dev-server websocket within the budget (§03.8); adding a dependency in
   bob.go restarts Vite with the new package importable within 10 s [8c/15G]; editing a
   `.proto` used via `connect.TS` changes the served module.
@@ -5871,7 +5929,8 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
 
   Ids: `ULID` = 26-char Crockford ULID (48-bit ms time + 80 random bits).
 - **Acceptance:** fuzz test: no input to the key builders yields an invalid or colliding
-  segment (10⁶ random strings, including `/`, empty, 1 KiB). An empty segment returns
+  segment (10⁶ random strings, including `/`, empty, 1 KiB). `sh2` is total over non-empty strings;
+  ids are validated at the API boundary, not in the key builders. An empty segment returns
   `store: key segment invalid: must match [A-Za-z0-9@._-]{1,100}`.
 - **Source:** S9 §5.1, B12.
 
@@ -6351,7 +6410,9 @@ keys are in `FleetConfig.k`); `ForgeIntegrationRecord` = `ForgeRecord`; `Setting
   The access plan per page is the table in §05.5.2. No list needs more than
   `1 + ceil(page size / P)` index GETs plus detail GETs for at most the visible rows.
 - **Acceptance:** for each row of §05.5.2, a test counts the requests through the proxy and
-  checks them against the column "requests (page 1)".
+  checks them against the column "requests (page 1)". Only rows reachable through the §06 API are
+  listed in the acceptance; "Build by number" and "Release by version" join it when the by-number
+  and by-version lookups exist (Gate H, G19; follow-up in `plan/m1.8-ledger.md`).
 - **Source:** R-STORE-004, D60.
 
 ---
@@ -6547,12 +6608,15 @@ CAS that is safe if two leaders overlap (S9 §3.3 measured no-leader runs as cor
 #### R-FLEET-005 Scheduling unit (resolved)
 - **Statement:** a job realises a set of ≤ 64 derivations on one worker. By default each build has
   one `evalbuild` closure job. The build controller splits the build into an `eval` job plus
-  ready-set `batch` jobs only when the S14 planner predicts ≥ 60 s **and** ≥ 30 % gain with the
-  idle eligible workers. Promotion is per job; jobs depend on each other only through promoted
+  ready-set `batch` jobs only when the S14 planner predicts a gain of ≥ max(10 s, 30 % of the closure-job time) with the
+  idle eligible workers (`split = I ≥ 2 and T1 − Tsplit ≥ max(10 s, 0.3 × T1)`; amended 2026-10-22,
+  ADR 0016). Promotion is per job; jobs depend on each other only through promoted
   paths, never through `staging/`.
 - **Acceptance:**
   - Planner unit tests on the S14 graphs: fixture → no split; go200, rust129 and wide2000 at
-    W = 100 with 2 slots → split.
+    W = 100 with 2 slots → split (fixture: 14.7 s vs 19.4 s, no split). Boundary rows: a predicted
+    gain of exactly 10 s and exactly 30 % splits; just below either bound does not; just above
+    both does.
   - The predicted gain is within 25 % of the S14 model.
   - A real-run test on 4 local workers: a split build of the 73-drv layer graph is faster than
     the closure job (S14 quiet: closure 20.6 s; per-drv 9.3 s; a batch build must be ≤ 15 s)
@@ -6843,8 +6907,9 @@ Orchestrator signing keys: the seeds are in control `okey/<kid>`, the public key
 - **Acceptance:**
   - `GetCheckoutCredential` with a job the caller does not own, or a stale epoch →
     `permission_denied: worker holds no lease on job <id>`.
-  - Live Forgejo: worker A with the lease gets a credential that clones repo R and gets 404 on
-    repo R2 the bot can read; after the job ends, the token returns 401 within 30 s.
+  - Live Forgejo: worker A with the lease gets a credential that clones repo R and gets 403 on
+    repo R2 the bot can read (the forge decides the status for a repository outside the token's
+    scope; Forgejo answers 403, measured in S16); after the job ends, the token returns 401 within 30 s.
   - Orchestrator killed between mint and revoke: the `forge-sweeper` (60 s, over `ftok/*`)
     revokes the token within 60 s + skew after the job is terminal; a token without a record is
     removed by the Forgejo name-timestamp sweep (§06 §6.9.6).
@@ -6976,7 +7041,9 @@ persisted seq (`JobResult.LogLast` of the previous attempt, or a lake read) and 
   and ≤ 1 MiB/s per worker (4 MiB burst). It drops a chunk that violates these limits and logs
   `invalid_argument: log line invalid: <package>/<seq>`. The UI renders log text inert.
 - **Acceptance:** S17's 14 security cases adapted to pull: oversize, flood, cross-job chunk and
-  stale epoch are all rejected, and follower output is unchanged.
+  stale epoch are all rejected, and follower output is unchanged. The forged-chunk tests need a
+  worker Attach client (`tests/serverenv/workerclient`, Gate H G20 follow-up for the milestone that
+  implements worker registration).
 
 ### 05.10.4 Reader API (for §06)
 
@@ -7127,7 +7194,10 @@ budgets file).
 - **Statement:** v1 targets ≤ 5,000 projects, ≤ 1,000 workers, ≤ 2,000 running builds and
   ≤ 1,024 jobs per build. Each limit is enforced, and a request over a limit is refused with an
   error that names the limit.
-- **Acceptance:** each limit has a test at limit and limit + 1.
+- **Acceptance:** each limit has a test at limit and limit + 1, at the lowest layer that enforces
+  it (store layer with in-process fakes for projects, workers and jobs; the 2,000 running builds
+  row stays black-box). The seeding hooks are built by the milestone that implements each limit
+  (Gate H, G18).
 
 ---
 
@@ -7450,7 +7520,7 @@ Each RPC declares its authorization rule with the method option `bob.authz.v1.ru
 
 | Kind | Check |
 |---|---|
-| `PROJECT` | permission on the project named by `project_field` in the request (for ids like `build_id`, the handler resolves the build's project first; unknown id → NotFound) |
+| `PROJECT` | permission on the project named by `project_field` in the request (a top-level string field, or a dotted path to a nested one such as `project.id`; for ids like `build_id`, the handler resolves the build's project first; unknown id → NotFound) |
 | `GLOBAL` | permission with project `*` |
 | `LIST_FILTERED` | authenticated; results contain only projects where the principal has the method; an explicit `project_id` filter without permission → NotFound |
 | `AUTHENTICATED` | any valid API principal (own data only) |
@@ -7584,7 +7654,7 @@ enum Resolve {
 
 message Rule {
   Kind kind = 1;
-  string project_field = 2;        // KIND_PROJECT only; top-level string field of the request
+  string project_field = 2;        // KIND_PROJECT only; string field of the request, or a dotted path to a nested string field ("project.id")
   Resolve resolve = 3;
   bool allow_download_scope = 4;   // KIND_AUTHENTICATED: also accept bob_dt_ tokens
 }
@@ -7912,7 +7982,7 @@ service ProjectService {
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id"}; }  // GET
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) { option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED}; }          // GET
-  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id"}; }
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "project.id"}; }
   // Refused while non-terminal builds exist. Releases must be deleted first (R-STORE-007).
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) { option (bob.authz.v1.rule) = {kind: KIND_GLOBAL}; }
   // Pipelines from the newest evaluation of the default branch.
@@ -8316,7 +8386,7 @@ service ReleaseService {
   rpc GetRelease(GetReleaseRequest) returns (GetReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PUBLIC}; }         // GET
   // bob install: "<project>/<name>@<constraint>" + platform → release and closure roots.
   rpc ResolveRelease(ResolveReleaseRequest) returns (ResolveReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PUBLIC}; } // GET
-  rpc UpdateRelease(UpdateReleaseRequest) returns (UpdateReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id", resolve: RESOLVE_RELEASE}; }
+  rpc UpdateRelease(UpdateReleaseRequest) returns (UpdateReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "release.id", resolve: RESOLVE_RELEASE}; }
   // The only way a release is removed (R-STORE-007).
   rpc DeleteRelease(DeleteReleaseRequest) returns (DeleteReleaseResponse) { option (bob.authz.v1.rule) = {kind: KIND_PROJECT, project_field: "id", resolve: RESOLVE_RELEASE}; }
 }
@@ -9109,7 +9179,8 @@ repo, err := a.LookupRepo(ctx, "acme/api")
   (tag v*) → only `bob/ci` appears, pending → running → success, target URL opens the build
   page (HTTP 200). A failing test → `failure` with description containing `BOB-E-2005`.
   A forged evaluation result that adds `release` → job result rejected, build FAILED with
-  `evaluation result rejected: pipeline match mismatch`.
+  `evaluation result rejected: pipeline match mismatch` (this test needs the worker Attach client of
+  Gate H G20: `tests/serverenv/workerclient`, built with worker registration).
 - **Source:** R-PIPE-003, R-FW-040, R-SEC-004.
 
 #### R-PIPE-004 Triggers by API, UI and --remote
@@ -9147,7 +9218,7 @@ pipeline are never superseded.
 
 ```
 worker holds lease (job J, epoch E) → WorkerControlService/GetCheckoutCredential(J, E)  (§05.9.1)
-orchestrator: GET JobRecord; owner = caller wid and epoch = E, state CLAIMED|RUNNING, else PermissionDenied "job not leased by this worker"
+orchestrator: GET JobRecord; owner = caller wid and epoch = E, state CLAIMED|RUNNING, else PermissionDenied `permission_denied: worker holds no lease on job <id>`
   CheckoutRecord(J) in ftok/<sh2(J)> exists (repeat call, e.g. worker restart of the fetch) → RevokeCheckout(old handle) first; token values are never stored
   adapter.IssueCheckout({Repo, JobID: J, TTL: min(1h, job deadline − now)})
   CAS-add CheckoutRecord{J, epoch E, handle, expiresAt, forgeExpires} to ftok/<sh2(J)> (no token value)

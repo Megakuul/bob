@@ -93,6 +93,8 @@ func TestRNIX020EmbeddedStaticNix(t *testing.T) {
 // name starts with "." or contains "nix". Extraction writes a temporary entry
 // in <home>/bin and renames it atomically to nix-<12 hex>: the time between the first entry
 // appearing and the final directory appearing, polled every millisecond, is the extraction.
+// Ruling G16: the observation points are the temporary entry in <home>/bin and its atomic
+// rename to the final nix-<12 hex> directory.
 func TestRNIX020FirstExtractionBudget(t *testing.T) {
 	parity.Covers(t, "R-NIX-020")
 	e := newBobEnv(t)

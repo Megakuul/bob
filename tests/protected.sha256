@@ -10,6 +10,7 @@
 # glob tools/pins.json
 # glob tools/go.mod
 # glob tools/go.sum
+# glob schema/events-v1.json
 28c99a97e006453ea0b9aa470d2768eb05900558c3a8a99e17938a6e80cd8dc7  tests/budgets/budgets.json
 8f07cc797f9d23455c6fab8097ddc519cddddd4cc49f6ce9ae7b391944a036e8  tests/errors/catalogue.go
 394f3b17e04a6b164203389bbdaec0b00e50695540383a697f2a532e87a796eb  tests/errors/leakcheck/leakcheck.go

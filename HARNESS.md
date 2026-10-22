@@ -191,7 +191,7 @@ reference screenshots stay in git) is kept out of git: the repo holds a manifest
 
 - **Protected set** (glob list at the top of `tests/protected.sha256`): `tests/**` (except
   `tests/*/scratch`), `pkg/bob/diag/codes.lock`, `tools/ci/**`, `tools/lint/**`, `tools/s3count/**`,
-  `tools/golden/**`, `tools/pins.json`, `tools/go.mod`, `tools/go.sum`, and every `*_test.go`
+  `tools/golden/**`, `tools/pins.json`, `tools/go.mod`, `tools/go.sum`, `schema/events-v1.json`, and every `*_test.go`
   file whose package doc carries `//bob:protected` (acceptance tests outside `tests/`, e.g.
   `pkg/layering_test.go`). The harness code itself is protected, so a linter cannot be weakened to
   pass.
@@ -602,7 +602,7 @@ failing test, duration, date, machine). Gate H needs every row red as expected.
 | 24 | job token not revoked at job end | `forge-forgejo-live` |
 | 25 | userns refusal prints the wrong fix | `rootless` |
 | 26 | 20 % slower no-op build (sleep injected) | `budgets` |
-| 27 | edit a golden without updating the manifest | `protected` |
+| 27 | edit a golden (the `protected` stage reports every change, no blocking; D68) | `protected` |
 | 28 | goroutine leak in a server handler | `unit` (goleak) |
 | 29 | UI page renders the wrong theme default | `ui` |
 | 30 | add a GPL dependency | `licence` |

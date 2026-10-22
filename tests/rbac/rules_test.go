@@ -74,14 +74,7 @@ func TestRAUTH006EveryRPCHasRule(t *testing.T) {
 	cat := catalog(t)
 
 	t.Run("proto", func(t *testing.T) {
-		// The full assertion stays: every problem fails the subtest. Problems that are the known
-		// UpdateProject/UpdateRelease project_field defect additionally carry the red marker
-		// until the owner decides how the proto is fixed (proto/ is not ours to edit).
 		for _, p := range cat.Problems() {
-			if strings.Contains(p, "UpdateProject") || strings.Contains(p, "UpdateRelease") {
-				t.Errorf("red: not implemented yet: proto problem pending owner decision (UpdateProject/UpdateRelease project_field): %s", p)
-				continue
-			}
 			t.Errorf("proto problem: %s", p)
 		}
 	})
@@ -156,7 +149,7 @@ func TestRAUTH006EveryRPCHasRule(t *testing.T) {
 			}
 			body := map[string]any{}
 			if m.Kind == ref.KindProject && (m.Resolve == "" || m.Resolve == "UNSPECIFIED") && m.ProjectField != "" {
-				body[m.ProjectField] = "p1"
+				ref.SetPath(body, m.ProjectField, "p1")
 			}
 			got := call(t, c, m, body)
 			if got.OK() || (got.Code != "not_found" && got.Code != "permission_denied") {
