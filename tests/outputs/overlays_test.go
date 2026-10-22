@@ -83,7 +83,7 @@ var BadPrune = bob.Define(func(p *bob.P) *appimage.Bundle {
 
 var script = bob.Define(func(p *bob.P) bob.Executable {
 	step := bob.Run(p, "deploy-script", bob.RunOpts{
-		Tools: []bob.Tool{nixpkgs.Tool(p, "coreutils")},
+		Tools: []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
 		Cmd:   []string{"sh", "-c", "mkdir -p $out/bin && printf '#!/bin/sh\necho deploy\n' > $out/bin/deploy && chmod +x $out/bin/deploy"},
 	})
 	return bob.Exe(step, "bin/deploy")

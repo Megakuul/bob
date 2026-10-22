@@ -73,6 +73,22 @@ func TestSettingsAndAnalytics(t *testing.T) {
 	if d := s.CacheDays(ctx); d != 30 {
 		t.Errorf("CacheDays = %d", d)
 	}
+	// Leaf paths (R-STORE-150 sets retention.cacheUnreferencedDays = 0: collect at once).
+	m, err = upd(&settingsv1.Settings{Retention: &settingsv1.Retention{CacheUnreferencedDays: 0, LogsDays: 10}},
+		"retention.cacheUnreferencedDays", "retention.logs_days")
+	if err != nil || m.GetRetention().GetCacheUnreferencedDays() != 0 || m.GetRetention().GetLogsDays() != 10 || m.GetServerName() != "acme" {
+		t.Fatalf("UpdateSettings leaf paths = %v %v", m, err)
+	}
+	if d := s.CacheDays(ctx); d != 0 {
+		t.Errorf("CacheDays after explicit 0 = %d", d)
+	}
+	// The whole group: 0 is the default again.
+	if m, err = upd(&settingsv1.Settings{Retention: &settingsv1.Retention{}}, "retention"); err != nil || m.GetRetention().GetCacheUnreferencedDays() != 90 {
+		t.Fatalf("UpdateSettings retention = %v %v", m, err)
+	}
+	if m, err = upd(&settingsv1.Settings{Sessions: &settingsv1.SessionPolicy{SaTokenMaxDays: 10}}, "sessions.saTokenMaxDays"); err != nil || m.GetSessions().GetSaTokenMaxDays() != 10 || m.GetSessions().GetCliMaxDays() != 30 {
+		t.Fatalf("UpdateSettings sessions.saTokenMaxDays = %v %v", m, err)
+	}
 	for _, c := range []struct {
 		name  string
 		m     *settingsv1.Settings
@@ -85,6 +101,10 @@ func TestSettingsAndAnalytics(t *testing.T) {
 		{"idle beyond max", &settingsv1.Settings{Sessions: &settingsv1.SessionPolicy{CliIdleDays: 40, CliMaxDays: 30}}, []string{"sessions"}, connect.CodeInvalidArgument},
 		{"unknown mask path", &settingsv1.Settings{}, []string{"nope"}, connect.CodeInvalidArgument},
 		{"empty mask", &settingsv1.Settings{}, nil, connect.CodeInvalidArgument},
+		{"etag is not a setting", &settingsv1.Settings{}, []string{"etag"}, connect.CodeInvalidArgument},
+		{"unknown leaf", &settingsv1.Settings{}, []string{"retention.nope"}, connect.CodeInvalidArgument},
+		{"negative cache days", &settingsv1.Settings{Retention: &settingsv1.Retention{CacheUnreferencedDays: -1}}, []string{"retention.cache_unreferenced_days"}, connect.CodeInvalidArgument},
+		{"leaf idle beyond max", &settingsv1.Settings{Sessions: &settingsv1.SessionPolicy{CliIdleDays: 40}}, []string{"sessions.cliIdleDays"}, connect.CodeInvalidArgument},
 	} {
 		if _, err := upd(c.m, c.paths...); code(err) != c.want {
 			t.Errorf("%s: %v, want %v", c.name, err, c.want)

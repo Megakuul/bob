@@ -11,9 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
 	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/internal/store/sweep"
 )
@@ -130,8 +127,7 @@ func StagedKeys(prefix string, complete []byte, withAssets bool) ([]string, erro
 
 // Staged deletes promoted staging objects of the artifacts bucket by known key.
 type Staged struct {
-	S3     *s3.Client
-	Bucket string
+	Objects *store.Objects
 }
 
 // Delete deletes the keys StagedKeys names; COMPLETE.json goes last, so a crash in between
@@ -148,7 +144,7 @@ func (x *Staged) Delete(ctx context.Context, prefix string, complete []byte, wit
 		if i == len(keys)-1 && len(errs) > 0 {
 			break // keep COMPLETE.json while objects it names remain
 		}
-		if _, err := x.S3.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(x.Bucket), Key: aws.String(k)}); err != nil {
+		if err := x.Objects.Delete(ctx, k); err != nil {
 			if ctx.Err() != nil {
 				return n, ctx.Err()
 			}

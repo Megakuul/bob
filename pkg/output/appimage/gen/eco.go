@@ -17,6 +17,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/engine/nixidx"
 	"github.com/megakuul/bob/pkg/output/appimage/internal/aispec"
 
 	// The AppImage API registers the appimage.bundle kind the IR names.
@@ -51,15 +52,12 @@ func (Ecosystem) Plan(ctx context.Context, req engine.PlanRequest) (res engine.P
 	}
 	res.Nodes = map[string]engine.Resolved{}
 	runtimes := map[string]string{}
-	licences, err := licenceTable(ctx, req)
-	if err != nil {
-		return res, err
-	}
+	lic := lookupLicences(ctx, req)
 	for _, n := range req.Nodes {
 		if n.Kind != aispec.KindBundle {
 			return res, fmt.Errorf("appimage planner: unknown kind %s", n.Kind)
 		}
-		d, err := planBundle(ctx, req, n, runtimes, licences)
+		d, err := planBundle(ctx, req, n, runtimes, lic.table(n))
 		if err != nil {
 			return res, fmt.Errorf("%s: %w", n.Label, err)
 		}
@@ -328,62 +326,78 @@ func findIcon(root string) (string, error) {
 // toolchain puts into a closure, CA certificates and time zones.
 var licenceAttrs = []string{"glibc", "gcc-unwrapped", "cacert", "tzdata"}
 
-// licenceTable maps every output path of the nixpkgs packages the bundles depend on (and of
-// licenceAttrs) to its pname, version and licences (R-OUT-008). Paths it does not know are
-// listed by bob-builder with the store name and "unknown".
-func licenceTable(ctx context.Context, req engine.PlanRequest) (map[string]licenceInfo, error) {
-	out := map[string]licenceInfo{}
-	if req.Nixpkgs == nil {
-		return out, nil
-	}
+// licences holds the nixpkgs facts a plan needs for licences.json (R-OUT-008).
+type licences struct {
+	attrs   map[string][]string // node id → nixpkgs attributes of its dependency closure (host set)
+	entries map[string]nixidx.Entry
+}
+
+// lookupLicences finds the nixpkgs attributes each bundle depends on (plus licenceAttrs) and
+// looks them all up in one query. Licence data is best effort: what is not known is listed by
+// bob-builder with the store name and "unknown".
+func lookupLicences(ctx context.Context, req engine.PlanRequest) licences {
+	l := licences{attrs: map[string][]string{}, entries: map[string]nixidx.Entry{}}
 	byID := map[string]*ir.Node{}
 	for _, n := range req.Graph.Nodes {
 		byID[n.ID] = n
 	}
-	attrs := map[string]bool{}
-	for _, a := range licenceAttrs {
-		attrs[a] = true
-	}
 	host := engine.HostSystem()
-	seen := map[string]bool{}
-	var walk func(id string)
-	walk = func(id string) {
-		if seen[id] {
-			return
+	all := map[string]bool{}
+	for _, root := range req.Nodes {
+		attrs := map[string]bool{}
+		for _, a := range licenceAttrs {
+			attrs[a] = true
 		}
-		seen[id] = true
-		n := byID[id]
-		if n == nil {
-			return
-		}
-		if n.Nix != nil {
-			if sys, attr, err := engine.NixpkgsSource(n); err == nil && sys == host {
-				attrs[attr] = true
+		seen := map[string]bool{}
+		var walk func(id string)
+		walk = func(id string) {
+			n := byID[id]
+			if seen[id] || n == nil {
+				return
+			}
+			seen[id] = true
+			if n.Nix != nil {
+				if sys, attr, err := engine.NixpkgsSource(n); err == nil && sys == host {
+					attrs[attr] = true
+				}
+			}
+			for _, d := range n.Deps {
+				walk(d)
 			}
 		}
-		for _, d := range n.Deps {
-			walk(d)
+		walk(root.ID)
+		for a := range attrs {
+			l.attrs[root.ID] = append(l.attrs[root.ID], a)
+			all[a] = true
 		}
+		sort.Strings(l.attrs[root.ID])
 	}
-	for _, n := range req.Nodes {
-		walk(n.ID)
+	if req.Nixpkgs == nil {
+		return l
 	}
-	list := make([]string, 0, len(attrs))
-	for a := range attrs {
+	list := make([]string, 0, len(all))
+	for a := range all {
 		list = append(list, a)
 	}
 	sort.Strings(list)
-	entries, err := req.Nixpkgs.Lookup(ctx, list)
-	if err != nil && len(entries) == 0 {
-		return out, nil // licence data is best effort: the paths are listed as "unknown"
+	if entries, _ := req.Nixpkgs.Lookup(ctx, list); entries != nil {
+		l.entries = entries
 	}
-	for _, e := range entries {
-		if e.Missing || len(e.Licenses) == 0 {
+	return l
+}
+
+// table maps every output path of the nixpkgs packages bundle n depends on to its pname,
+// version and licences.
+func (l licences) table(n *ir.Node) map[string]licenceInfo {
+	out := map[string]licenceInfo{}
+	for _, a := range l.attrs[n.ID] {
+		e, ok := l.entries[a]
+		if !ok || e.Missing || len(e.Licenses) == 0 {
 			continue
 		}
 		for _, p := range e.Outputs {
 			out[p] = licenceInfo{Name: e.Pname, Version: e.Version, Licenses: e.Licenses}
 		}
 	}
-	return out, nil
+	return out
 }

@@ -42,6 +42,7 @@ type planner struct {
 	res      *resolver
 	testArgs []string      // bob test -- args, passed to the ecosystems
 	version  string        // release version (PlanRequest.Version)
+	dryRun   bool          // Options.DryRun: nothing is built while planning (Closure refuses)
 	root     string        // repository root (PlanRequest.Root)
 	fetcher  fetch.Fetcher // the run's fetcher (PlanRequest.Store.Ensure)
 	offline  bool          // no substituters for builds while planning (Options.Offline)

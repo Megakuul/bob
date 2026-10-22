@@ -64,8 +64,10 @@ README demonstrably fails; each one is a small function with a comment pointing 
 
 * Only `internal/store` (and `internal/store/sweep` for Query) imports `github.com/megakuul/dynamitedb`;
   only `internal/logstore` imports `github.com/megakuul/lake`; the AWS S3 SDK is imported only by
-  `internal/store` (probe, sweep, artifacts) and `internal/cache`/`internal/promote` (artifacts bucket
-  objects), never to reimplement dynamitedb records.
+  `internal/store` (records, probe, `store.Objects` for the artifacts bucket, and `internal/store/sweep`
+  for the LISTs) and by `internal/logstore` (lake takes an `*s3.Client`), never to reimplement
+  dynamitedb records (R-STORE-106). Every other package reaches artifacts-bucket objects through
+  `store.Objects` (Get/Head/Put/Copy/Delete with conditions, ranges, streaming uploads).
 * A call to `dynamitedb.Create/Put/Update` must take a composite literal (a fresh value) as its
   argument and that literal must not contain filter operators; `Get/Query/Delete` literals must not
   contain update operators.

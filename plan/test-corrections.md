@@ -252,3 +252,41 @@ access and the primitive constructors change.
    every outputPaths call failed ("shows raw Nix text: store path"). Same correction as A116 for
    TestRFW051: the package.finish `paths` field is removed before the leak check; everything else
    (stderr, other events, other fields) is still checked.
+30. APPLIED 2026-10-22 I-S3 (A123 completion, owner OK for evidence-based corrections). Item 21
+   / A123 were recorded as applied but six constructor calls were still `npm.App(p, …)` /
+   `npm.Test(p, …)` (evidence I-M9b TEST PROBLEM 1; pkg/npm/api.go has `func NewApp`,
+   `func NewTest`, types `App`, `Test`; SPEC §03.4 uses `npm.NewApp`/`npm.NewTest`): changed to
+   `npm.NewApp` / `npm.NewTest` in tests/fixtures/repos/npm/native/bob.go:14,
+   tests/fixtures/repos/npm/ts-lib/bob.go:24, tests/fixtures/repos/codegen/web/bob.go:16,
+   tests/eco/npm/repos_test.go:34, build_test.go:151, graphs_test.go:110 (generated bob.go).
+   Types `*npm.App` / `*npm.Test` unchanged. Grep of tests/ for the same clash in cc/rust/ocaml:
+   every qualified call (cc.NewBinary/NewTest, rust.Test → *rust.TestSet, ocaml.NewTest) resolves
+   to a func and every `*pkg.T` to a type; nothing else to change.
+31. APPLIED 2026-10-22 I-S3 (A141). tests/errors/errors_test.go buildBins built bob and
+   bob-server without `-tags bobtest`, so the BOB_TEST_NIX_REPLAY hook was not compiled in and
+   every replay entry of the S15 fault catalogue failed. It now passes
+   `serverenv.BobtestTagsFlag()` (bobtest merged with the caller's GOFLAGS -tags, A109), as
+   tests/harness and tests/serverenv/stack do. Assertions unchanged.
+32. APPLIED 2026-10-22 I-S3 (A141). tests/eco/internal/ecotest: the registry manifests are found by
+   `RegistryManifests` ($BOB_REGISTRY_MANIFESTS, else tests/fixtures/registry when it has
+   index.json, else $XDG_CACHE_HOME/bob-test/registry-manifests); `Registry` and `OpamCommit`
+   use it. Needed because the npm snapshot is larger than the 150 MB the repository may hold.
+
+## I-M12a (2026-10-22, owner-approved evidence-based corrections; evidence plan/progress/I-M12a.md)
+35. APPLIED. tests/outputs/oci_test.go TestROUT009LayerAlgorithm: "v2 differs from v1 in exactly
+   one layer blob" cannot hold together with R-OUT-008/R-OUT-012: the customisation layer (last)
+   carries /.bob/licences.json, which lists every closure path including the root, whose store
+   path changes with the source. Measured on a scratch repo (Go program + coreutils, arm64): after
+   one string change exactly one new oci-layer derivation and two new layer blobs (the program's
+   layer and the customisation layer). The count now leaves the last layer out; the ≤ 16 % byte
+   check still counts every new blob. SPEC R-OUT-009 acceptance text needs the same words.
+36. APPLIED. tests/outputs/oci_test.go TestROUT011ImageLayoutInTheStore: `skopeo copy` with a
+   fresh HOME fails before copying on hosts without /etc/containers/policy.json ("Error loading
+   trust policy: no policy.json file found", skopeo 1.22.2 on this host); `--insecure-policy`
+   added (a local layout-to-layout copy verifies no signatures). With it the copy of a bob image
+   succeeds and keeps the index digest.
+37. APPLIED. tests/outputs/release_test.go TestROUT023ReleaseManifest: invalid versions are
+   BOB-E-1020 (SPEC §02.3/§4.11), whose template is `{label}: invalid {option}: {reason}`; the
+   text `✗ invalid release version "<v>"` (no label) cannot be produced by that code. The version
+   comes from the command line, so the label is the flag: the test now expects
+   `✗ --version: invalid release version "<v>"` (exit 3 unchanged).

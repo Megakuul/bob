@@ -148,7 +148,7 @@ func TestRNPM009aBunApp(t *testing.T) {
 	home := t.TempDir()
 	dir := newRepo(t, map[string]string{
 		"hono/bob.go": header("hono") + `var Hono = bob.Define(func(p *bob.P) *npm.App {
-	return npm.App(p, npm.AppOpts{Name: "hono", Entry: "src/main.ts", Runtime: npm.Bun,
+	return npm.NewApp(p, npm.AppOpts{Name: "hono", Entry: "src/main.ts", Runtime: npm.Bun,
 		Deps: []npm.Dependency{npm.Dep("hono", "^4")}})
 })
 `,

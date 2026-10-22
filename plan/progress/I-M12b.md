@@ -19,7 +19,7 @@ changes elsewhere are listed under "files".
   - translate render: definitionLine case 2015 (plan-time BOB-E-2015 errors render as ✗ too).
 - BuilderVersion: 9 = appimage (I-M12a took 10 after me).
 
-## done (checkpoint 22:35)
+## done (final 23:15)
 - runtime: pkg/output/appimage/gen/runtime (own Go module, only klauspost/compress): squashfs
   4.0 reader (zstd, fragments, ext inodes), extraction cache ($XDG_CACHE_HOME/bob/appimage/<sha>,
   ~/.cache, $TMPDIR/bob-appimage-<uid>; temp dir + rename + .complete), flags --appimage-extract
@@ -39,8 +39,20 @@ changes elsewhere are listed under "files".
 - Verified by hand on a cc scratch repo: build 4-10 s, run in userns/ldso/auto, BOB_ENTRY, iconv
   e4, curl HTTPS 200, en_US.UTF-8, SIGTERM → 143 both modes, script warning, prune ✗ 2015.
 
+- 22:55: licence table per bundle (a bundle's drv no longer depends on which other bundles are
+  planned in the same wave: found by comparing two drvs of one bundle); prune check names the
+  entry first and resolves candidates inside the AppDir; closure-wide makeWrapper detection
+  (scripts in bin/ that exec a /nix/store program, makeBinaryWrapper ELFs).
+- Reproducibility: //deploy:small-appimage and //deploy:tools of the cc scratch repo built in two
+  fresh bob homes: identical drv paths and identical AppImage bytes; second build counts.built 0.
+- Distro matrix by hand (tests/rootless/enter as bobtest, 5 cached rootfs images: alpine-3.22,
+  debian-12, fedora-43, ubuntu-22.04, ubuntu-24.04) × {userns, ldso, blocked+auto, blocked+ldso}:
+  program line, date, iconv e4, curl HTTPS 200 all pass (arm64 native).
+- Start-up [8c/15G, load ~20]: first run 0.30 s (12.9 MB bundle), cached 0.024 s.
+
 ## next
-- acceptance tests tests/outputs (polyglot), reproducibility, framework.zip, CI checks.
+- acceptance tests in tests/outputs need the polyglot fixture, which does not evaluate yet
+  (`undefined: proto.Library` etc., pkg/proto is M10): see TEST PROBLEM / still red.
 
 ## files (outside ownership)
 - pkg/builder/closure.go, licences.go (new), bspec (LicenceInfo, BuilderVersion 9),
@@ -77,6 +89,38 @@ changes elsewhere are listed under "files".
   nixpkgs deps and glibc/gcc-unwrapped/cacert/tzdata (host index; cross bundles get "unknown"
   for target paths); other paths: store-name pname/version, "unknown".
 
-## NEEDS
+## still red (not caused by this unit)
+- tests/outputs TestROUT007/008/015/016/019 (+ slow TestDistro*): every one builds the polyglot
+  fixture, which fails evaluation (`undefined: proto.Library/LibraryOpts/Check/Lint`, pkg/proto is
+  M10). Ran TestROUT015|TestROUT019 at 22:07: exit 3 at evaluation, nothing of the AppImage path
+  reached. Their checks were reproduced by hand on the cc scratch repo (see done); the golden
+  tests/goldens/outputs/appimage.sha256 (frozen polyglot fixture) cannot be produced yet, so no
+  golden candidate in out/golden-candidates.
+- CI vet stage fails only on out/m12check and out/uicheck (not mine); fmt/lint/layering pass.
+  The runtime module (pkg/output/appimage/gen/runtime) is outside the root module: vet it with
+  `cd pkg/output/appimage/gen/runtime && GOWORK=off go vet .` (clean); TestRuntimeEmbedded
+  (pkg/output/appimage/gen, skipped with -short) rebuilds it and fails when runtimebin/ is stale.
 
-## TEST PROBLEM
+## NEEDS
+- coordinator: regenerate pkg/engine/store/builders.go (go generate ./pkg/engine/store) and
+  pkg/engine/eval/framework.zip (go generate ./pkg/engine/eval) after I-M12a lands (both fresh
+  at 23:15 with BuilderVersion 10).
+- decisions.md: copy D-M12b-1..10 and test corrections 1-3 (+ codes golden) from here.
+
+## TEST PROBLEM (corrections applied, owner-approved evidence-based class)
+1. tests/outputs/overlays_test.go apptestGo `script` step: Tools were only coreutils but Cmd runs
+   `sh -c …`; bob-builder looks argv[0] up only in the declared tools (R-NIX-016) and nixpkgs
+   coreutils 9.11 has no sh (checked: `ls <coreutils>/bin | grep -x sh` → none), so the step
+   could never run and R-OUT-019's build could not succeed. Applied: Tools gains
+   nixpkgs.Tool(p, "bash") (provides sh).
+2. tests/outputs/appimage_test.go checkLicences: wanted glibc `LGPL-2.1-or-later`; nixpkgs
+   meta.license of glibc at the pin is lgpl2Plus = `LGPL-2.0-or-later` (nix eval of
+   legacyPackages.aarch64-linux.glibc.meta.license at cd4ea8d5 and da6dc0e7), and R-OUT-008 says
+   licences come from nixpkgs meta. Applied: accept LGPL-2.0-or-later or LGPL-2.1-or-later; SPEC
+   R-OUT-008 acceptance aligned (spec/04 + SPEC.md).
+3. tests/outputs/appimage_distro_slow_test.go: `date -u -d @0` with LANG=en_US.UTF-8 and the
+   bundled en_US locale prints `Thu Jan  1 12:00:00 AM UTC 1970` (glibc en_US date_fmt uses %r;
+   the host's own coreutils prints the same); the test wanted the C form only. Applied: accept
+   both (the "no locale warnings" check is unchanged).
+4. NOT a test edit: tests/goldens/diag/codes.golden regenerated with `go test ./pkg/bob/diag
+   -update` for the appended code 2016 (D-M12b-8).

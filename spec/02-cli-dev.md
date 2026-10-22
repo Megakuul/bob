@@ -216,6 +216,7 @@ added by §02.
 | 2013 **new** | build | `{label}: {package} needs its {script} script ({reason})` | add npm.AllowScripts("{package}") to {label} |
 | 2014 **new** | build | `{label}: {package} uses {dep} without declaring it` | add npm.Extend("{package}", npm.Peer("{dep}")) |
 | 2015 **new** | build | `{label}: prune pattern "{pattern}" removes {file}, which {user} needs` | narrow the pattern |
+| 2016 **new** | build | `{label}: {reason}` (a warning bob-builder reports on a successful build, rendered `warning: <label>: <reason>`, R-OUT-019) | |
 | 3001 | fetch | `{label}: download does not match bob.lock` | if the upstream file legitimately changed, run bob lock; otherwise the source was tampered with |
 | 3002 | fetch | `{label}: download failed: {reason}` | check the URL and your network; bob retried {attempts} times |
 | 3003 | fetch | `{label}: download not found (HTTP {status})` | the file was removed or the URL in bob.go is wrong |

@@ -184,15 +184,19 @@ func TestROUT009LayerAlgorithm(t *testing.T) {
 		old[d.Digest] = true
 	}
 	changed := 0
-	for _, d := range m2.Layers {
+	for i, d := range m2.Layers {
 		total += d.Size
 		if !old[d.Digest] {
-			changed++
 			fresh += d.Size
+			// The customisation layer (last) changes too: its /.bob/licences.json lists every
+			// closure path, the root's new store path included (R-OUT-008, R-OUT-012).
+			if i < len(m2.Layers)-1 {
+				changed++
+			}
 		}
 	}
 	if changed != 1 {
-		t.Errorf("v2 differs from v1 in %d layer blobs, want exactly 1", changed)
+		t.Errorf("v2 differs from v1 in %d layer blobs besides the customisation layer, want exactly 1", changed)
 	}
 	if total > 0 && float64(fresh) > 0.16*float64(total) {
 		t.Errorf("v2 adds %d of %d compressed bytes (%.1f %%), want ≤ 16 %%", fresh, total, 100*float64(fresh)/float64(total))
@@ -334,7 +338,9 @@ func TestROUT011ImageLayoutInTheStore(t *testing.T) {
 
 	skopeo := pinnedBin(t, "skopeo", "skopeo")
 	dst := t.TempDir()
-	r := run(t, 5*time.Minute, []string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin"}, skopeo, "copy", "--all", "oci:"+out, "oci:"+dst+"/copy")
+	// --insecure-policy: the fresh HOME has no containers policy.json and hosts need not have
+	// /etc/containers/policy.json; copying between two local layouts verifies no signatures.
+	r := run(t, 5*time.Minute, []string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin"}, skopeo, "--insecure-policy", "copy", "--all", "oci:"+out, "oci:"+dst+"/copy")
 	if r.Exit != 0 {
 		t.Errorf("skopeo copy --all oci:<out> oci:<copy>: exit %d\n%s", r.Exit, r.Combined())
 	}

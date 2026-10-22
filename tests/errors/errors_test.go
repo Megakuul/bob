@@ -20,6 +20,7 @@ import (
 	"github.com/megakuul/bob/tests/errors/leakcheck"
 	"github.com/megakuul/bob/tests/golden"
 	"github.com/megakuul/bob/tests/parity"
+	"github.com/megakuul/bob/tests/serverenv"
 )
 
 // EnvSummary names a file TestFaults writes its per-entry results to (tools/ci prints it).
@@ -43,7 +44,9 @@ var (
 	binsErr  error
 )
 
-// buildBins builds bob and bob-server once per test binary into a temporary directory.
+// buildBins builds bob and bob-server once per test binary into a temporary directory, with the
+// bobtest build tag merged with the caller's GOFLAGS -tags (serverenv.BobtestTagsFlag, decision
+// A109) so that BOB_TEST_NIX_REPLAY replay is compiled in, as the harness builds them.
 func buildBins(t testing.TB) map[string]string {
 	t.Helper()
 	binsOnce.Do(func() {
@@ -55,7 +58,7 @@ func buildBins(t testing.TB) map[string]string {
 		bins = map[string]string{}
 		for _, name := range []string{"bob", "bob-server"} {
 			out := filepath.Join(dir, name)
-			cmd := exec.Command("go", "build", "-o", out, "./cmd/"+name)
+			cmd := exec.Command("go", "build", serverenv.BobtestTagsFlag(), "-o", out, "./cmd/"+name)
 			cmd.Dir = root(t)
 			if b, err := cmd.CombinedOutput(); err != nil {
 				binsErr = fmt.Errorf("go build ./cmd/%s: %w: %s", name, err, b)

@@ -312,8 +312,9 @@ func (p *P) Toolchain() Toolchain
   `/.bob/licences.json` in the customisation layer; tarball: `bob/licences.json`):
   `[{"path":"<store path>","name":"<pname>","version":"…","licenses":["<SPDX id>",…]}]` from
   nixpkgs `meta.license` (bob paths: the `License` field of their package, default `"unknown"`).
-- **Acceptance:** The fixture AppImage's `licences.json` lists glibc with `LGPL-2.1-or-later`
-  and openssl with `Apache-2.0`; entries sorted by path.
+- **Acceptance:** The fixture AppImage's `licences.json` lists glibc with its nixpkgs licence
+  (`LGPL-2.0-or-later` at the pin: meta.license is lgpl2Plus; upstream COPYING.LIB says 2.1, so
+  `LGPL-2.1-or-later` is accepted too) and openssl with `Apache-2.0`; entries sorted by path.
 - **Source:** S8 §5.8, D16, D52.
 
 ## 4.5 OCI images
@@ -496,7 +497,9 @@ func NewBundle(p *bob.P, name string, opts BundleOpts) *Bundle
 - **Statement:** File = bob runtime ELF (static Go, `CGO_ENABLED=0`, for the bundle's
   platform) + squashfs image appended at the ELF's end. Bytes 8–10 = `AI\x02`. The squashfs is
   written by nixpkgs `mksquashfs` (`nixpkgs.Tool`) inside the `appimage` derivation with
-  `-all-root -no-xattrs -all-time 1 -mkfs-time 1 -comp zstd -Xcompression-level 19 -b 1M`.
+  `-all-root -no-xattrs -comp zstd -Xcompression-level 19 -b 1M` and `SOURCE_DATE_EPOCH=1`
+  (bob-builder's environment; mksquashfs refuses `-all-time 1 -mkfs-time 1` next to it, the
+  effect is the same: mkfs and inode times 1).
   AppDir: `AppRun` (= the runtime binary, launcher mode), `<name>.desktop`, `<name>.svg|png`,
   `.DirIcon`, `.bob/launch.json`, `.bob/licences.json`, `nix/store/…`. The runtime never uses
   FUSE in v1: it extracts once to `$XDG_CACHE_HOME/bob/appimage/<sha256 of file>/` (fallback

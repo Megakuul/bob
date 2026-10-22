@@ -25,13 +25,10 @@ const (
 var importAllow = map[string][]string{
 	dynamitedbPath: {Module + "/internal/store"},
 	lakePath:       {Module + "/internal/logstore"},
-	// Artifact and staging objects, the store probe/sweep, and the
-	// orchestrator's fsck/staging controllers talk S3 directly; never to
-	// reimplement dynamitedb records.
-	s3SDKPath: {
-		Module + "/internal/store", Module + "/internal/cache", Module + "/internal/promote",
-		Module + "/internal/orchestrator", Module + "/internal/worker", Module + "/internal/logstore",
-	},
+	// R-STORE-106: only internal/store (records, probe, sweep, and the
+	// artifacts bucket through store.Objects) talks S3; internal/logstore
+	// hands lake the *s3.Client it requires (the SPEC's lake exception).
+	s3SDKPath: {Module + "/internal/store", Module + "/internal/logstore"},
 }
 
 // filterOps are dynamitedb filter operators (Get/Query/Delete values); they

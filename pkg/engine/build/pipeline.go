@@ -110,7 +110,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		p = newPlanner(g, st, builder, srcPaths, entries, lf, idx)
 		p.root, p.fetcher = o.Root, f
 		p.offline, p.maxJobs = o.Offline, o.MaxJobs
-		p.version = version
+		p.version, p.dryRun = version, o.DryRun
 		if o.Command == CmdTest {
 			p.testArgs = o.TestArgs
 		}

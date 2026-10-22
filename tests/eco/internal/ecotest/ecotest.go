@@ -158,7 +158,7 @@ func ErrorCodes(t *testing.T, r harness.Result) []string {
 }
 
 // Registry starts the offline registry mirror (or adopts BOB_TEST_REGISTRY_URL) and returns the
-// environment that points bob at it. The mirror serves tests/fixtures/registry.
+// environment that points bob at it. The mirror serves RegistryManifests and the blob cache.
 func Registry(t *testing.T, home string) []string {
 	t.Helper()
 	url := os.Getenv("BOB_TEST_REGISTRY_URL")
@@ -171,7 +171,7 @@ func Registry(t *testing.T, home string) []string {
 			}
 			blobs = filepath.Join(cache, "bob-test", "registry-blobs")
 		}
-		url = startMirror(t, filepath.Join(harness.Root(t), "tests", "fixtures", "registry"), blobs)
+		url = startMirror(t, RegistryManifests(t), blobs)
 	}
 	env := []string{
 		"BOB_HOME=" + home,
@@ -185,11 +185,32 @@ func Registry(t *testing.T, home string) []string {
 	return env
 }
 
-// OpamCommit is the opam-repository commit of tests/fixtures/registry/index.json ("" until the
-// first refresh).
+// RegistryManifests is the manifest directory of the registry snapshot
+// (tests/fixtures/registry/README.md): $BOB_REGISTRY_MANIFESTS when set; else
+// tests/fixtures/registry when a snapshot is committed there (it has index.json); else the
+// snapshot kept outside git because it is too large to commit (decision A141),
+// $XDG_CACHE_HOME/bob-test/registry-manifests.
+func RegistryManifests(t *testing.T) string {
+	t.Helper()
+	if d := os.Getenv("BOB_REGISTRY_MANIFESTS"); d != "" {
+		return d
+	}
+	in := filepath.Join(harness.Root(t), "tests", "fixtures", "registry")
+	if _, err := os.Stat(filepath.Join(in, "index.json")); err == nil {
+		return in
+	}
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatalf("harness: %v", err)
+	}
+	return filepath.Join(cache, "bob-test", "registry-manifests")
+}
+
+// OpamCommit is the opam-repository commit of the snapshot's index.json ("" until the first
+// refresh).
 func OpamCommit(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(harness.Root(t), "tests", "fixtures", "registry", "index.json"))
+	b, err := os.ReadFile(filepath.Join(RegistryManifests(t), "index.json"))
 	if err != nil {
 		return ""
 	}

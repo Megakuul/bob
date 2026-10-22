@@ -21,4 +21,4 @@ var Lib = bob.Define(func(p *bob.P) *npm.Lib {
 })
 
 // Test runs vitest over src/**/*.test.ts.
-var Test = bob.Define(func(p *bob.P) *npm.Test { return npm.Test(p, npm.TestOpts{Of: Lib(p)}) })
+var Test = bob.Define(func(p *bob.P) *npm.Test { return npm.NewTest(p, npm.TestOpts{Of: Lib(p)}) })

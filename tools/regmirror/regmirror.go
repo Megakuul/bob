@@ -12,7 +12,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -20,7 +19,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // BaseToken is replaced in every served npm document by the URL of the npm route of the
@@ -44,7 +42,18 @@ type Config struct {
 	// network and keep them (manifests: index files, blobs: .crate files): the manual, online
 	// capture step of HARNESS.md §4.3. Gate runs never set it.
 	RecordCrates bool
-	// Client is used by RecordCrates; nil = a client with a 60 s timeout.
+	// RecordNpm, when set, makes the mirror fetch npm documents and tarballs it does not have
+	// from registry.npmjs.org and keep them: abbreviated packuments (manifests
+	// npm/packuments/<name>.json), per-version documents (npm/versions/<name>/<version>.json)
+	// and tarballs (blobs npm/<name>/-/<file>.tgz), every dist.tarball rewritten to
+	// "@REGISTRY@/…". Running the npm suites against a recording mirror captures exactly what
+	// bob and the npm oracle load. Gate runs never set it.
+	RecordNpm bool
+	// RecordOpam, when set, makes the mirror fetch a missing opam-repository snapshot (GitHub
+	// archive of the commit) and missing opam archive cache entries (opam.ocaml.org/cache) into
+	// the blob cache. Gate runs never set it.
+	RecordOpam bool
+	// Client is used by the record modes; nil = a client with a 10 min timeout.
 	Client *http.Client
 }
 
@@ -86,8 +95,20 @@ func (m *mirror) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch route {
 	case "npm":
 		file, doc = m.npmFile(rest)
+		if file != "" && m.c.RecordNpm {
+			if err := m.recordNpm(r, rest, file, doc); err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+		}
 	case "opam":
 		file = m.opamFile(rest)
+		if file != "" && m.c.RecordOpam {
+			if err := m.recordOpam(r, rest, file); err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+		}
 	case "crates":
 		if rest == "index/config.json" {
 			m.cratesConfig(w, r)
@@ -95,7 +116,7 @@ func (m *mirror) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		file, doc = m.crateFile(rest)
 		if file != "" && m.c.RecordCrates {
-			if err := m.record(r, rest, file); err != nil {
+			if err := m.recordCrate(r, rest, file); err != nil {
 				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
 			}
@@ -218,55 +239,6 @@ func (m *mirror) opamFile(rest string) string {
 		return filepath.Join(m.c.Blobs, "opam", "cache", parts[1], parts[2], parts[3])
 	}
 	return ""
-}
-
-// record fetches a missing crates.io file from upstream into file (RecordCrates). A file the
-// upstream does not have stays missing (the request then gets 404).
-func (m *mirror) record(r *http.Request, rest, file string) error {
-	if _, err := os.Stat(file); err == nil {
-		return nil
-	}
-	var url string
-	if idx, ok := strings.CutPrefix(rest, "index/"); ok {
-		url = cratesIndexUpstreamURL + idx
-	} else {
-		parts := strings.Split(rest, "/") // dl/<name>/<version>/download
-		url = cratesDLUpstreamURL + parts[1] + "/" + parts[1] + "-" + parts[2] + ".crate"
-	}
-	c := m.c.Client
-	if c == nil {
-		c = &http.Client{Timeout: 60 * time.Second}
-	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	switch {
-	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusForbidden:
-		return nil
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("regmirror: %s: %s", url, resp.Status)
-	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, maxDoc+1))
-	if err != nil {
-		return err
-	}
-	if len(b) > maxDoc {
-		return fmt.Errorf("regmirror: %s is larger than %d bytes", url, maxDoc)
-	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-		return err
-	}
-	tmp := file + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, file)
 }
 
 func validSegments(parts []string) bool {

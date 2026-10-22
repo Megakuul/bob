@@ -90,14 +90,16 @@ func checkLicences(t testing.TB, what string, raw []byte) {
 		}
 		switch l.Name {
 		case "glibc":
-			found["glibc"] = l.has("LGPL-2.1-or-later")
+			// nixpkgs meta.license of glibc at the pin is lgpl2Plus (LGPL-2.0-or-later); upstream
+			// COPYING.LIB is LGPL-2.1. bob reports the nixpkgs value (test correction, I-M12b).
+			found["glibc"] = l.has("LGPL-2.1-or-later") || l.has("LGPL-2.0-or-later")
 		case "openssl":
 			found["openssl"] = l.has("Apache-2.0")
 		}
 	}
 	for _, p := range []string{"glibc", "openssl"} {
 		if !found[p] {
-			t.Errorf("%s: licences.json does not list %s with its licence (glibc LGPL-2.1-or-later, openssl Apache-2.0)", what, p)
+			t.Errorf("%s: licences.json does not list %s with its licence (glibc LGPL-2.x-or-later, openssl Apache-2.0)", what, p)
 		}
 	}
 	sorted := append([]string(nil), paths...)

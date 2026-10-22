@@ -32,6 +32,10 @@ func (s planStore) Closure(ctx context.Context, outs []engine.PlanOutput) (map[s
 	if err != nil {
 		return nil, err
 	}
+	if len(invalid) > 0 && s.p != nil && s.p.dryRun {
+		// --dry-run builds nothing (R-RS-005): the output generators plan their placeholder.
+		return nil, fmt.Errorf("%w: a dry run builds nothing", engine.ErrClosureBuild)
+	}
 	bobDrvs := map[string]*drv.Derivation{}
 	var nixTargets []string
 	for _, p := range invalid {

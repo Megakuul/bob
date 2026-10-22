@@ -304,46 +304,35 @@ func readELF(file string) *elfInfo {
 	return in
 }
 
+// prunedNeed is a library a kept ELF file needs that a prune pattern removed.
+type prunedNeed struct{ pattern, file, user string }
+
 // checkNeeded fails when a pruned file is a library a kept ELF file of the bundle needs
-// (DT_NEEDED resolved in its RUNPATH): BOB-E-2015.
+// (DT_NEEDED resolved in its RUNPATH): BOB-E-2015. The entries are checked first, so the
+// message names the program when it is the one that needs the library.
 func (b *bundle) checkNeeded() error {
 	if len(b.pruned) == 0 {
 		return nil
 	}
-	type problem struct{ pattern, file, user string }
-	var found *problem
-	err := filepath.WalkDir(b.inBundle(b.store), func(p string, d fs.DirEntry, err error) error {
-		if err != nil || !d.Type().IsRegular() || found != nil {
+	var found *prunedNeed
+	for _, e := range b.entryNames() {
+		if real, err := b.resolve(e[1]); err == nil {
+			if found = b.prunedNeed(real); found != nil {
+				break
+			}
+		}
+	}
+	if found == nil {
+		err := filepath.WalkDir(b.inBundle(b.store), func(p string, d fs.DirEntry, err error) error {
+			if err != nil || !d.Type().IsRegular() || found != nil {
+				return err
+			}
+			found = b.prunedNeed("/" + filepath.ToSlash(strings.TrimPrefix(p, b.appDir+"/")))
+			return nil
+		})
+		if err != nil {
 			return err
 		}
-		in := readELF(p)
-		if in == nil {
-			return nil
-		}
-		storeFile := "/" + filepath.ToSlash(strings.TrimPrefix(p, b.appDir+"/"))
-		for _, lib := range in.needed {
-			var prunedBy string
-			kept := false
-			for _, dir := range in.runpath {
-				dir = strings.ReplaceAll(strings.ReplaceAll(dir, "${ORIGIN}", path.Dir(storeFile)), "$ORIGIN", path.Dir(storeFile))
-				cand := path.Join(dir, lib)
-				if _, err := os.Stat(b.inBundle(cand)); err == nil && strings.HasPrefix(cand, b.store+"/") {
-					kept = true
-					break
-				}
-				if g, ok := b.pruned[cand]; ok && prunedBy == "" {
-					prunedBy = g
-				}
-			}
-			if !kept && prunedBy != "" {
-				found = &problem{prunedBy, lib, path.Base(storeFile)}
-				return nil
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 	if found == nil {
 		return nil
@@ -351,6 +340,36 @@ func (b *bundle) checkNeeded() error {
 	msg := fmt.Sprintf("%s: prune pattern %q removes %s, which %s needs", b.c.Job.Label, found.pattern, found.file, found.user)
 	b.c.CodedDiag("error", codePrune, map[string]string{"label": b.c.Job.Label, "pattern": found.pattern, "file": found.file, "user": found.user}, msg)
 	return errors.New(msg)
+}
+
+// prunedNeed checks the store file f of the AppDir (nil: fine or not a dynamic ELF file).
+func (b *bundle) prunedNeed(f string) *prunedNeed {
+	in := readELF(b.inBundle(f))
+	if in == nil {
+		return nil
+	}
+	for _, lib := range in.needed {
+		var prunedBy string
+		kept := false
+		for _, dir := range in.runpath {
+			dir = strings.ReplaceAll(strings.ReplaceAll(dir, "${ORIGIN}", path.Dir(f)), "$ORIGIN", path.Dir(f))
+			cand := path.Join(dir, lib)
+			if !strings.HasPrefix(cand, b.store+"/") {
+				continue
+			}
+			if _, err := b.resolve(cand); err == nil {
+				kept = true
+				break
+			}
+			if g, ok := b.pruned[cand]; ok && prunedBy == "" {
+				prunedBy = g
+			}
+		}
+		if !kept && prunedBy != "" {
+			return &prunedNeed{prunedBy, lib, path.Base(f)}
+		}
+	}
+	return nil
 }
 
 // ---- metadata ----
@@ -401,37 +420,93 @@ func (b *bundle) warnFidelity() {
 	if b.a.Mode != "auto" {
 		return
 	}
+	const consequence = "; it cannot run on hosts without user namespaces. Set Mode: appimage.UsernsOnly to make this explicit."
+	warn := func(what string) {
+		reason := what + consequence
+		b.c.CodedDiag("warning", codeWarning, map[string]string{"label": b.c.Job.Label, "reason": reason}, b.c.Job.Label+": "+reason)
+	}
+	entryFiles := map[string]bool{}
 	for _, e := range b.entryNames() {
 		real, err := b.resolve(e[1])
 		if err != nil {
 			continue
 		}
-		head := make([]byte, 4)
-		if f, err := os.Open(b.inBundle(real)); err == nil {
-			_, _ = io.ReadFull(f, head)
-			f.Close()
+		entryFiles[real] = true
+		switch wrapperKind(b.inBundle(real)) {
+		case "script":
+			warn(fmt.Sprintf("entry %q is a script", e[0]))
+		case "wrapper":
+			warn(fmt.Sprintf("entry %q is a wrapper that runs another store path", e[0]))
 		}
-		var what string
-		switch {
-		case string(head[:2]) == "#!":
-			what = fmt.Sprintf("entry %q is a script", e[0])
-		case string(head) == "\x7fELF" && fileContains(b.inBundle(real), "makeCWrapper"):
-			what = fmt.Sprintf("entry %q is a wrapper that runs another store path", e[0])
-		default:
+	}
+	// makeWrapper-style wrappers elsewhere in the closure (programs in bin/ of a store path).
+	var wrappers []string
+	for _, p := range b.closure {
+		ents, err := os.ReadDir(b.inBundle(p + "/bin"))
+		if err != nil {
 			continue
 		}
-		reason := what + "; it cannot run on hosts without user namespaces. Set Mode: appimage.UsernsOnly to make this explicit."
-		b.c.CodedDiag("warning", codeWarning, map[string]string{"label": b.c.Job.Label, "reason": reason}, b.c.Job.Label+": "+reason)
+		for _, e := range ents {
+			f := p + "/bin/" + e.Name()
+			if !e.Type().IsRegular() || entryFiles[f] {
+				continue
+			}
+			if k := wrapperKind(b.inBundle(f)); k == "wrapper" || k == "script" && execsStore(b.inBundle(f)) {
+				wrappers = append(wrappers, f)
+			}
+		}
 	}
+	if len(wrappers) > 0 {
+		what := fmt.Sprintf("the closure contains a wrapper that runs another store path (%s", wrappers[0])
+		if len(wrappers) > 1 {
+			what += fmt.Sprintf(" and %d more", len(wrappers)-1)
+		}
+		warn(what + ")")
+	}
+}
+
+// wrapperKind classifies a program: "script" (shebang), "wrapper" (nixpkgs makeBinaryWrapper
+// ELF, which embeds its makeCWrapper call), "" otherwise.
+func wrapperKind(file string) string {
+	f, err := os.Open(file)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	head := make([]byte, 4)
+	if _, err := io.ReadFull(f, head); err != nil {
+		return ""
+	}
+	switch {
+	case string(head[:2]) == "#!":
+		return "script"
+	case string(head) == "\x7fELF":
+		data, err := io.ReadAll(io.LimitReader(f, 16<<20))
+		if err == nil && bytes.Contains(data, []byte("makeCWrapper")) {
+			return "wrapper"
+		}
+	}
+	return ""
+}
+
+// execsStore reports whether a shell script execs a /nix/store program (makeWrapper's
+// `exec -a "$0" "/nix/store/…" "$@"`).
+func execsStore(file string) bool {
+	data, err := os.ReadFile(file)
+	if err != nil || len(data) > 1<<20 {
+		return false
+	}
+	for _, l := range strings.Split(string(data), "\n") {
+		l = strings.TrimSpace(l)
+		if strings.HasPrefix(l, "exec ") && strings.Contains(l, "/nix/store/") {
+			return true
+		}
+	}
+	return false
 }
 
 // codeWarning is BOB-E-2016, a warning of a successful build ("{label}: {reason}").
 const codeWarning = 2016
-
-func fileContains(file, s string) bool {
-	data, err := os.ReadFile(file)
-	return err == nil && bytes.Contains(data, []byte(s))
-}
 
 // localeArchive builds a locale archive of the requested locales (R-OUT-017) into a
 // store-like directory of the AppDir.

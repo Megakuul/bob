@@ -183,7 +183,10 @@ func TestDistroAppImageMatrix(t *testing.T) {
 						t.Errorf("%s: HTTPS GET exit %d, status %q\n%s", tag, r.Exit, r.Stdout, r.Stderr)
 					}
 					r = g.run(row.block, append(env, "BOB_ENTRY=date"), binds, app, "-u", "-d", "@0")
-					if got := strings.TrimSpace(r.Stdout); r.Exit != 0 || got != "Thu Jan  1 00:00:00 UTC 1970" || r.Stderr != "" {
+					// en_US.UTF-8 (bundled) formats the time with %r: "12:00:00 AM" (glibc 2.42
+					// date_fmt "%a %b %e %r %Z %Y"); the C form appears only without the locale
+					// (test correction, I-M12b).
+					if got := strings.TrimSpace(r.Stdout); r.Exit != 0 || got != "Thu Jan  1 00:00:00 UTC 1970" && got != "Thu Jan  1 12:00:00 AM UTC 1970" || r.Stderr != "" {
 						t.Errorf("%s: date printed %q (exit %d) stderr %q, want the epoch and no locale warnings", tag, got, r.Exit, r.Stderr)
 					}
 					r = g.run(row.block, append(env, "BOB_ENTRY=iconv"), binds, "/bin/sh", "-c",

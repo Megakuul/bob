@@ -28,10 +28,10 @@ const (
 	defaultMaxLayers = 100
 	defaultUser      = "65534:65534"
 	defaultWorkDir   = "/"
-	caBundle         = "/etc/ssl/certs/ca-bundle.crt"     // in nixpkgs' cacert output
+	caBundle         = "/etc/ssl/certs/ca-bundle.crt"       // in nixpkgs' cacert output
 	caFile           = "/etc/ssl/certs/ca-certificates.crt" // in the image (R-OUT-012)
-	zoneInfoDir      = "/share/zoneinfo"                  // in nixpkgs' tzdata output
-	zoneInfo         = "/usr/share/zoneinfo"              // in the image
+	zoneInfoDir      = "/share/zoneinfo"                    // in nixpkgs' tzdata output
+	zoneInfo         = "/usr/share/zoneinfo"                // in the image
 )
 
 // Release is what a release adds to an image it publishes (R-OUT-022): the version enters only

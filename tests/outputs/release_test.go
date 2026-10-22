@@ -244,9 +244,12 @@ func TestROUT023ReleaseManifest(t *testing.T) {
 		if versionRE.MatchString(v) {
 			t.Fatalf("harness: %q should be invalid", v)
 		}
+		// BOB-E-1020's template is `{label}: invalid {option}: {reason}` (SPEC §02.3, §4.11); the
+		// version comes from the command line, so the label is the flag: `✗ --version: invalid
+		// release version "<v>": …`.
 		r := w.bob("build", "--version="+v, "//deploy:api")
-		if r.Exit != 3 || !strings.Contains(r.Stderr, fmt.Sprintf("✗ invalid release version %q", v)) {
-			t.Errorf("version %q: exit %d, want 3 and `✗ invalid release version %q`\n%s", v, r.Exit, v, r.Stderr)
+		if r.Exit != 3 || !strings.Contains(r.Stderr, fmt.Sprintf("✗ --version: invalid release version %q", v)) {
+			t.Errorf("version %q: exit %d, want 3 and `✗ --version: invalid release version %q`\n%s", v, r.Exit, v, r.Stderr)
 		}
 	}
 }

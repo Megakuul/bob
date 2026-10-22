@@ -106,7 +106,9 @@ func releaseKind(c *builder.Ctx, raw json.RawMessage) error {
 }
 
 // local is where a store path is readable in the build.
-func local(storeDir, p string) string { return filepath.Join(storeDir, strings.TrimPrefix(p, "/nix/store/")) }
+func local(storeDir, p string) string {
+	return filepath.Join(storeDir, strings.TrimPrefix(p, "/nix/store/"))
+}
 
 func describe(storeDir, version string, a Artifact) (entry, error) {
 	e := entry{Kind: a.Kind, Name: a.Name, Platform: a.Platform, StorePath: a.StorePath}

@@ -31,7 +31,7 @@ func header(pkg string) string {
 func fastifyRepo(t *testing.T) string {
 	return newRepo(t, map[string]string{
 		"api/bob.go": header("api") + `var Api = bob.Define(func(p *bob.P) *npm.App {
-	return npm.App(p, npm.AppOpts{
+	return npm.NewApp(p, npm.AppOpts{
 		Entry: "src/server.ts",
 		Deps: []npm.Dependency{
 			npm.Dep("fastify", "^5"),

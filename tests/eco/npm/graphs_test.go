@@ -101,13 +101,13 @@ func writeGraph(t *testing.T, g graph) string {
 	w("go.mod", "module example.com/"+strings.ReplaceAll(g.name, "-", "")+"\n\ngo 1.26\n")
 	w("bob.lock", "{\n  \"lockVersion\": 1\n}\n")
 	rootDecl := "var _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n"
-	for i, im := range g.importers {
-		pkg := "g" + fmt.Sprint(i)
+	for _, im := range g.importers {
+		pkg := filepath.Base(im.dir) // SPEC R2: the package of a directory without Go files is its name
 		body := ""
 		switch im.kind {
 		case "app":
 			w(im.dir+"/src/main.ts", "export {};\n")
-			body = fmt.Sprintf("var Importer = bob.Define(func(p *bob.P) *npm.App {\n\treturn npm.App(p, npm.AppOpts{Entry: \"src/main.ts\", Deps: %s})\n})\n", goDeps(im.deps))
+			body = fmt.Sprintf("var Importer = bob.Define(func(p *bob.P) *npm.App {\n\treturn npm.NewApp(p, npm.AppOpts{Entry: \"src/main.ts\", Deps: %s})\n})\n", goDeps(im.deps))
 		case "vite":
 			w(im.dir+"/index.html", "<!doctype html><script type=\"module\" src=\"/src/main.ts\"></script>\n")
 			w(im.dir+"/src/main.ts", "export {};\n")

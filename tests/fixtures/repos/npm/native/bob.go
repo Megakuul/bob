@@ -11,7 +11,7 @@ var noBundle = false
 
 // App is a Node program with a native addon whose install script is allowed (label //native:native).
 var App = bob.Define(func(p *bob.P) *npm.App {
-	return npm.App(p, npm.AppOpts{
+	return npm.NewApp(p, npm.AppOpts{
 		Entry: "src/main.mjs",
 		Deps: []npm.Dependency{
 			npm.Dep("better-sqlite3", "^12.2.0"),

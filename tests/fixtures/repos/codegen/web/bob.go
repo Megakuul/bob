@@ -13,7 +13,7 @@ import (
 
 // Client is a Node program using generated connect-es and graphql-codegen code (label //web:client).
 var Client = bob.Define(func(p *bob.P) *npm.App {
-	return npm.App(p, npm.AppOpts{
+	return npm.NewApp(p, npm.AppOpts{
 		Name:  "client",
 		Entry: "src/client.ts",
 		Deps: []npm.Dependency{

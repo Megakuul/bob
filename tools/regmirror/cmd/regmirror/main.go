@@ -1,5 +1,7 @@
 // Command regmirror serves the offline registry mirror (HARNESS.md §4.3) on loopback. It prints
 // "regmirror listening on http://<addr>" once the listener is up and stops on SIGINT/SIGTERM.
+// -record-crates, -record-npm and -record-opam turn it into a recording proxy (manual, online
+// capture; tests/fixtures/registry/README.md).
 package main
 
 import (
@@ -29,12 +31,23 @@ func run() error {
 	blobs := flag.String("blobs", "", "blob cache directory")
 	listen := flag.String("listen", "127.0.0.1:0", "listen address (loopback)")
 	record := flag.Bool("record-crates", false, "fetch missing crates.io index files and .crate files from the network and keep them (manual capture)")
+	recordNpm := flag.Bool("record-npm", false, "fetch missing npm packuments (abbreviated), per-version documents and tarballs from registry.npmjs.org and keep them (manual capture)")
+	recordOpam := flag.Bool("record-opam", false, "fetch a missing opam-repository snapshot and opam archive cache entries from the network and keep them (manual capture)")
+	opamCommit := flag.String("opam-commit", "", "with -record-opam: the opam-repository commit to write into index.json")
 	flag.Parse()
+	if *opamCommit != "" && !*recordOpam {
+		return errors.New("-opam-commit needs -record-opam")
+	}
+	if *recordNpm || *recordOpam {
+		if err := regmirror.UpdateIndex(*manifests, time.Now(), *recordNpm, *opamCommit); err != nil {
+			return err
+		}
+	}
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: regmirror.New(regmirror.Config{Manifests: *manifests, Blobs: *blobs, RecordCrates: *record}), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: regmirror.New(regmirror.Config{Manifests: *manifests, Blobs: *blobs, RecordCrates: *record, RecordNpm: *recordNpm, RecordOpam: *recordOpam}), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() {

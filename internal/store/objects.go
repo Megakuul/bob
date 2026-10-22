@@ -19,10 +19,10 @@ import (
 // Errors of the artifacts bucket (plain objects, not records: ErrObjectNotFound is distinct from
 // ErrNotFound). Callers act on them.
 var (
-	ErrObjectNotFound     = errors.New("not found")
-	ErrPrecondition = errors.New("precondition failed")
-	ErrRange        = errors.New("range not satisfiable")
-	ErrTooLarge     = errors.New("object too large")
+	ErrObjectNotFound = errors.New("not found")
+	ErrPrecondition   = errors.New("precondition failed")
+	ErrRange          = errors.New("range not satisfiable")
+	ErrTooLarge       = errors.New("object too large")
 )
 
 // Objects is the artifacts bucket (plain S3 objects, not dynamitedb records; SPEC §05.2.4).

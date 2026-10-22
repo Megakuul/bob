@@ -29,6 +29,7 @@ type SettingsRecord struct {
 	AnalyticsDay store.DataField[int32]  `cbor:"ra,omitempty"`
 	BuildsDays   store.DataField[int32]  `cbor:"rb,omitempty"`
 	CacheDays    store.DataField[int32]  `cbor:"rc,omitempty"`
+	CacheNow     store.DataField[bool]   `cbor:"rz,omitempty"` // CacheDays is an explicit 0, not the default
 	StagingDays  store.DataField[int32]  `cbor:"rs,omitempty"`
 	CLIIdleDays  store.DataField[int32]  `cbor:"ci,omitempty"`
 	CLIMaxDays   store.DataField[int32]  `cbor:"cm,omitempty"`
@@ -50,6 +51,7 @@ func (r *SettingsRecord) Draft() *SettingsRecord {
 		AnalyticsDay: store.Carry(r.AnalyticsDay),
 		BuildsDays:   store.Carry(r.BuildsDays),
 		CacheDays:    store.Carry(r.CacheDays),
+		CacheNow:     store.Carry(r.CacheNow),
 		StagingDays:  store.Carry(r.StagingDays),
 		CLIIdleDays:  store.Carry(r.CLIIdleDays),
 		CLIMaxDays:   store.Carry(r.CLIMaxDays),
@@ -125,7 +127,59 @@ func (s *Settings) CacheDays(ctx context.Context) int32 {
 	if err != nil {
 		return defaultCacheDays
 	}
-	return pick(zero(rec.CacheDays), defaultCacheDays)
+	return cacheDays(rec)
+}
+
+// cacheDays is the effective retention.cache_unreferenced_days of r. Unlike the other settings,
+// an explicit 0 (set through the mask path retention.cache_unreferenced_days) is a valid value:
+// unreferenced paths are collected on the next GC run (R-STORE-150). Absent means the default.
+// Absent and 0 read the same from a stored record, so the explicit 0 is CacheNow.
+func cacheDays(r *SettingsRecord) int32 {
+	if zero(r.CacheNow) {
+		return 0
+	}
+	return pick(zero(r.CacheDays), defaultCacheDays)
+}
+
+// settingsPaths are the update_mask paths UpdateSettings accepts (proto names; protojson
+// lowerCamelCase paths are converted). retention and sessions replace the whole group, where 0
+// means the default; a leaf path replaces one setting.
+var settingsPaths = map[string]bool{
+	"server_name": true, "base_url": true, "live_log_enabled": true, "max_parallel_downloads": true,
+	"retention": true, "retention.logs_days": true, "retention.analytics_days": true, "retention.builds_days": true,
+	"retention.cache_unreferenced_days": true, "retention.staging_days": true,
+	"sessions": true, "sessions.cli_idle_days": true, "sessions.cli_max_days": true, "sessions.browser_idle_hours": true,
+	"sessions.browser_max_days": true, "sessions.sa_token_max_days": true,
+}
+
+// maskPath turns a protojson mask path ("retention.cacheUnreferencedDays") into proto names
+// ("retention.cache_unreferenced_days").
+func maskPath(p string) string {
+	var b strings.Builder
+	for _, r := range p {
+		if r >= 'A' && r <= 'Z' {
+			b.WriteByte('_')
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// checkSettingsMask validates update_mask: required, and only the paths in settingsPaths.
+func checkSettingsMask(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, api.InvalidArgument("updateMask", "update_mask is required")
+	}
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		n := maskPath(p)
+		if !settingsPaths[n] {
+			return nil, api.InvalidArgument("updateMask", fmt.Sprintf("field %q cannot be updated", p))
+		}
+		out = append(out, n)
+	}
+	return out, nil
 }
 
 func (s *Settings) message(r *SettingsRecord) *settingsv1.Settings {
@@ -142,7 +196,7 @@ func (s *Settings) message(r *SettingsRecord) *settingsv1.Settings {
 	}
 	return &settingsv1.Settings{ServerName: name, BaseUrl: base,
 		Retention: &settingsv1.Retention{LogsDays: pick(zero(r.LogsDays), defaultLogsDays), AnalyticsDays: pick(zero(r.AnalyticsDay), defaultAnalytics),
-			BuildsDays: pick(zero(r.BuildsDays), defaultBuildsDays), CacheUnreferencedDays: pick(zero(r.CacheDays), defaultCacheDays),
+			BuildsDays: pick(zero(r.BuildsDays), defaultBuildsDays), CacheUnreferencedDays: cacheDays(r),
 			StagingDays: pick(zero(r.StagingDays), defaultStagingDays)},
 		Sessions: &settingsv1.SessionPolicy{CliIdleDays: pick(zero(r.CLIIdleDays), defaultCLIIdle), CliMaxDays: pick(zero(r.CLIMaxDays), defaultCLIMax),
 			BrowserIdleHours: pick(zero(r.BrowserIdleH), defaultBrowserIdle), BrowserMaxDays: pick(zero(r.BrowserMaxD), defaultBrowserMax),
@@ -190,15 +244,15 @@ func checkBaseURL(s string) error {
 }
 
 // UpdateSettings implements SettingsService for the fields named in update_mask (server_name,
-// base_url, retention, sessions, live_log_enabled, max_parallel_downloads; retention and
-// sessions are replaced as a whole). An etag, when given, must match (decision D-IB4-3).
+// base_url, retention, sessions, live_log_enabled, max_parallel_downloads, and every leaf of
+// retention and sessions; see settingsPaths). An etag, when given, must match (decision D-IB4-3).
 func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[settingsv1.UpdateSettingsRequest]) (*connect.Response[settingsv1.UpdateSettingsResponse], error) {
 	in := req.Msg.GetSettings()
 	if in == nil {
 		return nil, api.InvalidArgument("settings", "settings is required")
 	}
-	if err := api.CheckMask(req.Msg.GetUpdateMask(), in, "server_name", "base_url", "retention", "sessions",
-		"live_log_enabled", "max_parallel_downloads"); err != nil {
+	paths, err := checkSettingsMask(req.Msg.GetUpdateMask().GetPaths())
+	if err != nil {
 		return nil, err
 	}
 	r, ss := in.GetRetention(), in.GetSessions()
@@ -229,27 +283,47 @@ func (s *Settings) UpdateSettings(ctx context.Context, req *connect.Request[sett
 		var cliIdle, cliMax, browserIdle, browserMax int32
 		if cur != nil {
 			next = *cur
-			cliIdle, cliMax, browserIdle, browserMax = cur.CLIIdleDays.Value(), cur.CLIMaxDays.Value(), cur.BrowserIdleH.Value(), cur.BrowserMaxD.Value()
+			cliIdle, cliMax, browserIdle, browserMax = zero(cur.CLIIdleDays), zero(cur.CLIMaxDays), zero(cur.BrowserIdleH), zero(cur.BrowserMaxD)
 		}
 		if etag != "" && etag != store.ETagOf(next.ETag) { // next.ETag: cur's, or nil
 			return nil, api.Aborted("the settings were changed by someone else (etag mismatch); reload and retry")
 		}
-		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
+		for _, p := range paths {
 			switch p {
-			case "server_name", "serverName":
+			case "server_name":
 				next.ServerName = store.Set(in.GetServerName())
-			case "base_url", "baseUrl":
+			case "base_url":
 				next.BaseURL = store.Set(strings.TrimRight(in.GetBaseUrl(), "/"))
 			case "retention":
 				next.LogsDays, next.AnalyticsDay, next.BuildsDays = store.Set(r.GetLogsDays()), store.Set(r.GetAnalyticsDays()), store.Set(r.GetBuildsDays())
-				next.CacheDays, next.StagingDays = store.Set(r.GetCacheUnreferencedDays()), store.Set(r.GetStagingDays())
+				next.CacheDays, next.CacheNow, next.StagingDays = store.Set(r.GetCacheUnreferencedDays()), store.Set(false), store.Set(r.GetStagingDays())
+			case "retention.logs_days":
+				next.LogsDays = store.Set(r.GetLogsDays())
+			case "retention.analytics_days":
+				next.AnalyticsDay = store.Set(r.GetAnalyticsDays())
+			case "retention.builds_days":
+				next.BuildsDays = store.Set(r.GetBuildsDays())
+			case "retention.cache_unreferenced_days": // 0 = collect on the next GC run (cacheDays)
+				next.CacheDays, next.CacheNow = store.Set(r.GetCacheUnreferencedDays()), store.Set(r.GetCacheUnreferencedDays() == 0)
+			case "retention.staging_days":
+				next.StagingDays = store.Set(r.GetStagingDays())
 			case "sessions":
 				cliIdle, cliMax, browserIdle, browserMax = ss.GetCliIdleDays(), ss.GetCliMaxDays(), ss.GetBrowserIdleHours(), ss.GetBrowserMaxDays()
 				next.CLIIdleDays, next.CLIMaxDays, next.BrowserIdleH = store.Set(ss.GetCliIdleDays()), store.Set(ss.GetCliMaxDays()), store.Set(ss.GetBrowserIdleHours())
 				next.BrowserMaxD, next.SATokenMaxD = store.Set(ss.GetBrowserMaxDays()), store.Set(ss.GetSaTokenMaxDays())
-			case "live_log_enabled", "liveLogEnabled":
+			case "sessions.cli_idle_days":
+				cliIdle, next.CLIIdleDays = ss.GetCliIdleDays(), store.Set(ss.GetCliIdleDays())
+			case "sessions.cli_max_days":
+				cliMax, next.CLIMaxDays = ss.GetCliMaxDays(), store.Set(ss.GetCliMaxDays())
+			case "sessions.browser_idle_hours":
+				browserIdle, next.BrowserIdleH = ss.GetBrowserIdleHours(), store.Set(ss.GetBrowserIdleHours())
+			case "sessions.browser_max_days":
+				browserMax, next.BrowserMaxD = ss.GetBrowserMaxDays(), store.Set(ss.GetBrowserMaxDays())
+			case "sessions.sa_token_max_days":
+				next.SATokenMaxD = store.Set(ss.GetSaTokenMaxDays())
+			case "live_log_enabled":
 				next.LiveLogOff = store.Set(!in.GetLiveLogEnabled())
-			case "max_parallel_downloads", "maxParallelDownloads":
+			case "max_parallel_downloads":
 				next.MaxDownloads = store.Set(in.GetMaxParallelDownloads())
 			}
 		}
