@@ -18,7 +18,7 @@ import (
 const Module = "github.com/megakuul/bob"
 
 // Analyzers is every analyzer boblint runs.
-var Analyzers = []*analysis.Analyzer{NoPanic, NoExit, NoList, ImportBoundary}
+var Analyzers = []*analysis.Analyzer{NoPanic, NoExit, NoList, ImportBoundary, SafeGo}
 
 //go:embed allow.txt
 var allowTxt string

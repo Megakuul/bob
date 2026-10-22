@@ -21,6 +21,7 @@ func TestAnalyzers(t *testing.T) {
 		{lint.NoExit, []string{"internal/x", "cmd/tool"}},
 		{lint.NoList, []string{"internal/x", "internal/store/sweep"}},
 		{lint.ImportBoundary, []string{"internal/x", "internal/store", "pkg/cc", "cmd/bob"}},
+		{lint.SafeGo, []string{"internal/x", "internal/safe", "cmd/tool", "pkg/p"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.a.Name, func(t *testing.T) {

@@ -125,7 +125,7 @@ Every analyzer has a positive and a negative testdata package (`analysistest`). 
 | `nopanic` | no `panic`, `log.Fatal*`, `log.Panic*` outside `package main` under `cmd/`. Allowlisted: `diag.New` (panics on an unknown code by design, R-NIX-028; reachable only with constant codes, which a test proves), and `regexp.MustCompile`/`template.Must` in package-level `var` initialisers. | BOOTSTRAP §5.3 |
 | `noexit` | `os.Exit` only inside `func main` of `cmd/*/main.go` | BOOTSTRAP §5.3 |
 | `nolist` | the identifiers `ListObjects`, `ListObjectsV2`, `NewListObjectsV2Paginator`, `ListObjectVersions`, `ListMultipartUploads` and `dynamitedb.Query` are referenced only in `internal/store/sweep` | R-STORE-100/101, D60 |
-| `safego` | no bare `go` statement in `internal/` or `cmd/bob-server`; use `internal/safe.Go`, which recovers and converts a panic to an error. `pkg/` uses `pkg/engine/safe` the same way. | BOOTSTRAP §5.3 |
+| `safego` | no bare `go` statement in `internal/` or `cmd/` (non-test); the only exempt package is `internal/safe`, which holds the one `go` statement. Use `internal/safe.Go`, which recovers and converts a panic to an error. `pkg/` uses `pkg/engine/safe` the same way. | BOOTSTRAP §5.3 |
 | `storecall` | no package outside `internal/store` imports `dynamitedb`; `internal/store` wraps every call in `store.Call` (recover → `ErrPanic`, S9 §3.6) | R-STORE-005 |
 | `importboundary` | the R-ARCH-003 layer table, encoded once in `tools/lint/layers.go` and shared with `TestLayering` | R-ARCH-002/003, BOOTSTRAP §5.6 |
 | `ctxio` | exported funcs in `internal/` that take an `io.Reader`/`*http.Client`/store handle, or start a process, have `context.Context` as their first parameter | BOOTSTRAP §5.3 |

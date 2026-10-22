@@ -24,7 +24,7 @@ func runLint(ctx context.Context, env *Env) error {
 	// bob's own analyzers (tools/lint) run on bob's module; the layering
 	// stage runs importboundary on its own.
 	if _, err := goCmd(ctx, env.Root, nil, "run", "./tools/lint/cmd/boblint",
-		"-nopanic", "-noexit", "-nolist", "./..."); err != nil {
+		"-nopanic", "-noexit", "-nolist", "-safego", "./..."); err != nil {
 		return err
 	}
 	return checkNoNixFiles(env.Root)
