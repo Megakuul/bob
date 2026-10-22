@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"path"
 	"regexp"
-	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -145,17 +144,26 @@ func invalid(n *ir.Node, option, reason string) error {
 
 // ---- toolchain and platform ----
 
-// toolchain is what every job of one root runs with.
+// toolchain is what every job of one root runs with. Host units (build scripts, proc-macros
+// and their dependencies, R-FW-035) use only the host side, so their derivations are the same
+// for every target; target units of a cross build add the target's linker and standard library
+// (R-FW-033 Rust row, R-FW-034).
 type toolchain struct {
-	rustc   engine.Resolved
-	cc      engine.Resolved
-	bin     engine.Resolved // binutils
-	out     string          // rustc store path
-	version string          // "1.95.0"
-	system  string          // Nix system of the jobs
-	triple  string          // target triple
-	host    *resolve.Platform
-	target  *resolve.Platform
+	rustc      engine.Resolved
+	cc         engine.Resolved // host C compiler
+	bin        engine.Resolved // host binutils
+	out        string          // rustc store path
+	version    string          // "1.95.0"
+	system     string          // Nix system of the jobs (always the host's, R-PLAT-004)
+	hostTriple string
+	triple     string // target triple
+	host       *resolve.Platform
+	target     *resolve.Platform
+
+	cross   *rsspec.Cross
+	xcc     engine.Resolved // cross C compiler wrapper
+	xbin    engine.Resolved // its binutils
+	sysroot engine.Resolved // rust-std-<triple>
 }
 
 var rustcName = regexp.MustCompile(`-rustc(?:-wrapper)?-([0-9]+\.[0-9]+\.[0-9]+)[^/]*$`)
@@ -176,46 +184,89 @@ func (pl *planner) rustcOf(n *ir.Node, s rsspec.Crate) (engine.Resolved, string,
 	return rv, m[1], nil
 }
 
+// depInput returns the planned dependency i of node n.
+func (pl *planner) depInput(n *ir.Node, i int, what string) (engine.Resolved, error) {
+	if i < 0 || i >= len(n.Deps) {
+		return engine.Resolved{}, fmt.Errorf("%s: %s index out of range", n.Label, what)
+	}
+	r, ok := pl.req.Inputs[n.Deps[i]]
+	if !ok {
+		return engine.Resolved{}, fmt.Errorf("%s: its %s is not planned", n.Label, what)
+	}
+	return r, nil
+}
+
 // newToolchain prepares the toolchain and platform of root crate node n.
 func (pl *planner) newToolchain(n *ir.Node, s rsspec.Crate) (*toolchain, error) {
 	rv, version, err := pl.rustcOf(n, s)
 	if err != nil {
 		return nil, err
 	}
-	tc := &toolchain{rustc: rv, out: rv.Outputs["out"], version: version}
-	for _, x := range []struct {
-		i  int
-		to *engine.Resolved
-	}{{s.CC, &tc.cc}, {s.Binutils, &tc.bin}} {
-		if x.i < 0 || x.i >= len(n.Deps) {
-			return nil, fmt.Errorf("%s: C toolchain index out of range", n.Label)
-		}
-		r, ok := pl.req.Inputs[n.Deps[x.i]]
-		if !ok {
-			return nil, fmt.Errorf("%s: its C toolchain is not planned", n.Label)
-		}
-		*x.to = r
+	tc := &toolchain{rustc: rv, out: rv.Outputs["out"], version: version, system: engine.HostSystem()}
+	if tc.cc, err = pl.depInput(n, s.CC, "C toolchain"); err != nil {
+		return nil, err
+	}
+	if tc.bin, err = pl.depInput(n, s.Binutils, "C toolchain"); err != nil {
+		return nil, err
 	}
 	plat, err := platformOf(n)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", n.Label, err)
 	}
-	arch, _, _ := strings.Cut(strings.TrimPrefix(string(plat), "linux-"), "-")
-	sys := map[string]string{"amd64": "x86_64-linux", "arm64": "aarch64-linux"}[arch]
-	tc.triple = map[string]string{"amd64": "x86_64-unknown-linux-gnu", "arm64": "aarch64-unknown-linux-gnu"}[arch]
-	if sys == "" {
+	host := engine.HostPlatform()
+	rt := engine.RustFor(host, plat)
+	tc.hostTriple, tc.triple = host.Triple(), rt.Triple
+	if tc.triple == "" || tc.hostTriple == "" || tc.system == "" {
 		return nil, fmt.Errorf("%s: unsupported platform %s", n.Label, plat)
 	}
-	hostSys := map[string]string{"amd64": "x86_64-linux", "arm64": "aarch64-linux"}[runtime.GOARCH]
-	if sys != hostSys {
-		return nil, diag.NotImplemented("cross-compiling Rust crates (" + n.Label + " for " + string(plat) + ", task M7.4)")
+	if tc.host, err = resolve.NewPlatform(tc.hostTriple); err != nil {
+		return nil, err
 	}
-	tc.system = sys
 	if tc.target, err = resolve.NewPlatform(tc.triple); err != nil {
 		return nil, err
 	}
-	tc.host = tc.target
+	if !rt.Cross {
+		return tc, nil
+	}
+	x := s.Cross
+	if x == nil || x.Triple != rt.Triple {
+		return nil, fmt.Errorf("%s: the crate was not evaluated for %s (no cross toolchain in its definition)", n.Label, plat)
+	}
+	tc.cross = x
+	if tc.xcc, err = pl.depInput(n, x.CC, "cross C compiler"); err != nil {
+		return nil, err
+	}
+	if tc.xbin, err = pl.depInput(n, x.Binutils, "cross binutils"); err != nil {
+		return nil, err
+	}
+	std, err := pl.depInput(n, x.Std, "target standard library")
+	if err != nil {
+		return nil, err
+	}
+	if m := rustcName.FindStringSubmatch(std.Outputs["out"]); m == nil || m[1] != version {
+		e := diag.New(1021, "label", n.Label, "reason", fmt.Sprintf("the standard library for %s comes from %s, but the crate compiles with rustc %s; cross-compiling needs the default rustc of the nixpkgs pin",
+			plat, path.Base(std.Outputs["out"]), version))
+		e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
+		return nil, e
+	}
+	if tc.sysroot, err = pl.rustStd(tc, std); err != nil {
+		return nil, err
+	}
 	return tc, nil
+}
+
+// rustStd plans rust-std-<triple> (R-FW-034): exactly the files the target rustc's
+// manifest-rust-std-<triple> lists, laid out as a sysroot. One derivation per target rustc.
+func (pl *planner) rustStd(tc *toolchain, std engine.Resolved) (engine.Resolved, error) {
+	in := newInputs(pl.req.Builder)
+	from := in.add(std, "out")
+	return pl.job(drv.Name("rust-std", tc.triple), tc.system, "rust-std", "rust-std-"+tc.triple, rustStdJSON{From: from, Triple: tc.triple}, in)
+}
+
+// rustStdJSON is bop.RustStdArgs.
+type rustStdJSON struct {
+	From   string `json:"from"`
+	Triple string `json:"triple"`
 }
 
 func platformOf(n *ir.Node) (bob.Platform, error) {
@@ -230,11 +281,32 @@ func platformOf(n *ir.Node) (bob.Platform, error) {
 	return bob.Platform(p), nil
 }
 
-// path is the PATH of the jobs: rustc, the C compiler (rustc's linker, build scripts' cc) and
-// binutils (ar).
-func (tc *toolchain) path(in *inputs) []string {
-	return []string{in.add(tc.rustc, "out") + "/bin", in.add(tc.cc, pickOutput(tc.cc.Outputs, "bin", "out")) + "/bin",
-		in.add(tc.bin, pickOutput(tc.bin.Outputs, "bin", "out")) + "/bin"}
+// path is the PATH of a job: rustc, the host C compiler (rustc's linker, build scripts' cc) and
+// binutils (ar); target units of a cross build put the cross tools first.
+func (tc *toolchain) path(in *inputs, host bool) []string {
+	p := []string{in.add(tc.rustc, "out") + "/bin"}
+	if tc.cross != nil && !host {
+		p = append(p, in.add(tc.xcc, pickOutput(tc.xcc.Outputs, "bin", "out"))+"/bin",
+			in.add(tc.xbin, pickOutput(tc.xbin.Outputs, "bin", "out"))+"/bin")
+	}
+	return append(p, in.add(tc.cc, pickOutput(tc.cc.Outputs, "bin", "out"))+"/bin",
+		in.add(tc.bin, pickOutput(tc.bin.Outputs, "bin", "out"))+"/bin")
+}
+
+// roleTriple is the triple a unit compiles for: the host's for host units.
+func (tc *toolchain) roleTriple(host bool) string {
+	if host {
+		return tc.hostTriple
+	}
+	return tc.triple
+}
+
+// targetArgs sets --target, --sysroot and the linker of a cross target unit.
+func (tc *toolchain) targetArgs(in *inputs, a *rustcArgsJSON, host bool) {
+	if tc.cross == nil || host {
+		return
+	}
+	a.Target, a.Sysroot, a.Linker = tc.triple, in.add(tc.sysroot, "out"), tc.cross.Prefix+"cc"
 }
 
 func pickOutput(outs map[string]string, prefer ...string) string {
@@ -343,6 +415,7 @@ type unitOut struct {
 	deps     []*unitOut // normal (and dev) dependencies, by UnitDep order
 	depNames []string   // their code names
 	src      string     // crate directory (store path)
+	sum      string     // source checksum, "local" for local crates
 	features []string
 }
 
@@ -458,10 +531,12 @@ func (pl *planner) hasRegistryDeps() bool {
 	return false
 }
 
-// rootUnit returns the unit of local crate name in rc (target role).
-func (rc *rootCtx) rootUnit(name string) *resolve.Unit {
+// rootUnit returns the unit of local crate name in rc: the host unit of a proc-macro (it runs
+// inside the compiler), the target unit of every other crate type.
+func (rc *rootCtx) rootUnit(name, typ string) *resolve.Unit {
+	host := typ == rsspec.TypeProcMacro
 	for k, u := range rc.units {
-		if k.Local && !k.Host && strings.HasPrefix(k.Crate, name+"@") {
+		if k.Local && k.Host == host && strings.HasPrefix(k.Crate, name+"@") {
 			return u
 		}
 	}
@@ -588,7 +663,8 @@ func (pl *planner) unitPlan(rc *rootCtx, k resolve.UnitKey) (*unitOut, error) {
 	if k.Host {
 		role = "host"
 	}
-	u.meta = metadata(append([]string{name, version, sum, role, u.typ, strings.Join(un.Features, ","), rc.tc.out, rc.tc.triple}, depMetas...)...)
+	u.sum = sum
+	u.meta = metadata(append([]string{name, version, sum, role, u.typ, strings.Join(un.Features, ","), rc.tc.out, rc.tc.roleTriple(k.Host)}, depMetas...)...)
 	if u.typ == rsspec.TypeProcMacro {
 		u.libFile = "lib" + u.codeName + "-" + u.meta + ".so"
 	} else {
@@ -662,6 +738,8 @@ type rustcArgsJSON struct {
 	Edition    string            `json:"edition"`
 	Root       string            `json:"root"`
 	Target     string            `json:"target"`
+	Sysroot    string            `json:"sysroot,omitempty"`
+	Linker     string            `json:"linker,omitempty"`
 	Features   []string          `json:"features"`
 	Metadata   string            `json:"metadata"`
 	OptLevel   string            `json:"optLevel"`
@@ -752,8 +830,10 @@ func (pl *planner) rustcArgs(u *unitOut, edition, root string) rustcArgsJSON {
 // dependencies, the transitive library directories, its build-script run and, for linking
 // types, the transitive runs' link search paths.
 func (pl *planner) commonInputs(rc *rootCtx, u *unitOut, in *inputs, a *rustcArgsJSON) {
-	a.Path = rc.tc.path(in)
+	host := u.unit.Key.Host
+	a.Path = rc.tc.path(in, host)
 	a.Rustc = rc.tc.out + "/bin/rustc"
+	rc.tc.targetArgs(in, a, host)
 	pl.addSource(u, in)
 	for i, d := range u.deps {
 		a.Externs = append(a.Externs, externJSON{Name: u.depNames[i], File: in.add(d.compile, "out") + "/lib/" + d.libFile})
@@ -824,14 +904,20 @@ func transitiveRuns(deps []*unitOut) []*engine.Resolved {
 	return out
 }
 
-// buildScript plans the compile (host) and the run of u's build script.
+// buildScript plans the compile (host) and the run of u's build script. The compile is a host
+// unit: it depends only on the host, the crate and its features, never on the target
+// (R-FW-035); the run is per target.
 func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script string, bdeps []*unitOut, bnames []string) error {
 	in := newInputs(pl.req.Builder)
+	metas := []string{u.name, u.version, u.sum, "build-script", strings.Join(u.features, ","), rc.tc.out, rc.tc.hostTriple}
+	for i, d := range bdeps {
+		metas = append(metas, bnames[i]+"="+d.meta)
+	}
 	a := rustcArgsJSON{Src: u.src, Remap: remap(u), CrateName: "build_script_build", CrateType: rsspec.TypeBin, Edition: edition,
-		Root: script, Features: nonNil(u.features), Metadata: metadata(u.meta, "build-script"), OptLevel: "0", CapLints: u.local == nil,
+		Root: script, Features: nonNil(u.features), Metadata: metadata(metas...), OptLevel: "0", CapLints: u.local == nil,
 		Env: pkgEnv(u), Externs: []externJSON{}, LinkFrom: []string{}, LinkArgs: []string{}, Libs: []string{}, Search: []string{},
 		FeatureSet: []string{}, OutName: "build_script_build"}
-	a.Path = rc.tc.path(in)
+	a.Path = rc.tc.path(in, true)
 	a.Rustc = rc.tc.out + "/bin/rustc"
 	pl.addSource(u, in)
 	for i, d := range bdeps {
@@ -847,11 +933,20 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 	}
 	// The run: Cargo's build-script environment for the unit's platform.
 	rin := newInputs(pl.req.Builder)
-	triple := rc.tc.triple
+	host := u.unit.Key.Host
+	triple := rc.tc.roleTriple(host)
 	env := pkgEnv(u)
-	for k, v := range map[string]string{"TARGET": triple, "HOST": triple, "PROFILE": "release", "OPT_LEVEL": optLevel(u.unit.Key.Host),
+	for k, v := range map[string]string{"TARGET": triple, "HOST": rc.tc.hostTriple, "PROFILE": "release", "OPT_LEVEL": optLevel(host),
 		"DEBUG": "false"} {
 		env[k] = v
+	}
+	if x := rc.tc.cross; x != nil && !host {
+		// What Cargo users set for cross builds: the cc and pkg-config crates find the target's
+		// compiler and accept target libraries.
+		for k, v := range map[string]string{"TARGET_CC": x.Prefix + "cc", "TARGET_CXX": x.Prefix + "c++", "TARGET_AR": x.Prefix + "ar",
+			"HOST_CC": "cc", "HOST_CXX": "c++", "HOST_AR": "ar", "PKG_CONFIG_ALLOW_CROSS": "1"} {
+			env[k] = v
+		}
 	}
 	if u.links != "" {
 		env["CARGO_MANIFEST_LINKS"] = u.links
@@ -876,7 +971,7 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 		env["CARGO_CFG_"+envName(k)] = strings.Join(vs, ",")
 	}
 	r := buildRunJSON{Src: u.src, Env: env, DepLinks: []depLinksJSON{}}
-	r.Path = rc.tc.path(rin)
+	r.Path = rc.tc.path(rin, host)
 	r.Rustc = rc.tc.out + "/bin/rustc"
 	pl.addSource(u, rin)
 	if err := pl.nativeForBuildScript(rc, u, rin, &r); err != nil {
@@ -966,7 +1061,7 @@ func (pl *planner) planCrate(n *ir.Node) error {
 	if err != nil {
 		return err
 	}
-	ru := rc.rootUnit(s.Name)
+	ru := rc.rootUnit(s.Name, s.Type)
 	if ru == nil {
 		return fmt.Errorf("%s: the crate is not part of its unification", n.Label)
 	}
@@ -1033,7 +1128,7 @@ func (pl *planner) planCrate(n *ir.Node) error {
 func (pl *planner) depsOf(rc *rootCtx, ru *resolve.Unit) (*unitOut, error) {
 	name, version, _ := strings.Cut(ru.Key.Crate, "@")
 	m := pl.ws.members[name]
-	u := &unitOut{unit: ru, name: name, version: version, local: m, typ: m.spec.Type, codeName: codeName(m.spec.Name), features: ru.Features}
+	u := &unitOut{unit: ru, name: name, version: version, local: m, typ: m.spec.Type, codeName: codeName(m.spec.Name), features: ru.Features, sum: "local"}
 	var metas []string
 	for _, d := range ru.Deps {
 		if d.Kind == "build" {
@@ -1048,7 +1143,7 @@ func (pl *planner) depsOf(rc *rootCtx, ru *resolve.Unit) (*unitOut, error) {
 		metas = append(metas, d.Name+"="+du.meta)
 	}
 	sort.Strings(metas)
-	u.meta = metadata(append([]string{name, version, "local", "root", m.spec.Type, strings.Join(ru.Features, ","), rc.tc.out, rc.tc.triple}, metas...)...)
+	u.meta = metadata(append([]string{name, version, "local", "root", m.spec.Type, strings.Join(ru.Features, ","), rc.tc.out, rc.tc.roleTriple(ru.Key.Host)}, metas...)...)
 	id := rc.nodes[name]
 	src, ok := pl.req.Sources[id]
 	if !ok {
@@ -1142,7 +1237,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	if err != nil {
 		return err
 	}
-	ru := rc.rootUnit(s.Name)
+	ru := rc.rootUnit(s.Name, s.Type)
 	if ru == nil {
 		return fmt.Errorf("%s: the crate is not part of its unification", n.Label)
 	}
@@ -1202,7 +1297,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	if err != nil {
 		return err
 	}
-	run, err := pl.testRun(n, t, tb, name, rc.tc.system)
+	run, err := pl.testRun(n, t, tb, name, rc.tc.system, rc.tc.cross != nil && !ru.Key.Host)
 	if err != nil {
 		return err
 	}
@@ -1236,14 +1331,26 @@ type probeJob struct {
 	Argv []string `json:"argv,omitempty"`
 }
 
-// testRun plans the test-run job of a unit (§03.0.5): the harness runs once with its services.
-func (pl *planner) testRun(n *ir.Node, t rsspec.Test, tb engine.Resolved, bin, system string) (engine.Resolved, error) {
+// testRun plans the test-run job of a unit (§03.0.5): the harness runs once with its services;
+// a test binary of another platform (emulate) runs under the user-mode emulator (R-FW-039).
+func (pl *planner) testRun(n *ir.Node, t rsspec.Test, tb engine.Resolved, bin, system string, emulate bool) (engine.Resolved, error) {
 	in := newInputs(pl.req.Builder)
 	timeout := t.TimeoutS
 	if timeout <= 0 {
 		timeout = defaultTestTimeoutS
 	}
-	argv := append([]string{in.add(tb, "out") + "/bin/" + bin}, t.Args...)
+	argv := []string{in.add(tb, "out") + "/bin/" + bin}
+	if emulate {
+		if t.Emulator <= 0 || t.EmulatorCmd == "" || strings.ContainsAny(t.EmulatorCmd, "/\x00") {
+			return engine.Resolved{}, fmt.Errorf("%s: no emulator for a test of another platform", n.Label)
+		}
+		q, err := pl.depInput(n, t.Emulator, "emulator")
+		if err != nil {
+			return engine.Resolved{}, err
+		}
+		argv = append([]string{in.add(q, pickOutput(q.Outputs, "bin", "out")) + "/bin/" + t.EmulatorCmd}, argv...)
+	}
+	argv = append(argv, t.Args...)
 	argv = append(argv, pl.req.TestArgs...)
 	a := testRunArgs{Argv: argv, Env: map[string]string{"RUST_BACKTRACE": "1"}, TimeoutS: timeout}
 	for _, sv := range t.Services {

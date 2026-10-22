@@ -43,6 +43,18 @@ type Crate struct {
 	Binutils    int                 `json:"binutils"`    // dep index of binutils (ar for build scripts)
 	PkgConfig   int                 `json:"pkgConfig"`   // dep index of pkg-config; -1 = none (no Uses)
 	Uses        []Use               `json:"uses"`        // native packages of registry crates' build scripts
+	Cross       *Cross              `json:"cross,omitempty"` // set when the crate is built for another platform than the host
+}
+
+// Cross is what a crate built for a foreign platform needs besides the host toolchain (SPEC
+// R-FW-033 Rust row, R-FW-034): the cross C compiler (linker) and binutils of the target, and
+// the target system's rustc whose standard library becomes the sysroot.
+type Cross struct {
+	Triple   string `json:"triple"`   // target triple ("x86_64-unknown-linux-gnu")
+	Prefix   string `json:"prefix"`   // command prefix of the cross C tools ("x86_64-unknown-linux-gnu-")
+	CC       int    `json:"cc"`       // dep index of the cross C compiler wrapper
+	Binutils int    `json:"binutils"` // dep index of its binutils
+	Std      int    `json:"std"`      // dep index of the target system's rustc (unwrapped)
 }
 
 // Dep is one dependency edge of a local crate.
@@ -69,6 +81,11 @@ type Test struct {
 	Args     []string      `json:"args"`
 	Services []ext.Service `json:"services"`
 	TimeoutS int64         `json:"timeoutSeconds"`
+	// Emulator is the dep index of the user-mode emulator that runs a test of another platform
+	// (qemu-user, R-FW-039); 0 = none (index 0 is the crate).
+	Emulator int `json:"emulator,omitempty"`
+	// EmulatorCmd is its command in bin/ ("qemu-x86_64").
+	EmulatorCmd string `json:"emulatorCmd,omitempty"`
 }
 
 // Tests is the spec of a rust.tests node; its deps are its units.

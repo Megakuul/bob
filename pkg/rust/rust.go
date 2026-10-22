@@ -277,10 +277,18 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 	if tc == nil {
 		tc = nixpkgs.Tool(p, "rustc")
 	}
-	c.deps = []bob.Package{tc, nixpkgs.Tool(p, "gcc"), nixpkgs.Tool(p, "binutils")}
+	// The host's C toolchain links host units (build scripts, proc-macros) and native builds.
+	host := p.Host().Toolchain()
+	c.deps = []bob.Package{tc, nixpkgs.Tool(p, host.CC), nixpkgs.Tool(p, host.Bintools)}
 	s := rsspec.Crate{Name: o.Name, Type: typ, Edition: string(ed), Root: root, Toolchain: 0, CC: 1, Binutils: 2,
 		PkgConfig: -1, Features: map[string][]string{}, Default: sortedSet(o.Default), Enable: sortedSet(o.Enable),
 		Native: []int{}, Uses: []rsspec.Use{}, Headers: path.Clean(headers)}
+	if xt := p.Toolchain(); xt.Cross() {
+		// R-FW-033/034: host rustc --target, the target's cross C compiler as linker, and the
+		// standard library of the target system's own rustc (same source and version).
+		s.Cross = &rsspec.Cross{Triple: xt.Triple, Prefix: xt.Prefix, CC: 3, Binutils: 4, Std: 5}
+		c.deps = append(c.deps, nixpkgs.Tool(p, xt.CC), nixpkgs.Tool(p, xt.Bintools), nixpkgs.Pkg(p, "rustc.unwrapped", nixpkgs.Outputs("out")))
+	}
 	if headers == "" {
 		s.Headers = ""
 	} else if !validRel(s.Headers) || s.Headers == "." {
@@ -503,6 +511,10 @@ func (c *crate) unit(p *bob.P, name, file string, o TestOpts) *TestSet {
 	deps := []bob.Package{c.node}
 	svcs, deps := ext.Services(o.Services, deps)
 	spec := rsspec.Test{Crate: 0, File: file, Args: slices.Clone(o.Args), Services: svcs, TimeoutS: int64(o.Timeout / time.Second)}
+	if tc := p.Toolchain(); tc.Emulator != "" {
+		spec.Emulator, spec.EmulatorCmd = len(deps), tc.EmulatorCmd
+		deps = append(deps, nixpkgs.Tool(p, tc.Emulator))
+	}
 	if spec.Args == nil {
 		spec.Args = []string{}
 	}

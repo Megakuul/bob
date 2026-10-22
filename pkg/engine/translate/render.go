@@ -174,6 +174,11 @@ func definitionLine(e *diag.Error) (string, bool) {
 			return e.Args["reason"], true
 		}
 		return e.Error(), true
+	case 1015: // R-ML-002: `✗ cannot resolve opam packages: <reason>`; other ecosystems keep the error[] head
+		if e.Args["ecosystem"] == "opam" && e.Args["reason"] != "" {
+			return "cannot resolve opam packages: " + e.Args["reason"], true
+		}
+		return "", false
 	case cScriptDenied: // §03.4.4 runtime translations
 		return fmt.Sprintf("%s needs its %s script (%s). Add npm.AllowScripts(%q) to %s",
 			e.Args["package"], e.Args["script"], e.Args["reason"], e.Args["package"], e.Args["label"]), true

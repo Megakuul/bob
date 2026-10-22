@@ -148,6 +148,13 @@ amended SPEC R-GO-004a / R-FLEET-006 text accordingly.
 24. APPLIED 2026-10-22 I-TC (A126). I-M7b TEST PROBLEM 3: tests/core TestRFW038 / TestRFW033 /
    R-FW-032 lookups use the §03.1.3 cc names (`cc-foo-<platform>-address`, `cc-mathx`,
    `cc-pack`) per ruling G14 (A54).
+25. APPLIED 2026-10-22 I-S2 (A130, owner OK). Root package name in temp-dir repos: SPEC R2 names the
+   root package after the directory. tests/eco/ocaml/corpus_test.go `writeRepo` wrote `package root`
+   into the bare t.TempDir(); the repo root is now the subdirectory `<TempDir>/root` (sanitised
+   name `root`), every assertion kept. Audit of tests/eco/*, tests/core, tests/store, tests/server:
+   npm (repos, graphs), golang (resolve corproot, fixture synroot), rust (rsroot), core steps
+   (chain) and srvtest (srv) already put the repo in a directory named like the package; no other
+   change needed.
 
 Not applied (need an owner/SPEC decision, not a test defect): I-M5b 1 (go fixture's
 cross-module import vs `go list -m all`), I-C1 2 (remote builds without a project), I-M8a 4

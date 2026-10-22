@@ -193,10 +193,12 @@ func etagOf[T any](v *T) dynamitedb.ETagField {
 type drafter[T any] interface{ Draft() *T }
 
 // writeValue turns the result of a CAS func into the fresh update value dynamitedb.Put needs.
-// A CAS func may return a fresh value, or the fetched record (or a copy of it) with some
-// fields replaced by update operators. Data fields it did not replace still hold the fetched
-// read values, which dynamitedb refuses in a write ("incorrect DataField usage"); those come
-// from the fetched record's Draft. orig is a copy of the fetched record taken before fn ran.
+// A CAS func may return a fresh value, or a fetched record (or a copy of one) with some fields
+// replaced by update operators. Data fields that still hold fetched read values (from this
+// read or an earlier one) cannot go into a write (dynamitedb panics: "incorrect DataField
+// usage"); they are written again with the record type's Draft (store.Carry of the read
+// value). A field is a read value when its dynamic type is that of the same field of orig,
+// the record CAS just read (dynamitedb fills every field of a fetched record).
 func writeValue[T any](orig, next *T) (*T, error) {
 	if orig == nil {
 		return next, nil
@@ -204,24 +206,32 @@ func writeValue[T any](orig, next *T) (*T, error) {
 	nv, ov := reflect.ValueOf(next).Elem(), reflect.ValueOf(orig).Elem()
 	out := *next
 	wv := reflect.ValueOf(&out).Elem()
-	var draft reflect.Value
+	// reads is next with every field that is not a read value replaced by orig's read value,
+	// so that its Draft carries exactly the read values of next.
+	reads := *next
+	rv := reflect.ValueOf(&reads).Elem()
+	var fields []int
 	for i := range nv.NumField() {
 		f := nv.Type().Field(i)
 		if !f.IsExported() || f.Type.Kind() != reflect.Interface || f.Type == keyFieldType {
 			continue
 		}
 		n, o := nv.Field(i), ov.Field(i)
-		if n.IsNil() || o.IsNil() || n.Elem().Kind() != reflect.Pointer || o.Elem().Kind() != reflect.Pointer ||
-			n.Elem().Pointer() != o.Elem().Pointer() {
-			continue // replaced (or cleared) by fn
+		if n.IsNil() || o.IsNil() || n.Elem().Type() != o.Elem().Type() {
+			rv.Field(i).Set(o) // an update operator (or a cleared field): written as it is
+			continue
 		}
-		if !draft.IsValid() {
-			d, ok := any(orig).(drafter[T])
-			if !ok {
-				return nil, fmt.Errorf("store: %T has no Draft method; a CAS func must return a fresh value", orig)
-			}
-			draft = reflect.ValueOf(d.Draft()).Elem()
-		}
+		fields = append(fields, i)
+	}
+	if len(fields) == 0 {
+		return &out, nil
+	}
+	d, ok := any(&reads).(drafter[T])
+	if !ok {
+		return nil, fmt.Errorf("store: %T has no Draft method; a CAS func must return a fresh value", orig)
+	}
+	draft := reflect.ValueOf(d.Draft()).Elem()
+	for _, i := range fields {
 		wv.Field(i).Set(draft.Field(i))
 	}
 	return &out, nil
