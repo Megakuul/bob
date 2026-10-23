@@ -19,7 +19,7 @@ type Routes struct {
 	API http.Handler // /api/
 	// Patterns are further handlers by http.ServeMux pattern ("POST /oauth/token",
 	// "GET /nix/", UploadPattern, …). A more specific pattern wins over the pending prefixes
-	// below (§6.2).
+	// below (§6.2); a pattern equal to a pending prefix replaces it ("/" for the embedded UI).
 	Patterns map[string]http.Handler
 }
 
@@ -37,7 +37,7 @@ func Handler(r Routes, log *slog.Logger) http.Handler {
 		mux.Handle(p, h)
 	}
 	for _, p := range pending {
-		if p == "/api/" && r.API != nil {
+		if _, ok := r.Patterns[p]; ok || p == "/api/" && r.API != nil {
 			continue
 		}
 		mux.HandleFunc(p, func(w http.ResponseWriter, _ *http.Request) {

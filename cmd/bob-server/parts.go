@@ -15,6 +15,7 @@ func orchestratorParts(ctx context.Context, env *server.Env) (server.Orchestrato
 	var parts server.OrchestratorParts
 	rbacParts(env, &parts)
 	authParts(env, &parts)             // identity needs parts.Authz (rbacParts)
+	uiParts(env, &parts)               // embedded web UI at "/" (replaces the auth fallback pages)
 	cacheParts(ctx, env, &parts)       // /nix/ cache, promotion, signing keys (needs identity)
 	uploadParts(ctx, env, &parts)      // PUT /upload/source (needs identity)
 	cs := controllerParts(env, &parts) // membership, key, index-repair, retention, staging sweep

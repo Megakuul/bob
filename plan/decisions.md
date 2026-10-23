@@ -183,3 +183,9 @@
 | A160 The evaluation result of an evalbuild job is taken into the build when the job has | I-B26 | self-ruled |
 | A161 Builds.Create writes its three intent-first index entries concurrently (safe.Go): they | I-B26 | self-ruled |
 | A162 Supersede is decided by the newer build only when its pipelines are known (API, retry, | I-B26 | self-ruled |
+| A190 The UI is embedded from internal/ui/dist, not from web/build directly: go:embed cannot | I-B28 | self-ruled |
+| A191 SPA routing: prerendered `<path>.html` before the fallback (adapter-static writes | I-B28 | self-ruled |
+| A192 Security headers are not specified in SPEC; chosen: per-page CSP with sha256 hashes of the | I-B28 | self-ruled |
+| A193 internal/http: a route pattern equal to a pending prefix replaces it (generic; used for | I-B28 | self-ruled |
+| A194 The web build mirrors web/build into internal/ui/dist from svelte.config.js (adapter | I-B28 | self-ruled |
+| A195 `kit.version.name` is a content hash of the sources instead of a timestamp: reproducible | I-B28 | self-ruled |

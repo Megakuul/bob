@@ -47,7 +47,7 @@ func authParts(env *server.Env, parts *server.OrchestratorParts) {
 	for _, p := range auth.Patterns() {
 		parts.Routes[p] = h
 	}
-	// Until the embedded UI is served (internal/ui), minimal approval pages stand in.
+	// Minimal approval pages; uiParts replaces them with the embedded UI when it is built.
 	pages := id.FallbackPages()
 	for _, p := range auth.FallbackPatterns() {
 		parts.Routes[p] = pages
