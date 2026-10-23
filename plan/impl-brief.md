@@ -25,3 +25,12 @@ Resumability: checkpoint every ~15 min in `plan/progress/<unit>.md` (done / next
 DECISIONS / NEEDS / TEST PROBLEM). If you are relaunched, continue from that file. Finish each task
 in your chain before starting the next; report after each task (<= 25 lines: task id, files,
 tests green, tests still red and why).
+
+## Shared-tree safety (added 2026-10-23 after the I-B15 incident, A147)
+A unit once restored a pre-run tar snapshot over `internal cmd/bob-server tests` twice and silently reverted
+other units' uncommitted work (logstore rebase, two test corrections). Rules for every unit:
+- NEVER restore, extract, copy back or `git checkout` a snapshot over shared directories. Backups and
+  experiments happen in a private copy (`/var/tmp/<unit>/repo`), changes come back by editing the files you own.
+- Mass rewriters (AST tools, sed over many files) touch only files you own or have just listed in your
+  progress file; run them on a private copy first and diff.
+- Do not run `git` commands in the shared repo (the coordinator commits named paths).

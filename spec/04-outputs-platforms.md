@@ -403,7 +403,11 @@ func NewImage(p *bob.P, name string, opts ImageOpts) *Image
   (`bob-builder oci-layer`), keyed by the store paths it contains, the prune set and the layer
   format version `bob-oci-layer-v1`; its output is `layer.tar.gz` + `layer.json`
   (`{"diffID","digest","size","paths":[…]}`) and it sets `unsafeDiscardReferences.out = true`
-  (structured attrs), so a layer never pulls the paths it contains into its closure. The image
+  (structured attrs), so a layer never pulls the paths it contains into its closure. `paths`
+  (and the image configuration's history `created_by: "bob: <names>"`) hold the store names
+  without the hash part (`iana-etc-20251215`): a layer output holds no store hash in plain
+  text, so the cache's reference scan (§06 §6.6.4) finds no reference it does not register
+  (A146). The image
   derivation's output is an OCI layout whose layer blobs are symlinks to the layer outputs;
   config, manifests and index are regular files.
 - **Acceptance:** `nix-store -q --references <layer out>` is empty; the image output's closure
@@ -685,7 +689,7 @@ func New(p *bob.P, name string, opts ReleaseOpts) *Release
 | Field | Type | Meaning |
 |---|---|---|
 | `schema` | `"bob.release/v1"` | format version |
-| `project` | string | server project id from `bob.go` module config (§01); `""` when built without a server |
+| `project` | string | `""`: bob.go has no project setting, so local and remote builds give the same derivation; the server adds the project on promotion (the build's project; image repositories get `<projectID>/` in front) and rejects a manifest naming another project (§06 §6.8, A146) |
 | `release` | string | release name (label name) |
 | `label` | string | `//rel:api` |
 | `version` | string | given version |

@@ -617,6 +617,12 @@ type JobSpec struct {
 	Created  int64    `cbor:"13,keyasint"`
 }
 
+// Targets of an eval/evalbuild job carry the build's selection as selector entries next to
+// the plain labels; selectors start with "@", labels never do: @event:push:<branch>,
+// @event:tag:<name>, @event:pull_request, @pipeline:<name>, @test, @variant:<name>,
+// @upload:<sha256 hex>, and @version:<v>, the release version the worker builds the build's
+// releases with (BuildRecord.vr, or the tag without "v"; §06 §6.8, A146).
+
 // JobResult is written by the worker that holds the lease.
 type JobResult struct {
 	V        int      `cbor:"1,keyasint"`
@@ -640,7 +646,9 @@ fetch_ref} | upload sha256}, `tg` targets, `va` variants, `pi` pipeline runs [{n
 release id}], `rp` reported forge statuses {context → last state sent} (status controller,
 §06 §6.9.4), `jb` jobs [≤ 1,024 × {id, kind,
 class, st, at attempts, ep, worker, dur}], `rs` result {failed packages, error}, `lg` log
-partition id (§05.10.1), `rq` last request id.
+partition id (§05.10.1), `rq` last request id, `vr` release version of the build
+(`CreateBuildRequest.version`; `""` = none; tag builds derive it from the ref instead, §06 §6.8,
+A146).
 
 ### 05.4.5 Control-bucket records for §06 (added at integration)
 

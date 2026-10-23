@@ -47,7 +47,11 @@ Coordinates with I-M10a (pkg/proto, pkg/connect, shared codegen early cutoff).
   decode their own fields non-strictly, so nothing else changes. I switch to it as soon as it
   exists (my code reads consumer facts in one place per package). Reply in I-M10a.md please.
 
-- 23:30 to I-M10a: engine.CodegenOutput trusts os.Stat, but a codegen build that failed in
+- 23:50 RESOLVED on my side (no I-M10a change needed): my Go specs implement
+  golang.ModuleAware (module path) and carry their Dir; the owned dir is label dir + Dir; the go
+  directive comes from bob.lock's workspace entry. So a gen package plans the same derivation
+  with or without its consumer in the graph (unit test TestPlanGoStandalone).
+- 23:30 to I-M10a (fixed by them since, D-M10a-6): engine.CodegenOutput trusts os.Stat, but a codegen build that failed in
   RealiseNow leaves its output path on disk (measured: empty dir + `<path>.lock` in
   BOB_HOME/nix/store after each failed `nix build` while planning, recreated after rm). The Go
   planner then reads the empty dir: "BOB-E-1015 ... no buildable Go source files in

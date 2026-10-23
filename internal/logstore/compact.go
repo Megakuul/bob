@@ -30,24 +30,26 @@ const (
 )
 
 // Maintenance is the work of the `lake-maintenance` controller (every 30 s, leader only,
-// SPEC §05.11): it compacts the recent partitions. Each partition gets a lake.Bucket that
-// nothing else uses (lake bug L3: a Bucket that reloads its catalog during a compaction
-// duplicates the merged rows). It is not safe for concurrent use: one controller runs it.
+// SPEC §05.11): it compacts the recent partitions with lake's Compactor. Every compaction gets
+// a fresh lake.Bucket that nothing else uses: a Compactor whose Bucket reloads its catalog
+// during the compaction (an Ingestor commit or a query on the same Bucket) stores the rows of
+// a concurrent compaction twice (plan/progress/I-B16-repro/l3-compact-shared, part A); with a
+// Bucket of its own, a concurrent compaction fails with lake's optimistic-lock error and the
+// next pass retries (part B).
 type Maintenance struct {
-	client  *s3.Client // prefixed with the analytics bucket
-	err     error
-	shards  int
-	now     func() time.Time
-	buckets map[string]*lake.Bucket
+	client *s3.Client // prefixed with the analytics bucket
+	err    error
+	shards int
+	now    func() time.Time
 }
 
 // NewMaintenance performs no I/O.
 func NewMaintenance(client *s3.Client, analyticsBucket string, now func() time.Time) *Maintenance {
-	c, err := PrefixClient(client, analyticsBucket, nil)
+	c, err := PrefixClient(client, analyticsBucket)
 	if now == nil {
 		now = time.Now
 	}
-	return &Maintenance{client: c, err: err, shards: DefaultLogShards, now: now, buckets: map[string]*lake.Bucket{}}
+	return &Maintenance{client: c, err: err, shards: DefaultLogShards, now: now}
 }
 
 // Candidates are the partitions a pass at now considers: the log partitions of the last two
@@ -95,7 +97,6 @@ func (m *Maintenance) Pass(ctx context.Context) ([]string, error) {
 		}
 		if err := m.compact(ctx, p); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", p, err))
-			delete(m.buckets, p) // start over with a fresh catalog next time
 			continue
 		}
 		done = append(done, p)
@@ -121,13 +122,9 @@ func (m *Maintenance) lastWrite(ctx context.Context, p string) (time.Time, bool,
 }
 
 func (m *Maintenance) compact(ctx context.Context, p string) error {
-	b := m.buckets[p]
-	if b == nil {
-		var err error
-		if b, err = openPartition(ctx, m.client, p); err != nil {
-			return err
-		}
-		m.buckets[p] = b
+	b, err := openPartition(ctx, m.client, p)
+	if err != nil {
+		return err
 	}
 	switch {
 	case strings.HasPrefix(p, "log-"):

@@ -912,6 +912,8 @@ message CreateBuildRequest {
   repeated string variants = 6;
   bool test = 7;                // targets are tests (bob test --remote)
   string reason = 8;            // ≤ 200 bytes, shown in the UI
+  string version = 9;           // release version for the build's releases (bob build --remote
+                                // --version, R-OUT-022); "" = none; invalid → INVALID_ARGUMENT
 }
 message CreateBuildResponse { Build build = 1; }
 message GetBuildRequest { string id = 1; }
@@ -1696,6 +1698,18 @@ or a release.
   deletes `rel/<projectID>/<num10>/`; the record stays as a tombstone (`relv` kept, so the
   version is never reused). Its paths become ordinary cache paths subject to GC.
 - Version: semver 2.0 from the tag (`v1.4.2` → `1.4.2`) or from the pipeline definition.
+  Source of the version a build passes to its releases (A146): `CreateBuildRequest.version`
+  (stored as `BuildRecord.vr`, §05.4.4) wins; otherwise a build of `refs/tags/<t>` uses `<t>`
+  without a leading `v` when that is a valid release version (its retries and re-runs keep the
+  ref, so they build the same version). The build controller passes it to the worker as the
+  `@version:<v>` selector entry of `JobSpec.Targets` (§05.4.3); the worker builds the releases
+  with it.
+- Project of the manifest (A146): `release.json` keeps `project` `""` (bob.go has no project
+  setting, and the release derivation stays identical for local and remote builds, so remote
+  and local builds share their store paths). The server adds the project on promotion: a
+  manifest with project `""` belongs to the project of the build, its image repositories get
+  `<projectID>/` in front (the worker stages them under that name); a manifest naming another
+  project is rejected.
 
 Release downloads: `GET /r/<project>/<name>/<version>/<file>` — public: anonymous; private:
 Bearer (API token) or Basic (any token, user ignored) with `ReleaseService/GetRelease` on the

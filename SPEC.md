@@ -5470,7 +5470,11 @@ func NewImage(p *bob.P, name string, opts ImageOpts) *Image
   (`bob-builder oci-layer`), keyed by the store paths it contains, the prune set and the layer
   format version `bob-oci-layer-v1`; its output is `layer.tar.gz` + `layer.json`
   (`{"diffID","digest","size","paths":[…]}`) and it sets `unsafeDiscardReferences.out = true`
-  (structured attrs), so a layer never pulls the paths it contains into its closure. The image
+  (structured attrs), so a layer never pulls the paths it contains into its closure. `paths`
+  (and the image configuration's history `created_by: "bob: <names>"`) hold the store names
+  without the hash part (`iana-etc-20251215`): a layer output holds no store hash in plain
+  text, so the cache's reference scan (§06 §6.6.4) finds no reference it does not register
+  (A146). The image
   derivation's output is an OCI layout whose layer blobs are symlinks to the layer outputs;
   config, manifests and index are regular files.
 - **Acceptance:** `nix-store -q --references <layer out>` is empty; the image output's closure
@@ -5752,7 +5756,7 @@ func New(p *bob.P, name string, opts ReleaseOpts) *Release
 | Field | Type | Meaning |
 |---|---|---|
 | `schema` | `"bob.release/v1"` | format version |
-| `project` | string | server project id from `bob.go` module config (§01); `""` when built without a server |
+| `project` | string | `""`: bob.go has no project setting, so local and remote builds give the same derivation; the server adds the project on promotion (the build's project; image repositories get `<projectID>/` in front) and rejects a manifest naming another project (§06 §6.8, A146) |
 | `release` | string | release name (label name) |
 | `label` | string | `//rel:api` |
 | `version` | string | given version |
@@ -6503,6 +6507,12 @@ type JobSpec struct {
 	Created  int64    `cbor:"13,keyasint"`
 }
 
+// Targets of an eval/evalbuild job carry the build's selection as selector entries next to
+// the plain labels; selectors start with "@", labels never do: @event:push:<branch>,
+// @event:tag:<name>, @event:pull_request, @pipeline:<name>, @test, @variant:<name>,
+// @upload:<sha256 hex>, and @version:<v>, the release version the worker builds the build's
+// releases with (BuildRecord.vr, or the tag without "v"; §06 §6.8, A146).
+
 // JobResult is written by the worker that holds the lease.
 type JobResult struct {
 	V        int      `cbor:"1,keyasint"`
@@ -6526,7 +6536,9 @@ fetch_ref} | upload sha256}, `tg` targets, `va` variants, `pi` pipeline runs [{n
 release id}], `rp` reported forge statuses {context → last state sent} (status controller,
 §06 §6.9.4), `jb` jobs [≤ 1,024 × {id, kind,
 class, st, at attempts, ep, worker, dur}], `rs` result {failed packages, error}, `lg` log
-partition id (§05.10.1), `rq` last request id.
+partition id (§05.10.1), `rq` last request id, `vr` release version of the build
+(`CreateBuildRequest.version`; `""` = none; tag builds derive it from the ref instead, §06 §6.8,
+A146).
 
 ### 05.4.5 Control-bucket records for §06 (added at integration)
 
@@ -8311,6 +8323,8 @@ message CreateBuildRequest {
   repeated string variants = 6;
   bool test = 7;                // targets are tests (bob test --remote)
   string reason = 8;            // ≤ 200 bytes, shown in the UI
+  string version = 9;           // release version for the build's releases (bob build --remote
+                                // --version, R-OUT-022); "" = none; invalid → INVALID_ARGUMENT
 }
 message CreateBuildResponse { Build build = 1; }
 message GetBuildRequest { string id = 1; }
@@ -9095,6 +9109,18 @@ or a release.
   deletes `rel/<projectID>/<num10>/`; the record stays as a tombstone (`relv` kept, so the
   version is never reused). Its paths become ordinary cache paths subject to GC.
 - Version: semver 2.0 from the tag (`v1.4.2` → `1.4.2`) or from the pipeline definition.
+  Source of the version a build passes to its releases (A146): `CreateBuildRequest.version`
+  (stored as `BuildRecord.vr`, §05.4.4) wins; otherwise a build of `refs/tags/<t>` uses `<t>`
+  without a leading `v` when that is a valid release version (its retries and re-runs keep the
+  ref, so they build the same version). The build controller passes it to the worker as the
+  `@version:<v>` selector entry of `JobSpec.Targets` (§05.4.3); the worker builds the releases
+  with it.
+- Project of the manifest (A146): `release.json` keeps `project` `""` (bob.go has no project
+  setting, and the release derivation stays identical for local and remote builds, so remote
+  and local builds share their store paths). The server adds the project on promotion: a
+  manifest with project `""` belongs to the project of the build, its image repositories get
+  `<projectID>/` in front (the worker stages them under that name); a manifest naming another
+  project is rejected.
 
 Release downloads: `GET /r/<project>/<name>/<version>/<file>` — public: anonymous; private:
 Bearer (API token) or Basic (any token, user ignored) with `ReleaseService/GetRelease` on the

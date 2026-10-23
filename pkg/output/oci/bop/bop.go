@@ -66,7 +66,11 @@ func layerKind(c *builder.Ctx, raw json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	info, err := json.Marshal(LayerInfo{DiffID: res.DiffID, Digest: res.Digest, Size: res.Size, Paths: a.Paths})
+	names := make([]string, 0, len(a.Paths))
+	for _, p := range a.Paths {
+		names = append(names, storeName(p))
+	}
+	info, err := json.Marshal(LayerInfo{DiffID: res.DiffID, Digest: res.Digest, Size: res.Size, Names: names})
 	if err != nil {
 		return err
 	}
@@ -257,7 +261,7 @@ func (l layout) manifest(c *builder.Ctx, m Manifest) (descriptor, error) {
 		}
 		man.Layers = append(man.Layers, d)
 		cfg.RootFS.DiffIDs = append(cfg.RootFS.DiffIDs, diffID)
-		cfg.History = append(cfg.History, historyEx{Created: created, CreatedBy: "bob: " + strings.Join(layerPaths(out), " ")})
+		cfg.History = append(cfg.History, historyEx{Created: created, CreatedBy: "bob: " + strings.Join(layerNames(out), " ")})
 	}
 	var custom bytes.Buffer
 	res, err := builder.TarGzTo(&custom, customEntries(m.Custom))
@@ -295,8 +299,21 @@ func (l layout) manifest(c *builder.Ctx, m Manifest) (descriptor, error) {
 	return l.put(MediaManifest, mb)
 }
 
-// layerPaths are the store path names of a layer output (for the history), best effort.
-func layerPaths(out string) []string {
+// storeName is the name of a store path without its hash part: "/nix/store/<hash>-iana-etc-1"
+// → "iana-etc-1". Layer and image metadata hold no store hashes (A146), so the image (which
+// references only its layers) and the layers (which reference nothing) pass the cache's
+// reference scan.
+func storeName(p string) string {
+	base := filepath.Base(p)
+	if _, name, ok := strings.Cut(base, "-"); ok {
+		return name
+	}
+	return base
+}
+
+// layerNames are the store names (without hashes) of a layer output's paths (for the history),
+// best effort.
+func layerNames(out string) []string {
 	b, err := os.ReadFile(filepath.Join(out, "layer.json"))
 	if err != nil {
 		return nil
@@ -305,10 +322,7 @@ func layerPaths(out string) []string {
 	if json.Unmarshal(b, &info) != nil {
 		return nil
 	}
-	names := make([]string, 0, len(info.Paths))
-	for _, p := range info.Paths {
-		names = append(names, filepath.Base(p))
-	}
+	names := slices.Clone(info.Names)
 	sort.Strings(names)
 	return names
 }

@@ -149,6 +149,10 @@ func TestLayerAndImage(t *testing.T) {
 	if err != nil || json.Unmarshal(b, &info) != nil || info.Size <= 0 || !strings.HasPrefix(info.DiffID, "sha256:") {
 		t.Fatalf("layer.json %s: %v", b, err)
 	}
+	// no store hash in plain text: layers discard their references (A146)
+	if strings.Contains(string(b), "bbbbbbbb") || len(info.Names) != 1 || info.Names[0] != "libx-2.0" {
+		t.Errorf("layer.json holds store hashes or wrong names: %s", b)
+	}
 	gz, _ := os.ReadFile(filepath.Join(l2, "layer.tar.gz"))
 	hs := readTar(t, gz)
 	checkRules(t, hs)
@@ -241,6 +245,10 @@ func TestLayerAndImage(t *testing.T) {
 	}
 	if _, has := raw["created"]; has {
 		t.Errorf("config has created")
+	}
+	if c := string(blob(man.Config.Digest)); !strings.Contains(c, `"created_by":"bob: libx-2.0"`) ||
+		!strings.Contains(c, `"created_by":"bob: foo-1.0"`) || strings.Contains(c, "bbbbbbbb") {
+		t.Errorf("history must name the layers' store paths without hashes: %s", c)
 	}
 	if !strings.Contains(string(blob(man.Config.Digest)), `"created":"1970-01-01T00:00:01Z"`) {
 		t.Errorf("history created missing: %s", blob(man.Config.Digest))

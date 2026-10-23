@@ -11,12 +11,15 @@ type LayerArgs struct {
 	Skip   []string `json:"skip"`
 }
 
-// LayerInfo is $out/layer.json of a layer derivation.
+// LayerInfo is $out/layer.json of a layer derivation. Names are the store names of its paths
+// without the hash part ("iana-etc-20251215"): a layer discards its references (R-OUT-011), so
+// no store hash may appear in plain text in its output, or the cache's reference scan (§6.6.4)
+// would find references the layer does not have (A146).
 type LayerInfo struct {
 	DiffID string   `json:"diffID"`
 	Digest string   `json:"digest"`
 	Size   int64    `json:"size"`
-	Paths  []string `json:"paths"`
+	Names  []string `json:"paths"`
 }
 
 // ImageArgs is the Args schema of kind "oci-image": an OCI image layout with one image index

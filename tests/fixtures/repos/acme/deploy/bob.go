@@ -4,15 +4,21 @@ package deploy
 
 import (
 	"example.com/acme"
+	"example.com/acme/crates/rcore"
+	"example.com/acme/libs/foo"
 	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/cc"
 	"github.com/megakuul/bob/pkg/golang"
 	"github.com/megakuul/bob/pkg/output/appimage"
 	"github.com/megakuul/bob/pkg/output/oci"
 	"github.com/megakuul/bob/pkg/release"
 )
 
-// api is the same program as //cmd/api:api (identical declaration, so one node).
+// api is the same program as //cmd/api:api (identical declaration, so one node): the cgo
+// declaration of //cmd/api:FFI comes first, as in cmd/api/bob.go, so the binary gets the same
+// C and Rust libraries however the packages are evaluated.
 func api(p *bob.P) *golang.Binary {
+	acme.Module(p).Cgo("./cmd/api", golang.CgoOpts{Deps: []cc.Linkable{foo.Lib(p), rcore.Crate(p)}})
 	return acme.Module(p).Binary("./cmd/api", golang.BinaryOpts{
 		X: map[string]string{"main.version": "dev"},
 	})

@@ -342,3 +342,14 @@ access and the primitive constructors change.
    TestRFLEET001ZeroSetupRegistration: `harness.Bin(t, "bob-server")` once before the timing loop.
    The first Bin call built three binaries inside the first measurement (first samples 7.9 s and
    17.4 s, the build accounting for all but ~3 s; other samples 1.5-6 s). Assertions unchanged.
+
+## I-B22 (2026-10-23, owner-approved evidence-based fixture correction, A146)
+46. APPLIED 2026-10-23 I-B22. tests/fixtures/repos/acme/deploy/bob.go api(): declares the cgo
+   package first with the same constructor call as `//cmd/api:FFI`
+   (`acme.Module(p).Cgo("./cmd/api", golang.CgoOpts{Deps: []cc.Linkable{foo.Lib(p), rcore.Crate(p)}})`,
+   imports crates/rcore, libs/foo, pkg/cc), then the unchanged Binary call. A Go binary picks up
+   the module's cgo packages declared so far (pkg/golang Module.Cgo doc), so a worker evaluating
+   only //deploy:api declared the api binary without libfoo/rcore and its build failed with
+   `BOB-E-2003 //cmd/api:api: header foo.h not found` (evidence plan/progress/I-B20.md, devstack
+   run 1, NEEDS 2). Identical calls give identical nodes (pkg/bob node.go sameAs), so //deploy:api
+   and //cmd/api:api stay one node with one label; cmd/api/bob.go and every label unchanged.
