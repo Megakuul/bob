@@ -217,3 +217,4 @@
 | A250-A262 | I-B34 | See plan/progress/I-B34.md (promoter reads claims 16 at a time; worker adopts unknown wake classes and reports free slots at once; woken worker counts a slot taken; test corrections 61-68 applied; faults 49,51,58-66,69,70 got patch.diff). | self-ruled |
 | A263 | coordinator | Fault 67: HARNESS expects 1021 for Go, SPEC maps it to 1008/2006; SPEC wins (AGENTS precedence), fault expectation follows SPEC. | self-ruled |
 | A220-A225 | I-B31 | graph --json emits scan/eval events; 1018 list-element hint; Hdrs "." accepted; -vv prints raw Nix log (Options.Debug); withoutPaths helper reuse; see plan/progress/I-B31.md. | self-ruled |
+| A300-A309 | I-B38 | Budget benchmarks (tools/budgetbench), manifest no-op rewrite fix, correction 71; see plan/progress/I-B38.md. Loaded-host baseline file tests/budgets/baseline-8c15g.json dropped (first baseline must come from a quiet host). | self-ruled |

@@ -301,3 +301,26 @@ func TestNestedRootsRefused(t *testing.T) {
 		}
 	}
 }
+
+// A no-op apply (nothing changed since the last one) leaves the manifest file alone: it used to
+// be rewritten on every run because a finished root's "pending": null read back as {} (A300).
+func TestNoopKeepsManifest(t *testing.T) {
+	repo := t.TempDir()
+	a := Root{Dir: "gen/a", Label: "//p:a", Source: "/nix/store/aaaa-gen-a", Tree: tree(t, map[string]string{"x.go": "package x\n"})}
+	apply(t, Options{Repo: repo}, a)
+	m := filepath.Join(repo, filepath.FromSlash(ManifestPath))
+	before, err := os.Stat(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := apply(t, Options{Repo: repo}, a); len(res.Written) != 0 || len(res.Conflicts) != 0 {
+		t.Fatalf("second apply: written %v, conflicts %v", res.Written, conflictPaths(res))
+	}
+	after, err := os.Stat(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) || !after.ModTime().Equal(before.ModTime()) {
+		t.Errorf("a no-op apply rewrote %s", ManifestPath)
+	}
+}

@@ -38,6 +38,9 @@ type Root struct {
 	// Record is a repo-relative file that receives Source and a newline once Dir is up to date
 	// (an npm importer's .bob/node_modules.path); "" for none.
 	Record string
+	// Inputs is a digest of the declarations and sources Source was made from; it is recorded
+	// in the manifest for bob status ("" when unknown: the root then shows as stale).
+	Inputs string
 }
 
 // Options configures Apply.
@@ -129,7 +132,7 @@ func Apply(ctx context.Context, o Options, roots []Root) (*Result, error) {
 		if err != nil {
 			return res, err
 		}
-		changed, conflicts, err := a.apply(r.Dir, r.Label, r.Source, r.Keep, files)
+		changed, conflicts, err := a.apply(r, files)
 		if err != nil {
 			return res, err
 		}
@@ -156,7 +159,7 @@ func Apply(ctx context.Context, o Options, roots []Root) (*Result, error) {
 		sort.Strings(stale)
 		for _, d := range stale {
 			mr := m.Roots[d]
-			_, conflicts, err := a.apply(d, mr.Label, "", nil, map[string]want{})
+			_, conflicts, err := a.apply(Root{Dir: d, Label: mr.Label, Keep: mr.Keep}, map[string]want{})
 			if err != nil {
 				return res, err
 			}
@@ -290,6 +293,27 @@ func mapLink(r Root, rel, target string) string {
 	return target
 }
 
+// sameStoreLink reports whether the symlink p on disk and the wanted symlink w point at the
+// same store object, each through its own bob home ("<home>/nix/store/<hash>-<name>/…"). Such
+// a link was made by bob from the same output before the state home changed (or before the
+// manifest was lost); replacing it loses nothing, so it is rewritten instead of being a conflict.
+func sameStoreLink(p string, fi fs.FileInfo, w want) bool {
+	if fi.Mode()&fs.ModeSymlink == 0 || w.Link == "" {
+		return false
+	}
+	target, err := os.Readlink(p)
+	if err != nil {
+		return false
+	}
+	obj := func(t string) string {
+		if i := strings.LastIndex(t, "/nix/store/"); i >= 0 {
+			return t[i:]
+		}
+		return ""
+	}
+	return obj(target) != "" && obj(target) == obj(w.Link)
+}
+
 func linkFile(target string) ManifestFile {
 	sum := sha256.Sum256([]byte("symlink:" + target))
 	return ManifestFile{SHA256: hex.EncodeToString(sum[:]), Size: int64(len(target)), Link: target}
@@ -301,9 +325,10 @@ type onDisk struct {
 	info fs.FileInfo
 }
 
-// apply brings owned directory dir to files (empty files: remove everything bob owns there).
+// apply brings owned directory r.Dir to files (empty files: remove everything bob owns there).
 // It returns whether anything changed and the conflicts; with conflicts nothing was written.
-func (a *applier) apply(dir, label, source string, keepNames []string, files map[string]want) (bool, []*diag.Error, error) {
+func (a *applier) apply(r Root, files map[string]want) (bool, []*diag.Error, error) {
+	dir, label, source, keepNames := r.Dir, r.Label, r.Source, r.Keep
 	abs := filepath.Join(a.o.Repo, filepath.FromSlash(dir))
 	prev := a.m.Roots[dir]
 	known := func(rel string) (ManifestFile, ManifestFile, bool, bool) {
@@ -352,6 +377,8 @@ func (a *applier) apply(dir, label, source string, keepNames []string, files map
 					return false, nil, fmt.Errorf("materialise: %w", err)
 				}
 			}
+		case isWanted && sameStoreLink(filepath.Join(abs, filepath.FromSlash(f.rel)), f.info, w):
+			write = append(write, f.rel) // the same store object seen through another bob home
 		case inFiles && sum == mf.SHA256, inPending && sum == pf.SHA256:
 			if isWanted {
 				write = append(write, f.rel)
@@ -386,7 +413,7 @@ func (a *applier) apply(dir, label, source string, keepNames []string, files map
 	sort.Strings(write)
 	sort.Strings(remove)
 	if len(write) == 0 && len(remove) == 0 && !changed && prev.Source == source && len(prev.Pending) == 0 {
-		a.record(dir, label, source, files, nil)
+		a.record(r, files, nil)
 		return false, nil, nil
 	}
 	// Pending first: a crash from here on leaves files the next run recognises as bob's.
@@ -395,12 +422,12 @@ func (a *applier) apply(dir, label, source string, keepNames []string, files map
 		pending[rel] = w.ManifestFile
 	}
 	if len(files) > 0 {
-		r := a.m.Roots[dir]
-		r.Label, r.PendingSource, r.Pending = label, source, pending
-		if r.Files == nil {
-			r.Files = map[string]ManifestFile{}
+		mr := a.m.Roots[dir]
+		mr.Label, mr.PendingSource, mr.Pending, mr.Keep = label, source, pending, keepNames
+		if mr.Files == nil {
+			mr.Files = map[string]ManifestFile{}
 		}
-		a.m.Roots[dir] = r
+		a.m.Roots[dir] = mr
 		if err := writeManifest(a.o.Repo, a.m); err != nil {
 			return false, nil, err
 		}
@@ -428,18 +455,19 @@ func (a *applier) apply(dir, label, source string, keepNames []string, files map
 			return false, nil, err
 		}
 	}
-	a.record(dir, label, source, files, written)
+	a.record(r, files, written)
 	return true, nil, nil
 }
 
-// record makes files the owned set of dir in the manifest (written: the stat of files written
-// now; the others keep their recorded mtime).
-func (a *applier) record(dir, label, source string, files map[string]want, written map[string]ManifestFile) {
+// record makes files the owned set of root.Dir in the manifest (written: the stat of files
+// written now; the others keep their recorded mtime).
+func (a *applier) record(root Root, files map[string]want, written map[string]ManifestFile) {
 	if len(files) == 0 {
 		return
 	}
+	dir := root.Dir
 	prev := a.m.Roots[dir]
-	r := ManifestRoot{Label: label, Source: source, Files: map[string]ManifestFile{}}
+	r := ManifestRoot{Label: root.Label, Source: root.Source, Files: map[string]ManifestFile{}, Inputs: root.Inputs, Keep: root.Keep}
 	for rel, w := range files {
 		f := w.ManifestFile
 		if x, ok := written[rel]; ok {

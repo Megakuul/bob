@@ -11,6 +11,9 @@
 // The project must be a Go project whose default dev shell has been prepared (`bob allow` and
 // one `bob dev -- true` in the same HOME). Load averages before and after are printed, because
 // timings on a loaded host are not comparable with the budgets' quiet [8c/15G] profile.
+// With -budget it also prints "BUDGET <row> <value>" lines for the budgets stage (tools/ci,
+// tools/budgetbench group dev): B-079 and B-019 hook p95 (ms), B-080 exec p95 and B-018 exec median (ms),
+// B-014 dev median (s), B-081 warm definition mean (ms).
 //
 //	go run ./tools/devbench -bob /path/to/bob -dir /path/to/project [-runs 100]
 package main
@@ -32,6 +35,9 @@ import (
 	"time"
 )
 
+// budgetLines makes report print BUDGET lines (-budget).
+var budgetLines bool
+
 func main() {
 	bob := flag.String("bob", "bob", "bob executable")
 	dir := flag.String("dir", ".", "prepared project root")
@@ -41,6 +47,7 @@ func main() {
 	lspFile := flag.String("lsp-file", "cmd/hello/main.go", "Go file for the LSP measurement")
 	lspNeedle := flag.String("lsp-needle", "fmt.Println", "definition target in -lsp-file (at +5)")
 	only := flag.String("only", "hook,exec,shim,dev,lsp", "measurements to run")
+	flag.BoolVar(&budgetLines, "budget", false, "print BUDGET lines for the budgets stage")
 	flag.Parse()
 	if err := run(*bob, *dir, *runs, *devRuns, *shimArgs, *lspFile, *lspNeedle, *only); err != nil {
 		fmt.Fprintln(os.Stderr, "devbench:", err)
@@ -152,8 +159,22 @@ func report(name string, ds []time.Duration) {
 		sum += d
 	}
 	q := func(p float64) time.Duration { return ds[min(len(ds)-1, int(p*float64(len(ds))))] }
+	mean := sum / time.Duration(len(ds))
 	fmt.Printf("%-40s n=%-3d min %6.2f  mean %6.2f  median %6.2f  p95 %6.2f  max %6.2f ms  (load %s)\n",
-		name, len(ds), ms(ds[0]), ms(sum/time.Duration(len(ds))), ms(q(0.5)), ms(q(0.95)), ms(ds[len(ds)-1]), load())
+		name, len(ds), ms(ds[0]), ms(mean), ms(q(0.5)), ms(q(0.95)), ms(ds[len(ds)-1]), load())
+	if !budgetLines {
+		return
+	}
+	switch {
+	case strings.HasPrefix(name, "hook fast path"):
+		fmt.Printf("BUDGET B-079 %.3f\nBUDGET B-019 %.3f\n", ms(q(0.95)), ms(q(0.95)))
+	case strings.HasPrefix(name, "exec /bin/true"):
+		fmt.Printf("BUDGET B-080 %.3f\nBUDGET B-018 %.3f\n", ms(q(0.95)), ms(q(0.5)))
+	case strings.HasPrefix(name, "bob dev -- true"):
+		fmt.Printf("BUDGET B-014 %.4f\n", q(0.5).Seconds())
+	case strings.HasPrefix(name, "warm definition"):
+		fmt.Printf("BUDGET B-081 %.3f\n", ms(mean))
+	}
 }
 
 func ms(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }

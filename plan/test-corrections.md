@@ -667,3 +667,65 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    pipeline matcher (internal/build/jobspec Match) runs no pipeline on a push without a matching
    trigger, so both pushes built nothing (staging held only eval.json; I-B34 cache run 7). With the
    correction both builds build //:nonce.
+
+## I-B35 (2026-10-23, evidence-based test correction)
+
+69. APPLIED 2026-10-23 I-B35 (A276). tests/core/label_test.go TestRFW016FailingBuildShowsDefinedAt:
+   `want := "(defined at libs/foo/bob.go:<line>)"` -> `"package defined at libs/foo/bob.go:<line>:"`.
+   SPEC conflicts with itself: R-FW-016's acceptance sentence writes `(defined at
+   libs/foo/bob.go:13)`, while §02.5 rule 2 fixes the block line `package defined at
+   <file>:<line>:<col>` and R-CLI-007 requires the S15 goldens byte for byte (tests/faults/*/golden.txt,
+   e.g. 06-cxx-compile: `package defined at fixture/libfoo/bob.go:8:11`, 58 occurrences). bob
+   prints the §02.5 line (`package defined at libs/foo/bob.go:13:11`, I-B31 table). The
+   position asserted (the constructor line, the R-FW-016 point) is unchanged; only the wrapper text
+   follows the format rule with goldens. NEEDS: owner/coordinator to amend the R-FW-016 sentence.
+
+## I-B36 (2026-10-23, evidence-based test correction)
+70. APPLIED 2026-10-23 I-B36 (A285). tests/core/native_test.go TestRFW067GoplsResolvesGeneratedCode:
+   `execShim(t, filepath.Join(dir, "svc"), nil)` -> `execShim(t, dir, nil)` (the next line keeps
+   `cmd.Dir = svc`, so gopls still starts in the svc module). execShim runs `<arg>/.bob/bin/gopls`;
+   SPEC puts the shims at the project root only: §02.7.2 `PATH=<root>/.bob/bin:$PATH`, §02.7.3
+   `.bob/bin/<tool>` with `exec bob exec --project '<root>' -- gopls`, the editor table
+   (`${workspaceFolder}/.bob/bin/gopls`), and R-FW-067 "through the shim". The root of the codegen
+   fixture is codegen/ (bob.lock), so `bob env` writes codegen/.bob/bin/gopls; codegen/svc/.bob/bin
+   never exists (I-B31 T5: the test looked the shim up at codegen/svc/.bob/bin/gopls and could not
+   start gopls). Same pattern as the protected TestRFW001GoplsSeesBobGo (api_test.go:494,
+   `execShim(t, dir, env)` at the root). The assertions (0 gopls errors in cmd/server/main.go,
+   definition of greetv1.GreetRequest in gen/proto/greet/v1) are unchanged.
+
+## I-B38 (2026-10-23, evidence-based harness test correction and generated budgets file)
+71. APPLIED 2026-10-23 I-B38 (A302). tools/ci/stage_budgets_test.go TestBudgetStagesPass. Its
+   comment states its premise: "With no benchmarks registered every row is "no benchmark yet",
+   so both the gate stage and the slow bench stage pass". The budgets file's own note (and
+   HARNESS §12) says each task registers its benchmark in tools/internal/budgets/benches.go and
+   the row then counts; I-B38 registered 27 rows. From then on the test ran every real benchmark
+   twice inside the unit stage (`go test ./tools/ci`): evidence (I-B38 run 22:10): with
+   -test.timeout 140s it was still in `budgets.Run` -> `budgets.execCommand` running
+   `go run ./tools/budgetbench noop-rust` (the 6th of 15 commands) when it panicked
+   "test timed out after 2m20s"; the full set takes about 12 minutes per pass on this host (fleet
+   75 s, idle fleet 90 s, dev stack 30 s, fixtures), fails whenever a row is over its limit on a
+   loaded host, and writes tests/budgets/baseline-8c15g.json from a unit test. Edit: the test
+   checks the same two things without running benchmarks: budgets.Check("../..") (file current)
+   and budgets.Run for slow=false and slow=true with an Exec stub that answers every registered
+   command with each of its rows at exactly its limit, in a scratch root (baseline written there,
+   not in the repository). The real measurements stay in the budgets/bench stages. Result: PASS.
+   Also: tests/budgets/budgets.json regenerated with budgets.Write (the gen stage's function) after
+   the registration; the diff is the "bench" field of 27 rows only (checked: every other field of
+   all 97 rows and the header identical).
+
+## I-B37 (2026-10-23, evidence-based test correction)
+72. APPLIED 2026-10-23 I-B37 (A294). tests/server/log_commit_test.go TestRLOG001SizeTriggeredCommit
+   and TestRLOG001KillLosesOnlyUncommitted: new helper `warmWorker` (one `//warm:t` build of a
+   trivial package, waited for with WaitBuild 5 min) called right after srvtest.Start, before the
+   test's own context and submissions. Both tests start their 60 s / 90 s windows at the first
+   submission on a fresh stack, so the window held the cold start of a fresh worker, which is not
+   what R-LOG-001 measures (commit triggers, loss on SIGKILL). Evidence (I-B37 probes, 8 cores,
+   load 10-16, `/bin/bob job-run` process tree sampled every second): claim 6 ms after "build
+   planned"; then nixpkgs channel tarball download and unpack (~21 s), `nix-store --import` of it
+   (~22 s), go toolchain realise (~4 s), the evaluator's standard-library seed (~38 s), evaluator
+   compile, build: first output line 83-125 s after the submission (I-B37 cold1/cold2/cold3,
+   rlog4: the 90 s window missed by 3 s). With the fixes A290 and A292 a warm worker shows the
+   first line 4.2 s after the submission (cold3 round 1, was 88 s before them). The assertions
+   (>= 10,000 / >= 2,000 lines readable within 60 s with a 10 min flush interval; gap-free attempt
+   1 prefix, no committed line lost, attempt 2 continues at the next seq) are unchanged. Result
+   (shared tree, with A290-A293): both PASS (rlog5: kill test; rlog6: size test).

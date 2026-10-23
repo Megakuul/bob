@@ -36,6 +36,11 @@ type ManifestRoot struct {
 	Files         map[string]ManifestFile `json:"files"`         // path relative to the root
 	PendingSource string                  `json:"pendingSource"` // set during a write
 	Pending       map[string]ManifestFile `json:"pending"`
+	// Inputs is the digest of what Source was made from (Root.Inputs); bob status compares it
+	// with the current declarations to tell fresh from stale without planning (A280).
+	Inputs string `json:"inputs,omitempty"`
+	// Keep are the root's Root.Keep names, so that bob status skips them like bob gen does.
+	Keep []string `json:"keep,omitempty"`
 }
 
 // ManifestFile is one owned file. A symlink (an npm importer's node_modules is a directory of
@@ -75,6 +80,12 @@ func readManifest(repo string) (*Manifest, error) {
 		}
 		r.Files = validFiles(r.Files)
 		r.Pending = validFiles(r.Pending)
+		if len(r.Pending) == 0 {
+			// record writes a finished root with Pending nil ("pending": null); reading it back
+			// as an empty map made every no-op run see a changed manifest and rewrite it with
+			// two fsyncs (A300).
+			r.Pending = nil
+		}
 		m.Roots[dir] = r
 	}
 	return m, nil
