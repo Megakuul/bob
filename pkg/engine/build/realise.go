@@ -28,11 +28,11 @@ import (
 // substitute is bob's batch check of its own caches (A71): one narinfo HEAD per missing bob
 // output and cache (in parallel), then one `nix-store --realise` of the hits. bob derivations
 // carry allowSubstitutes = false, so Nix itself never asks a cache about them.
-func (r *runner) substitute(ctx context.Context, st *store.Store, p *planner) error {
+func (r *runner) substitute(ctx context.Context, st *store.Store, p *planner, extra []string) error {
 	if len(r.o.Caches) == 0 || r.o.Offline {
 		return nil
 	}
-	var outs []string
+	outs := append([]string(nil), extra...) // test results of the selected units
 	for _, d := range p.drvs {
 		for _, o := range d.Outputs {
 			outs = append(outs, o.Path)

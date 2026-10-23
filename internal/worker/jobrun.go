@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/megakuul/bob/internal/build/jobspec"
 	"github.com/megakuul/bob/internal/cache"
 	"github.com/megakuul/bob/internal/fleet"
+	"github.com/megakuul/bob/internal/isolation"
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
 	"github.com/megakuul/bob/pkg/engine/ir"
@@ -102,7 +104,8 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 	}
 	ev := &events{out: out, start: map[string]time.Time{}}
 	o := build.Options{Root: filepath.Join(work, workSrc), Store: st, Untrusted: true, Strict: true,
-		Variants: sel.Variants, JSONLog: true, Events: ev.handle, Version: sel.Version}
+		Variants: sel.Variants, JSONLog: true, Events: ev.handle, Version: sel.Version,
+		Caches: jobCaches("/etc/nix/nix.conf", isolation.NetrcPath)}
 	if p, _, _ := strings.Cut(spec.Class, "."); p != "" && p != jobspec.HostPlatform() {
 		o.Platform = p
 	}
@@ -368,6 +371,14 @@ func openJobStore(ctx context.Context, home string) (*store.Store, error) {
 	if err := os.WriteFile(filepath.Join(home, "etc", "nix", "nix.conf"), conf, 0o644); err != nil {
 		return nil, err
 	}
+	// The job's cache credential: Nix reads it at isolation.NetrcPath (nix.conf netrc-file);
+	// the engine's own cache lookups read the netrc of its home. The worker removes the copy
+	// at job end.
+	if rc, err := os.ReadFile(isolation.NetrcPath); err == nil {
+		if err := os.WriteFile(filepath.Join(home, "etc", "nix", "netrc"), rc, 0o600); err != nil {
+			return nil, err
+		}
+	}
 	return st, nil
 }
 
@@ -440,4 +451,38 @@ func nix32Hash(h string) (string, error) {
 		return "sha256:" + cache.Nix32(b), nil
 	}
 	return "", fmt.Errorf("NAR hash %q", h)
+}
+
+// jobCaches are the bob caches of the container's nix.conf (every substituter but
+// cache.nixos.org) with their netrc credential. bob derivations are never substituted by Nix
+// itself (allowSubstitutes = false, A71): the engine fetches hits from these caches.
+func jobCaches(confPath, netrcPath string) []store.Substituter {
+	creds := map[string]string{}
+	if b, err := os.ReadFile(netrcPath); err == nil {
+		for line := range strings.SplitSeq(string(b), "\n") {
+			f := strings.Fields(line)
+			if len(f) == 6 && f[0] == "machine" && f[2] == "login" && f[4] == "password" {
+				creds[f[1]] = f[5]
+			}
+		}
+	}
+	b, err := os.ReadFile(confPath)
+	if err != nil {
+		return nil
+	}
+	var out []store.Substituter
+	for line := range strings.SplitSeq(string(b), "\n") {
+		k, v, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(k) != "substituters" {
+			continue
+		}
+		for _, f := range strings.Fields(v) {
+			u, err := url.Parse(f)
+			if err != nil || u.Hostname() == "" || u.Hostname() == "cache.nixos.org" {
+				continue
+			}
+			out = append(out, store.Substituter{URL: f, NetrcMachine: u.Hostname(), NetrcPassword: creds[u.Hostname()]})
+		}
+	}
+	return out
 }

@@ -150,14 +150,19 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	}
 	r.emit(Event{Event: "drv.imported", Count: imported})
 
+	// Substitute first: a test result fetched from bob's cache is as cached as a local one.
+	var unitOuts []string
+	for _, u := range units {
+		unitOuts = append(unitOuts, u.Out)
+	}
+	if err := r.substitute(ctx, st, p, unitOuts); err != nil {
+		return res, err
+	}
 	cached := map[string]bool{}
 	if o.Command == CmdTest && len(units) > 0 {
 		if cached, err = testrun.Cached(ctx, st, units); err != nil {
 			return res, err
 		}
-	}
-	if err := r.substitute(ctx, st, p); err != nil {
-		return res, err
 	}
 
 	targets := r.withoutSkipped(r.targetLabels(g, p, res.Requested))
@@ -167,7 +172,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	}
 	rep.Counts.Built += p.planBuilt // derivations built while planning (early cutoff)
 	res.Report = rep
-	r.collect(st, g, p, res, targets)
+	r.collect(ctx, st, g, p, res, targets)
 	if o.Command == CmdTest {
 		res.Tests = append(r.testResults(ctx, st, units, cached), r.skippedResults()...)
 	}
@@ -373,7 +378,7 @@ func isTestDrv(d *drv.Derivation) bool {
 }
 
 // collect fills the per-package results and the host paths of their outputs.
-func (r *runner) collect(st *store.Store, g *ir.Graph, p *planner, res *Result, targets []string) {
+func (r *runner) collect(ctx context.Context, st *store.Store, g *ir.Graph, p *planner, res *Result, targets []string) {
 	status := map[string]string{}
 	for _, ps := range res.Report.Packages {
 		status[ps.Label] = string(ps.Status)
@@ -406,12 +411,15 @@ func (r *runner) collect(st *store.Store, g *ir.Graph, p *planner, res *Result, 
 			r.hostPaths[label] = append(r.hostPaths[label], hostPath(st, outs[o]))
 		}
 	}
+	invalid := r.untouchedInvalid(ctx, st, res, targets, status, byLabel)
 	for _, l := range targets {
 		pkg := Package{Label: l, Status: status[l], Outputs: byLabel[l], Drv: drvOf[l]}
 		if pkg.Status == "" {
-			// Nix had nothing to do for it: valid already (or nothing to build).
+			// Nix had nothing to do for it: valid already (or nothing to build). In a run that
+			// failed, Nix may also have stopped before reaching it: it is cached only when its
+			// outputs are valid, so the counts do not depend on which store was warm.
 			st := translate.StCached
-			if res.Report.ExitCode != 0 {
+			if invalid[l] {
 				st = translate.StSkipped
 			}
 			pkg.Status = string(st)
@@ -422,6 +430,53 @@ func (r *runner) collect(st *store.Store, g *ir.Graph, p *planner, res *Result, 
 		}
 		res.Packages = append(res.Packages, pkg)
 	}
+}
+
+// untouchedInvalid reports, for a run that exited non-zero, the requested labels Nix reported
+// nothing for whose outputs are not all valid in the store (or that have no outputs). A
+// validity check that fails counts every such label as invalid. A successful run needs no
+// check: Nix realised every requested output.
+func (r *runner) untouchedInvalid(ctx context.Context, st *store.Store, res *Result, targets []string, status map[string]string, byLabel map[string]map[string]string) map[string]bool {
+	if res.Report.ExitCode == 0 {
+		return nil
+	}
+	invalid := map[string]bool{}
+	owner := map[string][]string{} // output path -> labels
+	var paths []string
+	for _, l := range targets {
+		if status[l] != "" {
+			continue
+		}
+		if len(byLabel[l]) == 0 {
+			invalid[l] = true
+			continue
+		}
+		for _, sp := range byLabel[l] {
+			if owner[sp] == nil {
+				paths = append(paths, sp)
+			}
+			owner[sp] = append(owner[sp], l)
+		}
+	}
+	if len(paths) == 0 {
+		return invalid
+	}
+	sort.Strings(paths)
+	bad, err := st.Invalid(ctx, paths)
+	if err != nil {
+		for _, ls := range owner {
+			for _, l := range ls {
+				invalid[l] = true
+			}
+		}
+		return invalid
+	}
+	for _, sp := range bad {
+		for _, l := range owner[sp] {
+			invalid[l] = true
+		}
+	}
+	return invalid
 }
 
 // targetLabels are the requested labels this command realises: bob build leaves test units

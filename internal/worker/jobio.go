@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -24,6 +25,8 @@ import (
 	"github.com/megakuul/bob/internal/build/jobspec"
 	"github.com/megakuul/bob/internal/cache"
 	"github.com/megakuul/bob/internal/fleet"
+	authv1 "github.com/megakuul/bob/internal/gen/bob/auth/v1"
+	"github.com/megakuul/bob/internal/gen/bob/auth/v1/authv1connect"
 	workerv1 "github.com/megakuul/bob/internal/gen/bob/worker/v1"
 	"github.com/megakuul/bob/internal/gen/bob/worker/v1/workerv1connect"
 	"github.com/megakuul/bob/internal/promote"
@@ -63,8 +66,9 @@ func (e *jobFailed) Error() string { return e.msg }
 
 // prepareSource puts the job's source into <work>/src outside the container: the uploaded
 // snapshot of a remote build, or a shallow git fetch with the checkout credential of the held
-// job (§6.9.6; the credential never enters the container or .git/config).
-func (p *Process) prepareSource(ctx context.Context, c Claim, spec store.JobSpec, work string) error {
+// job (§6.9.6; the credential never enters the container or .git/config). cred is the answer
+// of GetCheckoutCredential (credErr when it failed), which only a git fetch needs.
+func (p *Process) prepareSource(ctx context.Context, c Claim, spec store.JobSpec, work string, cred *jobCredential, credErr error) error {
 	sel, err := jobspec.ParseSelection(spec.Targets)
 	if err != nil {
 		return &jobFailed{err.Error()}
@@ -73,19 +77,37 @@ func (p *Process) prepareSource(ctx context.Context, c Claim, spec store.JobSpec
 	if sel.Upload != "" {
 		return unpackSnapshot(ctx, p.cfg.Artifacts, jobspec.UploadKey(spec.Project, sel.Upload), dst)
 	}
-	co, err := p.checkout(ctx, c)
+	if credErr != nil {
+		return credErr
+	}
+	co, err := p.openCheckout(c, cred)
 	if err != nil {
 		return err
 	}
 	return gitFetch(ctx, dst, co, spec.Commit)
 }
 
-// checkout calls GetCheckoutCredential on an orchestrator and opens the sealed credential.
-func (p *Process) checkout(ctx context.Context, c Claim) (fleet.CheckoutPlain, error) {
-	var zero fleet.CheckoutPlain
+// openCheckout opens the sealed checkout credential of GetCheckoutCredential's answer.
+func (p *Process) openCheckout(c Claim, cred *jobCredential) (fleet.CheckoutPlain, error) {
+	co, err := fleet.OpenCheckout(p.id.kem, p.id.ID(), c.JobID, c.Epoch, cred.res.GetSealedCheckout())
+	if err != nil {
+		return fleet.CheckoutPlain{}, fmt.Errorf("checkout credential: %w", err)
+	}
+	return co, nil
+}
+
+// jobCredential is GetCheckoutCredential's answer for a held job and the orchestrator that
+// gave it: its /nix is the job's bob cache (§6.6.1), reachable from this worker.
+type jobCredential struct {
+	base string
+	res  *workerv1.GetCheckoutCredentialResponse
+}
+
+// credential calls GetCheckoutCredential on the orchestrators until one answers.
+func (p *Process) credential(ctx context.Context, c Claim) (*jobCredential, error) {
 	tok := p.token()
 	if tok == nil || p.id == nil {
-		return zero, errors.New("checkout: the worker has no token yet")
+		return nil, errors.New("checkout: the worker has no token yet")
 	}
 	var last error
 	for _, base := range p.attachAddrs(ctx) {
@@ -99,12 +121,62 @@ func (p *Process) checkout(ctx context.Context, c Claim) (fleet.CheckoutPlain, e
 			last = err
 			continue
 		}
-		return fleet.OpenCheckout(p.id.kem, p.id.ID(), c.JobID, c.Epoch, res.Msg.GetSealedCheckout())
+		return &jobCredential{base: base, res: res.Msg}, nil
 	}
 	if last == nil {
 		last = errors.New("no orchestrator address")
 	}
-	return zero, fmt.Errorf("checkout credential: %w", last)
+	return nil, fmt.Errorf("checkout credential: %w", last)
+}
+
+// jobCache is what the job's Nix needs to substitute from bob's cache: the substituter, the
+// keys it signs with and the job's download token (netrc). The zero value is no bob cache.
+type jobCache struct {
+	url, host, token string
+	keys             []string
+}
+
+// cacheOf asks the orchestrator that answered GetCheckoutCredential for its cache keys
+// (GetServerInfo, public): a cache whose keys are unknown is not used (require-sigs would
+// refuse its paths anyway). Without a download token only public paths substitute.
+func cacheOf(ctx context.Context, cred *jobCredential) (jobCache, error) {
+	if cred == nil {
+		return jobCache{}, nil
+	}
+	u, err := url.Parse(cred.base)
+	if err != nil || u.Hostname() == "" {
+		return jobCache{}, fmt.Errorf("orchestrator address %q: no host", cred.base)
+	}
+	cl := authv1connect.NewAuthServiceClient(attachClient(cred.base), cred.base+"/api")
+	ictx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	info, err := cl.GetServerInfo(ictx, connect.NewRequest(&authv1.GetServerInfoRequest{}))
+	if err != nil {
+		return jobCache{}, fmt.Errorf("cache keys: %w", err)
+	}
+	keys := info.Msg.GetNix().GetPublicKeys()
+	if len(keys) == 0 {
+		return jobCache{}, nil
+	}
+	for _, k := range keys {
+		if k == "" || strings.ContainsAny(k, " \t\r\n") {
+			return jobCache{}, fmt.Errorf("cache keys: malformed key %q", k)
+		}
+	}
+	tok := cred.res.GetDownloadToken()
+	if strings.ContainsAny(tok, " \t\r\n#") {
+		return jobCache{}, errors.New("cache: malformed download token")
+	}
+	return jobCache{url: cred.base + "/nix", host: u.Hostname(), token: tok, keys: keys}, nil
+}
+
+// netrc is the job's netrc (SPEC §6.6.1: user bob, password = the download token); empty
+// without a token.
+func (jc jobCache) netrc() []byte {
+	if jc.token == "" || jc.host == "" {
+		return nil
+	}
+	return []byte("machine " + jc.host + " login bob password " + jc.token + "\n")
 }
 
 // gitFetch fetches exactly one commit into dst. Refs and SHAs reach git only as separate,

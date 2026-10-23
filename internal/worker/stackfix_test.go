@@ -71,9 +71,14 @@ func TestCheckoutPoPPath(t *testing.T) {
 	srv.Start()
 	defer srv.Close()
 	p := &Process{cfg: ProcessConfig{Orchestrators: []string{srv.URL + "/"}, Now: time.Now}, id: id, tok: &Token{raw: token}}
-	co, err := p.checkout(context.Background(), Claim{JobID: "b.j0001", Epoch: 3})
+	c := Claim{JobID: "b.j0001", Epoch: 3}
+	cred, err := p.credential(context.Background(), c)
 	if err != nil {
 		t.Fatalf("checkout: %v (paths %v)", err, seen)
+	}
+	co, err := p.openCheckout(c, cred)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if co.CloneURL != impl.plan.CloneURL || !slices.Equal(seen, []string{want}) {
 		t.Errorf("checkout %+v via %v", co, seen)

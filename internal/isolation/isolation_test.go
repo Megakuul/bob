@@ -147,6 +147,7 @@ func TestNixConf(t *testing.T) {
 		"sandbox = true\n", "sandbox-fallback = false\n", "build-users-group = \n", "auto-allocate-uids = true\n",
 		"use-cgroups = true\n", "allowed-users = root\n", "trusted-users = root\n",
 		"substituters = https://bob.example/nix https://cache.nixos.org\n", "require-sigs = true\n",
+		"netrc-file = /etc/nix/netrc\n",
 	} {
 		if !strings.Contains(c, want) {
 			t.Errorf("nix.conf lacks %q:\n%s", want, c)

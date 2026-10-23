@@ -192,3 +192,8 @@
 | A200 Outputs of packages that built inside a failed evalbuild job are staged and promoted | I-B29 | self-ruled |
 | A201 The evaluator trusts `.bob/eval` only when bob's ownership stamp matches: the file | I-B29 | self-ruled |
 | A202 Jobs of a retry or re-run build carry Prefer = the worker that ran the last job of the | I-B29 | self-ruled |
+| A210 Job containers substitute from the orchestrator that answered the job's | I-B30 | self-ruled |
+| A211 Job download tokens: GetCheckoutCredential fills download_token for every job of a | I-B30 | self-ruled |
+| A212 "Revoked at job end" = the forge-sweeper pass (≤ 60 s after the job is terminal, plus | I-B30 | self-ruled |
+| A213 Worker jobs pass bob's caches to the engine (EngineRunner: build.Options.Caches parsed | I-B30 | self-ruled |
+| A214 Root-mode nix.conf sets `narinfo-cache-negative-ttl = 0`: Nix's lookup cache lives in | I-B30 | self-ruled |

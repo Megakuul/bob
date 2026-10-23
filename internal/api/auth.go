@@ -17,6 +17,10 @@ type Principal struct {
 	Expires            time.Time // credential expiry; zero = none
 	Bindings           []Binding
 	MustChangePassword bool
+	// CacheProject is set for a job's download token (GetCheckoutCredentialResponse.
+	// download_token): the one project whose private cache paths it may read. Such a principal
+	// has no bindings, so it has no permission anywhere else.
+	CacheProject string
 }
 
 // Binding is one role binding of a principal.

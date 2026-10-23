@@ -41,13 +41,28 @@ const CheckoutTTL = time.Hour
 // checkoutShards is the shard count of ftok/<sh2(jobID)>.
 const checkoutShards = 16
 
-// CheckoutRecord is one outstanding per-job forge token: never the token value (D62).
+// DownloadIssuer mints and revokes the per-job cache download tokens of
+// GetCheckoutCredentialResponse.download_token (auth.Identity): bob_dt_, download scope, the
+// job's project only. The handle names the token without being it.
+type DownloadIssuer interface {
+	IssueJobDownload(ctx context.Context, jobID, project string, expires time.Time) (token, handle string, err error)
+	RevokeJobDownload(ctx context.Context, handle string) error
+}
+
+// DownloadTTL is the lifetime of a job's download token. It is a backstop only: the token is
+// revoked when the job ends or its lease moves on (JobEnded, the forge-sweeper), and the
+// job's Nix needs it for the whole job, which may be longer than CheckoutTTL.
+const DownloadTTL = 24 * time.Hour
+
+// CheckoutRecord is one outstanding per-job token: a forge token (D62) or, with Download, the
+// job's cache download token. Never the token value.
 type CheckoutRecord struct {
 	Epoch        int64     `cbor:"ep,omitempty"`
 	Forge        string    `cbor:"f,omitempty"`
 	Handle       string    `cbor:"h,omitempty"`
 	Expires      time.Time `cbor:"ex,omitzero"`
 	ForgeExpires time.Time `cbor:"fx,omitzero"`
+	Download     bool      `cbor:"dt,omitempty"`
 }
 
 // checkoutShard is ftok/<sh2(jobID)>: job id -> its outstanding tokens.
@@ -79,7 +94,10 @@ type Checkouts struct {
 	Control *store.Bucket
 	Queue   *Queue
 	Forge   ForgeMinter
-	Now     func() time.Time
+	// Downloads mints the jobs' cache download tokens; nil: jobs get none (they substitute
+	// only public paths).
+	Downloads DownloadIssuer
+	Now       func() time.Time
 
 	cache store.Cache[checkoutShard]
 }
@@ -95,17 +113,10 @@ func (c *Checkouts) now() time.Time {
 // own the job at that epoch (owner + epoch on job/<id>, state claimed or running) gets
 // "permission_denied: worker holds no lease on job <id>".
 func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Checkout, error) {
-	rec, err := c.Queue.record(ctx, jobID)
-	if errors.Is(err, store.ErrNotFound) {
-		return Checkout{}, errNoLease(jobID)
-	}
+	spec, err := c.held(ctx, wid, jobID, epoch)
 	if err != nil {
 		return Checkout{}, err
 	}
-	if rec.Owner.Value() != wid || rec.Epoch.Value() != epoch || (rec.State.Value() != StateClaimed && rec.State.Value() != StateRunning) {
-		return Checkout{}, errNoLease(jobID)
-	}
-	spec, _ := fleet.DecodeSpec(rec.Spec.Value())
 	if spec.Repo == "" {
 		return Checkout{}, fmt.Errorf("job %s has no repository (uploaded source)", jobID)
 	}
@@ -142,6 +153,84 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 		return Checkout{}, errors.Join(err, c.Forge.Revoke(ctx, handle))
 	}
 	return co, nil
+}
+
+// held returns the spec of job jobID when worker wid holds it at epoch (owner + epoch on
+// job/<id>, state claimed or running), else errNoLease.
+func (c *Checkouts) held(ctx context.Context, wid, jobID string, epoch int64) (store.JobSpec, error) {
+	rec, err := c.Queue.record(ctx, jobID)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.JobSpec{}, errNoLease(jobID)
+	}
+	if err != nil {
+		return store.JobSpec{}, err
+	}
+	if rec.Owner.Value() != wid || rec.Epoch.Value() != epoch || (rec.State.Value() != StateClaimed && rec.State.Value() != StateRunning) {
+		return store.JobSpec{}, errNoLease(jobID)
+	}
+	spec, _ := fleet.DecodeSpec(rec.Spec.Value())
+	return spec, nil
+}
+
+// Lease is what GetCheckoutCredential knows of a held job besides its forge credential.
+type Lease struct {
+	Spec store.JobSpec
+	// DownloadToken is the job's cache download token ("" without Downloads or without a
+	// project); it expires at DownloadExpires unless revoked earlier.
+	DownloadToken   string
+	DownloadExpires time.Time
+}
+
+// Lease checks that worker wid holds job jobID at epoch (else errNoLease, nothing minted) and
+// mints the job's cache download token, recorded in ftok/<sh2(jobID)> (only its handle) so that
+// JobEnded and the forge-sweeper revoke it. Download tokens the job got before (an earlier
+// epoch, or a repeated call) are revoked once the new one is recorded.
+func (c *Checkouts) Lease(ctx context.Context, wid, jobID string, epoch int64) (Lease, error) {
+	spec, err := c.held(ctx, wid, jobID, epoch)
+	if err != nil {
+		return Lease{}, err
+	}
+	l := Lease{Spec: spec}
+	if c.Downloads == nil || spec.Project == "" {
+		return l, nil
+	}
+	key, err := shardOf(jobID)
+	if err != nil {
+		return Lease{}, err
+	}
+	now := c.now()
+	expires := now.Add(DownloadTTL)
+	tok, handle, err := c.Downloads.IssueJobDownload(ctx, jobID, spec.Project, expires)
+	if err != nil {
+		return Lease{}, fmt.Errorf("download token for job %s: %w", jobID, err)
+	}
+	entry := CheckoutRecord{Epoch: epoch, Handle: handle, Expires: expires, Download: true}
+	var older []CheckoutRecord
+	err = store.Change(ctx, c.Control, key, func(cur *checkoutShard) (*checkoutShard, error) {
+		jobs := map[string][]CheckoutRecord{}
+		if cur != nil {
+			maps.Copy(jobs, cur.Jobs.Value())
+		}
+		older = nil
+		for _, e := range jobs[jobID] {
+			if e.Download {
+				older = append(older, e)
+			}
+		}
+		jobs[jobID] = append(append([]CheckoutRecord(nil), jobs[jobID]...), entry)
+		return &checkoutShard{Shard: key.Shard, Jobs: store.Set(jobs)}, nil
+	})
+	if err != nil {
+		// No record means no sweeper: revoke now rather than leak the token.
+		return Lease{}, errors.Join(err, c.Downloads.RevokeJobDownload(ctx, handle))
+	}
+	if len(older) > 0 {
+		if _, err := c.revoke(ctx, key, map[string][]CheckoutRecord{jobID: older}); err != nil {
+			slog.Warn("checkout: an earlier download token of the job was not revoked yet, the sweeper retries", "job", jobID, "err", err)
+		}
+	}
+	l.DownloadToken, l.DownloadExpires = tok, expires
+	return l, nil
 }
 
 // validCheckout refuses an adapter answer that would leak a credential in a URL.
@@ -196,7 +285,9 @@ func (c *Checkouts) Sweep(ctx context.Context) (revoked int, err error) {
 				continue
 			}
 			for _, e := range entries {
-				if ended || e.Expires.Before(now) || (!e.ForgeExpires.IsZero() && e.ForgeExpires.Before(now)) {
+				// A download token belongs to one lease: requeued or claimed again, it is due.
+				moved := e.Download && v != nil && (e.Epoch != v.Epoch || v.State == StateQueued)
+				if ended || moved || e.Expires.Before(now) || (!e.ForgeExpires.IsZero() && e.ForgeExpires.Before(now)) {
 					due[jobID] = append(due[jobID], e)
 				}
 			}
@@ -217,8 +308,8 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 	var errs []error
 	for jobID, entries := range due {
 		for _, e := range entries {
-			if err := c.Forge.Revoke(ctx, e.Handle); err != nil {
-				slog.Warn("forge-sweeper: revoke failed, retried next pass", "job", jobID, "forge", e.Forge, "err", err)
+			if err := c.revokeOne(ctx, e); err != nil {
+				slog.Warn("forge-sweeper: revoke failed, retried next pass", "job", jobID, "forge", e.Forge, "download", e.Download, "err", err)
 				errs = append(errs, err)
 				continue
 			}
@@ -253,4 +344,15 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 		errs = append(errs, err)
 	}
 	return len(gone), errors.Join(errs...)
+}
+
+// revokeOne revokes one recorded token at the forge, or the job's download token at bob.
+func (c *Checkouts) revokeOne(ctx context.Context, e CheckoutRecord) error {
+	if !e.Download {
+		return c.Forge.Revoke(ctx, e.Handle)
+	}
+	if c.Downloads == nil {
+		return errors.New("no download token issuer configured")
+	}
+	return c.Downloads.RevokeJobDownload(ctx, e.Handle)
 }

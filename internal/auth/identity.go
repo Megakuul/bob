@@ -251,6 +251,12 @@ func (id *Identity) tokenPrincipal(ctx context.Context, tok Secret) (*api.Princi
 		}
 		p = saPrincipal(sa)
 		id.touchSAToken(ctx, sa, rec.TokenID.Value(), now)
+	case "job":
+		project, job, ok := parseJobOwner(owner)
+		if !ok || rec.Scope.Value() != "download" {
+			return nil, errInvalidToken
+		}
+		p = &api.Principal{ID: "job:" + job, DisplayName: "job " + job, CacheProject: project}
 	default:
 		return nil, errInvalidToken
 	}

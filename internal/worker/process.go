@@ -39,7 +39,10 @@ type ProcessConfig struct {
 	Log    *slog.Logger
 	// Executable is the bob-server binary bound into job containers ("" = this binary).
 	Executable string
-	// Substituters and TrustedKeys are bob's caches for the container's nix.conf.
+	// Substituters and TrustedKeys are extra caches for every job container's nix.conf. bob's
+	// own cache needs no configuration: each job gets the orchestrator that answered its
+	// GetCheckoutCredential as substituter, that orchestrator's public keys and the job's
+	// download token (jobNixConfig, decision A210).
 	Substituters, TrustedKeys []string
 	// Storage locates the analytics bucket of the job logs (lake); Orchestrators are the
 	// Attach endpoints (BOB_ORCHESTRATOR_ADDRS; empty: the members of fleet/cfg.m).
@@ -365,8 +368,9 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 			jl = nil
 		}
 	}
+	cred, credErr := p.credential(ctx, c)
 	if p.cfg.Artifacts != nil {
-		if err := p.prepareSource(ctx, c, spec, filepath.Join(dir, "work")); err != nil {
+		if err := p.prepareSource(ctx, c, spec, filepath.Join(dir, "work"), cred, credErr); err != nil {
 			var jf *jobFailed
 			if errors.As(err, &jf) {
 				return Outcome{Status: "failed", Error: jf.msg}
@@ -380,6 +384,12 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return Outcome{Status: "infra", Error: "job home: " + err.Error()}
 	}
+	nixConf, netrc, err := p.jobNixConfig(ctx, c, dir, cred)
+	if err != nil {
+		return Outcome{Status: "infra", Error: "job nix.conf: " + err.Error()}
+	}
+	// The job's download token is revoked at job end; its copy in the slot's home goes too.
+	defer os.Remove(filepath.Join(home, "etc", "nix", "netrc"))
 	pr, pw := io.Pipe()
 	var out Output
 	if jl != nil {
@@ -396,7 +406,8 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 		JobID: c.JobID, RootDir: filepath.Join(dir, "root"), Store: p.store,
 		Binds: []isolation.Bind{
 			{Host: p.exe, Path: "/bin/bob"},
-			{Host: p.nixConf, Path: "/etc/nix/nix.conf"},
+			{Host: nixConf, Path: "/etc/nix/nix.conf"},
+			{Host: netrc, Path: isolation.NetrcPath},
 			{Host: filepath.Join(dir, "work"), Path: "/work", Writable: true},
 			{Host: home, Path: JobHome, Writable: true},
 		},
@@ -430,6 +441,33 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 	}
 	p.stage(ctx, c, spec, filepath.Join(dir, "work"), &o)
 	return o
+}
+
+// jobNixConfig writes the job's netrc (0600, the download token) into the job directory and
+// returns it with the nix.conf of the container: the worker's own, or, when the orchestrator
+// that answered GetCheckoutCredential serves a cache with known keys, one that lists that cache
+// first (SPEC §05.8 "substituters = <bob cache> https://cache.nixos.org"). The nix.conf of the
+// worker is written once for all jobs; the cache credential is per job.
+func (p *Process) jobNixConfig(ctx context.Context, c Claim, dir string, cred *jobCredential) (nixConf, netrc string, err error) {
+	jc, err := cacheOf(ctx, cred)
+	if err != nil {
+		// Substitution from bob's cache only saves work: the job runs, and builds what it misses.
+		p.cfg.Log.Warn("worker: job runs without bob's cache", "job", c.JobID, "err", err.Error())
+		jc = jobCache{}
+	}
+	netrc = filepath.Join(dir, "netrc")
+	if err := os.WriteFile(netrc, jc.netrc(), 0o600); err != nil {
+		return "", "", err
+	}
+	if jc.url == "" {
+		return p.nixConf, netrc, nil
+	}
+	nixConf = filepath.Join(dir, "nix.conf")
+	conf := isolation.NixConf(append(append([]string(nil), p.cfg.Substituters...), jc.url), append(append([]string(nil), p.cfg.TrustedKeys...), jc.keys...))
+	if err := os.WriteFile(nixConf, []byte(conf), 0o644); err != nil {
+		return "", "", err
+	}
+	return nixConf, netrc, nil
 }
 
 // jobLogOutput feeds a job container's output events into the job's log.

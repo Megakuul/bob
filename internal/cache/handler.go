@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -163,6 +164,10 @@ func (h *Handler) visible(ctx context.Context, p *api.Principal, hash string) (p
 	}
 	if p == nil || len(doc.Projects) == 0 {
 		return false, false, nil
+	}
+	if p.CacheProject != "" {
+		// A job's download token reads the paths of its own project and nothing else.
+		return false, slices.Contains(doc.Projects, p.CacheProject), nil
 	}
 	ok, err = h.c.Allowed(ctx, p, doc.Projects)
 	return false, ok, err

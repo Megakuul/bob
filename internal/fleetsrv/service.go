@@ -260,8 +260,9 @@ type WorkerControl struct {
 	Live *orchestrator.LiveLogs
 }
 
-// GetCheckoutCredential implements WorkerControlService: a checkout credential for the job the
-// calling worker holds (owner + epoch), sealed to its KEM key (R-FLEET-006).
+// GetCheckoutCredential implements WorkerControlService: for the job the calling worker holds
+// (owner + epoch), a checkout credential sealed to its KEM key (R-FLEET-006; jobs with a
+// repository) and the job's cache download token (§05.9.1; every job of a project).
 func (w *WorkerControl) GetCheckoutCredential(ctx context.Context, req *connect.Request[workerv1.GetCheckoutCredentialRequest]) (*connect.Response[workerv1.GetCheckoutCredentialResponse], error) {
 	res, err := w.checkout(ctx, api.WorkerFrom(ctx), req.Msg.JobId, req.Msg.Epoch)
 	if err != nil {
@@ -275,16 +276,20 @@ func (w *WorkerControl) checkout(ctx context.Context, wid, jobID string, epoch i
 	if _, err := store.Segment(jobID); err != nil {
 		return nil, api.InvalidArgument("job_id", "invalid job id")
 	}
+	lease, err := w.F.Checkouts.Lease(ctx, wid, jobID, epoch)
+	if err != nil {
+		return nil, checkoutError(err)
+	}
+	res := &workerv1.GetCheckoutCredentialResponse{DownloadToken: lease.DownloadToken}
+	if !lease.DownloadExpires.IsZero() {
+		res.ExpiresUnix = lease.DownloadExpires.Unix()
+	}
+	if lease.Spec.Repo == "" {
+		return res, nil // uploaded source: the worker reads the snapshot itself
+	}
 	co, err := w.F.Checkouts.Get(ctx, wid, jobID, epoch)
 	if err != nil {
-		var de *diag.Error
-		switch {
-		case strings.HasPrefix(err.Error(), "permission_denied: "):
-			return nil, api.Forbidden(strings.TrimPrefix(err.Error(), "permission_denied: "))
-		case errors.As(err, &de) && de.Code == 9008:
-			return nil, api.Unavailable("checkout credentials are not available yet: " + de.Error())
-		}
-		return nil, err
+		return nil, checkoutError(err)
 	}
 	rec, err := store.Get(ctx, w.F.cfg.Fleet, &store.WorkerRecord{Wid: store.ID(wid)})
 	if err != nil {
@@ -294,12 +299,25 @@ func (w *WorkerControl) checkout(ctx context.Context, wid, jobID string, epoch i
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := fleet.SealCheckout(suite, rec.KEMPub.Value(), wid, jobID, epoch, fleet.CheckoutPlain{
+	res.SealedCheckout, err = fleet.SealCheckout(suite, rec.KEMPub.Value(), wid, jobID, epoch, fleet.CheckoutPlain{
 		CloneURL: co.CloneURL, Username: co.Username, Token: co.Token, Expires: co.Expires.Unix()})
 	if err != nil {
 		return nil, err
 	}
-	return &workerv1.GetCheckoutCredentialResponse{SealedCheckout: sealed, ExpiresUnix: co.Expires.Unix()}, nil
+	res.ExpiresUnix = co.Expires.Unix()
+	return res, nil
+}
+
+// checkoutError maps the lease refusal and an unavailable forge to the API error model.
+func checkoutError(err error) error {
+	var de *diag.Error
+	switch {
+	case strings.HasPrefix(err.Error(), "permission_denied: "):
+		return api.Forbidden(strings.TrimPrefix(err.Error(), "permission_denied: "))
+	case errors.As(err, &de) && de.Code == 9008:
+		return api.Unavailable("checkout credentials are not available yet: " + de.Error())
+	}
+	return err
 }
 
 // Attach implements WorkerControlService: the worker's control channel. The first message is

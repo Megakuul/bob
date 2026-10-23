@@ -28,6 +28,7 @@ var hermetic = []string{
 	"cmd/bob-builder/genbuilders",
 	"internal/api", "internal/auth", "internal/build/jobspec", "internal/forge/github",
 	"internal/forge/gitlab", "internal/http", "internal/isolation", "internal/safe", "internal/server",
+	"internal/ui",
 	"pkg/bob/ext", "pkg/cc/bop", "pkg/cc/gen", "pkg/cli/devenv", "pkg/cli/remote", "pkg/connect/gen",
 	"pkg/engine", "pkg/engine/drv", "pkg/engine/eval/evalbox", "pkg/engine/fetch", "pkg/engine/ir",
 	"pkg/engine/lock", "pkg/engine/materialise", "pkg/engine/nar", "pkg/golang", "pkg/golang/bop",

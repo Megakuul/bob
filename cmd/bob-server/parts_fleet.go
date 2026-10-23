@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/megakuul/bob/internal/auth"
 	"github.com/megakuul/bob/internal/fleetsrv"
 	"github.com/megakuul/bob/internal/isolation"
 	"github.com/megakuul/bob/internal/orchestrator"
@@ -27,6 +28,12 @@ func fleetParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 		Params: params, Now: env.Now, Log: env.Log})
 	if err != nil {
 		return nil, err
+	}
+	for _, a := range parts.Authn {
+		// Jobs get a cache download token of their project (GetCheckoutCredential, §6.9.6).
+		if id, ok := a.(*auth.Identity); ok {
+			f.Checkouts.Downloads = id
+		}
 	}
 	for _, c := range f.Components() {
 		parts.Controllers = append(parts.Controllers, c)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/internal/fleet"
+	"github.com/megakuul/bob/internal/promote"
 	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -375,9 +376,10 @@ func (r *Reconciler) job(ctx context.Context, rec *store.JobRecord, aj store.Act
 		if after <= 0 {
 			after = 10 * time.Minute
 		}
-		// A succeeded job waits for its promotion verdict (pm): finalising deletes the record the
-		// promotion controller works from (I-B9/I-B11).
-		pending := rec.State.Value() == StateSucceeded && rec.Promotion.Value() == ""
+		// A job that awaits its promotion verdict (pm) keeps its record: finalising deletes the
+		// record the promotion controller works from (I-B9/I-B11). That is a succeeded job, or
+		// a failed one with staged outputs (A200).
+		pending := promote.Awaits(rec)
 		if r.Queue != nil && !pending && !rec.Changed.Value().IsZero() && rec.Changed.Value().Add(after).Before(now) {
 			ok, err := r.Queue.Finalise(ctx, id)
 			if ok {
