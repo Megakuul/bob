@@ -304,8 +304,9 @@ func (in *Instance) seed(ctx context.Context) error {
 		}
 	}
 	// Forgejo serves repository hooks only to repository admins, and bob must manage the hook of a
-	// linked repository: the bot is admin on demo (the linked one), reader on other.
-	for repo, perm := range map[string]string{"demo": "admin", "other": "read"} {
+	// linked repository: the bot is admin on both (tests link either; R-REG-003 links both and
+	// publishes from both). Job tokens stay scoped to one repository (forgejo_live_test).
+	for repo, perm := range map[string]string{"demo": "admin", "other": "admin"} {
 		if err := in.API(ctx, http.MethodPut, "/api/v1/repos/alice/"+repo+"/collaborators/bobbot", owner,
 			map[string]any{"permission": perm}, nil); err != nil {
 			return err

@@ -329,6 +329,7 @@ func (q *Queue) summarise(ctx context.Context, buildID string, rec *store.JobRec
 		jobs := append([]store.BuildJob(nil), cur.Jobs.Value()...)
 		for i := range jobs {
 			if jobs[i].ID == rec.ID.Value() {
+				row.Error = jobs[i].Error // recorded by the build controller from the verified result
 				if jobs[i] == row {
 					return nil, store.ErrNoChange
 				}

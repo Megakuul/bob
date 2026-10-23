@@ -20,9 +20,12 @@ var _ = bob.Repo(bob.RepoOpts{
 })
 
 // The release pipeline runs on a tag push matching v* (concurrency Queue) and publishes
-// //deploy:polyglot. SPEC §06 does not define the fields of bob.PipelineOpts, so the pipeline is
-// registered by name only.
-var _ = bob.Pipeline("release", bob.PipelineOpts{})
+// //deploy:polyglot.
+var _ = bob.Pipeline("release", bob.PipelineOpts{
+	Triggers:    []bob.Trigger{bob.OnTag("v*")},
+	Concurrency: bob.Queue,
+	Releases:    []string{"polyglot"},
+})
 
 // Module is the Go module example.com/polyglot (label //:module).
 var Module = bob.Define(func(p *bob.P) *golang.Module {
@@ -43,8 +46,11 @@ var FFI = bob.Define(func(p *bob.P) *golang.Package {
 })
 
 // API is the cgo binary (label //cmd/api:api). It is declared here, not in cmd/api/bob.go,
-// because deploy/bob.go imports it and cmd/api is a main package (rule R3).
+// because deploy/bob.go imports it and cmd/api is a main package (rule R3). FFI is declared
+// first: a Go binary picks up the module's cgo packages declared so far, and a build of only
+// //deploy:polyglot never evaluates //:FFI otherwise.
 var API = bob.Define(func(p *bob.P) *golang.Binary {
+	FFI(p)
 	return Module(p).Binary("./cmd/api", golang.BinaryOpts{})
 })
 

@@ -130,15 +130,7 @@ func gitFetch(ctx context.Context, dst string, co fleet.CheckoutPlain, commit st
 	auth := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(co.Username+":"+co.Token))
 	git := func(args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dst}, args...)...)
-		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dst, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1"}
-		// git trusts the CAs the worker's own TLS client trusts (SSL_CERT_FILE / SSL_CERT_DIR, as
-		// Go reads them); git's curl ignores SSL_CERT_FILE, so it also goes in as GIT_SSL_CAINFO.
-		if f := os.Getenv("SSL_CERT_FILE"); f != "" {
-			cmd.Env = append(cmd.Env, "SSL_CERT_FILE="+f, "GIT_SSL_CAINFO="+f)
-		}
-		if d := os.Getenv("SSL_CERT_DIR"); d != "" {
-			cmd.Env = append(cmd.Env, "SSL_CERT_DIR="+d)
-		}
+		cmd.Env = gitEnv(dst)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return out, fmt.Errorf("git %s: %w: %s", args[0], err, strings.ReplaceAll(firstLineOf(string(out)), co.Token, "[redacted]"))
@@ -162,6 +154,20 @@ func gitFetch(ctx context.Context, dst string, co fleet.CheckoutPlain, commit st
 		return &jobFailed{fmt.Sprintf("checkout: fetched %s, expected %s", strings.TrimSpace(string(head)), want)}
 	}
 	return os.RemoveAll(filepath.Join(dst, ".git"))
+}
+
+// gitEnv is the scrubbed environment of the checkout's git: no worker credentials, no system
+// config. git trusts the CAs the worker's own TLS client trusts (SSL_CERT_FILE / SSL_CERT_DIR,
+// as Go reads them); git's curl ignores SSL_CERT_FILE, so it also goes in as GIT_SSL_CAINFO.
+func gitEnv(home string) []string {
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1"}
+	if f := os.Getenv("SSL_CERT_FILE"); f != "" {
+		env = append(env, "SSL_CERT_FILE="+f, "GIT_SSL_CAINFO="+f)
+	}
+	if d := os.Getenv("SSL_CERT_DIR"); d != "" {
+		env = append(env, "SSL_CERT_DIR="+d)
+	}
+	return env
 }
 
 func isSHA(s string) bool {

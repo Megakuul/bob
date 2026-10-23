@@ -8962,8 +8962,12 @@ Staging layout (worker writes; `<staging>` = `staging/<buildID>/<jobID>/<attempt
  "paths":["/nix/store/…-api-1.4.2"],
  "images":[{"repo":"api/server","tag":"1.4.2","manifest":"sha256:…","mediaType":"application/vnd.oci.image.index.v1+json","blobs":["sha256:…"]}],
  "assets":[{"file":"api-1.4.2-x86_64.AppImage","sha256":"…","size":31457280}],
- "skipped":["/nix/store/…-glibc-2.40"]}
+ "skipped":["/nix/store/…-glibc-2.40"],
+ "kinds":{"/nix/store/…-oci-image-api-image-1.4.2":"oci.image"}}
 ```
+`kinds` (optional) names the staged paths whose derivations discard references by design
+(kinds `oci.image` for images and their layers, `appimage.*`, `tarball.*`; A149); every key is
+one of `paths`.
 
 Steps (orchestrator, idempotent, re-run until done):
 
@@ -8979,7 +8983,19 @@ Steps (orchestrator, idempotent, re-run until done):
       → NarHash, NarSize, FileHash, FileSize recomputed → **reference scan**: every 32-char
       substring matching a store hash of a path in this job's closure or in an already-served
       narinfo that the claim does not list → `failed: artifact verification` (refs are no longer
-      blind worker claims).
+      blind worker claims). Outputs that discard references by design (A149: a path listed in
+      `kinds`; image config `PATH`/`Entrypoint`, R-OUT-012, and an AppImage's interpreter path
+      inside its zstd squashfs, R-OUT-015, hold store paths as data) are checked first against
+      what the orchestrator sees itself: the store name must be the one bob gives that kind's
+      derivations (`oci-image-`/`oci-layer-`, `appimage-`, `tarball-`) and the NAR must have the
+      kind's layout (`oci-layout` + `index.json`; `layer.json` + `layer.tar.gz`; one executable
+      `*.AppImage`; one `*.tar.gz`), else `failed: artifact verification`. For such a path, hashes
+      found in the content are **not** registered as references (the narinfo keeps the claimed
+      references, so clients never download the closure an image or AppImage carries) and are
+      accepted only when they belong to the job's own closure (`paths` and `skipped` of this
+      COMPLETE.json); a hash outside it (e.g. a served path of another job) fails with "the
+      <kind> output contains the store hash <h>, which is not in this job's closure". Every
+      other path keeps the strict scan.
    c. `CopyObject` to `nix/nar/<hash>.nar.zst` with `x-amz-copy-source-if-match: <ETag>`.
    d. PUT `nix/ls/<hash>.ls`; update `nix/vis/<hash>.json` (add project).
    e. Sign (ed25519, fingerprint `1;<path>;<NarHash>;<NarSize>;<refs full paths sorted, ","-joined>`,

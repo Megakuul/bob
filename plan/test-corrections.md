@@ -354,3 +354,29 @@ access and the primitive constructors change.
    run 1, NEEDS 2). Identical calls give identical nodes (pkg/bob node.go sameAs), so //deploy:api
    and //cmd/api:api stay one node with one label; cmd/api/bob.go and every label unchanged.
 RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_test.go cc derivation names cc-foo, cc-mathx, cc-pack) and part of item 11/A114 (tests/ui/seed.json seeded release buildId 01jbq7k2p4m8x0c3v5n7r9t1y6): both had been reverted by a tar restore (incident A147).
+
+## I-B23 (2026-10-23, evidence-based fixture correction)
+47. APPLIED 2026-10-23 I-B23. tests/fixtures/repos/polyglot/bob.go: the release pipeline was
+   registered as `bob.Pipeline("release", bob.PipelineOpts{})` (comment: "SPEC §06 does not define
+   the fields of bob.PipelineOpts, so the pipeline is registered by name only"; outdated: the
+   fields exist and the acme fixture uses them). With no trigger and no release, the tag push of
+   TestRREG003PullRegistry matched no pipeline: the devstack showed the tag build
+   b-01M5K7NJR9WT35T6GPX991N03E (refs/tags/v1.0.0) as BUILD_STATE_SKIPPED, nothing was built and
+   the test failed after 20 min with `release pub/polyglot@1.0.0 not published within 20m0s`.
+   Now `Triggers: OnTag("v*"), Concurrency: bob.Queue, Releases: {"polyglot"}`, exactly what the
+   fixture's own comment specifies. No golden for the polyglot IR exists (tests/goldens/ir/).
+48. APPLIED 2026-10-23 I-B23. tests/fixtures/repos/polyglot/bob.go API(): calls `FFI(p)` before
+   the unchanged `Module(p).Binary("./cmd/api", …)` (same defect and fix as item 46 for acme). With
+   item 47 in place the tag build ran and failed on the worker: orchestrator log `build: job failed
+   … status=failed error="BOB-E-2003 //cmd/api:api: header foo.h not found"` (build
+   b-01M5K8ASQY8D6GZ4CT5BF5DVB8): a worker evaluating //deploy:polyglot declared the api binary
+   before the module's cgo package //:FFI. Labels and nodes unchanged (FFI is the same node).
+49. APPLIED 2026-10-23 I-B23. tests/serverenv/forgejo/forgejo.go seed: bobbot is collaborator
+   `admin` (was `read`) on alice/other. TestRREG003PullRegistry links project priv to alice/other
+   and publishes a release from it by tag push, but with read access the bot cannot manage the
+   repository's hook: orchestrator log `forge: webhook not ensured; the repository is linked but
+   pushes trigger nothing … repository=alice/other err="forgejo: list hooks: … (HTTP 403): user
+   should be an owner or a collaborator with admin write of a repository"`, so the priv tag push
+   never triggered a build and `e.Publish("priv", "other", …)` could only time out. No test relies
+   on the bot lacking admin on alice/other: the job-token scoping checks of
+   tests/forge/forgejo_live_test.go use the repository-scoped job token, not the bot's rights.

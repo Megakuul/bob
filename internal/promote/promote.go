@@ -58,6 +58,11 @@ type Complete struct {
 	Images  []Image  `json:"images"`
 	Assets  []Asset  `json:"assets"`
 	Skipped []string `json:"skipped"`
+	// Kinds names the output kind of the staged paths whose derivations discard references by
+	// design (oci.image, appimage.*, tarball.*; A149): store hashes in their content are data,
+	// accepted only for paths of this job's closure (Paths and Skipped). Signed with the rest
+	// of COMPLETE.json (JobResult.CompSHA) and checked against the path's name and layout.
+	Kinds map[string]string `json:"kinds,omitempty"`
 }
 
 // Image is one staged OCI image.
@@ -115,6 +120,17 @@ func ParseComplete(b []byte, job, build, project string) (*Complete, error) {
 	for _, p := range c.Skipped {
 		if !cache.ValidStorePath(p) {
 			return nil, fmt.Errorf("COMPLETE.json: invalid skipped path %.300q", p)
+		}
+	}
+	if len(c.Kinds) > len(c.Paths) {
+		return nil, errors.New("COMPLETE.json declares more kinds than paths")
+	}
+	for p, k := range c.Kinds {
+		if !cache.ValidStorePath(p) || !seen[cache.HashOf(p)] || !slices.Contains(c.Paths, p) {
+			return nil, fmt.Errorf("COMPLETE.json declares the kind of %.300q, which it does not stage", p)
+		}
+		if !DiscardsRefs(k) {
+			return nil, fmt.Errorf("COMPLETE.json: kind %.40q of %s does not discard references", k, p)
 		}
 	}
 	for _, im := range c.Images {
@@ -712,7 +728,14 @@ func (p *Promoter) promotePath(ctx context.Context, j *Job, sp *stagedPath, r *r
 		return err
 	}
 	defer v.close()
-	if reason := p.checkClaim(ctx, sp, v, claimed, r); reason != "" {
+	kind := j.Complete.Kinds[sp.path]
+	if kind != "" {
+		if reason := checkKind(sp.path, kind, v.Top); reason != "" {
+			out.add(func(o *outcome) { o.failed = fmt.Errorf("%s: %s", sp.path, reason) })
+			return nil
+		}
+	}
+	if reason := p.checkClaim(ctx, sp, v, claimed, kind, r); reason != "" {
 		if strings.HasPrefix(reason, "!") {
 			return errors.New(reason[1:])
 		}
@@ -762,8 +785,11 @@ func (p *Promoter) promotePath(ctx context.Context, j *Job, sp *stagedPath, r *r
 }
 
 // checkClaim compares the claim with what the NAR proved. A reason starting with "!" is a
-// storage error (retried), any other reason a verification failure.
-func (p *Promoter) checkClaim(ctx context.Context, sp *stagedPath, v *verified, claimed map[string]bool, r *refs) string {
+// storage error (retried), any other reason a verification failure. kind is the verified
+// kind of an output that discards references (A149, "" for every other path): store hashes
+// in its content are data, never registered as references, and accepted only when they
+// belong to this job's own closure (the paths it stages and the ones it skipped).
+func (p *Promoter) checkClaim(ctx context.Context, sp *stagedPath, v *verified, claimed map[string]bool, kind string, r *refs) string {
 	c := sp.claim
 	switch {
 	case c.NarHash != v.NarHash || c.NarSize != v.NarSize:
@@ -771,9 +797,17 @@ func (p *Promoter) checkClaim(ctx context.Context, sp *stagedPath, v *verified, 
 	case c.FileHash != "" && (c.FileHash != v.FileHash || c.FileSize != v.FileSize):
 		return "compressed NAR does not match its claim"
 	}
+	foreign := func(h string) string {
+		return fmt.Sprintf("the %s output contains the store hash %s, which is not in this job's closure "+
+			"(outputs that discard references may only name paths of their own job)", kind, h)
+	}
 	for h := range v.Found {
-		if !claimed[h] {
+		switch {
+		case claimed[h]:
+		case kind == "":
 			return "the NAR references " + h + ", which the claim does not list"
+		case !r.inJob[h] && !r.skipped[h]:
+			return foreign(h)
 		}
 	}
 	for h := range v.Extra {
@@ -781,8 +815,12 @@ func (p *Promoter) checkClaim(ctx context.Context, sp *stagedPath, v *verified, 
 		if err != nil {
 			return "!" + err.Error()
 		}
-		if ok && !claimed[h] {
+		switch {
+		case !ok || claimed[h]:
+		case kind == "":
 			return "the NAR references the served path " + h + ", which the claim does not list"
+		default:
+			return foreign(h) // in the job's closure it would be among Found
 		}
 	}
 	return ""

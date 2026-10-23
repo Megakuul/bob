@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -111,7 +112,14 @@ func TestStageImagesAndReleaseAssets(t *testing.T) {
 		}}
 	mb, _ := json.Marshal(m)
 	relPath, _ := f.path("release-api-1.4.2", map[string]string{"release.json": string(mb)})
-	res := RunResult{Paths: f.paths, Outputs: []BuiltOutput{{Label: "//deploy:api", Path: relPath}, {Label: "//deploy:api-image", Path: plain}}}
+	cliApp, _ := f.path("appimage-cli", map[string]string{"cli-aarch64.AppImage": "cli"}) // outside a release
+	// images reference their layers (R-OUT-011)
+	for i := range f.paths {
+		if p := f.paths[i].Path; p == plain || p == relImg {
+			f.paths[i].References = []string{f.paths[i-1].Path}
+		}
+	}
+	res := RunResult{Paths: f.paths, Outputs: []BuiltOutput{{Label: "//deploy:api", Path: relPath}, {Label: "//deploy:api-image", Path: plain}, {Label: "//deploy:cli", Path: cliApp}}}
 	art, o := stageJob(t, dir, res)
 	if o.Status != "ok" || o.Complete == "" {
 		t.Fatalf("outcome %+v", o)
@@ -141,6 +149,17 @@ func TestStageImagesAndReleaseAssets(t *testing.T) {
 				t.Errorf("blob %s not staged or wrong (%d bytes)", d, len(b))
 			}
 		}
+	}
+	// A149: images, their layers and the AppImage are declared as outputs that discard
+	// references; the release output and anything else are not
+	wantKinds := map[string]string{plain: "oci.image", relImg: "oci.image", appPath: "appimage.bundle", cliApp: "appimage.bundle"}
+	for _, pi := range f.paths {
+		if strings.Contains(pi.Path, "-oci-layer-") {
+			wantKinds[pi.Path] = "oci.image"
+		}
+	}
+	if len(wantKinds) != 6 || !maps.Equal(c.Kinds, wantKinds) {
+		t.Errorf("kinds %v, want %v", c.Kinds, wantKinds)
 	}
 	if len(c.Assets) != 1 || c.Assets[0].File != file || c.Assets[0].Size != int64(len(app)) || string(art.m[staging+"assets/"+file]) != app {
 		t.Errorf("assets %+v", c.Assets)

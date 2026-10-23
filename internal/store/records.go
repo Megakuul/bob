@@ -626,6 +626,9 @@ type BuildJob struct {
 	Duration time.Duration `cbor:"d,omitempty"`
 	// Promotion is the job's final JobRecord.pm (§06 Job.promotion).
 	Promotion string `cbor:"pm,omitempty"`
+	// Error is the first line of the job's signed JobResult.error (≤ 300 bytes) once the row is
+	// terminal: the job record is gone then, and §06 Job.error still shows why it failed.
+	Error string `cbor:"e,omitempty"`
 }
 
 // BuildResult is BuildRecord.rs.

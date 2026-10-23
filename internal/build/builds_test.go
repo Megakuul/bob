@@ -13,12 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+
 	buildctl "github.com/megakuul/bob/internal/build"
 	"github.com/megakuul/bob/internal/build/jobspec"
 	"github.com/megakuul/bob/internal/cache"
 	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/fleetsrv"
 	"github.com/megakuul/bob/internal/forge"
+	buildv1 "github.com/megakuul/bob/internal/gen/bob/build/v1"
 	"github.com/megakuul/bob/internal/store"
 	"github.com/megakuul/bob/tests/store/env"
 )
@@ -166,8 +169,11 @@ func (l *lab) run(j *store.JobRecord, status string, report *jobspec.Report, fai
 	}
 	spec, _ := fleet.DecodeSpec(claimed.Spec.Value())
 	res := store.JobResult{V: 1, Status: status, Failed: failed, Finished: time.Now().Unix()}
-	if status == "failed" {
+	switch status {
+	case "failed":
 		res.Error = "✗ BOB-E-2005 test //cmd/api:test failed"
+	case "infra":
+		res.Error = "job source: checkout credential: unauthenticated: proof of possession invalid\nsecond line"
 	}
 	if report != nil {
 		body, _ := json.Marshal(report)
@@ -414,6 +420,21 @@ func infraRetries(t *testing.T, l *lab) {
 	got := l.build(rec.ID.Value())
 	if got.State.Value() != buildctl.StateFailed || len(got.Errors.Value()) == 0 || !strings.Contains(got.Errors.Value()[0].Message, "failed 3 times on workers (infrastructure)") {
 		t.Fatalf("after 3 infra failures: %s %+v (%d jobs)", got.State.Value(), got.Errors.Value(), len(got.Jobs.Value()))
+	}
+	// the last attempt's reason reaches the build error, every terminal row and the Job API
+	const reason = "job source: checkout credential: unauthenticated: proof of possession invalid"
+	if msg := got.Errors.Value()[0].Message; !strings.HasSuffix(msg, "; last error: "+reason) {
+		t.Errorf("build error %q does not carry the last job error", msg)
+	}
+	s := &buildctl.Service{B: l.b}
+	for _, row := range got.Jobs.Value() {
+		if row.Error != reason {
+			t.Errorf("row %s error %q, want %q", row.ID, row.Error, reason)
+		}
+		res, err := s.GetJob(l.ctx, connect.NewRequest(&buildv1.GetJobRequest{Id: row.ID}))
+		if err != nil || res.Msg.GetJob().GetError().GetMessage() != reason {
+			t.Errorf("GetJob %s: %v %v", row.ID, res, err)
+		}
 	}
 }
 

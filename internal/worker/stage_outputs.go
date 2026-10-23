@@ -47,6 +47,7 @@ type outStager struct {
 	mu     sync.Mutex
 	staged map[string]bool // blob digests uploaded by this job
 	done   *promote.Complete
+	kinds  map[string]string // store path → kind of the outputs that discard references
 }
 
 // stageOutputs lists the images and release assets of res in done and uploads their objects.
@@ -62,7 +63,7 @@ func (p *Process) stageOutputs(ctx context.Context, staging, project string, res
 		return err
 	}
 	s := &outStager{p: p, staging: staging, project: project, root: root, closure: map[string]bool{},
-		staged: map[string]bool{}, done: done}
+		staged: map[string]bool{}, done: done, kinds: map[string]string{}}
 	for _, pi := range res.Paths {
 		s.closure[strings.TrimPrefix(pi.Path, cache.StoreDir+"/")] = true
 	}
@@ -79,10 +80,15 @@ func (p *Process) stageOutputs(ctx context.Context, staging, project string, res
 			}
 		case isRegular(filepath.Join(dir, "oci-layout")) && isRegular(filepath.Join(dir, "index.json")):
 			plain = append(plain, o)
+		default:
+			if k := bundleKind(o.Path, dir); k != "" {
+				s.kinds[o.Path] = k // an AppImage or tarball outside a release (a cache path only)
+			}
 		}
 	}
 	// plain images after the releases: an image a release lists already is not staged twice
 	for _, o := range plain {
+		s.kinds[o.Path] = promote.KindOCIImage
 		repo := imageRepo(project, o.Label)
 		if repo == "" {
 			continue // no valid repository name: the image stays a cache path only
@@ -95,7 +101,65 @@ func (p *Process) stageOutputs(ctx context.Context, staging, project string, res
 	if len(done.Images) > maxImages || len(done.Assets) > maxImages {
 		return fmt.Errorf("more than %d images or assets", maxImages)
 	}
+	s.declareKinds(res.Paths)
 	return nil
+}
+
+// bundleKind recognises an AppImage or tarball output by its derivation name and its single
+// file (pkg/output/appimage, pkg/output/tarball); "" for anything else.
+func bundleKind(storePath, dir string) string {
+	name := strings.TrimPrefix(storePath, cache.StoreDir+"/")
+	if len(name) <= 33 {
+		return ""
+	}
+	kind, ext := "", ""
+	switch name = name[33:]; {
+	case strings.HasPrefix(name, "appimage-"):
+		kind, ext = "appimage.bundle", ".AppImage"
+	case strings.HasPrefix(name, "tarball-"):
+		kind, ext = "tarball.tarball", ".tar.gz"
+	default:
+		return ""
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	n := 0
+	for _, e := range ents {
+		if strings.HasSuffix(e.Name(), ext) && e.Type().IsRegular() {
+			n++
+		}
+	}
+	if n != 1 {
+		return ""
+	}
+	return kind
+}
+
+// declareKinds lists in COMPLETE.json the staged outputs that discard references by design
+// (A149): images and their layers, AppImages and tarballs. The orchestrator accepts store
+// hashes in their content (image config PATH, the AppImage's interpreter) as data when they
+// belong to the job's closure, after checking the kind against the path's name and layout.
+func (s *outStager) declareKinds(paths []PathInfo) {
+	for _, pi := range paths {
+		if s.kinds[pi.Path] != promote.KindOCIImage {
+			continue
+		}
+		for _, r := range pi.References {
+			if name := strings.TrimPrefix(r, cache.StoreDir+"/"); len(name) > 33 && strings.HasPrefix(name[33:], "oci-layer-") {
+				s.kinds[r] = promote.KindOCIImage
+			}
+		}
+	}
+	for _, p := range s.done.Paths {
+		if k := s.kinds[p]; k != "" {
+			if s.done.Kinds == nil {
+				s.done.Kinds = map[string]string{}
+			}
+			s.done.Kinds[p] = k
+		}
+	}
 }
 
 // imageRepo is the repository of a plain (non-release) image: <project>/<package name> in
@@ -257,7 +321,9 @@ func (s *outStager) release(ctx context.Context, o BuiltOutput, dir string) erro
 			if err := s.image(ctx, idir, repo, m.Version, a.Index); err != nil {
 				return fmt.Errorf("image %s: %w", a.Name, err)
 			}
+			s.kinds[a.StorePath] = promote.KindOCIImage
 		case "appimage", "tarball":
+			s.kinds[a.StorePath] = map[string]string{"appimage": "appimage.bundle", "tarball": "tarball.tarball"}[a.Kind]
 			if err := s.asset(ctx, a.Kind, a.StorePath, a.File, a.SHA256, a.Size); err != nil {
 				return fmt.Errorf("%s %s: %w", a.Kind, a.Name, err)
 			}

@@ -177,7 +177,11 @@ func (e *env) narOf(p *path) []byte {
 		if err := os.MkdirAll(filepath.Dir(fp), 0o755); err != nil {
 			e.t.Fatal(err)
 		}
-		if err := os.WriteFile(fp, []byte(c), 0o644); err != nil {
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(f, ".AppImage") {
+			mode = 0o755
+		}
+		if err := os.WriteFile(fp, []byte(c), mode); err != nil {
 			e.t.Fatal(err)
 		}
 	}
@@ -217,6 +221,11 @@ type job struct {
 }
 
 func (e *env) stage(id, project string, paths []*path, claimRefs func(*path) []*path) *job {
+	return e.stageKinds(id, project, paths, claimRefs, nil, nil)
+}
+
+// stageKinds is stage with the declared kinds of COMPLETE.json (A149) and skipped paths.
+func (e *env) stageKinds(id, project string, paths []*path, claimRefs func(*path) []*path, kinds map[*path]string, skipped []*path) *job {
 	j := &job{id: id, staging: "staging/b1/" + id + "/1/", paths: paths}
 	var stores []string
 	for _, p := range paths {
@@ -237,8 +246,20 @@ func (e *env) stage(id, project string, paths []*path, claimRefs func(*path) []*
 		e.put(j.staging+"narinfo/"+p.hash+".narinfo", []byte(claim))
 		stores = append(stores, p.store())
 	}
-	complete, _ := json.Marshal(map[string]any{"v": 1, "job": id, "build": "b1", "project": project, "paths": stores,
-		"images": []any{}, "assets": []any{}, "skipped": []string{}})
+	skip := []string{}
+	for _, p := range skipped {
+		skip = append(skip, p.store())
+	}
+	doc := map[string]any{"v": 1, "job": id, "build": "b1", "project": project, "paths": stores,
+		"images": []any{}, "assets": []any{}, "skipped": skip}
+	if len(kinds) > 0 {
+		k := map[string]string{}
+		for p, kind := range kinds {
+			k[p.store()] = kind
+		}
+		doc["kinds"] = k
+	}
+	complete, _ := json.Marshal(doc)
 	e.put(j.staging+"COMPLETE.json", complete)
 	sum := sha256.Sum256(complete)
 	spec, err := fleet.Encode(store.JobSpec{V: 1, JobID: id, BuildID: "b1", Project: project, Kind: "evalbuild", Staging: j.staging})
@@ -590,5 +611,134 @@ func TestBlockedWithoutComplete(t *testing.T) {
 	}
 	if pm := e.record("j1").Promotion.Value(); pm != promote.Blocked {
 		t.Fatalf("promotion = %q", pm)
+	}
+}
+
+// TestDiscardRefsKinds: outputs that discard references by design (A149, SPEC §6.6.4) may hold
+// store hashes of their own job's closure as data (image config PATH/Entrypoint, an AppImage's
+// interpreter inside the zstd squashfs); a foreign hash still fails, an ordinary output keeps
+// the strict scan, and a declared kind must match the path's name and layout.
+func TestDiscardRefsKinds(t *testing.T) {
+	e := newEnv(t)
+	glibc := newPath("glibc-2.42-100", map[string]string{"lib/ld-linux-aarch64.so.1": "ld\n"})
+	golink := newPath("go-link-api", map[string]string{"bin/api": "ELF interp @glibc-2.42-100/lib/ld-linux-aarch64.so.1\n"}, glibc)
+	image := func(name string, roots ...*path) (img, layer *path) {
+		layer = newPath("oci-layer-1a2b3c4d-"+name, map[string]string{"layer.json": `{"paths":["` + name + `"]}` + "\n", "layer.tar.gz": "\x1f\x8b gz"})
+		cfg := `{"config":{"Env":["PATH=`
+		for _, r := range roots {
+			cfg += "@" + r.name + "/bin:"
+		}
+		cfg += `/usr/bin"],"Entrypoint":["@` + roots[0].name + `/bin/api"]}}`
+		img = newPath("oci-image-"+name+"-image-1.4.5", map[string]string{"oci-layout": `{"imageLayoutVersion":"1.0.0"}`,
+			"index.json": `{"manifests":[]}`, "blobs/sha256/" + strings.Repeat("c", 64): cfg}, append([]*path{layer}, roots...)...)
+		return img, layer
+	}
+	onlyLayer := func(layer *path) func(*path) []*path {
+		return func(p *path) []*path {
+			if strings.HasPrefix(p.name, "oci-image-") {
+				return []*path{layer}
+			}
+			return p.refs
+		}
+	}
+
+	// j0 (another project) publishes a path the image of j2 names without having it in its job
+	foreign := newPath("secret-tool", map[string]string{"bin/api": "secret\n"})
+	e.stage("j0", "p2", []*path{foreign}, nil)
+
+	// j1: image with PATH/Entrypoint store paths inside the job's closure passes
+	img1, layer1 := image("api", golink)
+	e.stageKinds("j1", "p1", []*path{img1, layer1, golink, glibc}, onlyLayer(layer1),
+		map[*path]string{img1: promote.KindOCIImage, layer1: promote.KindOCIImage}, nil)
+
+	// j2: image naming a served path of another project (outside its closure) fails
+	golink2 := newPath("go-link-api", map[string]string{"bin/api": "api\n"})
+	img2, layer2 := image("api2", foreign)
+	img2.refs = []*path{layer2, foreign}
+	e.stageKinds("j2", "p1", []*path{img2, layer2, golink2}, onlyLayer(layer2),
+		map[*path]string{img2: promote.KindOCIImage, layer2: promote.KindOCIImage}, nil)
+
+	// j3: the same image content without a declared kind is an ordinary output: strict scan
+	golink3 := newPath("go-link-api", map[string]string{"bin/api": "api\n"})
+	img3, layer3 := image("api3", golink3)
+	e.stageKinds("j3", "p1", []*path{img3, layer3, golink3}, onlyLayer(layer3), nil, nil)
+
+	// j4: a declared kind that does not match the path (an ordinary program) fails
+	golink4 := newPath("go-link-api", map[string]string{"bin/api": "api\n"})
+	tool4 := newPath("bob-tool", map[string]string{"bin/tool": "runs @go-link-api/bin/api\n"}, golink4)
+	e.stageKinds("j4", "p1", []*path{tool4, golink4}, func(*path) []*path { return nil },
+		map[*path]string{tool4: promote.KindOCIImage}, nil)
+
+	// j5: AppImage with the interpreter path inside the zstd-compressed squashfs passes; the
+	// interpreter (glibc) is a skipped path of the job (served by cache.nixos.org)
+	glibc5 := newPath("glibc-2.42-100", nil)
+	golink5 := newPath("go-link-api", map[string]string{"bin/api": "api\n"})
+	launch := `{"interp":"` + glibc5.store() + `/lib/ld-linux-aarch64.so.1","exec":"` + golink5.store() + `/bin/api"}`
+	// mksquashfs -comp zstd emits raw (not entropy-coded) literals for such blocks (I-B22 found
+	// the glibc path at offset 9105927 of a real AppImage); the encoder is told to do the same
+	var sq bytes.Buffer
+	zw, err := zstd.NewWriter(&sq, zstd.WithNoEntropyCompression(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = zw.Write([]byte(launch + strings.Repeat("\x00", 64)))
+	_ = zw.Close()
+	squash := sq.Bytes()
+	if !bytes.Contains(squash, []byte(glibc5.hash)) {
+		t.Fatalf("precondition: zstd did not keep the store hash as a raw literal")
+	}
+	elf := "\x7fELF\x02\x01\x01\x00AI\x02" + strings.Repeat("\x00", 53) + "hsqs" + string(squash)
+	app5 := newPath("appimage-api-appimage", map[string]string{"api-aarch64.AppImage": elf})
+	e.stageKinds("j5", "p1", []*path{app5, golink5}, func(*path) []*path { return nil },
+		map[*path]string{app5: "appimage.bundle"}, []*path{glibc5})
+
+	if err := e.promoter("o1").Run(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ job, want, log string }{
+		{"j0", promote.Done, ""},
+		{"j1", promote.Done, ""},
+		{"j2", promote.Failed, "the oci.image output contains the store hash " + foreign.hash + ", which is not in this job's closure"},
+		{"j3", promote.Failed, "the NAR references " + golink3.hash + ", which the claim does not list"},
+		{"j4", promote.Failed, "COMPLETE.json declares kind oci.image, but the path is not an oci-image- or oci-layer- output"},
+		{"j5", promote.Done, ""},
+	} {
+		if pm := e.record(tc.job).Promotion.Value(); pm != tc.want {
+			t.Errorf("%s: promotion = %q, want %q", tc.job, pm, tc.want)
+		}
+		if tc.log != "" && !strings.Contains(e.logs.String(), tc.log) {
+			t.Errorf("%s: no log line with %q", tc.job, tc.log)
+		}
+	}
+	// the found hashes are data, not references: the image references only its layer
+	if ni := e.narinfo(img1); len(ni.References) != 1 || ni.References[0] != layer1.store() {
+		t.Errorf("image references %v, want only its layer", ni.References)
+	}
+	if ni := e.narinfo(app5); len(ni.References) != 0 {
+		t.Errorf("AppImage references %v, want none", ni.References)
+	}
+	// the foreign path's image never became visible
+	if code, _, _ := e.get("/nix/"+img2.hash+".narinfo", "p1-token", nil); code != http.StatusNotFound {
+		t.Errorf("rejected image narinfo: HTTP %d", code)
+	}
+}
+
+// TestParseCompleteKinds: COMPLETE.json kinds must name staged paths and discarding kinds.
+func TestParseCompleteKinds(t *testing.T) {
+	p := "/nix/store/" + strings.Repeat("a", 32) + "-oci-image-api"
+	doc := func(kinds string) []byte {
+		return []byte(`{"v":1,"job":"j","build":"b","project":"p","paths":["` + p + `"],"images":[],"assets":[],"skipped":[],"kinds":` + kinds + `}`)
+	}
+	if c, err := promote.ParseComplete(doc(`{"`+p+`":"oci.image"}`), "j", "b", "p"); err != nil || c.Kinds[p] != "oci.image" {
+		t.Fatalf("valid kinds: %v %v", c, err)
+	}
+	for _, bad := range []string{
+		`{"` + p + `":"golang.binary"}`,
+		`{"/nix/store/` + strings.Repeat("b", 32) + `-x":"oci.image"}`,
+		`{"` + p + `":"appimage."}`,
+	} {
+		if _, err := promote.ParseComplete(doc(bad), "j", "b", "p"); err == nil {
+			t.Errorf("kinds %s accepted", bad)
+		}
 	}
 }

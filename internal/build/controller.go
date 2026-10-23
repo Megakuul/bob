@@ -325,6 +325,9 @@ func setRow(rec *store.BuildRecord, row store.BuildJob) bool {
 func withRow(jobs []store.BuildJob, row store.BuildJob) ([]store.BuildJob, bool) {
 	for i := range jobs {
 		if jobs[i].ID == row.ID {
+			if row.Error == "" {
+				row.Error = jobs[i].Error // rows read before the result keep the recorded error
+			}
 			if jobs[i] == row {
 				return jobs, false
 			}
@@ -346,6 +349,10 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 	}
 	res, _ := fleet.DecodeResult(job.Result.Value())
 	spec, _ := fleet.DecodeSpec(job.Spec.Value())
+	if job.State.Value() == orchestrator.StateFailed {
+		b.cfg.Log.Info("build: job failed", "build", rec.ID.Value(), "job", job.ID.Value(), "attempt", job.Attempt.Value(),
+			"worker", job.Owner.Value(), "status", res.Status, "error", firstLine(res.Error))
+	}
 	var report *jobspec.Report
 	var reject string
 	if res.EvalSHA != "" && (row.Kind == KindEvalBuild || row.Kind == KindEval) {
@@ -397,7 +404,11 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 	next, err := b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
 		// The fields this update changes in several steps are edited as plain values and
 		// written once at the end (a field set with store.Set cannot be read back).
-		jobs, _ := withRow(cur.Jobs.Value(), rowOf(job, row))
+		final := rowOf(job, row)
+		if res.Status != "ok" {
+			final.Error = rowError(res.Error)
+		}
+		jobs, _ := withRow(cur.Jobs.Value(), final)
 		errs, result, pipes, evaluated := cur.Errors.Value(), cur.Result.Value(), cur.Pipelines.Value(), cur.Evaluated.Value()
 		if len(job.NonReproducible.Value()) > 0 {
 			nr := cur.NonReproducible.Value()
@@ -431,8 +442,11 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 			errs = addError(errs, store.BuildError{Message: fmt.Sprintf(
 				"build failed: job %s: %s after %d attempts", job.ID.Value(), job.Promotion.Value(), b.cfg.MaxAttempts)})
 		case infraRetry:
-			errs = addError(errs, store.BuildError{Message: fmt.Sprintf(
-				"build failed: job %s failed %d times on workers (infrastructure)", job.ID.Value(), b.cfg.MaxAttempts)})
+			msg := fmt.Sprintf("build failed: job %s failed %d times on workers (infrastructure)", job.ID.Value(), b.cfg.MaxAttempts)
+			if last := firstLine(res.Error); last != "" {
+				msg += "; last error: " + last
+			}
+			errs = addError(errs, store.BuildError{Message: msg})
 		case job.State.Value() == orchestrator.StateFailed && report == nil:
 			e := store.BuildError{Message: firstLine(res.Error)}
 			e.Code = codeRE.FindString(res.Error)
@@ -534,6 +548,15 @@ func appendUnique(l []string, s string) []string {
 		return l
 	}
 	return append(l, s)
+}
+
+// rowError is the error text kept in a terminal job row (store.BuildJob.Error).
+func rowError(s string) string {
+	s = firstLine(s)
+	if len(s) > 300 {
+		s = strings.ToValidUTF8(s[:300], "")
+	}
+	return s
 }
 
 func firstLine(s string) string {

@@ -481,6 +481,9 @@ func (b *Builds) job(ctx context.Context, rec *store.BuildRecord, row store.Buil
 	j := &buildv1.Job{Id: row.ID, BuildId: rec.ID.Value(), Kind: protoJobKind(row.Kind), State: protoJobState(row.State),
 		Platform: platformOf(row.Class), WorkerId: row.Worker, Attempt: int32(row.Attempts), Epoch: row.Epoch,
 		CreatedAt: ts(rec.Created.Value()), Promotion: row.Promotion, NonReproducible: rec.NonReproducible.Value()[row.ID]}
+	if row.Error != "" {
+		j.Error = &buildv1.ErrorSummary{Code: codeRE.FindString(row.Error), Message: row.Error}
+	}
 	if orchestrator.Terminal(row.State) {
 		return j, nil
 	}

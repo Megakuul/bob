@@ -9,6 +9,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/klauspost/compress/zstd"
 
@@ -126,6 +127,8 @@ type verified struct {
 	ListingSize       int64
 	Found             map[string]bool // known hashes found in the NAR
 	Extra             map[string]bool // other hashes after /nix/store/
+	// Top holds the root directory's entries by name (≤ maxTop; the kind check, A149).
+	Top map[string]cache.NarEntry
 }
 
 func (v *verified) close() {
@@ -153,7 +156,7 @@ func verifyNAR(ctx context.Context, obj *cache.Objects, key string, known map[st
 	if err != nil {
 		return nil, fmt.Errorf("promote: listing: %w", err)
 	}
-	v := &verified{ETag: o.ETag, Listing: ls}
+	v := &verified{ETag: o.ETag, Listing: ls, Top: map[string]cache.NarEntry{}}
 	defer func() {
 		if err != nil {
 			v.close()
@@ -174,6 +177,9 @@ func verifyNAR(ctx context.Context, obj *cache.Objects, key string, known map[st
 	listing := cache.NewListing(ls)
 	var local error // the listing's own I/O (temp file): retried, not the NAR's fault
 	werr := cache.WalkNAR(decoded, func(e cache.NarEntry) error {
+		if n, ok := strings.CutPrefix(e.Path, "/"); ok && !strings.Contains(n, "/") && len(v.Top) < maxTop {
+			v.Top[n] = e
+		}
 		if err := listing.Add(e); err != nil {
 			if !errors.Is(err, cache.ErrBadNAR) {
 				local = err

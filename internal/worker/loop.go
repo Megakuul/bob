@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"log/slog"
 	"math/rand/v2"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -749,6 +750,14 @@ watch:
 	}
 }
 
+// userinfoRE matches the credentials part of a URL ("https://user:token@host").
+var userinfoRE = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@`)
+
+// redactURLs removes URL credentials from an error text before it is logged or persisted
+// (tools such as git may echo a clone URL; the checkout token itself is redacted where it is
+// known).
+func redactURLs(s string) string { return userinfoRE.ReplaceAllString(s, "${1}[redacted]@") }
+
 // finish writes the signed result while the lease holds (SPEC §05.6.1 "result").
 func (w *Worker) finish(ctx context.Context, j *job, out Outcome, lost func()) {
 	id, ep := j.claim.JobID, j.claim.Epoch
@@ -760,9 +769,13 @@ func (w *Worker) finish(ctx context.Context, j *job, out Outcome, lost func()) {
 	default:
 		status = "infra"
 	}
-	errText := out.Error
+	errText := redactURLs(out.Error)
 	if len(errText) > 8<<10 {
 		errText = errText[:8<<10]
+	}
+	if status != "ok" {
+		// the reason stays in the signed result (JobResult.error → §06 Job.error) and here
+		slog.Warn("worker: job did not succeed", "job", id, "epoch", ep, "status", status, "error", errText)
 	}
 	now := w.now()
 	rs, err := fleet.Encode(store.JobResult{V: 1, Status: status, Error: errText, Finished: now.Unix(), LogLast: out.LogLast,
