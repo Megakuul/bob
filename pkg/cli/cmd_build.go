@@ -142,6 +142,9 @@ func (e *env) buildOptions(root string, cmd build.Command) (build.Options, error
 		PrintPaths: e.a.bool("print-paths"),
 		JSONLog:    e.out.jsonLog,
 	}
+	if e.out.verbose >= 2 { // -vv: bob's debug log (the raw Nix log) on stderr
+		o.Debug = e.out.errw
+	}
 	o.RequireAllTests = cmd == build.CmdTest && e.a.bool("require-all-tests")
 	if v := e.a.str("variant"); v != "" {
 		o.Variants = strings.Split(v, "+")

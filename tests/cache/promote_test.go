@@ -313,7 +313,11 @@ func TestRREG005SkippedPathsAreNotServed(t *testing.T) {
 	if e == nil {
 		return
 	}
-	e.DelayStaging(20 * time.Second)
+	// The delay only has to keep COMPLETE.json visible to awaitStaged (200 ms polls). Each staged
+	// GET of the promotion pays it: with 20 s, SPEC §6.6.4 step 3 alone (4 paths at a time) needs
+	// ceil(29/4) x 20 s for the 29 staged paths of the acme release job, the whole promotion more
+	// than waitPromotion's 5 minutes (I-B34, correction 66).
+	e.DelayStaging(5 * time.Second)
 	startTagged(t, e, "acme", "demo", "1.4.2")
 	prefix := awaitStaged(t, e)
 	code, body := e.S3Do(e.S3Creds("root"), http.MethodGet, artifacts, prefix+"COMPLETE.json", nil)

@@ -108,7 +108,10 @@ func TestRREG154DownloadTokenScope(t *testing.T) {
 		return
 	}
 	e.Project("acme", "demo")
-	tok := e.Principal("dl", "acme", "DOWNLOAD")
+	// R-REG-154 is about the bob_dt_ download token of a CLI login; a service-account token of
+	// scope download (bob_sa_) is refused on every /api/ method, WhoAmI included (R-AUTH-005,
+	// TestRAUTH005ServiceAccounts).
+	tok := e.CLIDownloadToken("dl")
 
 	var who struct {
 		TokenScope string `json:"tokenScope"`

@@ -16,6 +16,12 @@ decision.
 | Static Nix (stripped, gzip-9, embedded in `bob`) | 2.34.9 (ADR 0002) | LGPL-2.1-or-later, plus the licences of its static dependencies | `pkg/engine/store/nixbin/<arch>/nix.gz` (fetched by `scripts/fetch-nix.sh`), embedded in `cmd/bob` | https://github.com/NixOS/nix/tree/2.34.9; built by the derivations `s55n25gmlcyyhvchm0bdcfdqf2nqyxxp-nix-static-aarch64-unknown-linux-musl-2.34.9.drv` / `yxd2ay3ha18vcx4n0gw7f5d1f7xhps3w-nix-static-x86_64-unknown-linux-musl-2.34.9.drv` of nixpkgs https://github.com/NixOS/nixpkgs/tree/cd4ea8d57de16f4810bc5f14207bac45fbf19f67 | Ship the licence text; offer the corresponding source of the exact Nix build (and the means to relink, LGPL-2.1 §6) with every release | D50, D52 |
 | busybox (sandbox shell of static Nix) | as pinned with Nix (the version in the closure of the derivations above) | GPL-2.0-only | inside the embedded Nix binary | https://busybox.net/downloads/ (the version in the closure of the Nix derivations above) | Ship the licence text; provide the complete corresponding source with every release | D52 |
 
+## Embedded data
+
+| Item | Version | Licence | Where | Source | Obligations | Decision |
+|---|---|---|---|---|---|---|
+| Mozilla CA certificate bundle (fallback roots when the host has no CA bundle) | NSS 3.126 (nixpkgs `nss-cacert-3.126`, file `etc/ssl/certs/ca-no-trust-rules-bundle.crt`, derivation `ry9maqmzlm3ymsmyn7xk88mva4hnrrwj-nss-cacert-3.126.drv`) | MPL-2.0 | `pkg/engine/store/cacert/ca-bundle.crt`, embedded in `cmd/bob` | https://hg.mozilla.org/projects/nss (`lib/ckfw/builtins/certdata.txt`), via nixpkgs `cacert` | Ship the MPL-2.0 text and name the source; the file is unmodified (MPL-2.0 is compatible with AGPL-3.0 as a secondary licence) | A242 (plan/progress/I-B33.md) |
+
 **[open, release process]** The full list of static dependencies of the Nix build (and their
 licences) is generated from the pinned derivation when embedding lands; it is appended to the table
 above and to the release notes.

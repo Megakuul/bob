@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -32,12 +34,25 @@ func (l local) run(args ...string) harness.Result {
 	return l.c.RunEnv([]string{"NIX_STORE_DIR=/nix/store"}, args...)
 }
 
-// copyFrom substitutes paths from the cache at url into the local store, checking signatures
-// against keys. netrc may be empty (anonymous).
+// upstream is cache.nixos.org with its public key: the client configuration bob writes lists it
+// next to bob's cache (SPEC §6.6.5), and bob never serves a path that cache.nixos.org has
+// (R-REG-005), so a closure that holds nixpkgs paths (glibc, gcc-lib, …) substitutes only with both.
+const (
+	upstreamURL = "https://cache.nixos.org"
+	upstreamKey = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+)
+
+// copyFrom substitutes paths and their closures into the local store with bob's client
+// configuration (SPEC §6.6.5): the cache at url first, then cache.nixos.org, trusting keys and
+// the cache.nixos.org key. netrc may be empty (anonymous). A path that is in neither cache, or
+// whose signature does not verify, fails the substitution. Nix's narinfo disk cache is off in
+// both directions: the client's home is shared by every local store of a test, and a narinfo
+// fetched with a token must not answer a later anonymous or other-project lookup.
 func (l local) copyFrom(url, netrc string, keys []string, paths ...string) harness.Result {
-	args := []string{"copy", "--from", url, "--to", l.store(),
-		"--option", "trusted-public-keys", strings.Join(keys, " "),
-		"--option", "narinfo-cache-negative-ttl", "0"}
+	args := []string{"build", "--no-link", "--store", l.store(), "--max-jobs", "0",
+		"--option", "substituters", url + " " + upstreamURL,
+		"--option", "trusted-public-keys", strings.Join(append(append([]string{}, keys...), upstreamKey), " "),
+		"--option", "narinfo-cache-negative-ttl", "0", "--option", "narinfo-cache-positive-ttl", "0"}
 	if netrc != "" {
 		args = append(args, "--option", "netrc-file", netrc)
 	}
@@ -50,14 +65,36 @@ func (l local) verify(keys []string, paths ...string) harness.Result {
 	return l.run(append(args, paths...)...)
 }
 
-// closure lists the closure of path in the local store.
+// closure lists the bob-built part of the closure of path in the local store: every path but
+// those substituted from cache.nixos.org (signed by its key), which must verify against that key
+// alone (R-REG-005: bob does not serve them).
 func (l local) closure(t testing.TB, path string) []string {
 	t.Helper()
-	r := l.run("path-info", "--recursive", "--store", l.store(), path)
+	r := l.run("path-info", "--recursive", "--json", "--store", l.store(), path)
 	if r.Exit != 0 {
 		t.Fatalf("nix path-info --recursive %s: exit %d: %s", path, r.Exit, r.Combined())
 	}
-	return strings.Fields(r.Stdout)
+	var infos map[string]struct {
+		Signatures []string `json:"signatures"`
+	}
+	if err := json.Unmarshal([]byte(r.Stdout), &infos); err != nil {
+		t.Fatalf("nix path-info --json %s: %v: %s", path, err, r.Stdout)
+	}
+	var bob, upstream []string
+	for p, info := range infos {
+		if slices.ContainsFunc(info.Signatures, func(s string) bool { return strings.HasPrefix(s, "cache.nixos.org-1:") }) {
+			upstream = append(upstream, p)
+		} else {
+			bob = append(bob, p)
+		}
+	}
+	slices.Sort(bob)
+	if len(upstream) > 0 {
+		if v := l.verify([]string{upstreamKey}, upstream...); v.Exit != 0 {
+			t.Errorf("nix store verify of the cache.nixos.org paths of %s: exit %d: %s", path, v.Exit, v.Combined())
+		}
+	}
+	return bob
 }
 
 // roots returns the closure roots of the first platform of rel.

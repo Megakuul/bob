@@ -212,7 +212,10 @@ func (r *Runner) exec(ctx context.Context, f Fault, dir string, env []string, fl
 	}
 	timeout := r.Timeout
 	if timeout == 0 {
-		timeout = 2 * time.Minute
+		// A live run starts with an empty HOME (no bob store, no nixpkgs source): a cold
+		// evaluation of fixture acme took 2m13s on the 8-core harness host (I-B34), so the
+		// earlier 2 minutes killed every live entry that evaluates. A hang still fails.
+		timeout = 10 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -390,6 +393,7 @@ var events = map[string]bool{
 	"run.start": true, "package.start": true, "package.wait": true, "upstream.start": true,
 	"log": true, "error": true, "warning": true, "test.result": true, "package.finish": true,
 	"remote.submitted": true, "remote.state": true, "result": true, "run.finish": true,
+	"note": true, // SPEC §02.4 (new); same as tests/cli knownEvents (correction 57)
 	// R-FW-049 stage events and drv.imported (schema/events-v1.json ev.stage, ev.drv.imported).
 	"namespace": true, "scan": true, "eval": true, "ir": true, "lock": true, "index": true,
 	"sources": true, "plan": true, "fetch": true, "drv": true, "nix": true, "validity": true,

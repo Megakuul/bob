@@ -185,7 +185,7 @@ func (u *unifier) load(members []Member, crates []Crate) error {
 			} else {
 				c := MatchLocked(byName[d.Package], d.Req)
 				if c == nil {
-					return fmt.Errorf("crate %s depends on %s %s, which bob.lock does not hold (run bob lock)", m.Name, d.Package, d.Req)
+					return &NotLockedError{Crate: m.Name, Dep: d.Package, Req: d.Req.String()}
 				}
 				to = byKey[c.Name+"@"+c.Version]
 			}

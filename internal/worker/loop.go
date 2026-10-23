@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"regexp"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -99,9 +100,13 @@ type wake struct {
 type Worker struct {
 	cfg     Config
 	classes []string // ids of the configured classes the profile satisfies
+	// unknown are class ids of wake-ups that fleet/cfg did not list or this profile does not
+	// satisfy (looked up once per Worker; the Process restarts the Worker when fleet/cfg changes)
+	unknown map[string]bool
 
-	wakes chan wake
-	freed chan struct{}
+	wakes  chan wake
+	freed  chan struct{}
+	learns chan []string // class ids published in fleet/cfg since the Worker started (Learn)
 
 	mu       sync.Mutex
 	keys     []ed25519.PublicKey
@@ -167,9 +172,9 @@ func New(cfg Config) (*Worker, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	w := &Worker{cfg: cfg, wakes: make(chan wake, wakeBuffer), freed: make(chan struct{}, 1),
+	w := &Worker{cfg: cfg, wakes: make(chan wake, wakeBuffer), freed: make(chan struct{}, 1), learns: make(chan []string, 1),
 		keys: append([]ed25519.PublicKey(nil), cfg.Keys...), running: map[string]*job{}, lostJobs: map[string]time.Time{}, killed: make(chan struct{}),
-		cursor: map[string]uint64{}, seen: map[wake]bool{}}
+		cursor: map[string]uint64{}, seen: map[wake]bool{}, unknown: map[string]bool{}}
 	for _, c := range cfg.Classes {
 		ok, err := store.Satisfies(cfg.Profile, c)
 		if err != nil {
@@ -192,6 +197,23 @@ func New(cfg Config) (*Worker, error) {
 
 // ID is the worker id.
 func (w *Worker) ID() string { return w.cfg.ID }
+
+// Learn hands the Worker class ids that fleet/cfg gained since it started; it reads those its
+// profile satisfies from then on, without a restart that would drop wake-ups. It blocks only
+// until the previous call was taken up by Run.
+func (w *Worker) Learn(ctx context.Context, ids []string) {
+	select {
+	case w.learns <- ids:
+	case <-ctx.Done():
+	}
+}
+
+// Classes returns the ids of the classes the worker reads.
+func (w *Worker) Classes() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.classes)
+}
 
 // FreeSlots is the number of idle slots.
 func (w *Worker) FreeSlots() int {
@@ -352,6 +374,12 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 		case wk := <-w.wakes:
 			w.onWake(ctx, wk)
+		case ids := <-w.learns:
+			for _, id := range ids {
+				if !w.eligible(id) {
+					w.learnClass(ctx, id)
+				}
+			}
 		case <-w.freed:
 			w.drainPending(ctx)
 			if w.backlog.Swap(false) {
@@ -383,9 +411,47 @@ func (w *Worker) eligible(class string) bool {
 	return false
 }
 
+// learnClass handles a wake-up for a class this Worker does not read yet: the orchestrator
+// published it in fleet/cfg when it enqueued the first job of the class, and the Process
+// picks new classes up only every 30 s and only while idle. Without this, every idle worker
+// ignores the wake-ups of a new class and the first poller after the refresh claims the whole
+// burst (R-FLEET-012). It reads fleet/cfg once per unknown id and adds the class when this
+// profile satisfies it (R-FLEET-004), starting at the queue head as Run does.
+func (w *Worker) learnClass(ctx context.Context, id string) bool {
+	if id == "" || w.unknown[id] {
+		return false
+	}
+	fc, err := store.Get(ctx, w.cfg.Fleet, store.FleetConfigKey())
+	if err != nil {
+		return false // not published or unreadable: the next wake-up or poll tries again
+	}
+	for _, fcl := range fc.Classes.Value() {
+		if fcl.ID != id {
+			continue
+		}
+		c := store.Class{Platform: fcl.Platform, Caps: fcl.Caps, Labels: fcl.Labels}
+		cid, err := store.ClassID(c)
+		ok, serr := store.Satisfies(w.cfg.Profile, c)
+		if err != nil || serr != nil || cid != id || !ok {
+			break
+		}
+		head, err := store.Queue(w.cfg.Fleet, id).Head(ctx)
+		if err != nil {
+			return false
+		}
+		w.mu.Lock() // Classes reads it from the Attach goroutine; Run's own reads need no lock
+		w.classes = append(slices.Clip(w.classes), id)
+		w.mu.Unlock()
+		w.cursor[id] = max(head, 1)
+		return true
+	}
+	w.unknown[id] = true
+	return false
+}
+
 // onWake handles one wake-up: exactly that slot, nothing else (no herd).
 func (w *Worker) onWake(ctx context.Context, wk wake) {
-	if !w.eligible(wk.class) || wk.slot == 0 || w.seen[wk] || w.draining.Load() {
+	if wk.slot == 0 || w.seen[wk] || w.draining.Load() || !w.eligible(wk.class) && !w.learnClass(ctx, wk.class) {
 		return
 	}
 	if w.FreeSlots() == 0 {

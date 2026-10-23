@@ -327,10 +327,22 @@ func (p *Process) loop(ctx context.Context, id *Identity, fc *store.FleetConfig)
 			case <-t.C:
 			}
 			cur, _, err := store.GetCached(wctx, p.cfg.Fleet, &cache, store.FleetConfigKey())
-			if err != nil || slices.Equal(classIDs(cur), have) || w.FreeSlots() < p.cfg.Slots {
+			if err != nil || slices.Equal(classIDs(cur), have) {
 				continue
 			}
-			cancel() // idle and the classes changed: restart over the new set
+			ids := classIDs(cur)
+			if !slices.ContainsFunc(have, func(c string) bool { return !slices.Contains(ids, c) }) {
+				// only additions: the running Worker learns them (a restart would drop the
+				// wake-ups that arrive meanwhile, and the jobs of the new class would wait
+				// for a poll)
+				w.Learn(wctx, ids)
+				have = ids
+				continue
+			}
+			if w.FreeSlots() < p.cfg.Slots {
+				continue
+			}
+			cancel() // idle and a class was removed: restart over the new set
 			return nil
 		}
 	})

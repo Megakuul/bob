@@ -267,7 +267,7 @@ func (r *runner) realise(ctx context.Context, st *store.Store, g *ir.Graph, p *p
 		}
 		args = append(args, installables...)
 		start := time.Now()
-		code, sig, err := runTranslated(ctx, st, args, tr)
+		code, sig, err := runTranslated(ctx, st, args, tr, r.o.Debug)
 		outcome.ExitCode, outcome.Signal = code, sig
 		outcome.DurationMs = time.Since(start).Milliseconds()
 		outcome.Interrupt = ctx.Err() != nil
@@ -378,11 +378,14 @@ func (r *runner) installables(g *ir.Graph, p *planner, units []testrun.Unit, cac
 
 // runTranslated runs nix with args inside bob's namespace and feeds its stderr to tr line by
 // line as it arrives. It returns Nix's exit code and the signal that killed it, if any.
-func runTranslated(ctx context.Context, st *store.Store, args []string, tr *translate.Translator) (int, string, error) {
+func runTranslated(ctx context.Context, st *store.Store, args []string, tr *translate.Translator, debug io.Writer) (int, string, error) {
 	pr, pw := io.Pipe()
 	c := st.Command(ctx, "nix", args...)
 	var stdout bytes.Buffer
 	c.Stdout, c.Stderr = &stdout, pw
+	if debug != nil { // -vv: the raw Nix log as it arrives (SPEC §02.1 "bob's debug log")
+		c.Stderr = io.MultiWriter(pw, debug)
+	}
 	fed := make(chan error, 1)
 	go func() {
 		defer func() {

@@ -317,13 +317,56 @@ func (r *Pruning) removedBy(abs string) (string, bool) {
 
 // CheckPruned reports a pruned file that an ELF file left in the bundle needs (DT_NEEDED,
 // resolved through its RUNPATH/RPATH in the closure): BOB-E-2015 for label (R-OUT-007).
-func CheckPruned(st PlanStore, label string, paths []string, r *Pruning) error {
+// programs (store paths of the bundle's program files) are checked first, together with the
+// kept libraries they load, and a hit names the program (SPEC: "removes libssl.so.3, which api
+// needs" although api loads libssl through libfoo.so); every other file names itself.
+func CheckPruned(st PlanStore, label string, paths []string, r *Pruning, programs ...string) error {
 	if r == nil || len(r.by) == 0 {
 		return nil
 	}
 	inClosure := map[string]bool{}
 	for _, p := range paths {
 		inClosure[p] = true
+	}
+	// need returns the first library the store file abs needs that a pattern removed, and the
+	// kept libraries it loads.
+	need := func(abs string) (lib, pat string, kept []string) {
+		needed, runpath := elfNeeds(st.HostPath(storeRoot(abs)) + strings.TrimPrefix(abs, storeRoot(abs)))
+		for _, l := range needed {
+			for _, dir := range runpath {
+				dir = strings.ReplaceAll(strings.ReplaceAll(dir, "${ORIGIN}", path.Dir(abs)), "$ORIGIN", path.Dir(abs))
+				cand := path.Clean(dir + "/" + l)
+				if !strings.HasPrefix(cand, "/nix/store/") || !inClosure[storeRoot(cand)] {
+					continue
+				}
+				if _, err := os.Lstat(st.HostPath(storeRoot(cand)) + strings.TrimPrefix(cand, storeRoot(cand))); err != nil {
+					continue
+				}
+				if p, gone := r.removedBy(cand); gone {
+					return l, p, kept
+				}
+				kept = append(kept, cand)
+				break
+			}
+		}
+		return "", "", kept
+	}
+	for _, prog := range programs {
+		seen := map[string]bool{}
+		queue := []string{prog}
+		for len(queue) > 0 {
+			f := queue[0]
+			queue = queue[1:]
+			if seen[f] {
+				continue
+			}
+			seen[f] = true
+			lib, pat, kept := need(f)
+			if lib != "" {
+				return diag.New(2015, "label", label, "pattern", pat, "file", lib, "user", path.Base(prog))
+			}
+			queue = append(queue, kept...)
+		}
 	}
 	for _, sp := range paths {
 		host := st.HostPath(sp)
@@ -346,23 +389,9 @@ func CheckPruned(st PlanStore, label string, paths []string, r *Pruning) error {
 			if !d.Type().IsRegular() {
 				return nil
 			}
-			needed, runpath := elfNeeds(hp)
-			for _, lib := range needed {
-				for _, dir := range runpath {
-					dir = strings.ReplaceAll(strings.ReplaceAll(dir, "${ORIGIN}", path.Dir(abs)), "$ORIGIN", path.Dir(abs))
-					cand := path.Clean(dir + "/" + lib)
-					if !strings.HasPrefix(cand, "/nix/store/") || !inClosure[storeRoot(cand)] {
-						continue
-					}
-					if _, err := os.Lstat(st.HostPath(storeRoot(cand)) + strings.TrimPrefix(cand, storeRoot(cand))); err != nil {
-						continue
-					}
-					if pat, gone := r.removedBy(cand); gone {
-						found = diag.New(2015, "label", label, "pattern", pat, "file", lib, "user", path.Base(abs))
-						return found
-					}
-					break
-				}
+			if lib, pat, _ := need(abs); lib != "" {
+				found = diag.New(2015, "label", label, "pattern", pat, "file", lib, "user", path.Base(abs))
+				return found
 			}
 			return nil
 		})

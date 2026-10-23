@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"time"
 
@@ -72,6 +73,8 @@ type Options struct {
 	// 0.0.0-dev with a note. Only release derivations depend on it (engine.PlanRequest.Version).
 	Version string
 	Events  func(Event)
+	// Debug receives bob's debug log (-vv, SPEC §02.1): the raw Nix log of the build. nil = none.
+	Debug io.Writer
 }
 
 // Event is one typed event of a run. Names: the SPEC §02.4 events (run.start, package.start,
@@ -220,6 +223,9 @@ type runner struct {
 	// transientPin is the nixpkgs pin resolved for the evaluator's Go before bob.lock had one;
 	// the lock stage records it when bob.go declares the same channel.
 	transientPin lock.NixpkgsPin
+	// salvageLock is bob lock --rebuild: an unreadable bob.lock is not an error, only its
+	// nixpkgs revision is kept (R-FW-048).
+	salvageLock bool
 }
 
 func (r *runner) emit(e Event) {

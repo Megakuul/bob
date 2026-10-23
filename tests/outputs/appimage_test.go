@@ -122,6 +122,7 @@ func sortStrings(s []string) {
 func TestROUT007Pruning(t *testing.T) {
 	parity.Covers(t, "R-OUT-007")
 	w := appWorld(t)
+	w.overlay(ociOverlay()) // //ocitest:pruned below
 	file, ok := w.appImage("//deploy:api-appimage")
 	if !ok {
 		return

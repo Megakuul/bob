@@ -301,7 +301,10 @@
   "codes": [
    "BOB-E-1011"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "generated file api/go.mod was edited by hand"
+  ]
  },
  "50-lock-outdated": {
   "codes": [
@@ -313,7 +316,10 @@
   "codes": [
    "BOB-E-1019"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "bob.lock cannot be read: "
+  ]
  },
  "52-npm-script-denied": {
   "codes": [
@@ -355,55 +361,82 @@
   "codes": [
    "BOB-E-1024"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: the first line must be \"//go:build bob\" so that go build, go vet and go test ignore it"
+  ]
  },
  "59-bobgo-r2": {
   "codes": [
    "BOB-E-1024"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: package greeting, but the Go code in this directory is package greet; bob.go must use package greet"
+  ]
  },
  "60-bobgo-r3": {
   "codes": [
    "BOB-E-1024"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: imports the build definitions of tools/version/, which is a main package and cannot be imported; define the shared package in a bob.go of a non-main directory"
+  ]
  },
  "61-bobgo-r4": {
   "codes": [
    "BOB-E-1024"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "Hello is also declared at internal/greet/greet.go:5; bob.go shares its package with that code, rename one of them"
+  ]
  },
  "62-bobgo-r6": {
   "codes": [
    "BOB-E-1024"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go imports internal/hello, whose Go code imports internal/greet (cycle exists only for build definitions); move the definition"
+  ]
  },
  "63-bobgo-r7": {
   "codes": [
    "BOB-E-1024"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: imports github.com/google/uuid, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages"
+  ]
  },
  "64-source-outside": {
   "codes": [
    "BOB-E-1025"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "source pattern \"../../../outside/*.cpp\" leaves the repository"
+  ]
  },
  "65-glob-empty": {
   "codes": [
    "BOB-E-1025"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "bob.Glob(\"src/*.cc\") matches no files"
+  ]
  },
  "66-nondeterministic-bobgo": {
   "codes": [
    "BOB-E-1018"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "evaluating bob.go is not deterministic: //libs/foo:foo"
+  ]
  },
  "67-toolchain-go": {
   "codes": [
@@ -421,13 +454,21 @@
   "codes": [
    "BOB-E-1021"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "//svc:gen-graph: generator gqlgen ",
+   "does not match its runtime",
+   "but svc/bob.go requires v0.17.89"
+  ]
  },
  "70-generated-conflict": {
   "codes": [
    "BOB-E-1016"
   ],
-  "exit": 3
+  "exit": 3,
+  "messages": [
+   "svc/gen/rest/version.go conflicts with generated output of "
+  ]
  },
  "71-userns-blocked": {
   "codes": [

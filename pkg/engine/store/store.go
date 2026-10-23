@@ -72,6 +72,11 @@ func Open(ctx context.Context, c Config) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Only once the namespace works (probed, or entered already): nothing below <home>/nix
+	// before that (R-NIX-022).
+	if err := ensureNixCA(home); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 

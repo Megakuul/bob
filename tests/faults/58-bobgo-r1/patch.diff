@@ -1,0 +1,9 @@
+diff --git a/internal/greet/bob.go b/internal/greet/bob.go
+index ae67fda..9c14b91 100644
+--- a/internal/greet/bob.go
++++ b/internal/greet/bob.go
+@@ -1,4 +1,3 @@
+-//go:build bob
+ 
+ package greet
+ 

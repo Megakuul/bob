@@ -49,9 +49,27 @@ func noLeak(t *testing.T, r harness.Result, args []string) {
 			return
 		}
 	}
-	for _, l := range leakcheck.Check([]byte(r.Combined())) {
+	for _, l := range leakcheck.Check([]byte(withoutFinishPaths(r.Stdout) + r.Stderr)) {
 		t.Errorf("bob %s shows raw Nix text: %s", strings.Join(r.Args, " "), l)
 	}
+}
+
+// withoutFinishPaths drops the "paths" of package.finish events from --json output: with
+// --print-paths they are the outputs' host store paths by contract (SPEC §02.4, same as
+// TestRFW051, A116), not leaked Nix text.
+func withoutFinishPaths(stdout string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(stdout, "\n") {
+		var e map[string]any
+		if json.Unmarshal([]byte(line), &e) == nil && e["event"] == "package.finish" {
+			delete(e, "paths")
+			if nb, err := json.Marshal(e); err == nil {
+				line = string(nb)
+			}
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String()
 }
 
 // exitIs fails t unless r exited with want.

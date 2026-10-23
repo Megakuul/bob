@@ -80,7 +80,7 @@ func TestRFW046ProjectionIgnoresUndeclaredAxes(t *testing.T) {
 	env := []string{"BOB_HOME=" + t.TempDir()}
 	pathsOf := func(cfg string) map[string]string {
 		r := harness.RunPath(t, bin, harness.Spec{Dir: dir, Env: env}, "build", "//toy:b@linux-arm64"+cfg, "--print-paths", "--json")
-		noLeak(t, r)
+		noLeak(t, withoutPaths(r))
 		if harness.Red(t, r) || !exitIs(t, r, 0) {
 			return nil
 		}
@@ -540,8 +540,11 @@ func TestRFW047FixtureIRIsCanonicalAndValid(t *testing.T) {
 				harness.RedFeature(t, "ir.Parse")
 				return
 			}
-			if err != nil || len(g.Nodes) == 0 {
-				t.Errorf("ir.Parse of the evaluator's own IR: %v (%d nodes)", err, len(g.Nodes))
+			if err != nil {
+				t.Fatalf("ir.Parse of the evaluator's own IR: %v", err)
+			}
+			if len(g.Nodes) == 0 {
+				t.Errorf("ir.Parse of the evaluator's own IR: 0 nodes")
 			}
 		})
 	}

@@ -12,9 +12,9 @@
   "//..."
  ],
  "code": "BOB-E-1025",
- "position": "marker",
+ "position": "none",
  "excerpt": false,
- "hint": true,
+ "hint": false,
  "nixver": [],
  "exit": 3,
  "forbid": []

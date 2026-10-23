@@ -9,7 +9,7 @@ import "encoding/json"
 // pkg/ocaml/bop; Go cross env, variant flags and the -asan compiler shim of pkg/golang/bop; 8: Rust
 // cross compiles (--sysroot, -C linker) and kind rust-std of pkg/rust/bop; 9: kind appimage of pkg/output/appimage/bop, Ctx.ReferencesGraph, CodedDiag, licences.json; 10: kinds oci-layer, oci-image, tarball, release of pkg/output/oci/bop, pkg/output/tarball/bop, pkg/release/bop, reproducible tar helpers, DecodeArgs; 11: OCI layer blobs as relative symlinks, oci-image Error, tarball placeholder kind; 12: unpack accepts a repeated regular file, the last entry wins; 13: oci-layer layer.json and oci-image history hold store names without hashes, A146; 14: Ctx.MkdirAll tolerates a directory another goroutine created meanwhile, A155). The CI stage "builder" fails when the builder changed since the last commit
 // without a bump.
-const BuilderVersion = 14
+const BuilderVersion = 15
 
 // Job is one derivation's work. Kind selects the subcommand; Args is the kind's own schema.
 type Job struct {

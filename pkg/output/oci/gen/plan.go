@@ -198,7 +198,13 @@ func (ip *imagePlan) platform(pr platformRoots, refs map[string][]string, caOut,
 	if err != nil {
 		return manifest{}, err
 	}
-	if err := engine.CheckPruned(ip.req.Store, ip.n.Label, closure, pruning); err != nil {
+	var programs []string
+	if mp := pr.program.MainProgram; mp != "" {
+		if out := pr.program.Outputs["out"]; out != "" {
+			programs = append(programs, path.Join(out, mp))
+		}
+	}
+	if err := engine.CheckPruned(ip.req.Store, ip.n.Label, closure, pruning, programs...); err != nil {
 		return manifest{}, err
 	}
 	m := manifest{Architecture: pr.plat.GOARCH()}

@@ -91,4 +91,9 @@ type Link struct {
 	X        []string          `json:"x"`    // -X importpath.name=value, sorted
 	ModInfo  string            `json:"modinfo"`
 	External bool              `json:"external"` // link with the C compiler (cgo in the closure)
+	// Trim links as cmd/go -trimpath does: GOROOT is cleared for the linker, so the binary does
+	// not embed runtime.defaultGOROOT (a reference to the toolchain, SPEC R-NIX-019).
+	Trim bool `json:"trim,omitempty"`
+	// Strip drops the symbol table and DWARF (-s -w): release binaries (R-NIX-019 strip step).
+	Strip bool `json:"strip,omitempty"`
 }

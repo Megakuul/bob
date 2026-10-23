@@ -8,6 +8,18 @@ import (
 	"strings"
 )
 
+// NotLockedError reports a registry dependency of a local crate that bob.lock does not hold:
+// the rust section is missing or stale. Callers report it as a stale lock (BOB-E-1012).
+type NotLockedError struct {
+	Crate string // the local crate
+	Dep   string // the registry crate it depends on
+	Req   string // the version requirement
+}
+
+func (e *NotLockedError) Error() string {
+	return fmt.Sprintf("crate %s depends on %s %s, which bob.lock does not hold (run bob lock)", e.Crate, e.Dep, e.Req)
+}
+
 // IndexURL is the "index" value of bob.lock's rust section.
 const IndexURL = "sparse+https://index.crates.io/"
 
@@ -176,7 +188,7 @@ func CargoLockFromRecords(members []Member, crates []Crate) (string, error) {
 			} else {
 				c := MatchLocked(byName[d.Package], d.Req)
 				if c == nil {
-					return "", fmt.Errorf("crate %s depends on %s %s, which bob.lock does not hold (run bob lock)", m.Name, d.Package, d.Req)
+					return "", &NotLockedError{Crate: m.Name, Dep: d.Package, Req: d.Req.String()}
 				}
 				s = ref(c.Name, c.Version)
 			}

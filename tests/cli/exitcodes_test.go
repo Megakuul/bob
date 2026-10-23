@@ -129,7 +129,7 @@ func TestRCLI006CatalogueExpectations(t *testing.T) {
 	}
 }
 
-// TestRCLI006ProgramExit: `bob run //tools:exit3` exits 3 (the program's own status); a program
+// TestRCLI006ProgramExit: `bob run //tools/exit3:exit3` exits 3 (the program's own status); a program
 // killed by SIGKILL gives 137 (128+9). bob's own codes apply only to failures before the start.
 func TestRCLI006ProgramExit(t *testing.T) {
 	parity.Covers(t, "R-CLI-006")
@@ -140,9 +140,9 @@ func TestRCLI006ProgramExit(t *testing.T) {
 		exit  int
 		args  []string
 	}{
-		{"//tools:exit3", 3, nil},
-		{"//tools:selfkill", 137, nil},
-		{"//tools:hello", 0, []string{"--", "a", "b"}},
+		{"//tools/exit3:exit3", 3, nil},
+		{"//tools/selfkill:selfkill", 137, nil},
+		{"//tools/hello:hello", 0, []string{"--", "a", "b"}},
 	} {
 		r := bob(t, dir, env, append([]string{"run", c.label}, c.args...)...)
 		if harness.Red(t, r) {
@@ -151,7 +151,7 @@ func TestRCLI006ProgramExit(t *testing.T) {
 		if r.Exit != c.exit {
 			t.Errorf("bob run %s: exit %d, want %d\n%s", c.label, r.Exit, c.exit, r.Combined())
 		}
-		if c.label == "//tools:hello" && !strings.Contains(r.Stdout, "hello a b") {
+		if c.label == "//tools/hello:hello" && !strings.Contains(r.Stdout, "hello a b") {
 			t.Errorf("bob run %s -- a b: stdout %q does not contain %q (stdout is the program's)", c.label, r.Stdout, "hello a b")
 		}
 		if strings.Contains(r.Combined(), "BOB-E-") && c.exit != 0 {

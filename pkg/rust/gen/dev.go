@@ -153,7 +153,7 @@ func rustProject(ws *workspace, sec *lock.RustSection, root, libSrc string) ([]b
 		if len(crates) == 0 {
 			units = nil // not locked yet: local crates only
 		} else {
-			return nil, err
+			return nil, lockMiss(err)
 		}
 	}
 	// One entry per crate (the target role; host-only crates keep their host unit).

@@ -12,6 +12,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -113,6 +114,14 @@ func (c *Client) Attach(ctx context.Context, base string, hello *workerv1.Hello)
 	}
 	hello.WorkerId = c.ID.ID()
 	if err := bs.Send(&workerv1.AttachRequest{Msg: &workerv1.AttachRequest_Hello{Hello: hello}}); err != nil {
+		// A Send error wrapping io.EOF means the server already ended the stream; connect-go
+		// hands out the server's error from Receive (client_stream.go, BidiStreamForClient.Send).
+		if errors.Is(err, io.EOF) {
+			if _, rerr := bs.Receive(); rerr != nil {
+				cancel()
+				return nil, fmt.Errorf("workerclient: attach: %w", rerr)
+			}
+		}
 		cancel()
 		return nil, fmt.Errorf("workerclient: send hello: %w", err)
 	}

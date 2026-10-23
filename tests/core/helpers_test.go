@@ -19,6 +19,7 @@ import (
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
+	_ "github.com/megakuul/bob/pkg/cli" // links the kinds and ecosystems the bob binary links (R-FW-051)
 	"github.com/megakuul/bob/pkg/engine/eval"
 	_ "github.com/megakuul/bob/tests/core/toyeco" // registers the toy kinds in the test binary (A68)
 	"github.com/megakuul/bob/tests/errors/leakcheck"

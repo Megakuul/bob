@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/fetch"
@@ -34,13 +35,20 @@ func SourcePaths(ctx context.Context, r Request) (map[string]string, error) {
 }
 
 // Evaluate runs scan, eval and ir only (bob graph, bob check): the validated graph. Errors are
-// *diag.Error or ir.Errors.
+// *diag.Error or ir.Errors. With Options.Events it reports the scan and eval stage events
+// (R-FW-049) like Run, so `bob graph --json` shows whether the evaluator was reused (R-FW-043).
 func Evaluate(ctx context.Context, o Options) (*ir.Graph, error) {
 	st, err := openStore(ctx, o.Store, o.Home, o.Caches)
 	if err != nil {
 		return nil, err
 	}
-	g, _, err := evaluate(ctx, st, o)
+	t := time.Now()
+	g, res, err := evaluate(ctx, st, o)
+	if o.Events != nil && res != nil {
+		total := time.Since(t)
+		o.Events(Event{Event: StageScan, DurationMs: res.Scan.Milliseconds()})
+		o.Events(Event{Event: StageEval, DurationMs: (total - res.Scan).Milliseconds(), Cached: res.Cached})
+	}
 	return g, err
 }
 
@@ -61,7 +69,11 @@ func CheckDeterminism(ctx context.Context, o Options) error {
 
 // evaluate runs the evaluator (with the pinned Go) and validates its IR.
 func evaluate(ctx context.Context, st *store.Store, o Options) (*ir.Graph, *eval.Result, error) {
-	r := &runner{o: o}
+	return (&runner{o: o}).evaluate(ctx, st)
+}
+
+func (r *runner) evaluate(ctx context.Context, st *store.Store) (*ir.Graph, *eval.Result, error) {
+	o := r.o
 	goRoot, err := r.evalGoRoot(ctx, st, fetch.New(st, fetch.Policy{}))
 	if err != nil {
 		return nil, nil, err

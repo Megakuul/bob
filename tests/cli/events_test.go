@@ -40,6 +40,8 @@ func knownEvents() map[string]map[string]string {
 		"translate": {"durationMs": "n"},
 		// R-NIX-007: derivations the drv stage imported (schema v1 ev.drv.imported).
 		"drv.imported": {"count": "n"},
+		// SPEC §02.4: a non-error remark (optional label, attr, platform, field are not listed).
+		"note": {"type": "s", "code": "s", "message": "s"},
 	}
 }
 

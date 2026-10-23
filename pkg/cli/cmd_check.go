@@ -7,8 +7,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
@@ -93,13 +95,13 @@ func runGen(e *env) int {
 func reportFindings(e *env, findings []*diag.Error) int {
 	objs := []translate.ErrorObject{}
 	for _, f := range findings {
-		objs = append(objs, translate.NewErrorObject(f, f.Hint()))
+		objs = append(objs, translate.NewErrorObject(f, findingHint(f)))
 	}
 	e.out.result(struct {
 		Findings []translate.ErrorObject `json:"findings"`
 	}{objs})
 	for _, f := range findings {
-		e.out.diagnose(f, "")
+		e.out.diagnose(f, findingHint(f))
 	}
 	exit := diag.ExitCode(findings)
 	if len(findings) == 0 {
@@ -113,6 +115,18 @@ func reportFindings(e *env, findings []*diag.Error) int {
 		fmt.Fprintf(e.out.errw, "\nbob: %d %s (exit %d)\n", len(findings), word, exit)
 	}
 	return e.out.finish(exit, translate.Counts{}, nil)
+}
+
+// listOrderRe matches a BOB-E-1018 label whose differing field is a list element: only the
+// order of a list differs, the symptom of ranging over a map.
+var listOrderRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\(field [^)]*\]\)$`) })
+
+// findingHint is f's hint; for BOB-E-1018 on a list element it is R-FW-008's specific hint.
+func findingHint(f *diag.Error) string {
+	if f.Code == 1018 && listOrderRe().MatchString(f.Args["label"]) {
+		return "do not range over maps when building lists; sort the keys"
+	}
+	return f.Hint()
 }
 
 // writeExclude replaces bob's block in .git/info/exclude with .bob/ and paths, keeping every

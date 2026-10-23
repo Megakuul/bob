@@ -44,7 +44,11 @@ func fleetParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 		fs.Members = cs.Membership
 	}
 	parts.Services.Fleet = fs
-	parts.Services.WorkerControl = &fleetsrv.WorkerControl{F: f, Live: live}
+	wc := &fleetsrv.WorkerControl{F: f, Live: live}
+	if cs != nil {
+		wc.Key = cs.AttachKey
+	}
+	parts.Services.WorkerControl = wc
 	return f, nil
 }
 

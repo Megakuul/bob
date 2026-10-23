@@ -1,0 +1,10 @@
+diff --git a/api/go.mod b/api/go.mod
+index a51397d..d1298a9 100644
+--- a/api/go.mod
++++ b/api/go.mod
+@@ -4,3 +4,5 @@
+ module example.com/api
+ 
+ go 1.26.0
++
++require golang.org/x/text v0.20.0

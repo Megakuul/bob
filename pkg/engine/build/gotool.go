@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path"
 
@@ -23,12 +24,21 @@ func (r *runner) evalGoRoot(ctx context.Context, st *store.Store, f fetch.Fetche
 		return "", nil
 	}
 	lf, err := readLock(r.o.Root)
-	if err != nil {
+	decl := lock.DefaultChannel
+	switch {
+	case err != nil && r.salvageLock:
+		// bob lock --rebuild of an unreadable bob.lock: only its nixpkgs revision counts.
+		lf = &lock.File{LockVersion: lock.Version}
+		raw, _ := os.ReadFile(lockPath(r.o.Root))
+		if rev := lock.SalvageNixpkgsRev(raw); rev != "" {
+			decl += "@" + rev
+		}
+	case err != nil:
 		return "", err
 	}
 	pin := lf.Nixpkgs
 	if pin.Rev == "" {
-		if pin, err = lock.PinNixpkgs(ctx, f, lock.DefaultChannel, lock.NixpkgsPin{}, false, nil); err != nil {
+		if pin, err = lock.PinNixpkgs(ctx, f, decl, lock.NixpkgsPin{}, false, nil); err != nil {
 			return "", err
 		}
 		r.transientPin = pin

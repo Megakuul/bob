@@ -107,7 +107,8 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	return append(findings, IgnoreFindings(ctx, o.Root, ignore)...), nil
 }
 
-// Gen writes the generated native files of the graph (bob gen, bob check --fix): missing files
+// Gen writes the generated native files of the graph (bob gen, bob check --fix) after the lock
+// check of bob build (missing sections locked on demand, stale ones BOB-E-1012): missing files
 // and files bob wrote from older declarations are (re)written, unchanged ones keep their bytes
 // (mode 0444 restored), and a file edited by hand fails with BOB-E-1011 unless force, which
 // first copies the edited file to .bob/gen/backup/<UTC time>/ (R-FW-061). Nothing is written
@@ -127,17 +128,20 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	// graph in its host configuration, whatever patterns name (those select codegen roots).
 	patterns := o.Patterns
 	o.Patterns, o.Platform, o.Variants = nil, "", nil
-	g, _, err := evaluate(ctx, st, o)
-	if err != nil {
-		return nil, err
-	}
-	lf, err := readLock(o.Root)
+	r := &runner{o: o}
+	g, _, err := r.evaluate(ctx, st)
 	if err != nil {
 		return nil, err
 	}
 	var f fetch.Fetcher = fetch.New(st, fetch.Policy{})
 	if o.Offline {
 		f = offlineFetcher{st: st}
+	}
+	// The lock check of bob build (R-FW-005, R-FW-062): sections bob.lock does not have yet
+	// are locked on demand, stale ones fail with BOB-E-1012 before anything is written.
+	lf, err := r.lockStage(ctx, st, f, g)
+	if err != nil {
+		return nil, err
 	}
 	idx, err := nativeIndex(ctx, st, f, g, lf)
 	if err != nil {

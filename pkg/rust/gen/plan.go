@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -141,6 +142,16 @@ func (l errorList) Error() string {
 }
 
 func (l errorList) Unwrap() []error { return l }
+
+// lockMiss turns a registry dependency that bob.lock does not hold into the stale-lock error
+// (SPEC §03.0.3 R-FW-062: BOB-E-1012, "run bob lock"); other errors pass unchanged.
+func lockMiss(err error) error {
+	var nl *resolve.NotLockedError
+	if errors.As(err, &nl) {
+		return diag.New(1012, "what", fmt.Sprintf("crate %s needs rust %s %s (not pinned)", nl.Crate, nl.Dep, nl.Req))
+	}
+	return err
+}
 
 // invalid is BOB-E-1020 for node n.
 func invalid(n *ir.Node, option, reason string) error {
@@ -505,6 +516,9 @@ func (pl *planner) newRoot(n *ir.Node, s rsspec.Crate, dev bool) (*rootCtx, erro
 	root := resolve.Root{Member: s.Name, Features: append(slices.Clone(s.Enable), variantFeatures(n)...), Default: true, Dev: dev}
 	units, err := resolve.Unify(pl.members, pl.crates, []resolve.Root{root}, tc.host, tc.target)
 	if err != nil {
+		if errors.As(err, new(*resolve.NotLockedError)) {
+			return nil, lockMiss(err)
+		}
 		return nil, invalid(n, "Deps", err.Error())
 	}
 	rc := &rootCtx{node: n, tc: tc, units: map[resolve.UnitKey]*resolve.Unit{}, done: map[resolve.UnitKey]*unitOut{}, nodes: nodes}

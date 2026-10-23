@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -145,6 +146,11 @@ func newRunner(c *builder.Ctx, t Toolchain, cgo bool) (*runner, error) {
 // run executes argv in dir and returns its stdout; stderr goes to the build log, stdout too
 // unless capture is set.
 func (r *runner) run(dir string, capture bool, argv ...string) ([]byte, error) {
+	return r.runEnv(dir, capture, nil, argv...)
+}
+
+// runEnv is run with env entries ("K=V") replacing those of the toolchain environment.
+func (r *runner) runEnv(dir string, capture bool, env []string, argv ...string) ([]byte, error) {
 	prog := argv[0]
 	if !strings.Contains(prog, "/") {
 		p, err := lookPath(prog, r.t.Path)
@@ -154,7 +160,7 @@ func (r *runner) run(dir string, capture bool, argv ...string) ([]byte, error) {
 		prog = p
 	}
 	var stdout, stderr bytes.Buffer
-	cmd := &exec.Cmd{Path: prog, Args: argv, Env: r.t.env(r.tmp, r.cgo), Dir: dir, Stdout: &stdout, Stderr: &stderr}
+	cmd := &exec.Cmd{Path: prog, Args: argv, Env: withEnv(r.t.env(r.tmp, r.cgo), env), Dir: dir, Stdout: &stdout, Stderr: &stderr}
 	err := cmd.Run()
 	r.mu.Lock()
 	if !capture {
@@ -170,6 +176,21 @@ func (r *runner) run(dir string, capture bool, argv ...string) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %w", filepath.Base(argv[0]), err)
 	}
 	return stdout.Bytes(), nil
+}
+
+// withEnv returns base with every entry of over replacing the entry of the same key.
+func withEnv(base, over []string) []string {
+	if len(over) == 0 {
+		return base
+	}
+	out := make([]string, 0, len(base)+len(over))
+	for _, kv := range base {
+		k, _, _ := strings.Cut(kv, "=")
+		if !slices.ContainsFunc(over, func(o string) bool { return strings.HasPrefix(o, k+"=") }) {
+			out = append(out, kv)
+		}
+	}
+	return append(out, over...)
 }
 
 func lookPath(name string, path []string) (string, error) {

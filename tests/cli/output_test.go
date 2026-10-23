@@ -37,7 +37,7 @@ func TestRCLI002JSONStream(t *testing.T) {
 		{acme, []string{"version", "--json"}, 0, []string{"bob", "nix", "nixpkgs"}, "version"},
 		{acme, []string{"list", "--json"}, 0, []string{"installed"}, "list"},
 		{acme, []string{"env", "--json"}, 0, []string{"root", "shell", "outside", "insideOnly", "tools"}, "env"},
-		{exits, []string{"build", "//tools:broken", "--json"}, 1, nil, ""},
+		{exits, []string{"build", "//tools/broken:broken", "--json"}, 1, nil, ""},
 		{exits, []string{"build", "//tools:nosuch", "--json"}, 2, nil, ""},
 	}
 	for _, c := range runs {
@@ -151,8 +151,8 @@ func TestRCLI002VerboseAddsLines(t *testing.T) {
 		dir  string
 		args []string
 	}{
-		{exits, []string{"build", "//tools:broken"}},
-		{exits, []string{"build", "//tools:hello"}},
+		{exits, []string{"build", "//tools/broken:broken"}},
+		{exits, []string{"build", "//tools/hello:hello"}},
 		{acme, []string{"test", "//..."}},
 	} {
 		env := home(t)
@@ -190,7 +190,7 @@ func TestRCLI007HumanOutput(t *testing.T) {
 	parity.Covers(t, "R-CLI-007")
 	exits := repo(t, "exits")
 	env := append(home(t), "TERM=dumb")
-	r := bob(t, exits, env, "build", "//tools:broken", "//tools:hello")
+	r := bob(t, exits, env, "build", "//tools/broken:broken", "//tools/hello:hello")
 	if harness.Red(t, r) {
 		return
 	}
@@ -206,19 +206,19 @@ func TestRCLI007HumanOutput(t *testing.T) {
 	failed, built := -1, -1
 	for i, l := range ls {
 		switch {
-		case strings.HasPrefix(l, "FAILED  //tools:broken"):
+		case strings.HasPrefix(l, "FAILED  //tools/broken:broken"):
 			failed = i
-		case strings.HasPrefix(l, "built   //tools:hello"):
+		case strings.HasPrefix(l, "built   //tools/hello:hello"):
 			built = i
 		}
 	}
 	if failed < 0 || built < 0 || failed > built {
-		t.Errorf("want package lines `FAILED  //tools:broken` before `built   //tools:hello` (failed first):\n%s", out)
+		t.Errorf("want package lines `FAILED  //tools/broken:broken` before `built   //tools/hello:hello` (failed first):\n%s", out)
 	}
-	if !regexp.MustCompile(`(?m)^error\[BOB-E-2001\]: //tools:broken: compile error in `).MatchString(out) {
-		t.Errorf("no error block `error[BOB-E-2001]: //tools:broken: compile error in …`:\n%s", out)
+	if !regexp.MustCompile(`(?m)^error\[BOB-E-2001\]: //tools/broken:broken: compile error in `).MatchString(out) {
+		t.Errorf("no error block `error[BOB-E-2001]: //tools/broken:broken: compile error in …`:\n%s", out)
 	}
-	if !strings.Contains(out, "  package defined at tools/bob.go:") || !strings.Contains(out, "  full log: bob log //tools:broken") {
+	if !strings.Contains(out, "  package defined at tools/bob.go:") || !strings.Contains(out, "  full log: bob log //tools/broken:broken") {
 		t.Errorf("error block lacks `package defined at` or `full log:` line:\n%s", out)
 	}
 	if !regexp.MustCompile(`(?m)^bob: 1 failed, 0 skipped, 1 built, 0 cached \(exit 1\)$`).MatchString(out) {
@@ -236,7 +236,7 @@ func TestRCLI007HumanOutput(t *testing.T) {
 	golden.Assert(t, "tests/goldens/cli/human/build-broken.txt", []byte(r.Stdout+r.Stderr), golden.Human(), golden.Reqs("R-CLI-007"))
 
 	// success: `bob: N built, N cached` without failures.
-	ok := bob(t, exits, env, "build", "//tools:hello")
+	ok := bob(t, exits, env, "build", "//tools/hello:hello")
 	if ok.Exit != 0 || !regexp.MustCompile(`(?m)^bob: 1 built, 0 cached$`).MatchString(ok.Stdout+ok.Stderr) {
 		t.Errorf("success summary is not `bob: 1 built, 0 cached` (exit %d):\n%s", ok.Exit, ok.Combined())
 	}
@@ -254,7 +254,7 @@ func TestRCLI007HumanOutput(t *testing.T) {
 func TestRCLI007Colour(t *testing.T) {
 	parity.Covers(t, "R-CLI-007")
 	exits := repo(t, "exits")
-	args := []string{"build", "//tools:broken", "//tools:hello"}
+	args := []string{"build", "//tools/broken:broken", "//tools/hello:hello"}
 	base := home(t)
 	with := func(extra ...string) []string { return append(append([]string{}, base...), extra...) }
 

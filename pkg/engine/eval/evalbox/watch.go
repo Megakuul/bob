@@ -43,12 +43,26 @@ func sandboxUsage(pid int) usage {
 			}
 		}
 	}
-	// The /work tmpfs of the sandbox, seen through stage1's root.
+	// The /work tmpfs of the sandbox, seen through stage1's root. Counted only once it is that
+	// tmpfs: before stage1 has pivoted, its root is the caller's, whose /work may be any
+	// filesystem (the rootless harness binds the repository there), and the used blocks of a
+	// disk are no memory of the sandbox (seen as "peak 127701 MiB" on a 151 GB disk).
 	var st syscall.Statfs_t
-	if syscall.Statfs("/proc/"+strconv.Itoa(pid)+"/root/work", &st) == nil && st.Blocks >= st.Bfree {
+	if syscall.Statfs("/proc/"+strconv.Itoa(pid)+"/root/work", &st) == nil && st.Type == tmpfsMagic && st.Blocks >= st.Bfree &&
+		!sameFile("/proc/"+strconv.Itoa(pid)+"/root/work", "/work") {
 		u.memory += (st.Blocks - st.Bfree) * uint64(st.Bsize)
 	}
 	return u
+}
+
+// tmpfsMagic is TMPFS_MAGIC of statfs(2).
+const tmpfsMagic = 0x01021994
+
+// sameFile reports whether a and b are the same directory (b missing: false).
+func sameFile(a, b string) bool {
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(fa, fb)
 }
 
 // statusUsage returns RssAnon+RssShmem (bytes) and Threads of one /proc/<pid>/status.

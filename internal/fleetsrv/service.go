@@ -258,6 +258,9 @@ type WorkerControl struct {
 	// Live is the live log path (M14.2): it subscribes to a worker's job logs over its
 	// Attach stream and takes the LiveChunks; nil: no live logs.
 	Live *orchestrator.LiveLogs
+	// Key is the orchestrator's pinned key (R-SRV-102): Attach answers the worker's nonce with
+	// a proof of it in the response header; nil: no proof, and workers refuse the stream.
+	Key *fleet.ServerKey
 }
 
 // GetCheckoutCredential implements WorkerControlService: for the job the calling worker holds
@@ -355,6 +358,13 @@ func (w *WorkerControl) Attach(ctx context.Context, st *connect.BidiStream[worke
 			}
 		})
 		defer detach()
+	}
+	if nonce := st.RequestHeader().Get(fleet.AttachNonceHeader); w.Key != nil && nonce != "" {
+		proof, err := w.Key.AttachProof(nonce)
+		if err != nil {
+			return api.InvalidArgument("nonce", err.Error())
+		}
+		st.ResponseHeader().Set(fleet.AttachProofHeader, proof) // sent with Welcome
 	}
 	if err := st.Send(&workerv1.AttachResponse{Msg: &workerv1.AttachResponse_Welcome{Welcome: &workerv1.Welcome{OrchestratorId: w.F.cfg.Name, FleetConfigGen: gen}}}); err != nil {
 		return err

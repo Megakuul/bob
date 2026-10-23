@@ -205,3 +205,15 @@
 | A171 | I-B27 | out/uicheck renamed out/_uicheck (vet R-ARCH-001). | self-ruled |
 | A172 | I-B27 | go mod tidy; dbusage.todo comment refreshed. | self-ruled |
 | A173 | I-B27 | Acceptance triage package-sequential with disk guard; failures classified in plan/progress/I-B27.md. | self-ruled |
+| A240 | I-B33 | Go links clear GOROOT for the linker, release links add -s -w, go-link forbids toolchain refs; BuilderVersion 15. | self-ruled |
+| A241 | I-B33 | Orchestrator Ed25519 key pinning: fp in fleet/cfg.m, nonce proof on Attach. | self-ruled |
+| A242 | I-B33 | bob embeds the Mozilla CA bundle (nss-cacert 3.126) as fallback roots and Nix CA file. | self-ruled |
+| A243-A245 | I-B33 | Prune message names the program; evalbox /work not charged as memory unless sandbox tmpfs; worker Attach PoP path fixed. | self-ruled |
+| OPEN | R-OUT-007 | AppImage 12 MB size budget unreachable (12.9 MB with gconv pruned, 14.87 MB default); needs owner ruling: raise budget to ~15 MB / change gconv default / shrink runtime. Recommendation: raise budget to 15 MB (budget came from a C-runtime spike). | owner |
+| A230 | I-B32 | Rust lock miss is a typed NotLockedError -> BOB-E-1012, exit 3. | self-ruled |
+| A231 | I-B32 | `bob gen` runs the same lock stage as `bob build` (locks missing sections on demand); kept. | self-ruled |
+| A232-A234 | I-B32 | lock --rebuild salvages unreadable lock; --dry-run prints <hash>-<name> only (AGENTS §5.5); cross-build labels stay plain (correction 59). | self-ruled |
+| OPEN | R-FW-011/015 wording | Needs new diag code 1027 `definition {pos}: {reason}` and an update of protected golden tests/goldens/diag/codes.golden plus unit tests asserting 1020; prototype described in plan/progress/I-B32.md. Owner golden approval pending. | owner |
+| A250-A262 | I-B34 | See plan/progress/I-B34.md (promoter reads claims 16 at a time; worker adopts unknown wake classes and reports free slots at once; woken worker counts a slot taken; test corrections 61-68 applied; faults 49,51,58-66,69,70 got patch.diff). | self-ruled |
+| A263 | coordinator | Fault 67: HARNESS expects 1021 for Go, SPEC maps it to 1008/2006; SPEC wins (AGENTS precedence), fault expectation follows SPEC. | self-ruled |
+| A220-A225 | I-B31 | graph --json emits scan/eval events; 1018 list-element hint; Hdrs "." accepted; -vv prints raw Nix log (Options.Debug); withoutPaths helper reuse; see plan/progress/I-B31.md. | self-ruled |

@@ -368,7 +368,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, _, err := evaluate(ctx, st, o)
+	g, _, err := (&runner{o: o, salvageLock: lo.Rebuild}).evaluate(ctx, st)
 	if err != nil {
 		return nil, err
 	}

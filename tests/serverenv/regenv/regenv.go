@@ -31,6 +31,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -277,6 +278,69 @@ func (e *Env) Principal(name, project, scope string) string {
 	e.MustCall(e.Admin, "bob.access.v1.ServiceAccountService/CreateServiceAccountToken", map[string]any{
 		"serviceAccountId": name, "name": "t", "scope": "TOKEN_SCOPE_" + scope, "ttlDays": 1}, &tok)
 	return tok.Secret
+}
+
+// CLIDownloadToken creates the local user login and returns the bob_dt_ download token of a CLI
+// login (SPEC §6.3.1: the CLI session's download token, answered as bob_download_token by
+// /oauth/token): LoginPassword gives the browser session, the device flow (§6.3.2) is approved
+// with it, and the first poll of /oauth/token redeems the device code.
+func (e *Env) CLIDownloadToken(login string) string {
+	e.T.Helper()
+	password := "pw-" + login + "-harness-secret"
+	e.MustCall(e.Admin, "bob.access.v1.UserService/CreateUser", map[string]any{
+		"user": map[string]any{"login": login}, "initialPassword": password}, nil)
+	post := func(path, contentType string, body []byte, cookie *http.Cookie) (*http.Response, []byte) {
+		req, err := http.NewRequest(http.MethodPost, e.API+path, bytes.NewReader(body))
+		if err != nil {
+			e.T.Fatal(err)
+		}
+		req.Header.Set("Content-Type", contentType)
+		if contentType == "application/json" {
+			req.Header.Set("Connect-Protocol-Version", "1")
+		}
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		r, err := e.HTTP.Do(req)
+		if err != nil {
+			e.T.Fatalf("harness error: POST %s: %v", path, err)
+		}
+		defer r.Body.Close()
+		b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		return r, b
+	}
+	b, _ := json.Marshal(map[string]string{"login": login, "password": password})
+	r, body := post("/api/bob.auth.v1.AuthService/LoginPassword", "application/json", b, nil)
+	var session *http.Cookie
+	for _, c := range r.Cookies() {
+		if c.Name == "bob_session" {
+			session = c
+		}
+	}
+	if r.StatusCode != http.StatusOK || session == nil {
+		e.T.Fatalf("harness error: LoginPassword %s: HTTP %d, cookie %v: %s", login, r.StatusCode, session != nil, body)
+	}
+	form := "application/x-www-form-urlencoded"
+	_, body = post("/oauth/device/code", form, []byte(url.Values{"client_id": {"bob-cli"}}.Encode()), nil)
+	var dc struct {
+		DeviceCode string `json:"device_code"`
+		UserCode   string `json:"user_code"`
+	}
+	if err := json.Unmarshal(body, &dc); err != nil || dc.DeviceCode == "" || dc.UserCode == "" {
+		e.T.Fatalf("harness error: /oauth/device/code: %v: %s", err, body)
+	}
+	if r, body := post("/device", form, []byte(url.Values{"user_code": {dc.UserCode}, "decision": {"allow"}}.Encode()), session); r.StatusCode != http.StatusOK {
+		e.T.Fatalf("harness error: approving the device code: HTTP %d: %.200s", r.StatusCode, body)
+	}
+	_, body = post("/oauth/token", form, []byte(url.Values{"grant_type": {"urn:ietf:params:oauth:grant-type:device_code"},
+		"device_code": {dc.DeviceCode}, "client_id": {"bob-cli"}}.Encode()), nil)
+	var tok struct {
+		Download string `json:"bob_download_token"`
+	}
+	if err := json.Unmarshal(body, &tok); err != nil || !strings.HasPrefix(tok.Download, "bob_dt_") {
+		e.T.Fatalf("harness error: /oauth/token (device grant) gave no bob_dt_ download token: %v", err)
+	}
+	return tok.Download
 }
 
 // PublicKeys returns the server's trusted public keys ("name:base64"), from the public

@@ -8,11 +8,11 @@
   "describe": "bob.go reads time.Now"
  },
  "command": [
-  "build",
-  "//..."
+  "check",
+  "--determinism"
  ],
  "code": "BOB-E-1018",
- "position": "marker",
+ "position": "none",
  "excerpt": false,
  "hint": true,
  "nixver": [],

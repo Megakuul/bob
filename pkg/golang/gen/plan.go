@@ -403,18 +403,32 @@ func (in *inputs) list() ([]drv.InputDrv, []string) {
 	return ds, sortedKeys(in.srcs)
 }
 
-// emptyFixup: Go kinds skip the fixup (byte-exact archives); the contract still names it.
-func emptyFixup() map[string]any {
-	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
+// fixupSpec: Go kinds do not strip or patch (archives stay byte-exact; the link strips itself
+// with -s -w); only the reference check runs, for the forbidden paths of a link.
+func fixupSpec(forbidden []string) map[string]any {
+	fs := make([]any, 0, len(forbidden))
+	for _, f := range forbidden {
+		fs = append(fs, f)
+	}
+	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": fs,
 		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
 }
 
 // job finalises one bob-builder job and records it; it returns its path and derivation.
 func (pl *planner) job(name, system, kind, label string, args any, in *inputs) (string, *drv.Derivation, error) {
-	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": emptyFixup()}
+	return pl.jobFixup(name, system, kind, label, args, in, nil)
+}
+
+// jobFixup is job with forbidden references of the output (sorted, unique, non-empty paths).
+func (pl *planner) jobFixup(name, system, kind, label string, args any, in *inputs, forbidden []string) (string, *drv.Derivation, error) {
+	forbidden = slices.Compact(slices.Sorted(slices.Values(slices.DeleteFunc(slices.Clone(forbidden), func(f string) bool { return f == "" }))))
+	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": fixupSpec(forbidden)}
 	ds, ss := in.list()
 	j := drv.Job{Name: name, System: system, Builder: pl.req.Builder, Spec: spec, InputDrvs: ds, InputSrcs: ss,
 		ExtraAttribute: map[string]any{"allowSubstitutes": false}}
+	if len(forbidden) > 0 {
+		j.Disallowed = map[string][]string{"out": forbidden}
+	}
 	d, err := j.Derivation()
 	if err != nil {
 		return "", nil, err
@@ -1188,7 +1202,8 @@ func (pl *planner) planBinary(n *ir.Node) error {
 	}
 	out := drv.Placeholder("out")
 	l := map[string]any{"main": link[ip], "packages": link, "mode": s.Mode, "x": xFlags(s.X),
-		"modinfo": pl.modinfo(cl, ip, t, s.Mode), "external": res.cgo}
+		"modinfo": pl.modinfo(cl, ip, t, s.Mode), "external": res.cgo,
+		"trim": true, "strip": !cl.ctx.v.debug}
 	var linkInfo *bob.LinkInfo
 	switch s.Mode {
 	case gospec.ModeCArchive, gospec.ModeCShared:
@@ -1202,8 +1217,11 @@ func (pl *planner) planBinary(n *ir.Node) error {
 		l["out"] = out + "/bin/" + s.Name
 	}
 	args := tca.with("std", res.std, "pack", "", "packages", []any{}, "link", l)
-	p, d, err := pl.job(drv.Name(append([]string{"go-link", s.Name}, nameParts(cl.ctx.target, cl.ctx.v.tag(cl.ctx.cgo))...)...),
-		t.system, "go-link", n.Label, args, in)
+	// The program must not reference the toolchain or the builder (R-NIX-019 reference check,
+	// also enforced by Nix through disallowedReferences).
+	forbidden := []string{cl.ctx.tc.out, pl.req.Builder}
+	p, d, err := pl.jobFixup(drv.Name(append([]string{"go-link", s.Name}, nameParts(cl.ctx.target, cl.ctx.v.tag(cl.ctx.cgo))...)...),
+		t.system, "go-link", n.Label, args, in, forbidden)
 	if err != nil {
 		return internal(n, "%v", err)
 	}

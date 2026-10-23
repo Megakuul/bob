@@ -317,7 +317,7 @@ func (b *bundle) checkNeeded() error {
 	var found *prunedNeed
 	for _, e := range b.entryNames() {
 		if real, err := b.resolve(e[1]); err == nil {
-			if found = b.prunedNeed(real); found != nil {
+			if found = b.prunedNeedFrom(real, true); found != nil {
 				break
 			}
 		}
@@ -327,7 +327,7 @@ func (b *bundle) checkNeeded() error {
 			if err != nil || !d.Type().IsRegular() || found != nil {
 				return err
 			}
-			found = b.prunedNeed("/" + filepath.ToSlash(strings.TrimPrefix(p, b.appDir+"/")))
+			found = b.prunedNeedFrom("/"+filepath.ToSlash(strings.TrimPrefix(p, b.appDir+"/")), false)
 			return nil
 		})
 		if err != nil {
@@ -342,31 +342,48 @@ func (b *bundle) checkNeeded() error {
 	return errors.New(msg)
 }
 
-// prunedNeed checks the store file f of the AppDir (nil: fine or not a dynamic ELF file).
-func (b *bundle) prunedNeed(f string) *prunedNeed {
-	in := readELF(b.inBundle(f))
-	if in == nil {
-		return nil
-	}
-	for _, lib := range in.needed {
-		var prunedBy string
-		kept := false
-		for _, dir := range in.runpath {
-			dir = strings.ReplaceAll(strings.ReplaceAll(dir, "${ORIGIN}", path.Dir(f)), "$ORIGIN", path.Dir(f))
-			cand := path.Join(dir, lib)
-			if !strings.HasPrefix(cand, b.store+"/") {
-				continue
-			}
-			if _, err := b.resolve(cand); err == nil {
-				kept = true
-				break
-			}
-			if g, ok := b.pruned[cand]; ok && prunedBy == "" {
-				prunedBy = g
-			}
+// prunedNeedFrom checks the store file root of the AppDir (nil: fine or not a dynamic ELF file).
+// With deep set it also follows the kept libraries root loads (each resolved in its own
+// RUNPATH, as ld.so does) and names root as the one that needs a pruned library: for a bundle
+// entry the message names the program (SPEC R-OUT-007: "removes libssl.so.3, which api needs"
+// although api loads libssl through libfoo.so).
+func (b *bundle) prunedNeedFrom(root string, deep bool) *prunedNeed {
+	seen := map[string]bool{}
+	queue := []string{root}
+	for len(queue) > 0 {
+		f := queue[0]
+		queue = queue[1:]
+		if seen[f] {
+			continue
 		}
-		if !kept && prunedBy != "" {
-			return &prunedNeed{prunedBy, lib, path.Base(f)}
+		seen[f] = true
+		in := readELF(b.inBundle(f))
+		if in == nil {
+			continue
+		}
+		for _, lib := range in.needed {
+			var prunedBy string
+			kept := false
+			for _, dir := range in.runpath {
+				dir = strings.ReplaceAll(strings.ReplaceAll(dir, "${ORIGIN}", path.Dir(f)), "$ORIGIN", path.Dir(f))
+				cand := path.Join(dir, lib)
+				if !strings.HasPrefix(cand, b.store+"/") {
+					continue
+				}
+				if real, err := b.resolve(cand); err == nil {
+					kept = true
+					if deep {
+						queue = append(queue, real)
+					}
+					break
+				}
+				if g, ok := b.pruned[cand]; ok && prunedBy == "" {
+					prunedBy = g
+				}
+			}
+			if !kept && prunedBy != "" {
+				return &prunedNeed{prunedBy, lib, path.Base(root)}
+			}
 		}
 	}
 	return nil

@@ -13,6 +13,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/megakuul/bob/internal/fleet"
 	workerv1 "github.com/megakuul/bob/internal/gen/bob/worker/v1"
 	"github.com/megakuul/bob/internal/gen/bob/worker/v1/workerv1connect"
 	"github.com/megakuul/bob/internal/safe"
@@ -20,12 +21,14 @@ import (
 )
 
 // attachPath is the path the Attach proof of possession signs.
-const attachPath = "/api/" + workerv1connect.WorkerControlServiceAttachProcedure
+const attachPath = "/api" + workerv1connect.WorkerControlServiceAttachProcedure // "/api/bob.worker.v1…/Attach"
 
-// Attach timing: slot states every slotEvery; a stream is reopened attachRenew before its
+// Attach timing: slot states every slotEvery and when the free count changes (checked every
+// slotPoll); a stream is reopened attachRenew before its
 // token expires (new token, new PoP); a failed stream is retried with 1–30 s backoff.
 const (
 	slotEvery   = 5 * time.Second
+	slotPoll    = 250 * time.Millisecond
 	attachRenew = 5 * time.Minute
 )
 
@@ -84,6 +87,45 @@ func (p *Process) attachAddrs(ctx context.Context) []string {
 	return out
 }
 
+// attachPin is what a worker expects of the server at one Attach address (R-SRV-102). For a
+// member endpoint read from fleet/cfg the server must prove that member's pin. For a configured
+// address (BOB_ORCHESTRATOR_ADDRS) the server must prove the pin of the member it names in
+// Welcome, and the address stays bound to the first member that did: a redirected address
+// that now leads to another orchestrator is refused.
+type attachPin struct {
+	base   string
+	static bool
+	bound  string // orchestrator id this address proved first (static addresses)
+}
+
+// checkPin verifies the Attach proof of the server at pin.base against fleet/cfg.m.
+func (p *Process) checkPin(ctx context.Context, pin *attachPin, orch, proof, nonce string) error {
+	fc, err := store.Get(ctx, p.cfg.Fleet, store.FleetConfigKey())
+	if err != nil {
+		return fmt.Errorf("attach pin: fleet/cfg: %w", err)
+	}
+	var want *store.FleetMember
+	for _, m := range fc.Members.Value() {
+		if pin.static && m.Orch == orch || !pin.static && strings.TrimRight(m.Endpoint, "/") == pin.base {
+			want = &m
+			break
+		}
+	}
+	switch {
+	case want == nil:
+		return fmt.Errorf("attach pin: %w: %q is not a member of fleet/cfg", fleet.ErrPin, orch)
+	case pin.static && pin.bound != "" && pin.bound != orch:
+		return fmt.Errorf("attach pin: %w: this address belongs to %s, not %s", fleet.ErrPin, pin.bound, orch)
+	}
+	if err := fleet.VerifyAttachProof(proof, nonce, want.SPKIPin); err != nil {
+		return fmt.Errorf("attach pin of %s: %w", want.Orch, err)
+	}
+	if pin.static {
+		pin.bound = orch
+	}
+	return nil
+}
+
 // attachClient speaks HTTP/2 to base: h2c for http://, TLS for https:// (Attach is a
 // bidirectional stream).
 func attachClient(base string) *http.Client {
@@ -98,15 +140,55 @@ func attachClient(base string) *http.Client {
 	return &http.Client{Transport: tr}
 }
 
+// connSet records the connections a client dialed.
+type connSet struct {
+	mu    sync.Mutex
+	conns []net.Conn
+}
+
+func (c *connSet) closeAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, n := range c.conns {
+		_ = n.Close()
+	}
+	c.conns = nil
+}
+
+// attachStreamClient is attachClient whose connections closeAll ends.
+func attachStreamClient(base string) (*http.Client, *connSet) {
+	hc := attachClient(base)
+	cs := &connSet{}
+	tr, ok := hc.Transport.(*http.Transport)
+	if !ok {
+		return hc, cs
+	}
+	dial := tr.DialContext
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		c, err := dial(ctx, network, addr)
+		if err == nil {
+			cs.mu.Lock()
+			cs.conns = append(cs.conns, c)
+			cs.mu.Unlock()
+		}
+		return c, err
+	}
+	return hc, cs
+}
+
 // attachLoop keeps one Attach stream to the orchestrator at base open until ctx ends. Without
 // it the worker still works (poll, claim, result through S3, R-SRV-100).
 func (p *Process) attachLoop(ctx context.Context, base string) error {
 	base = strings.TrimRight(base, "/")
-	cl := workerv1connect.NewWorkerControlServiceClient(attachClient(base), base+"/api")
+	pin := &attachPin{base: base, static: len(p.cfg.Orchestrators) > 0}
 	backoff := time.Second
 	for ctx.Err() == nil {
 		start := time.Now()
-		err := p.attachOnce(ctx, cl)
+		// One client per stream, and every connection it dialed is closed when the stream
+		// ends: a refused server must not keep a (pooled) connection of this worker (R-SRV-102).
+		hc, conns := attachStreamClient(base)
+		err := p.attachOnce(ctx, workerv1connect.NewWorkerControlServiceClient(hc, base+"/api"), pin)
+		conns.closeAll()
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -126,7 +208,7 @@ func (p *Process) attachLoop(ctx context.Context, base string) error {
 
 // attachOnce runs one Attach stream: Hello, then wake-ups and live log subscriptions in,
 // slot states and live chunks out, until the token is due for renewal or the stream fails.
-func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerControlServiceClient) error {
+func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerControlServiceClient, pin *attachPin) error {
 	tok := p.token()
 	if tok == nil {
 		return errors.New("no token")
@@ -140,6 +222,11 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 	bs := cl.Attach(sctx)
 	bs.RequestHeader().Set("Authorization", tok.Authorization())
 	bs.RequestHeader().Set("Bob-PoP", tok.PoP(p.id, http.MethodPost, attachPath, p.cfg.Now()))
+	nonce, err := fleet.NewAttachNonce()
+	if err != nil {
+		return err
+	}
+	bs.RequestHeader().Set(fleet.AttachNonceHeader, nonce)
 	var sendMu sync.Mutex
 	send := func(m *workerv1.AttachRequest) error {
 		sendMu.Lock()
@@ -155,7 +242,7 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 	w := p.cur.Load()
 	hello := &workerv1.Hello{WorkerId: p.id.ID(), Platform: p.id.Profile.Platform, SlotsTotal: int32(p.cfg.Slots)}
 	if w != nil {
-		hello.SlotsFree, hello.ClassIds = int32(w.FreeSlots()), w.classes
+		hello.SlotsFree, hello.ClassIds = int32(w.FreeSlots()), w.Classes()
 	}
 	if err := send(&workerv1.AttachRequest{Msg: &workerv1.AttachRequest_Hello{Hello: hello}}); err != nil {
 		// A Send error wrapping io.EOF means the server already ended the stream (e.g. it
@@ -174,6 +261,10 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 	if first.GetWelcome() == nil {
 		return fmt.Errorf("first message is %T, want Welcome", first.GetMsg())
 	}
+	if err := p.checkPin(ctx, pin, first.GetWelcome().GetOrchestratorId(), bs.ResponseHeader().Get(fleet.AttachProofHeader), nonce); err != nil {
+		p.cfg.Log.Warn("worker: orchestrator refused: it does not prove its pinned key", "orchestrator", pin.base, "err", err.Error())
+		return err
+	}
 	var bg []<-chan error
 	defer func() {
 		cancel()
@@ -189,20 +280,31 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 		bg = append(bg, safe.Go(func() error { return ls.Run(sctx) }))
 	}
 	bg = append(bg, safe.Go(func() error {
-		t := time.NewTicker(slotEvery)
+		// Every slotEvery, and at once when the free count changes (checked every
+		// slotPoll): the Hello of a worker whose job loop has not started yet says 0 free
+		// slots, and the orchestrator wakes nobody for jobs enqueued before the next state.
+		t := time.NewTicker(slotPoll)
 		defer t.Stop()
+		sent, last := time.Now(), hello.SlotsFree // what the Hello said
 		for {
 			select {
 			case <-sctx.Done():
 				return nil
 			case <-t.C:
 			}
-			if w := p.cur.Load(); w != nil {
-				if err := send(&workerv1.AttachRequest{Msg: &workerv1.AttachRequest_Slots{Slots: &workerv1.SlotState{SlotsFree: int32(w.FreeSlots())}}}); err != nil {
-					cancel()
-					return nil
-				}
+			w := p.cur.Load()
+			if w == nil {
+				continue
 			}
+			free := int32(w.FreeSlots())
+			if free == last && time.Since(sent) < slotEvery {
+				continue
+			}
+			if err := send(&workerv1.AttachRequest{Msg: &workerv1.AttachRequest_Slots{Slots: &workerv1.SlotState{SlotsFree: free}}}); err != nil {
+				cancel()
+				return nil
+			}
+			sent, last = time.Now(), free
 		}
 	}))
 	for {

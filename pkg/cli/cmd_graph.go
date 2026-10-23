@@ -182,7 +182,17 @@ func runGraph(e *env) int {
 	if done {
 		return exit
 	}
-	ig, err := build.Evaluate(e.ctx, build.Options{Root: root, Patterns: []string{"//..."}, Store: st, Offline: e.a.bool("offline")})
+	o := build.Options{Root: root, Patterns: []string{"//..."}, Store: st, Offline: e.a.bool("offline")}
+	if e.out.json { // the scan and eval stage events (eval carries `cached`, R-FW-043)
+		o.Events = func(ev build.Event) {
+			e.out.begin(nil)
+			e.out.event(ev.Event, struct {
+				DurationMs int64 `json:"durationMs"`
+				Cached     bool  `json:"cached,omitempty"`
+			}{ev.DurationMs, ev.Cached})
+		}
+	}
+	ig, err := build.Evaluate(e.ctx, o)
 	if err != nil {
 		return e.out.fail(err)
 	}

@@ -198,7 +198,7 @@ var Foo = bob.Define(func(p *bob.P) *cc.Library {
 
 const restrictedAppGo = `//go:build bob
 
-package restrictedapp
+package app
 
 import (
 	"example.com/cc/libs/restricted"

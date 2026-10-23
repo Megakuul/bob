@@ -91,8 +91,17 @@ func (c *Conn) SetSlots(free int) { c.free.Store(int64(free)) }
 // FreeSlots is the free slot count of the worker's last SlotState.
 func (c *Conn) FreeSlots() int { return int(c.free.Load()) }
 
-// Wake sends a wake-up to this worker.
+// Wake sends a wake-up to this worker. The woken worker is about to take a slot, so it counts
+// as taken until the worker's next SlotState (every 5 s): otherwise every enqueue of a burst
+// sees the same stale free count and wakes the same worker, and the other idle workers wait
+// (R-FLEET-012: the worker with the most free slots).
 func (c *Conn) Wake(class string, slot uint64, job string) {
+	for {
+		f := c.free.Load()
+		if f <= 0 || c.free.CompareAndSwap(f, f-1) {
+			break
+		}
+	}
 	c.send("wake " + class + " " + strconv.FormatUint(slot, 10) + " " + job)
 }
 

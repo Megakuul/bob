@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/internal/cache"
+	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/overview"
 	"github.com/megakuul/bob/internal/release"
@@ -26,8 +27,11 @@ import (
 type controllerSet struct {
 	Membership *orchestrator.Membership
 	Keys       *orchestrator.Keys
-	Skew       time.Duration
-	JobShards  int
+	// AttachKey is this process's pinned key (R-SRV-102): its pin goes into fleet/cfg.m, and
+	// WorkerControlService.Attach proves it to every worker.
+	AttachKey *fleet.ServerKey
+	Skew      time.Duration
+	JobShards int
 }
 
 // controllerParts adds the controllers of SPEC §05.11 that this milestone owns: membership
@@ -40,8 +44,17 @@ func controllerParts(env *server.Env, parts *server.OrchestratorParts) *controll
 	}
 	cs := &controllerSet{Skew: setting(env, "BOB_FLEET_SKEW", 5*time.Second), JobShards: intSetting(env, "BOB_FLEET_JOB_SHARDS", 16)}
 	owner, ctl, fl := env.Config.Name, env.Storage.Control, env.Storage.Fleet
-	cs.Membership = &orchestrator.Membership{Fleet: fl, ID: owner, Endpoint: endpoint(env.Config), Version: server.Version(),
-		Now: env.Now, Log: env.Log}
+	key, err := fleet.NewServerKey()
+	if err != nil {
+		env.Log.Error("attach key not available; workers will refuse this orchestrator", "err", err.Error())
+	}
+	cs.AttachKey = key
+	pin := ""
+	if key != nil {
+		pin = key.Pin()
+	}
+	cs.Membership = &orchestrator.Membership{Fleet: fl, ID: owner, Endpoint: endpoint(env.Config), SPKIPin: pin,
+		Version: server.Version(), Now: env.Now, Log: env.Log}
 	cs.Keys = &orchestrator.Keys{Control: ctl, Fleet: fl, Now: env.Now, Log: env.Log}
 	repair := &orchestrator.IndexRepair{Control: ctl, Fleet: fl, JobShards: cs.JobShards, Log: env.Log}
 	retention := &orchestrator.Retention{Control: ctl, Fleet: fl, Log: env.Log,

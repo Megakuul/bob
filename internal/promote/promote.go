@@ -55,6 +55,8 @@ const (
 	MaxComplete   = 4 << 20
 	MaxPaths      = 100_000
 	levelParallel = 4
+	// claimParallel bounds the concurrent reads of staged narinfo claims (step 2).
+	claimParallel = 16
 	// unknownRefGrace is how long a claimed reference that is neither in the job, nor skipped,
 	// nor served may stay unknown (another job's promotion may still be running) before the
 	// job fails verification.
@@ -540,31 +542,37 @@ func (p *Promoter) finish(ctx context.Context, rec *store.JobRecord, verdict str
 	return err
 }
 
-// claims reads every staged narinfo claim and orders the paths topologically.
+// claims reads every staged narinfo claim and orders the paths topologically. The claims are
+// read claimParallel at a time: a job stages up to MaxPaths of them, and one sequential GET
+// each puts the backend's latency per object into the promotion time N times over.
 func (p *Promoter) claims(ctx context.Context, j *Job) ([]*stagedPath, error) {
-	byHash := map[string]*stagedPath{}
-	var out []*stagedPath
-	for _, path := range j.Complete.Paths {
-		h := cache.HashOf(path)
-		body, _, err := p.c.Objects.Read(ctx, j.Staging+"narinfo/"+h+".narinfo", cache.MaxNarInfo)
-		switch {
-		case errors.Is(err, cache.ErrNotFound):
-			return nil, verifyFailed("staged narinfo of %s is missing", path)
-		case errors.Is(err, cache.ErrTooLarge):
-			return nil, verifyFailed("staged narinfo of %s is too large", path)
-		case err != nil:
+	out := make([]*stagedPath, len(j.Complete.Paths))
+	errs := make([]error, len(j.Complete.Paths))
+	sem := make(chan struct{}, claimParallel)
+	var waits []<-chan error
+	for i, path := range j.Complete.Paths {
+		sem <- struct{}{}
+		waits = append(waits, safe.Go(func() error {
+			defer func() { <-sem }()
+			out[i], errs[i] = p.claim(ctx, j, path)
+			return nil
+		}))
+	}
+	for _, w := range waits {
+		if err := <-w; err != nil {
 			return nil, err
 		}
-		claim, err := cache.ParseNarInfo(body)
+	}
+	// the first failing path in COMPLETE.json order decides, so the verdict does not depend on
+	// which read finished first
+	for _, err := range errs {
 		if err != nil {
-			return nil, verifyFailed("staged narinfo of %s: %v", path, err)
+			return nil, err
 		}
-		if claim.StorePath != path {
-			return nil, verifyFailed("staged narinfo of %s claims StorePath %s", path, claim.StorePath)
-		}
-		sp := &stagedPath{path: path, hash: h, claim: claim}
-		byHash[h] = sp
-		out = append(out, sp)
+	}
+	byHash := map[string]*stagedPath{}
+	for _, sp := range out {
+		byHash[sp.hash] = sp
 	}
 	for _, sp := range out {
 		for _, r := range sp.claim.References {
@@ -600,6 +608,28 @@ func (p *Promoter) claims(ctx context.Context, j *Job) ([]*stagedPath, error) {
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].level < out[b].level })
 	return out, nil
+}
+
+// claim reads and checks the staged narinfo claim of path.
+func (p *Promoter) claim(ctx context.Context, j *Job, path string) (*stagedPath, error) {
+	h := cache.HashOf(path)
+	body, _, err := p.c.Objects.Read(ctx, j.Staging+"narinfo/"+h+".narinfo", cache.MaxNarInfo)
+	switch {
+	case errors.Is(err, cache.ErrNotFound):
+		return nil, verifyFailed("staged narinfo of %s is missing", path)
+	case errors.Is(err, cache.ErrTooLarge):
+		return nil, verifyFailed("staged narinfo of %s is too large", path)
+	case err != nil:
+		return nil, err
+	}
+	claim, err := cache.ParseNarInfo(body)
+	if err != nil {
+		return nil, verifyFailed("staged narinfo of %s: %v", path, err)
+	}
+	if claim.StorePath != path {
+		return nil, verifyFailed("staged narinfo of %s claims StorePath %s", path, claim.StorePath)
+	}
+	return &stagedPath{path: path, hash: h, claim: claim}, nil
 }
 
 // served reads the served narinfo of hash (nil when absent).

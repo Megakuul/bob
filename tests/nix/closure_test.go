@@ -23,8 +23,9 @@ func (e *bobEnv) buildPath(t testing.TB, fixture, label string) (path string, r 
 	if r.Exit != 0 {
 		t.Fatalf("bob build %s exit %d:\n%s", label, r.Exit, r.Combined())
 	}
+	plain, _, _ := strings.Cut(label, "@") // events name packages by their plain label (SPEC §02.4)
 	for _, ev := range events(t, r.Stdout) {
-		if l, _ := ev["label"].(string); ev["event"] == "package.finish" && strings.HasPrefix(l, label) {
+		if l, _ := ev["label"].(string); ev["event"] == "package.finish" && strings.HasPrefix(l, plain) {
 			if ps, _ := ev["paths"].([]any); len(ps) > 0 {
 				return "/nix/store/" + filepath.Base(ps[0].(string)), r
 			}

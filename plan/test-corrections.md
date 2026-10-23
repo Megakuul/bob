@@ -394,7 +394,7 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    No assertion, timeout or budget changed.
 
 ## I-B27 (2026-10-23, evidence-based test correction; NOT applied: protected path, coordinator applies)
-51. PROPOSED 2026-10-23 I-B27. tests/core TestRFW047FixtureIRIsCanonicalAndValid panics for every
+51. APPLIED 2026-10-23 I-B31 (proposed by I-B27; owner pre-approved evidence-based corrections). tests/core TestRFW047FixtureIRIsCanonicalAndValid panics for every
    fixture (nil pointer at ir_test.go:544). Cause, measured: the IR is valid; the test binary does
    not link the ecosystems. `ir.Parse` rejects kinds this binary cannot plan (SPEC §1.6 "unknown
    kinds rejected"; `nodes[].kind` = "registered kind name"; R-FW-051: `engine.Register` in each
@@ -432,7 +432,7 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    description check (`superseded by #<n>`) and the timeout are unchanged.
 
 ## I-B27 (continued; 52 is I-B26's)
-53. PROPOSED 2026-10-23 I-B27. tests/serverenv/workerclient/workerclient.go Attach (harness client):
+53. APPLIED 2026-10-23 I-B31 (proposed by I-B27; owner pre-approved evidence-based corrections). tests/serverenv/workerclient/workerclient.go Attach (harness client):
    TestRegisterAndAttach failed once in the CI unit stage (host load 17) with `token with a foreign
    PoP: workerclient: send hello: unknown: write envelope: EOF, want unauthenticated: proof of
    possession invalid`; 5 isolated runs passed. Cause: the server refuses the stream before the
@@ -472,7 +472,7 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
 56. tests/serverenv/serverenv.go, tests/golden/golden.go: repo-root detection matched go.mod only if it started with `module github.com/megakuul/bob`; once bob owns go.mod its first line is the generated header (SPEC §03.0.2). Now matches `(?m)^module github\.com/megakuul/bob\s*$` as tests/core/layout_test.go does. APPLIED (coordinator, evidence: I-B25 incident 1).
 
 ## I-B27 (continued, 2026-10-23; numbers 51, 53, 57, 58 are I-B27's)
-57. PROPOSED 2026-10-23 I-B27. tests/cli/events_test.go knownEvents lacks the `note` event that
+57. APPLIED 2026-10-23 I-B31 (proposed by I-B27; owner pre-approved evidence-based corrections). tests/cli/events_test.go knownEvents lacks the `note` event that
    SPEC §02.4 lists (event table, `note` **new**: `type`, `code` (string), `message`, optional
    `label`, `attr`, `platform`, `field`; SPEC §03 R-cross text line ~5272 shows
    `{"type":"note","code":"uncached-target-lib",...}`) and that tests/core/platform_test.go:664
@@ -481,7 +481,7 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    emits exactly the SPEC fields. Edit: add
    `"note": {"type": "s", "code": "s", "message": "s"},` to knownEvents (optional fields are not
    listed, as for the other events). No assertion is removed.
-58. PROPOSED 2026-10-23 I-B27. tests/eco/golang/helpers_test.go:52 and tests/eco/cc/helpers_test.go:52
+58. APPLIED 2026-10-23 I-B31 (proposed by I-B27; owner pre-approved evidence-based corrections). tests/eco/golang/helpers_test.go:52 and tests/eco/cc/helpers_test.go:52
    noLeak leak-check `r.Combined()` including the package.finish `paths` of `--print-paths --json`,
    which are host store paths by contract (SPEC §02.4 `paths[]` "host paths, only with
    --print-paths"; §02.6). Same defect and fix as item 29 (tests/eco/rust, I-M8b) and item 13a
@@ -495,3 +495,175 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    (`noLeak(t, r)` on `build //toy:b@linux-arm64 --print-paths --json`): apply the same filter there
    (TestRFW046 also has a real failure after the leak lines: //toy:a has no paths[] in the +debug
    run, see plan/progress/I-B27.md).
+   Applied as written in tests/eco/golang and tests/eco/cc. In tests/core/ir_test.go the filter is
+   the package's existing `withoutPaths` helper (`noLeak(t, withoutPaths(r))`, the form TestRFW051
+   in the same file already uses, item 13a) instead of a second copy of `withoutFinishPaths`.
+   Items 51 (both edits), 53 (Receive before cancel, imports io) and 57 applied as written. I-B31.
+
+## I-B32 (2026-10-23, evidence-based test correction)
+59. APPLIED 2026-10-23 I-B32. tests/nix/closure_test.go `buildPath` (TestRNIX030ClosureBudgets
+   cross-native-libs, cross-Cross()): it looked up the `package.finish` event whose label starts
+   with the configured label `//cmd/api:api@linux-amd64`. bob's events name packages by their
+   plain label for every configuration (SPEC §02.4 defines `label` and shows only plain labels;
+   no SPEC text puts a configured label into events), and five other protected tests require
+   exactly that for cross builds of the same kind: tests/core/platform_test.go:159-163
+   (TestRFW030, `printPaths(…"//cmd/api:api@"+other)` then `paths["//cmd/api:api"]`), :588, :707
+   (same with `+asan`), tests/platforms/platform_test.go:60-64 (`--platform other` →
+   `paths["//cmd/api:api"]`), tests/eco/golang/build_test.go:43-47 (and the same lookup in
+   tests/eco/rust and tests/eco/cc cross subtests). Emitting configured labels would break all of
+   those; the two expectations cannot both hold. Edit: `buildPath` matches the label's plain part
+   (`strings.Cut(label, "@")`) by prefix, so it also accepts a configured label should SPEC ever
+   add one. The budgets and the closure measurement are unchanged.
+
+## I-B33 (2026-10-23, evidence-based test correction)
+60. APPLIED 2026-10-23 I-B33. tests/outputs/appimage_test.go TestROUT007Pruning builds
+   `//ocitest:pruned` (the OCI half of "pruning a library the binary needs is a build error ...
+   also for images"), but the test's world is `appWorld`, which overlays only `apptest/bob.go`;
+   `ocitest/bob.go` (overlays_test.go `ociOverlay`, the package that declares `Pruned`) is written
+   only by the OCI tests' world. Evidence (I-B33 run 13:30): `bob build //ocitest:pruned` → exit 2
+   `error[BOB-E-0003]: pattern //ocitest:pruned matches no package`. Edit: one line,
+   `w.overlay(ociOverlay())` after `appWorld(t)` in TestROUT007Pruning. The expected exit code and
+   message, the size budget and every other assertion are unchanged. With the overlay a private
+   build of the same declaration prints exactly the expected
+   `✗ //ocitest:pruned: prune pattern "/nix/store/*-openssl-*/lib/libssl.so*" removes libssl.so.3, which api needs`.
+
+## I-B34 (2026-10-23, evidence-based test and fixture corrections; numbers 61-65)
+61. APPLIED 2026-10-23 I-B34 (A250). tests/cache/cache_test.go TestRREG154DownloadTokenScope and
+   tests/serverenv/regenv/regenv.go (new `CLIDownloadToken`). The test called WhoAmI with a
+   service-account token of scope download (`e.Principal`, a `bob_sa_` secret) and wanted
+   token_scope "download". SPEC R-REG-154 is about `bob_dt_` tokens ("`bob_dt_` tokens are accepted
+   by WhoAmI and download endpoints only"); R-AUTH-005 says an SA download token "gets
+   Unauthenticated on /api/", §6.3.1 lists SA tokens as `bob_sa_` and the CLI session's download
+   token as `bob_dt_`, and the protected TestRAUTH005ServiceAccounts calls WhoAmI with exactly
+   such an SA token and wants Unauthenticated "token not valid for the API". The two tests could
+   not both pass; the server follows SPEC (internal/auth/identity.go refuses SA download tokens on
+   every /api/ method, D-IB4-2). Edit: `CLIDownloadToken(login)` creates a local user, logs in
+   (LoginPassword -> bob_session), runs the device flow of §6.3.2 (/oauth/device/code, POST
+   /device allow, /oauth/token device grant) and returns `bob_download_token` (checked to start
+   with `bob_dt_`); the test uses it instead of the SA token. All three assertions (WhoAmI scope,
+   ListProjects Unauthenticated "token not valid for the API", nix-cache-info 200) are unchanged.
+   Result: PASS (18.9 s, I-B34 run 13:33).
+62. APPLIED 2026-10-23 I-B34 (A251). tests/cache/helpers_test.go `copyFrom` and `closure`
+   (used by TestRREG001, RREG150, RREG152TwoOrchestrators, RREG153, the slow RREG151/152 tests).
+   `copyFrom` ran `nix copy --from <bob>/nix` with bob's keys only, and the tests then verified
+   the whole closure with bob's key alone. The acme release closure holds nixpkgs paths
+   (x86_64 glibc, gcc-lib, openssl, …); cache.nixos.org serves them (HEAD
+   https://cache.nixos.org/54cd56yscrlh84g0fhn67gjpl9cd1w22.narinfo = 200 for the
+   `x86_64-unknown-linux-gnu-gcc-15.3.0-lib` the test failed on), so R-REG-005 forbids bob to
+   store or serve them (the protected TestRREG005SkippedPathsAreNotServed asserts the 404). A
+   bob-only copy of such a closure can never succeed. SPEC R-REG-001 (1) says "embedded Nix with
+   bob's config", and §6.6.5 bob's client config is `substituters = https://cache.nixos.org
+   https://<server>/nix` with both keys. Edits: (a) `copyFrom` substitutes with that config
+   (`nix build --no-link --store <local> --max-jobs 0`, substituters `<bob> https://cache.nixos.org`,
+   trusted keys = the given keys + cache.nixos.org-1, netrc unchanged); (b) it also sets
+   `narinfo-cache-positive-ttl 0` (it had only the negative one): every local store of a test
+   shares one client home, and with (a) the second step of TestRREG001 found the root's narinfo in
+   Nix's disk cache from step (1) (fetched with the p1 token) and tried the NAR anonymously
+   (`copying path ...cc-foo-linux-amd64 from 'http://127.0.0.1:…/nix'`, NAR 404) — the server
+   answered correctly, the client cache made it look like a leak; (c) `closure` returns the
+   bob-built part (every closure path without a cache.nixos.org-1 signature) and verifies the
+   cache.nixos.org part against the cache.nixos.org key alone. Every bob path must still come
+   from bob (it is in no other cache) and still verifies against bob's key alone; the
+   anonymous, other-project and wrong-token assertions are unchanged.
+   Result: TestRREG001NixSubstitution PASS (493 s, run 14:03).
+63. APPLIED 2026-10-23 I-B34 (A253). tests/cli/testdata/repos/exits/tools/bob.go and the labels
+   in tests/cli/output_test.go (TestRCLI002JSONStream, TestRCLI002VerboseAddsLines,
+   TestRCLI007HumanOutput, TestRCLI007Colour) and tests/cli/exitcodes_test.go
+   (TestRCLI006ProgramExit). The fixture declares the module in tools/bob.go (module root = tools/,
+   SPEC §03.2.1 NewModule) and `Binary("./tools/exit3")`, i.e. the directory tools/tools/exit3,
+   which does not exist; the evaluated labels are //tools/tools/{broken,exit3,hello,selfkill}
+   (probe, `bob graph --json`). The tests wanted //tools:exit3, which no declaration can give:
+   Binary's label is `//<module dir>/<dir>:<Name>` (§03.2.1), and four main packages need four
+   directories. Same defect class as item 55 (pipe fixture). Edits: Binary dirs `./exit3`,
+   `./selfkill`, `./hello`, `./broken` (module-relative; label comments updated); the tests use
+   //tools/exit3:exit3, //tools/selfkill:selfkill, //tools/hello:hello, //tools/broken:broken.
+   `package defined at tools/bob.go:`, exit codes, `//tools:nosuch` (still no such package) and
+   every other assertion are unchanged. Probe on a private copy: `bob run //tools/exit3:exit3`
+   exits 3, `bob run //tools/hello:hello -- a b` prints `hello a b`, `bob build
+   //tools/broken:broken //tools/hello:hello` = FAILED //tools/broken:broken, BOB-E-2001, exit 1.
+   Result (run 15:30): TestRCLI006ProgramExit PASS; TestRCLI002JSONStream exits subtests PASS
+   (its `--json-log` subtest fails: no log event on the fully cached second build of acme); the
+   label, ordering, error-block and `package defined at tools/bob.go:` checks of
+   TestRCLI007HumanOutput pass, it still fails on the summary line (`bob: 1 failed (exit 1)`), the
+   missing golden and the success summary; TestRCLI007Colour fails on NO_COLOR under a pty;
+   TestRCLI002VerboseAddsLines fails because the -v run follows the default run in the same store
+   (`built` vs `cached`) and on a 4-minute harness timeout of `test //...` under load. None of
+   these involve the labels.
+64. APPLIED 2026-10-23 I-B34 (A254). tests/platforms/platform_test.go restrictedAppGo:
+   `package restrictedapp` -> `package app`. R-FW-002 R2: a directory without Go files takes the
+   directory name (apps/app holds only main.c), so the overlay failed with BOB-E-1024 `package
+   restrictedapp, but the Go code in this directory is package app` before reaching the platform
+   check. Result: TestRPLAT006PerPackagePlatformRestriction PASS (258 s).
+65. APPLIED 2026-10-23 I-B34 (A255). tests/faults: patch.diff for 49, 51, 58-66, 69, 70 (they had
+   none, so the live runner ran the unmodified fixture: exit 0 or another error), fault.json and
+   expect.json of those entries aligned with SPEC, and the runner's per-invocation timeout.
+   HARNESS.md §5.1 says the added faults run live from `patch.diff`; tests/faults/README says
+   49-81 have no capture by design. Each patch was applied to a scratch copy of its fixture and
+   run with bob (I-B34, 13:30-14:00); output as SPEC's code table and R-FW-002 texts say:
+   - 58-63 (acme, `bob check`): R1 first line removed; R2 `package greeting`; R3 import of a new
+     main package tools/version's bob.go; R4 `var Hello` (greet.go declares Hello); R6
+     internal/greet/bob.go imports a new internal/hello whose Go code imports greet; R7 import of
+     github.com/google/uuid. Each prints exactly its R-FW-002 text as BOB-E-1024, exit 3.
+     fault.json: position marker -> none and hint true -> false: the 1024 row of the code table
+     (SPEC §02) has no hint ("—"), and the rule texts carry a file (R4 file:line), not a package,
+     so no `package defined at` line exists. expect.json gains the rule text as `messages`.
+   - 64/65 (acme): Srcs `bob.Glob("../../../outside/*.cpp")` / `bob.Glob("src/*.cc")` ->
+     BOB-E-1025 `<pos>: source pattern … leaves the repository` / `bob.Glob(…) matches no files`,
+     exit 3; position none and hint false (1025 row: no hint, the position is inside the
+     message); messages added.
+   - 66 (acme): Defines from time.Now(). command `build //...` -> `check --determinism`: R-FW-008
+     detects non-determinism only by `bob check --determinism` (two evaluations); a build
+     evaluates once. Output BOB-E-1018 `evaluating bob.go is not deterministic: //libs/foo:foo
+     differs between two runs (field nodes[…].spec.defines.BUILD_TIME)` + hint, exit 3; position
+     none (the message names the label); message added.
+   - 49 (go): `require golang.org/x/text v0.20.0` appended to api/go.mod -> BOB-E-1011 `generated
+     file api/go.mod was edited by hand` + hint, exit 3 (R-FW-061); position none.
+   - 51 (polyglot): bob.lock with <<<<<<< / ======= / >>>>>>> -> BOB-E-1019 `bob.lock cannot be
+     read: merge conflict marker <<<<<<< (line 1)` + hint, exit 3 (R-FW-048); position none.
+   - 69 (codegen): svc/bob.go requires github.com/99designs/gqlgen v0.17.89 (SPEC §03.6.4 / R-GEN-006
+     F4), marker on the graphql.Gqlgen call -> `//svc:gen-graph: generator gqlgen 0.17.90 (bob's
+     nixpkgs pin) does not match its runtime: … but svc/bob.go requires v0.17.89`, exit 3. Entry
+     kept as marker/hint; messages added. Still FAILS on bob: the line is printed as `✗ …`
+     without `error[BOB-E-1021]`, and `package defined at svc/bob.go:24` has no column (FEAT).
+   - 70 (codegen, `bob gen`): hand-written svc/gen/rest/version.go -> BOB-E-1016 `svc/gen/rest/
+     version.go conflicts with generated output of //svc:gen-rest: bob did not write it` + hint,
+     exit 3; position none.
+   tests/errors/run.go: default per-invocation timeout 2 min -> 10 min. A live run starts with an
+   empty HOME; measured cold `bob build //...` of fixture acme with patch 64: 2m13s, cold `bob
+   check` with patch 58: 59 s (8-core host, load ~15); with 2 min every evaluating entry was
+   "killed or timed out" (I-B34 run 14:45, entry 49). A hang still fails the entry.
+   tests/errors/run.go `events`: adds `note` (SPEC §02.4 event table, `note` **new**; the same
+   gap as item 57 in tests/cli). 64/65 failed only on `--json: line 6: unknown event "note"`
+   (bob's `note: no version given; using 0.0.0-dev`).
+   Result (TestFaults filtered to these 13 entries, run 14:47-15:25, then 64/65 again): 49, 51,
+   58-63, 64, 65 (after the `note` fix), 66, 70 PASS (12 of 13); 69 FAIL on bob (FEAT, above).
+   TestCatalogue, TestRunnerClassifies, TestCheckJSON, TestCapturedGoldensDoNotLeak, TestMarkerPos PASS.
+66. APPLIED 2026-10-23 I-B34 (A257). tests/cache/promote_test.go TestRREG005SkippedPathsAreNotServed:
+   `e.DelayStaging(20 * time.Second)` -> `5 * time.Second` (comment added). The delay is only
+   there so that awaitStaged (200 ms polls) sees COMPLETE.json before the promotion, but every
+   staged GET of the promotion pays it, and the test then waits ≤ 5 min (waitPromotion) for
+   `done`. Measured (run 17:00-17:10, with A252): the acme release job stages 29 paths; COMPLETE
+   at 17:05:22, `promoted 29` at 17:09:26 (SPEC §6.6.4 step 3 runs 4 paths at a time per level,
+   so ≥ ceil(29/4) x 20 s = 160 s for the NAR GETs alone), then step 4 reads the image index,
+   manifests and blobs from staging and step 5 the assets, each GET +20 s: `done` cannot arrive
+   within 5 minutes. With 5 s the same test PASSES (549 s, I-B34 cache run 6); the assertions (skipped
+   non-empty, promotion `done`, every skipped path 404) are unchanged. The tampered/forged-claim
+   tests keep 20 s (they end at the first failing path and pass).
+67. APPLIED 2026-10-23 I-B34 (A258). tests/cache/visibility_test.go `servedPaths`
+   (TestRREG150VisibilityDocuments): it took the 10 distinct paths of R-REG-150 from the
+   bob-built part of the release closure only, which for fixture acme holds 2 paths (the cgo
+   binary and libfoo; C++ and Rust are linked in): `closure … has 2 bob-served paths, the
+   acceptance needs 10 distinct` (I-B34 cache run 4). R-REG-150 asks for "10 distinct paths", not paths of
+   one closure. Edit: servedPaths still substitutes the root (same check as before) and returns
+   the store hashes of the closure's bob paths plus every other promoted narinfo (S3 listing of
+   nix/narinfo/ on the backend, not through the counting proxy) that answers 200 for the token.
+   The counting (≤ 20 GETs on nix/vis/, 0 LIST) and the private-within-31 s assertions are
+   unchanged. Result: PASS (373 s, I-B34 cache run 5).
+68. APPLIED 2026-10-23 I-B34 (A259). tests/fixtures/repos/nondet/bob.go (fixture of
+   TestRREG152NonReproduciblePathKeepsFirstPublication): `bob.Pipeline("ci", bob.PipelineOpts{})`
+   -> `Triggers: OnPush("*"), Targets: //:nonce`. Its comment said "SPEC §06 does not define the
+   fields of bob.PipelineOpts, so the pipeline is registered by name only"; SPEC §1.4.4 now
+   defines them ("Triggers: none = manual runs only", "Targets: packages to build"), and the
+   pipeline matcher (internal/build/jobspec Match) runs no pipeline on a push without a matching
+   trigger, so both pushes built nothing (staging held only eval.json; I-B34 cache run 7). With the
+   correction both builds build //:nonce.

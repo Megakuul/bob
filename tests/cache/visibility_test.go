@@ -12,8 +12,11 @@ import (
 	"github.com/megakuul/bob/tests/serverenv/regenv"
 )
 
-// servedPaths substitutes the closure of rel's first root into a scratch store and returns
-// every path of it that bob serves (the narinfo answers 200 for the token).
+// servedPaths substitutes the closure of rel's first root into a scratch store and returns the
+// store hashes of every path bob serves to the token (the narinfo answers 200): the bob-built
+// paths of that closure and every other promoted path of the token's project. The release
+// closure alone holds too few bob-built paths for 10 distinct ones (fixture acme: the cgo binary
+// and libfoo; C++ and Rust are linked in), and R-REG-150 asks for any 10 distinct paths.
 func servedPaths(t *testing.T, e *regenv.Env, n *clients.Client, keys []string, token string, rel regenv.Release) []string {
 	t.Helper()
 	l := newLocal(n)
@@ -21,11 +24,19 @@ func servedPaths(t *testing.T, e *regenv.Env, n *clients.Client, keys []string, 
 	if r := l.copyFrom(e.API+"/nix", regenv.Netrc(t, n, e.API, token), keys, root); r.Exit != 0 {
 		t.Fatalf("nix copy %s: exit %d: %s", root, r.Exit, r.Combined())
 	}
+	seen := map[string]bool{}
 	var out []string
-	for _, p := range l.closure(t, root) {
-		if narinfoStatus(e, e.API, p, token) == http.StatusOK {
-			out = append(out, p)
+	add := func(hash string) {
+		if !seen[hash] && narinfoStatus(e, e.API, hash, token) == http.StatusOK {
+			seen[hash] = true
+			out = append(out, hash)
 		}
+	}
+	for _, p := range l.closure(t, root) {
+		add(regenv.StoreHash(p))
+	}
+	for _, k := range e.S3List("nix/narinfo/") { // the backend directly, not counted by the proxy
+		add(hashOfKey(k))
 	}
 	return out
 }
@@ -43,7 +54,7 @@ func TestRREG150VisibilityDocuments(t *testing.T) {
 
 	paths := servedPaths(t, e, n, keys, tok, rel)
 	if len(paths) < 10 {
-		t.Fatalf("closure of %s has %d bob-served paths, the acceptance needs 10 distinct (extend the fixture release)", root, len(paths))
+		t.Fatalf("bob serves %d paths to the p1 token after publishing %s, the acceptance needs 10 distinct", len(paths), root)
 	}
 	sort.Strings(paths)
 	paths = paths[:10]

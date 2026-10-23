@@ -132,13 +132,18 @@ func library(p *bob.P, name string, o LibraryOpts, typ string) *Library {
 	hdrs := ""
 	if o.Hdrs != "" {
 		hdrs = path.Clean(o.Hdrs)
-		if !localDir(hdrs) {
+		// "." is the bob.go directory itself (SPEC §03.4: Hdrs is relative to the bob.go dir).
+		if hdrs != "." && !localDir(hdrs) {
 			problems = append(problems, fmt.Sprintf("Hdrs %q is not a directory below the bob.go directory", o.Hdrs))
 			hdrs = ""
 		}
 	}
 	srcs := []bob.Sources{o.Srcs, o.Private}
-	if hdrs != "" {
+	switch hdrs {
+	case "":
+	case ".": // the files next to bob.go, not the packages in subdirectories
+		srcs = append(srcs, bob.Glob("*"))
+	default:
 		srcs = append(srcs, bob.Dir(hdrs))
 	}
 	t := ccspec.Target{Name: name, Type: typ, Std: string(o.Std), Defines: defines(o.Defines),

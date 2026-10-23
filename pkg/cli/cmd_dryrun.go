@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"path"
+	"strings"
+
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
 )
@@ -14,8 +17,8 @@ func runBuildCmd(e *env) int {
 }
 
 // runDryRun evaluates and plans the patterns without fetching, importing or building anything
-// and prints the planned derivations, one store path per line, sorted. The plan needs no
-// network and no crate sources: bob.lock carries every fact it uses (R-RS-005).
+// and prints the planned derivations, one per line, sorted. The plan needs no network and no
+// crate sources: bob.lock carries every fact it uses (R-RS-005).
 func runDryRun(e *env) int {
 	if e.a.bool("remote") {
 		return e.out.fail(diag.New(4, "flag", "--dry-run", "what", "a local build (not --remote)"))
@@ -60,7 +63,14 @@ func runDryRun(e *env) int {
 	}
 	// Human output only: the event schema (schema/events-v1.json) has no plan event yet.
 	for _, p := range res.Planned {
-		e.out.printf("%s\n", p)
+		e.out.printf("%s\n", planEntry(p))
 	}
 	return e.out.finish(0, res.Report.Counts, nil)
+}
+
+// planEntry is how --dry-run names one planned derivation: its hash and name
+// ("<hash>-<name>"), which identify it exactly, without the store directory and the .drv
+// suffix, so no raw Nix path reaches the user (AGENTS §5.5, R-NIX-010; A230).
+func planEntry(drvPath string) string {
+	return strings.TrimSuffix(path.Base(drvPath), ".drv")
 }

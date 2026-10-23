@@ -409,6 +409,9 @@ func (b *build) link(l Link) error {
 	}
 	args := []string{t.tool("link"), "-o", out, "-importcfg", ic, "-buildmode=" + mode, "-buildid="}
 	args = append(args, t.LDFlags...)
+	if l.Strip {
+		args = append(args, "-s", "-w")
+	}
 	if l.External || mode != "exe" || has(t.LDFlags, "-asan") {
 		if t.CC == "" {
 			return fmt.Errorf("linking needs a C compiler but cgo is off for this build")
@@ -424,6 +427,10 @@ func (b *build) link(l Link) error {
 	for _, x := range l.X {
 		args = append(args, "-X", x)
 	}
-	_, err = r.run(obj, false, append(args, l.Main)...)
+	var env []string
+	if l.Trim {
+		env = []string{"GOROOT="}
+	}
+	_, err = r.runEnv(obj, false, env, append(args, l.Main)...)
 	return err
 }

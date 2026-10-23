@@ -1,0 +1,43 @@
+diff --git a/internal/greet/bob.go b/internal/greet/bob.go
+index ae67fda..bac2bd3 100644
+--- a/internal/greet/bob.go
++++ b/internal/greet/bob.go
+@@ -4,11 +4,12 @@ package greet
+ 
+ import (
+ 	"example.com/acme"
++	"example.com/acme/internal/hello"
+ 	"github.com/megakuul/bob/pkg/bob"
+ 	"github.com/megakuul/bob/pkg/golang"
+ )
+ 
+ // Tests runs the tests of this package (unit //internal/greet:go_test).
+ var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+-	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: "greet_tests"})
++	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: hello.Name})
+ })
+diff --git a/internal/hello/bob.go b/internal/hello/bob.go
+new file mode 100644
+index 0000000..1f67b62
+--- /dev/null
++++ b/internal/hello/bob.go
+@@ -0,0 +1,6 @@
++//go:build bob
++
++package hello
++
++// Name is the name of the greeting test unit.
++const Name = "greet_tests"
+diff --git a/internal/hello/hello.go b/internal/hello/hello.go
+new file mode 100644
+index 0000000..b84404a
+--- /dev/null
++++ b/internal/hello/hello.go
+@@ -0,0 +1,7 @@
++// Package hello wraps greet.
++package hello
++
++import "example.com/acme/internal/greet"
++
++// World greets the world.
++func World() string { return greet.Hello("world") }

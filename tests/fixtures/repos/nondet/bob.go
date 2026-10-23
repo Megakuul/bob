@@ -12,9 +12,12 @@ import (
 
 var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
 
-// ci runs on every push to a branch and builds //:nonce. SPEC §06 does not define the fields of
-// bob.PipelineOpts, so the pipeline is registered by name only.
-var _ = bob.Pipeline("ci", bob.PipelineOpts{})
+// ci runs on every push to a branch and builds //:nonce (SPEC §1.4.4 PipelineOpts: no trigger
+// would mean manual runs only, no target nothing to build).
+var _ = bob.Pipeline("ci", bob.PipelineOpts{
+	Triggers: []bob.Trigger{bob.OnPush("*")},
+	Targets:  []bob.Pattern{"//:nonce"},
+})
 
 // Nonce writes 16 random bytes (hex) to nonce.txt (label //:nonce).
 var Nonce = bob.Define(func(p *bob.P) *bob.Step {

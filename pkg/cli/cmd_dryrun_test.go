@@ -18,3 +18,12 @@ func TestDryRunFlag(t *testing.T) {
 		t.Errorf("--remote: exit %d: %s", got, se.String())
 	}
 }
+
+// --dry-run names a planned derivation by hash and name only: no store directory, no .drv
+// suffix (AGENTS §5.5).
+func TestPlanEntry(t *testing.T) {
+	got := planEntry("/nix/store/0123456789abcdfghijklmnpqrsvwxyz-rcore-0.1.0.drv")
+	if got != "0123456789abcdfghijklmnpqrsvwxyz-rcore-0.1.0" {
+		t.Errorf("planEntry = %q", got)
+	}
+}

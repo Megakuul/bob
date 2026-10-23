@@ -81,7 +81,7 @@ func nativeFiles(ws *workspace, sec *lock.RustSection) ([]engine.GeneratedFile, 
 	}
 	cl, err := resolve.CargoLockFromRecords(members, records)
 	if err != nil {
-		return nil, err
+		return nil, lockMiss(err)
 	}
 	out = append(out, engine.GeneratedFile{Path: "Cargo.lock", Content: []byte(cl), Mode: 0o444, Owner: owner})
 	out = append(out, engine.GeneratedFile{Path: ".cargo/config.toml", Content: []byte(tomlHeader +

@@ -1,0 +1,11 @@
+diff --git a/internal/greet/bob.go b/internal/greet/bob.go
+index ae67fda..9e49603 100644
+--- a/internal/greet/bob.go
++++ b/internal/greet/bob.go
+@@ -12,3 +12,6 @@ import (
+ var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+ 	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: "greet_tests"})
+ })
++
++// Hello is also declared by greet.go.
++var Hello = "bob.go"
