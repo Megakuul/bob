@@ -353,3 +353,4 @@ access and the primitive constructors change.
    `BOB-E-2003 //cmd/api:api: header foo.h not found` (evidence plan/progress/I-B20.md, devstack
    run 1, NEEDS 2). Identical calls give identical nodes (pkg/bob node.go sameAs), so //deploy:api
    and //cmd/api:api stay one node with one label; cmd/api/bob.go and every label unchanged.
+RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_test.go cc derivation names cc-foo, cc-mathx, cc-pack) and part of item 11/A114 (tests/ui/seed.json seeded release buildId 01jbq7k2p4m8x0c3v5n7r9t1y6): both had been reverted by a tar restore (incident A147).

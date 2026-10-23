@@ -331,7 +331,7 @@ func TestRFW032TypedNixpkgsSets(t *testing.T) {
 	}
 	// The libfoo derivation depends on the target openssl, the proto generator on the host protobuf.
 	for _, c := range []struct{ drvSub, in, sys string }{
-		{"libs-foo-foo", "openssl-", targetSys},
+		{"cc-foo", "openssl-", targetSys},
 		{"greeting", "protobuf-", hostSys},
 	} {
 		found := false
@@ -420,7 +420,7 @@ func TestRFW033ToolchainSelection(t *testing.T) {
 		return
 	}
 	var sets []map[string]bool
-	for _, sub := range []string{"libs-mathx-mathx", "libs-pack-pack"} {
+	for _, sub := range []string{"cc-mathx", "cc-pack"} {
 		names := drvNamesWith(ccAll, sub)
 		if len(names) == 0 {
 			t.Errorf("no derivation for %s", sub)
@@ -881,14 +881,14 @@ func TestRFW038DerivationNames(t *testing.T) {
 	if !ok {
 		return
 	}
-	names := drvNamesWith(all, "libs-foo-foo")
-	re := regexp.MustCompile(`^[0-9a-z]{32}-libs-foo-foo-` + regexp.QuoteMeta(other) + `-address\.drv$`)
+	names := drvNamesWith(all, "cc-foo")
+	re := regexp.MustCompile(`^[0-9a-z]{32}-cc-foo-` + regexp.QuoteMeta(other) + `-address\.drv$`)
 	found := false
 	for _, n := range names {
 		found = found || re.MatchString(n)
 	}
 	if !found {
-		t.Errorf("no derivation named libs-foo-foo-%s-address among %v", other, names)
+		t.Errorf("no derivation named cc-foo-%s-address among %v", other, names)
 	}
 	for n, d := range bobDrvs(all) {
 		if len(d.Name) > 200 {
