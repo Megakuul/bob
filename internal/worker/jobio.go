@@ -93,7 +93,7 @@ func (p *Process) checkout(ctx context.Context, c Claim) (fleet.CheckoutPlain, e
 		cl := workerv1connect.NewWorkerControlServiceClient(attachClient(base), base+"/api")
 		req := connect.NewRequest(&workerv1.GetCheckoutCredentialRequest{JobId: c.JobID, Epoch: c.Epoch})
 		req.Header().Set("Authorization", tok.Authorization())
-		req.Header().Set("Bob-PoP", tok.PoP(p.id, http.MethodPost, "/api/"+workerv1connect.WorkerControlServiceGetCheckoutCredentialProcedure, p.cfg.Now()))
+		req.Header().Set("Bob-PoP", tok.PoP(p.id, http.MethodPost, "/api"+workerv1connect.WorkerControlServiceGetCheckoutCredentialProcedure, p.cfg.Now()))
 		res, err := cl.GetCheckoutCredential(ctx, req)
 		if err != nil {
 			last = err
@@ -131,6 +131,14 @@ func gitFetch(ctx context.Context, dst string, co fleet.CheckoutPlain, commit st
 	git := func(args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dst}, args...)...)
 		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dst, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1"}
+		// git trusts the CAs the worker's own TLS client trusts (SSL_CERT_FILE / SSL_CERT_DIR, as
+		// Go reads them); git's curl ignores SSL_CERT_FILE, so it also goes in as GIT_SSL_CAINFO.
+		if f := os.Getenv("SSL_CERT_FILE"); f != "" {
+			cmd.Env = append(cmd.Env, "SSL_CERT_FILE="+f, "GIT_SSL_CAINFO="+f)
+		}
+		if d := os.Getenv("SSL_CERT_DIR"); d != "" {
+			cmd.Env = append(cmd.Env, "SSL_CERT_DIR="+d)
+		}
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return out, fmt.Errorf("git %s: %w: %s", args[0], err, strings.ReplaceAll(firstLineOf(string(out)), co.Token, "[redacted]"))

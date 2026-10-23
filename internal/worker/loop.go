@@ -745,6 +745,9 @@ watch:
 			lost()
 		}
 	default:
+		if out.Status != "ok" { // IB22DEBUG
+			slog.Warn("IB22DEBUG job outcome", "job", id, "status", out.Status, "err", out.Error)
+		}
 		w.finish(ctx, j, out, lost)
 	}
 }
