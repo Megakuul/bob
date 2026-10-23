@@ -170,3 +170,11 @@
 | A149 | 2026-10-22 | Ruling on I-B22 NEEDS 1 (images and AppImages necessarily contain store paths as DATA: image config PATH/Entrypoint, AppImage launch.json/interpreter inside zstd squashfs): the promotion reference scan stays strict for ordinary outputs. For outputs that discard references by design (kinds oci.image, appimage.*, tarball.*), hashes found in the content are not registered as references and are accepted ONLY IF they are members of the promoted job's own closure (the set of paths the job claims and promotes together); a hash outside that set still fails verification. The worker never adds the found hashes as references (clients would download the whole closure). No builder format change (R-OUT-012 and R-OUT-015 stay as the SPEC states). SPEC §6.6.4 gets this rule. | Structural check preserved: a worker cannot smuggle foreign paths; formats stay as specified. |
 
 | A150 | I-B23 | Job closure for A149 = COMPLETE.json `paths` plus `skipped` (cache-served paths such as the glibc an AppImage uses). Registry tag visibility must be per project (see I-B24). Test corrections 47-49 (polyglot release trigger, API() FFI call, bobbot admin on alice/other) approved as evidence-based. | self-ruled |
+| A152 `bob pipeline run <name>`: steps are build (Targets ∪ release labels of Releases) then test | I-B25 | self-ruled |
+| A153 bob's `ci` pipeline: targets = the three binaries and //web:web; tests = the 49 Go packages | I-B25 | self-ruled |
+| A154 Evaluator in bob's own repository: its main module is named `bobrepo` instead of | I-B25 | self-ruled |
+| A155 bob-builder: Ctx.MkdirAll tolerates a directory another goroutine created between its | I-B25 | self-ruled |
+| A156 Sources: `.git/info/exclude` unreadable because `.git` is a file (linked worktree, | I-B25 | self-ruled |
+| A157 Evaluator go directive: a root go.mod naming a patch release above the pinned Go (go.mod | I-B25 | self-ruled |
+| A158 Bootstrap route: SPEC R-ARCH-005 names `BOB_BOOTSTRAP_BUILDER=<path> go build -tags bootstrap`; | I-B25 | self-ruled |
+| A159 go.mod/go.sum stay hand-written for now (see TEST PROBLEM 1). bob.go's Require list equals | I-B25 | self-ruled |

@@ -60,6 +60,9 @@ type config struct {
 }
 
 // Human marks the output as human-facing: timestamps become <t> (HARNESS.md §3.1).
+// bobModuleRE finds the module line even when bob's generated header comes first (SPEC §03.0.2).
+var bobModuleRE = regexp.MustCompile(`(?m)^module github\.com/megakuul/bob\s*$`)
+
 func Human() Option { return func(c *config) { c.human = true } }
 
 // Reqs records the requirement ids the golden covers; they appear on the review page.
@@ -97,7 +100,7 @@ func Root() (string, error) {
 		}
 		for {
 			b, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-			if err == nil && bytes.HasPrefix(b, []byte("module github.com/megakuul/bob\n")) {
+			if err == nil && bobModuleRE.Match(b) {
 				rootDir = dir
 				return
 			}

@@ -3,9 +3,11 @@ package srcs
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"os"
 	"path"
 	"strings"
+	"syscall"
 )
 
 // gitignore semantics, implemented in Go (R-FW-021; no git binary). A rule set belongs to the
@@ -119,7 +121,8 @@ func matchSegs(pat, name []string) bool {
 // readIgnore reads a gitignore-format file; a missing file has no rules.
 func readIgnore(file, base string) ([]rule, error) {
 	b, err := os.ReadFile(file)
-	if os.IsNotExist(err) {
+	if os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR) {
+		// ENOTDIR: .git is a file in a linked worktree or a submodule (A156).
 		return nil, nil
 	}
 	if err != nil {

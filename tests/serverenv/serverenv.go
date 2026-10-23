@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -46,6 +47,9 @@ const (
 
 // Root returns the repository root: the nearest ancestor of the working
 // directory whose go.mod declares the bob module.
+// bobModuleRE finds the module line even when bob's generated header comes first (SPEC §03.0.2).
+var bobModuleRE = regexp.MustCompile(`(?m)^module github\.com/megakuul/bob\s*$`)
+
 func Root() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -53,7 +57,7 @@ func Root() (string, error) {
 	}
 	for {
 		b, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-		if err == nil && strings.HasPrefix(string(b), "module github.com/megakuul/bob\n") {
+		if err == nil && bobModuleRE.Match(b) {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

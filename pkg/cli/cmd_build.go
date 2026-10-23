@@ -52,6 +52,17 @@ func runPipeline(e *env, cmd build.Command) int {
 		return exit
 	}
 	opts.Store, opts.Caches = st, caches
+	exit, counts, drift := runStep(e, root, opts, warns)
+	if e.out.json {
+		return e.out.finish(exit, counts, drift)
+	}
+	return exit
+}
+
+// runStep runs one build.Run inside the store namespace and renders its human result; in
+// --json mode the caller ends the run with the counts and drift it returns (a pipeline run
+// emits one run.finish for all its steps).
+func runStep(e *env, root string, opts build.Options, warns []*diag.Error) (int, translate.Counts, []string) {
 	s := newSink(e.out)
 	opts.Events = s.put
 	s.put(build.Event{Event: build.StageNamespace, DurationMs: namespaceMs()})
@@ -66,7 +77,10 @@ func runPipeline(e *env, cmd build.Command) int {
 	s.flush()
 	s.clear()
 	if res == nil {
-		return e.out.fail(err)
+		for _, d := range diagErrors(err) {
+			e.out.diagnose(d, "")
+		}
+		return diag.ExitCode(e.out.errs), translate.Counts{}, nil
 	}
 	recordBuild(root, drvsOf(res))
 	recordLabels(root, res.Requested)
@@ -74,7 +88,7 @@ func runPipeline(e *env, cmd build.Command) int {
 		// Native files the run wrote stay out of git (best effort: bob check reports 1013).
 		_ = updateExclude(root, res.Generated, false)
 	}
-	exit = res.ExitCode
+	exit := res.ExitCode
 	if err != nil {
 		// a failure that is not a diagnostic: report it with the run's own errors
 		res.Report.Errors = append(res.Report.Errors, diagErrors(err)...)
@@ -87,14 +101,14 @@ func runPipeline(e *env, cmd build.Command) int {
 		}
 	}
 	if e.out.json {
-		return e.out.finish(exit, res.Report.Counts, res.Report.Drift)
+		return exit, res.Report.Counts, res.Report.Drift
 	}
-	if cmd == build.CmdTest {
+	if opts.Command == build.CmdTest {
 		renderTests(e.out, res)
 	} else {
 		renderBuild(e.out, res)
 	}
-	return exit
+	return exit, res.Report.Counts, res.Report.Drift
 }
 
 // checkPlatforms refuses an unknown platform in --platform or a pattern's "@<platform>" suffix

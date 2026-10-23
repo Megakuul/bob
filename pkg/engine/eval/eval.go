@@ -199,6 +199,12 @@ func compile(ctx context.Context, r Request, root string, tc toolchain, fw *fram
 			return err
 		}
 	}
+	// A root go.mod may name a patch release above the pinned Go (a hand-written "go 1.26.9"
+	// with nixpkgs go 1.26.8): the evaluator's go.mod then names the toolchain's own version,
+	// which GOTOOLCHAIN=local accepts (A157).
+	if have := strings.TrimPrefix(tc.version, "go"); rootMod.goDir != "" && versionLess(have, rootMod.goDir) {
+		rootMod.goDir = have
+	}
 	g, err := generate(root, rootMod, scan, own, deps, fw)
 	if err != nil {
 		return fmt.Errorf("generating the evaluator: %w", err)

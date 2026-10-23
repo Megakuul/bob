@@ -59,7 +59,7 @@ func commands() []command {
 			[]flag{{name: "build", kind: fStr}, {name: "f", short: true}, {name: "attempt", kind: fInt}}, runLog},
 		{"cancel", []string{"bob cancel <build-id>"}, "cancel a remote build", nil, runCancel},
 		{"pipeline", []string{"bob pipeline run <name> [--remote]"}, "run a pipeline",
-			[]flag{{name: "remote"}}, notYet},
+			[]flag{{name: "remote"}}, runPipelineCmd},
 		{"login", []string{"bob login [<url>] [--device] [--token-stdin]"}, "log in to a bob server",
 			[]flag{{name: "device"}, {name: "token-stdin"}}, runLogin},
 		{"logout", []string{"bob logout [<url>]"}, "log out of a bob server", nil, runLogout},

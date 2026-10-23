@@ -304,7 +304,7 @@ func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]
 				child = name
 			}
 			isDir := e.IsDir()
-			if isDir && (name == ".git" || name == ".bob") {
+			if name == ".git" || isDir && name == ".bob" { // .git is a file in a linked worktree
 				continue
 			}
 			if !isDir && (name == "bob.go" || name == "zz_bob_cgo.go" || name == ".gitignore") {

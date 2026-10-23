@@ -106,6 +106,11 @@ func (c *Ctx) MkdirAll(p string) error {
 			return err
 		}
 		if err := os.Mkdir(cur, 0o755); err != nil {
+			// Kinds create directories from several goroutines (go-compile writes the
+			// packages of a module in parallel): another one may have made it in between.
+			if fi, lerr := os.Lstat(cur); errors.Is(err, fs.ErrExist) && lerr == nil && fi.IsDir() {
+				continue
+			}
 			return err
 		}
 	}

@@ -380,3 +380,89 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    never triggered a build and `e.Publish("priv", "other", …)` could only time out. No test relies
    on the bot lacking admin on alice/other: the job-token scoping checks of
    tests/forge/forgejo_live_test.go use the repository-scoped job token, not the bot's rights.
+
+## I-B26 (2026-10-23, evidence-based harness correction)
+50. APPLIED 2026-10-23 I-B26. tests/serverenv/forgejo/forgejo.go app.ini: `[queue] TYPE = channel`
+   (was `level`). TestPIPE003PipelinesRunAndReport failed `project acme has fewer than 1 builds
+   after 500ms`. Measured on the devstack (private copy, intake instrumented): Forgejo POSTed the
+   push hook 3.7 s after `git push` returned (orchestrator `intake start` 02:56:20.909, push
+   returned 02:56:17.183); the intake then created the build in 0.34 s. Forgejo's level queue
+   polls with a growing backoff (push_update and webhook queues chained), so the delay is the
+   test Forgejo's queue configuration. SPEC/budgets B-071 count the budget "after receipt" and
+   name the forge's delivery latency as excluded. With the in-memory channel queue the hook
+   arrives ~0.2 s after the push and the build is listed 0.55-0.68 s after the push returns.
+   No assertion, timeout or budget changed.
+
+## I-B27 (2026-10-23, evidence-based test correction; NOT applied: protected path, coordinator applies)
+51. PROPOSED 2026-10-23 I-B27. tests/core TestRFW047FixtureIRIsCanonicalAndValid panics for every
+   fixture (nil pointer at ir_test.go:544). Cause, measured: the IR is valid; the test binary does
+   not link the ecosystems. `ir.Parse` rejects kinds this binary cannot plan (SPEC §1.6 "unknown
+   kinds rejected"; `nodes[].kind` = "registered kind name"; R-FW-051: `engine.Register` in each
+   `pkg/<eco>/gen` init feeds `ir.KnownKind`). The bob binary links all of them through
+   `pkg/cli/link.go`; the tests/core test binary links only pkg/golang/gen and pkg/nixpkgs
+   (`go list -test -deps ./tests/core`). Probe (scratch package, deleted) calling eval.Evaluate +
+   ir.Parse on the nine fixtures: with only golang/gen+nixpkgs linked every fixture fails, e.g.
+   acme `node //crates/rcore:rcore@linux-amd64 has the unknown kind "rust.crate"`, polyglot/go
+   `"connect.go"`, rust/cpp-lib `"cc.library"`, npm `"npm.app"`, ocaml `"opam.executable"`, codegen
+   `"proto.library"`; with `_ "github.com/megakuul/bob/pkg/cli"` linked all nine parse with err nil.
+   Second defect: line 543-544 evaluates `len(g.Nodes)` when err != nil (g is nil), turning the
+   error into a panic that hides the message. Same class as item 4 (A68: toy kinds linked by a
+   blank import in tests/core). Edits:
+   a) tests/core/helpers_test.go imports, after `pkg/bob/diag`:
+      `_ "github.com/megakuul/bob/pkg/cli" // links the kinds and ecosystems the bob binary links (R-FW-051)`
+   b) tests/core/ir_test.go lines 543-545 become
+      `if err != nil { t.Fatalf("ir.Parse of the evaluator's own IR: %v", err) }`
+      `if len(g.Nodes) == 0 { t.Errorf("ir.Parse of the evaluator's own IR: 0 nodes") }`
+   Verified on a private copy (/var/tmp/I-B27/repo, gofmt clean): TestRFW047FixtureIRIsCanonicalAndValid
+   PASS for all nine fixtures; TestRFW047IRValidation (incl. unknown_kind "nope.x"), TestRFW044*,
+   TestRFW047SchemaFile unchanged PASS; TestRFW046* and TestRFW047GoldenIR fail identically with
+   and without the edit (other causes, plan/progress/I-B27.md). No assertion loosened.
+
+## I-B26 (continued, 2026-10-23, evidence-based test correction; 51 is I-B27's)
+52. APPLIED 2026-10-23 I-B26. tests/forge/pipelines_live_test.go TestPIPE005 (1): the cancelled
+   status of the superseded build is looked for with Forgejo state `warning` (was `error`). SPEC
+   §6.9.2 maps bob's `cancelled` to Forgejo `warning` (GitHub `error`+"cancelled", GitLab
+   `canceled`), R-PIPE-005 (1) asks for "forge status `cancelled`", and the protected
+   TestForgejoLive asserts `forge.StateCancelled: "warning"` for the same adapter
+   (forgejo_live_test.go:198, "SPEC 6.9.2 table"). The two tests could not both pass; the
+   description check (`superseded by #<n>`) and the timeout are unchanged.
+
+## I-B27 (continued; 52 is I-B26's)
+53. PROPOSED 2026-10-23 I-B27. tests/serverenv/workerclient/workerclient.go Attach (harness client):
+   TestRegisterAndAttach failed once in the CI unit stage (host load 17) with `token with a foreign
+   PoP: workerclient: send hello: unknown: write envelope: EOF, want unauthenticated: proof of
+   possession invalid`; 5 isolated runs passed. Cause: the server refuses the stream before the
+   client's Send completes; connect-go documents (connectrpc.com/connect client_stream.go:304,
+   BidiStreamForClient.Send) "If the server returns an error, Send returns an error that wraps
+   io.EOF" and the error itself comes from Receive. The harness returns the Send error. Edit: in
+   Attach, when `errors.Is(err, io.EOF)` after `bs.Send(hello)`, call `bs.Receive()` and return
+   `fmt.Errorf("workerclient: attach: %w", rerr)` if it fails (imports errors, io). The assertion
+   (error contains "proof of possession") is unchanged. The same defect in the real worker
+   (internal/worker/attach.go) was fixed in place by I-B27 (A170).
+
+## I-B25 (2026-10-23, evidence-based fixture correction)
+50. APPLIED 2026-10-23 I-B25. tests/cli/testdata/repos/pipe: libs/bob.go removed, its three
+   declarations moved unchanged in substance into the root bob.go (Module `example.com/pipe` Go
+   1.26, the binary of `./app` with CGoOff, Tests("./...")). SPEC §03.2.1: NewModule's root is
+   the directory of the calling bob.go and Binary's dir is module-relative, so libs/bob.go
+   declared a module rooted at libs/ whose binary was libs/app, a directory the fixture does not
+   have (go.mod and app/ are at the repository root, and TestRCLI012PipelineRun writes
+   app/bad_test.go and app/main.go). Evidence: `bob pipeline run ci` on the unchanged fixture:
+   `error[BOB-E-1015]: cannot resolve Go dependencies for //libs/app:app: example.com/pipe/app:
+   cannot find package "." in: libs/app` (package defined at libs/bob.go:17); the fixture's own
+   comment named a label //libs/greet:greet that no declaration produces. With the correction
+   the test is green; the test file is unchanged.
+
+## I-B24 (2026-10-23, evidence-based test correction)
+54. APPLIED 2026-10-23 I-B24. tests/oci/oci_test.go TestRREG003PullRegistry, the `norm` helper of
+   the "other-project pull must fail like a missing tag" comparison: it replaced only the full
+   reference and the host, but podman's error also names the bare tag ("reading manifest <tag>
+   in <host>/<repo>"), so the two outputs can never be equal for different tags. Evidence (devstack
+   run 2026-10-23 04:16, registry fixed by I-B24/A151): denied = `...initializing source
+   docker://HOST/priv/polyglot:1.0.0: reading manifest 1.0.0 in HOST/priv/polyglot: unauthorized`,
+   missing = `...docker://HOST/priv/polyglot:no-such-tag: reading manifest no-such-tag in
+   HOST/priv/polyglot: unauthorized` — identical except the tag inside podman's own message.
+   Edit: norm also replaces `manifest <tag> in` by `manifest TAG in`. The assertion (both fail,
+   same normalised text) is unchanged.
+
+51. tests/serverenv/serverenv.go, tests/golden/golden.go: repo-root detection matched go.mod only if it started with `module github.com/megakuul/bob`; once bob owns go.mod its first line is the generated header (SPEC §03.0.2). Now matches `(?m)^module github\.com/megakuul/bob\s*$` as tests/core/layout_test.go does. APPLIED (coordinator, evidence: I-B25 incident 1).
