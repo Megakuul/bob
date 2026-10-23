@@ -201,3 +201,7 @@
 | A171 out/uicheck -> out/_uicheck (vet R-ARCH-001; leftover copy, content kept). | I-B27 | self-ruled |
 | A172 go mod tidy (4 deps to direct) and the dbusage.todo comment refresh. | I-B27 | self-ruled |
 | A173 Acceptance triage method: package-sequential with a disk guard; test failures are | I-B27 | self-ruled |
+| A170 | I-B27 | Worker attach: refused attach returns the server error from Receive when Send fails with EOF. | self-ruled |
+| A171 | I-B27 | out/uicheck renamed out/_uicheck (vet R-ARCH-001). | self-ruled |
+| A172 | I-B27 | go mod tidy; dbusage.todo comment refreshed. | self-ruled |
+| A173 | I-B27 | Acceptance triage package-sequential with disk guard; failures classified in plan/progress/I-B27.md. | self-ruled |
