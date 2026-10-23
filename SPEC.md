@@ -6535,10 +6535,12 @@ Fields: `pr` projectID, `n` number, `st` state, `ph` phase (`evaluating|building
 fetch_ref} | upload sha256}, `tg` targets, `va` variants, `pi` pipeline runs [{name, state,
 release id}], `rp` reported forge statuses {context → last state sent} (status controller,
 §06 §6.9.4), `jb` jobs [≤ 1,024 × {id, kind,
-class, st, at attempts, ep, worker, dur}], `rs` result {failed packages, error}, `lg` log
+class, st, at attempts, ep, worker, dur, e error}], `rs` result {failed packages, error}, `lg` log
 partition id (§05.10.1), `rq` last request id, `vr` release version of the build
 (`CreateBuildRequest.version`; `""` = none; tag builds derive it from the ref instead, §06 §6.8,
-A146).
+A146). A job row's `e` is the first line of the job's signed `JobResult.error`, URL credentials
+redacted, ≤ 300 bytes, written when the row becomes terminal and never cleared; the job record is
+deleted after the job ends, so `e` is where §06 `Job.error` comes from afterwards (A180).
 
 ### 05.4.5 Control-bucket records for §06 (added at integration)
 
@@ -8400,7 +8402,8 @@ message Job {
   google.protobuf.Timestamp created_at = 12;
   google.protobuf.Timestamp claimed_at = 13;
   google.protobuf.Timestamp finished_at = 14;
-  ErrorSummary error = 15;
+  ErrorSummary error = 15;       // why the job failed (first line, code = its BOB-E-NNNN); kept
+                                 // after the job ends, from the build record's job row `e` (§05.4.4, A180)
 }
 message GetJobRequest { string id = 1; }
 message GetJobResponse { Job job = 1; }
@@ -9097,6 +9100,13 @@ or a release.
   Missing and not-allowed give the same 401 `insufficient_scope` / 404 `MANIFEST_UNKNOWN`
   consistently (no existence leak). Blobs are content-addressed and shared across repositories;
   a blob is served when visible to the caller, regardless of which repository path asked.
+- Tags (A151): projects that build the same image share its digest and so its visibility
+  document. A tag of repository `<project>/<image>` is visible iff the object's document exists
+  and the caller has `GetRepository` on `<project>`, or the tag is a release tag (`r`) whose
+  release id is in the document's `public`; build tags are visible to the project only. The same
+  rule decides manifest requests by tag, `tags/list`, `RegistryService.ListTags`/`GetRepository`
+  and the token endpoint's grants ("at least one visible tag"); requests by digest stay
+  object-based.
 
 #### R-REG-003 OCI pull registry
 - **Statement:** Stock OCI clients pull bob-built images; only promotion writes.

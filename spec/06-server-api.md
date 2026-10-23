@@ -989,7 +989,8 @@ message Job {
   google.protobuf.Timestamp created_at = 12;
   google.protobuf.Timestamp claimed_at = 13;
   google.protobuf.Timestamp finished_at = 14;
-  ErrorSummary error = 15;
+  ErrorSummary error = 15;       // why the job failed (first line, code = its BOB-E-NNNN); kept
+                                 // after the job ends, from the build record's job row `e` (§05.4.4, A180)
 }
 message GetJobRequest { string id = 1; }
 message GetJobResponse { Job job = 1; }
@@ -1686,6 +1687,13 @@ or a release.
   Missing and not-allowed give the same 401 `insufficient_scope` / 404 `MANIFEST_UNKNOWN`
   consistently (no existence leak). Blobs are content-addressed and shared across repositories;
   a blob is served when visible to the caller, regardless of which repository path asked.
+- Tags (A151): projects that build the same image share its digest and so its visibility
+  document. A tag of repository `<project>/<image>` is visible iff the object's document exists
+  and the caller has `GetRepository` on `<project>`, or the tag is a release tag (`r`) whose
+  release id is in the document's `public`; build tags are visible to the project only. The same
+  rule decides manifest requests by tag, `tags/list`, `RegistryService.ListTags`/`GetRepository`
+  and the token endpoint's grants ("at least one visible tag"); requests by digest stay
+  object-based.
 
 #### R-REG-003 OCI pull registry
 - **Statement:** Stock OCI clients pull bob-built images; only promotion writes.

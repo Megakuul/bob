@@ -178,3 +178,5 @@
 | A157 Evaluator go directive: a root go.mod naming a patch release above the pinned Go (go.mod | I-B25 | self-ruled |
 | A158 Bootstrap route: SPEC R-ARCH-005 names `BOB_BOOTSTRAP_BUILDER=<path> go build -tags bootstrap`; | I-B25 | self-ruled |
 | A159 go.mod/go.sum stay hand-written for now (see TEST PROBLEM 1). bob.go's Require list equals | I-B25 | self-ruled |
+| A151 | I-B24 | Registry tag visibility is per project: a tag is visible only if the caller sees the repo's project, or it is a release tag whose release id is in the object's public list; digest requests keep the document-only rule. | self-ruled |
+| A180 | I-B24 | Job row field `e` keeps the first line of the job error (<=300 bytes, credentials stripped) after the job ends. | self-ruled |

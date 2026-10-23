@@ -268,7 +268,7 @@ func TestRegistry(t *testing.T) {
 			Tags []string
 		}
 		_ = json.Unmarshal(body, &tl)
-		if code != 200 || tl.Name != "p1/app" || !slices.Equal(tl.Tags, []string{"1.0.0", "b-01PUB", "latest"}) {
+		if code != 200 || tl.Name != "p1/app" || !slices.Equal(tl.Tags, []string{"1.0.0", "latest"}) { // build tags: project only (A151)
 			t.Errorf("anonymous tags/list: %d %s", code, body)
 		}
 	})

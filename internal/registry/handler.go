@@ -205,13 +205,28 @@ func route(rest string) (repo, kind, ref string, ok bool) {
 	return "", "", "", false
 }
 
-// visible decides from the object's visibility document alone (§6.6.2).
+// visible decides from the object's visibility document alone (§6.6.2); it is the rule for
+// digest references (manifests and blobs are content-addressed and shared across projects).
 func (g *Registry) visible(ctx context.Context, c *Claims, digest string) (bool, error) {
 	doc, err := g.c.Vis.Get(ctx, strings.TrimPrefix(digest, "sha256:"))
 	if err != nil || doc == nil {
 		return false, err
 	}
 	return len(doc.Public) > 0 || c.sees(doc.Projects), nil
+}
+
+// tagVisible is the rule for a tag of repo (A151): the object's visibility document must
+// exist, and the bearer sees the repository's project, or the tag is a release tag whose
+// release made the object public. Two projects that build the same image share its digest
+// and so its document; another project's public release must not expose this project's
+// private or build tags.
+func (g *Registry) tagVisible(ctx context.Context, repo string, e TagEntry, sees func([]string) bool) (vis, public bool, err error) {
+	doc, err := g.c.Vis.Get(ctx, strings.TrimPrefix(e.D, "sha256:"))
+	if err != nil || doc == nil {
+		return false, false, err
+	}
+	public = e.R != "" && slices.Contains(doc.Public, e.R)
+	return public || sees([]string{RepoProject(repo)}), public, nil
 }
 
 func cacheControl(w http.ResponseWriter, public bool, immutable bool) {
@@ -234,20 +249,25 @@ func (g *Registry) isPublic(ctx context.Context, digest string) bool {
 func (g *Registry) manifest(w http.ResponseWriter, r *http.Request, c *Claims, repo, ref string) {
 	ctx := r.Context()
 	digest, media := ref, ""
-	if !ValidDigest(ref) {
-		idx, _, err := g.Repos.Get(ctx, repo)
-		if err != nil {
+	var ok, public bool
+	var err error
+	if ValidDigest(ref) {
+		ok, err = g.visible(ctx, c, digest)
+		public = ok && g.isPublic(ctx, digest)
+	} else {
+		var idx *RepoIndex
+		if idx, _, err = g.Repos.Get(ctx, repo); err != nil {
 			g.unavailable(w, r, err)
 			return
 		}
-		e, ok := idx.lookup(ref)
-		if !ok {
+		e, found := idx.lookup(ref)
+		if !found {
 			writeErr(w, http.StatusNotFound, "MANIFEST_UNKNOWN", "manifest unknown")
 			return
 		}
 		digest, media = e.D, e.M
+		ok, public, err = g.tagVisible(ctx, repo, e, c.sees)
 	}
-	ok, err := g.visible(ctx, c, digest)
 	if err != nil {
 		g.unavailable(w, r, err)
 		return
@@ -271,7 +291,7 @@ func (g *Registry) manifest(w http.ResponseWriter, r *http.Request, c *Claims, r
 	w.Header().Set("Content-Type", media)
 	w.Header().Set("Docker-Content-Digest", digest)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-	cacheControl(w, g.isPublic(ctx, digest), ValidDigest(ref))
+	cacheControl(w, public, ValidDigest(ref))
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(body)
 	}
@@ -426,15 +446,15 @@ func singleRange(v string) string {
 	return "bytes=" + a + "-" + b
 }
 
-// visibleTags returns the tags of idx whose objects the bearer sees (sorted).
-func (g *Registry) visibleTags(ctx context.Context, idx *RepoIndex, sees func(projects []string) bool) ([]string, error) {
+// visibleTags returns the tags of repo's index idx that the bearer sees (tagVisible, sorted).
+func (g *Registry) visibleTags(ctx context.Context, repo string, idx *RepoIndex, sees func(projects []string) bool) ([]string, error) {
 	var out []string
 	for _, t := range idx.SortedTags() {
-		doc, err := g.c.Vis.Get(ctx, strings.TrimPrefix(idx.Tags[t].D, "sha256:"))
+		vis, _, err := g.tagVisible(ctx, repo, idx.Tags[t], sees)
 		if err != nil {
 			return nil, err
 		}
-		if doc != nil && (len(doc.Public) > 0 || sees(doc.Projects)) {
+		if vis {
 			out = append(out, t)
 		}
 	}
@@ -448,7 +468,7 @@ func (g *Registry) tags(w http.ResponseWriter, r *http.Request, c *Claims, repo 
 		g.unavailable(w, r, err)
 		return
 	}
-	tags, err := g.visibleTags(ctx, idx, c.sees)
+	tags, err := g.visibleTags(ctx, repo, idx, c.sees)
 	if err != nil {
 		g.unavailable(w, r, err)
 		return
@@ -549,7 +569,7 @@ func pullScope(s string) (string, bool) {
 	return repo, ValidRepo(repo) && (slices.Contains(actions, "pull") || slices.Contains(actions, "*"))
 }
 
-// repoVisible: the repository has at least one object (tag) visible to the caller.
+// repoVisible: the repository has at least one tag visible to the caller (tagVisible).
 func (g *Registry) repoVisible(ctx context.Context, repo string, sees func([]string) bool) (bool, error) {
 	idx, _, err := g.Repos.Get(ctx, repo)
 	if err != nil || idx == nil {
@@ -571,11 +591,11 @@ func (g *Registry) repoVisible(ctx context.Context, repo string, sees func([]str
 		if n++; n > maxVisibleChecks {
 			break
 		}
-		doc, err := g.c.Vis.Get(ctx, strings.TrimPrefix(idx.Tags[t].D, "sha256:"))
+		vis, _, err := g.tagVisible(ctx, repo, idx.Tags[t], sees)
 		if err != nil {
 			return false, err
 		}
-		if doc != nil && (len(doc.Public) > 0 || sees(doc.Projects)) {
+		if vis {
 			return true, nil
 		}
 	}

@@ -91,7 +91,11 @@ func TestRREG003PullRegistry(t *testing.T) {
 	af := authfile(t, p, host, other)
 	denied, missing := pull(p, privRef, af), pull(p, missingRef, af)
 	norm := func(r harness.Result, ref string) string {
-		return strings.ReplaceAll(strings.ReplaceAll(r.Combined(), ref, "REF"), host, "HOST")
+		// podman also names the bare tag ("reading manifest <tag> in <repo>")
+		tag := ref[strings.LastIndex(ref, ":")+1:]
+		out := strings.ReplaceAll(r.Combined(), ref, "REF")
+		out = strings.ReplaceAll(out, "manifest "+tag+" in", "manifest TAG in")
+		return strings.ReplaceAll(out, host, "HOST")
 	}
 	if denied.Exit == 0 || missing.Exit == 0 || norm(denied, privRef) != norm(missing, missingRef) {
 		t.Errorf("other-project pull must fail like a missing tag:\n denied (exit %d): %s\n missing (exit %d): %s", denied.Exit, denied.Combined(), missing.Exit, missing.Combined())

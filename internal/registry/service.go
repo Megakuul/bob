@@ -172,19 +172,17 @@ func (s *Service) visibleIndex(ctx context.Context, repo, method string) (*RepoI
 	}
 	public := map[string]bool{}
 	var tags []string
+	sees := func(ps []string) bool { return slices.ContainsFunc(ps, allowed) }
 	for _, t := range idx.SortedTags() {
-		doc, err := s.R.c.Vis.Get(ctx, strings.TrimPrefix(idx.Tags[t].D, "sha256:"))
+		vis, pub, err := s.R.tagVisible(ctx, repo, idx.Tags[t], sees)
 		if err != nil {
 			return nil, nil, nil, api.Unavailable("the registry is not available, try again")
 		}
-		if doc == nil {
-			continue
+		if vis {
+			tags = append(tags, t)
 		}
-		if len(doc.Public) > 0 {
+		if pub {
 			public[t] = true
-			tags = append(tags, t)
-		} else if slices.ContainsFunc(doc.Projects, allowed) {
-			tags = append(tags, t)
 		}
 	}
 	if len(tags) == 0 {

@@ -645,10 +645,12 @@ Fields: `pr` projectID, `n` number, `st` state, `ph` phase (`evaluating|building
 fetch_ref} | upload sha256}, `tg` targets, `va` variants, `pi` pipeline runs [{name, state,
 release id}], `rp` reported forge statuses {context → last state sent} (status controller,
 §06 §6.9.4), `jb` jobs [≤ 1,024 × {id, kind,
-class, st, at attempts, ep, worker, dur}], `rs` result {failed packages, error}, `lg` log
+class, st, at attempts, ep, worker, dur, e error}], `rs` result {failed packages, error}, `lg` log
 partition id (§05.10.1), `rq` last request id, `vr` release version of the build
 (`CreateBuildRequest.version`; `""` = none; tag builds derive it from the ref instead, §06 §6.8,
-A146).
+A146). A job row's `e` is the first line of the job's signed `JobResult.error`, URL credentials
+redacted, ≤ 300 bytes, written when the row becomes terminal and never cleared; the job record is
+deleted after the job ends, so `e` is where §06 `Job.error` comes from afterwards (A180).
 
 ### 05.4.5 Control-bucket records for §06 (added at integration)
 
