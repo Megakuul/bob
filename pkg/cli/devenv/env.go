@@ -40,6 +40,43 @@ type Outside struct {
 	Set map[string]string `json:"set"`
 }
 
+// Result is the `result` data of `bob env` (`--json` and `--format json`, SPEC §02.4):
+// {root, shell, outside:{set, prepend:{PATH}}, insideOnly, tools}. outside.prepend.PATH is what
+// the hook's enter script puts in front of PATH (the shim directory, §02.7.1 step 6); tools are
+// the shimmed tool names, sorted.
+type Result struct {
+	Root       string        `json:"root"`
+	Shell      string        `json:"shell"`
+	Outside    ResultOutside `json:"outside"`
+	InsideOnly []string      `json:"insideOnly"`
+	Tools      []string      `json:"tools"`
+}
+
+// ResultOutside is Result.outside: the exported variables and the PATH entries to prepend.
+type ResultOutside struct {
+	Set     map[string]string   `json:"set"`
+	Prepend map[string][]string `json:"prepend"`
+}
+
+// Result returns the `bob env` result data of f.
+func (f *File) Result() Result {
+	r := Result{
+		Root:       f.Root,
+		Shell:      f.Shell,
+		Outside:    ResultOutside{Set: map[string]string{}, Prepend: map[string][]string{"PATH": {ShimDir(f.Root)}}},
+		InsideOnly: append([]string{}, f.InsideOnly...),
+		Tools:      make([]string, 0, len(f.Tools)),
+	}
+	for k, v := range f.Outside.Set {
+		r.Outside.Set[k] = v
+	}
+	for name := range f.Tools {
+		r.Tools = append(r.Tools, name)
+	}
+	sort.Strings(r.Tools)
+	return r
+}
+
 // Tool is one shimmed tool.
 type Tool struct {
 	Path string            `json:"path"`

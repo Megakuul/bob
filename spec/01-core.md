@@ -623,9 +623,30 @@ func (c Config) Features(l bob.Label) []string
 // New creates a node of kind for p. name is the label name; deps are the node's direct
 // package dependencies (order is kept); spec is the kind's payload, serialised into the IR.
 func New(p *bob.P, kind, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node
+// NewIn is New with the label directory dir (relative to the repository or the dependency
+// repo's module root) instead of the calling bob.go's: e.g. a Go binary //<module dir>/<dir>:<name>
+// declared in the module's bob.go (§03.2.1).
+func NewIn(p *bob.P, kind, dir, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node
+// Here captures the bob.go position of the running call; NewAt is New with that definedAt
+// (codegen recipes: the consumer's package is defined at the recipe's line, R-FW-016).
+type Site struct{ /* unexported */ }
+func Here() Site
+func NewAt(p *bob.P, at Site, kind, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node
 // ConfigOf returns the projected configuration of a node.
 func ConfigOf(n *bob.Node) Config
+
+// Elsewhere runs the current constructor once more for platform pl ("nested" configuration,
+// never a target) and returns that configuration; output kinds use it for their programs on
+// other platforms (oci.ImageOpts.Platforms, release.ReleaseOpts.Platforms). The nested run
+// stores what it got with Record (Nested(p) is true), the outer run reads it with Recorded.
+func Elsewhere(p *bob.P, pl bob.Platform) *bob.P
+func Nested(p *bob.P) bool
+func Record(p *bob.P, key string, v any)
+func Recorded(p *bob.P, key string) (any, bool)
 ```
+
+- `New`, `NewIn` and `NewAt` are one constructor family (they differ only in the label's
+  directory and `definedAt`) and all return `bob.Node`; the kind's typed result wraps it.
 
 - **Acceptance:** A unit test registers a kind with `Axes={AxisPlatform}`; its constructor
   calling `ext.ConfigOf(n).Profile()` panics with `ext: kind <k> reads the profile but did not declare
@@ -697,7 +718,12 @@ type PlanRequest struct {
 	Sources map[string]string   // node id → imported source store path (R-NIX-009)
 	Nixpkgs *nixidx.Index
 	Builder string              // bob-builder store path for the host system
+	Store   PlanStore           // store access while planning: HostPath, ImportSources, Ensure
 }
+// Optional extensions of PlanStore, found by a type assertion on PlanRequest.Store:
+// PlanRealiser.RealiseNow builds derivations planned so far (early cutoff: §03.6.3, R-GO-005);
+// PlanCloser.Closure makes outputs valid and returns their closure with references (§04 images
+// and tarballs: R-OUT-004, R-OUT-007, R-OUT-011). A failed closure build wraps ErrClosureBuild.
 type PlanResult struct {
 	Drvs    []*drv.Derivation        // new derivations, any order (bob sorts topologically)
 	Nodes   map[string]Resolved      // node id → its outputs and, for Linkables, filled LinkInfo

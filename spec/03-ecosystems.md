@@ -1672,8 +1672,9 @@ func TS(s *Spec, o TSOpts) npm.Generated
 #### R-GEN-002a GraphQL for Go and TypeScript
 - **Acceptance:** In the codegen fixture, gqlgen output compiles with the user's resolvers and
   graphql-codegen output type-checks the TS operations; an undefined type in the schema gives
-  `│ failed to load schema: schema/schema.graphqls:9:18: Undefined type Nope.` (gqlgen) and
-  `│ Unknown type: "Nope".` (TS), no Node stack trace into the store.
+  `| failed to load schema: schema/schema.graphqls:9:18: Undefined type Nope.` (gqlgen) and
+  `| Unknown type: "Nope".` (TS) (excerpt prefix `|` outside a terminal, `│` on one: §02.5), no
+  Node stack trace into the store.
 - **Source:** R-GEN-002, S6 §3.3–3.4.
 
 #### R-GEN-003a OpenAPI for Go and TypeScript

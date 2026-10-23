@@ -1,6 +1,7 @@
 package install
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -40,14 +41,22 @@ func TestRINST003PublicWithoutAuth(t *testing.T) {
 }
 
 // checkNo401 fails when Nix's 401 warning reaches the user ("No Nix 401 warning is ever shown").
+// The HTTP status is matched as a token (`HTTP 401`, `401 Unauthorized`, ` 401 `), not as a
+// substring: bob's own codes such as BOB-E-4010 contain "401".
 func checkNo401(t testing.TB, r harness.Result) {
 	t.Helper()
-	for _, bad := range []string{"401", "Unauthorized", "HTTP error", "unable to download", "warning: error:"} {
+	if m := http401.FindString(r.Combined()); m != "" {
+		t.Errorf("output of bob %s mentions HTTP status 401 (%q):\n%s", strings.Join(r.Args, " "), m, r.Combined())
+	}
+	for _, bad := range []string{"Unauthorized", "HTTP error", "unable to download", "warning: error:"} {
 		if strings.Contains(r.Combined(), bad) {
 			t.Errorf("output of bob %s mentions %q:\n%s", strings.Join(r.Args, " "), bad, r.Combined())
 		}
 	}
 }
+
+// http401 matches the HTTP status 401 as a word of its own (never a digit run or a BOB-E code).
+var http401 = regexp.MustCompile(`(?:^|[^\w-])401(?:[^\w]|$)`)
 
 // TestRINST003PrivateNeedsLogin: a private release fails without credentials with exit 4 and
 // BOB-E-4010 (4008 with an invalid token), and the hint names `bob login`; after `bob login

@@ -15,7 +15,9 @@ images, AppImages, tarballs, closures as outputs, releases as built objects, the
   (`drv.Derivation`, structured attributes, `Name`), `bob-builder` subcommands, the per-package
   fixup step (§01 §1.13: strip; references are prevented with prefix maps such as
   `--remap-path-prefix`/`-trimpath` instead of rewritten, and a forbidden reference fails with
-  BOB-E-9003), and the embedded Nix config.
+  BOB-E-9003), and the embedded Nix config; `ext.Elsewhere` (§1.5: the programs of the other
+  platforms) and the planner's optional `engine.PlanCloser` (§1.6.1: closures while planning,
+  for layers, the static-tarball check and pruning).
   **Required from §01:** the derivation layer supports `__structuredAttrs` with
   `unsafeDiscardReferences` (R-OUT-011). No experimental feature is needed: `discard-references`
   is stable in Nix 2.34 (enabling it only warns `unknown experimental feature`; §01 R-NIX-024).
@@ -323,7 +325,10 @@ func (p *P) Toolchain() Toolchain
 - **Statement:** `oci.Image` produces an OCI image layout (`oci-layout`, `index.json`,
   `blobs/sha256/…`) with one image index over the requested platforms (default amd64 +
   arm64, cross-built per R-PLAT-004), written by bob's own Go code (stdlib `archive/tar`,
-  `compress/gzip`, `encoding/json`; no go-containerregistry, no Docker).
+  `compress/gzip`, `encoding/json`; no go-containerregistry, no Docker). Mechanism: the
+  constructor gets the programs of each other platform with `ext.Elsewhere(p, pl)` (§1.5, a
+  nested run of the same constructor), and the planner reads each closure through
+  `engine.PlanCloser` (§1.6.1).
 - **Acceptance:** `crane validate --remote` of the pushed fixture index → PASS for each platform;
   index media type `application/vnd.oci.image.index.v1+json`, platforms
   `[{linux,amd64},{linux,arm64}]` sorted amd64 first; rootless `podman run` (bobtest) of the
@@ -373,7 +378,9 @@ func NewImage(p *bob.P, name string, opts ImageOpts) *Image
   layer each, the rest share one layer; (4) one layer per root in root order; (5) the
   customisation layer (R-OUT-012) last.
 - **Acceptance:** Fixture `api` v1 → 14 layers; v2 (one string changed in `api`) differs from
-  v1 in exactly one layer blob and the config/manifest; new compressed bytes ≤ 16 % of the image
+  v1 in exactly one layer blob apart from the customisation layer (its `/.bob/licences.json` lists
+  the root, whose path changes) and the config/manifest; new compressed bytes (all new blobs,
+  the customisation layer included) ≤ 16 % of the image
   (S8: 3.78 / 25.4 MB). With `MaxLayers: 4`: 4 layers, the root alone in layer 3.
 - **Source:** S8 §3.2, §5.2, S8-2.
 
@@ -671,8 +678,8 @@ func New(p *bob.P, name string, opts ReleaseOpts) *Release
   arrays sorted by `name`, then `platform`), consumed by §06 (publish) and `bob install`.
 - **Acceptance:** Golden `release.json` of the fixture; JSON-schema test (the schema file lives
   in `pkg/release/schema/release-v1.json`); `version` matches
-  `^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$` (else evaluation error
-  `✗ invalid release version "<v>"`).
+  `^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$` (else BOB-E-1020, exit 3, with the flag as label:
+  `✗ --version: invalid release version "<v>"`; §4.11).
 - **Source:** R-REG-004, R-INST-001.
 
 | Field | Type | Meaning |
@@ -688,7 +695,7 @@ func New(p *bob.P, name string, opts ReleaseOpts) *Release
 | `artifacts[].kind` | `closure` \| `oci` \| `appimage` \| `tarball` | |
 | `artifacts[].platform` | `linux-amd64` \| `linux-arm64` \| `multi` | `multi` only for `oci` |
 | `artifacts[].storePath` | string | the artifact's output path |
-| `artifacts[].entrypoints` | map name→relative path | `closure` only: executables installed by `bob install` (default `{<name>: <MainProgram>}`; all of `bin/*` when `MainProgram` is empty) |
+| `artifacts[].entrypoints` | map name→relative path | `closure` only: executables installed by `bob install` (default `{<name>: <MainProgram>}`; all of `bin/*` when `MainProgram` is empty). v1 limitation: the proto `PlatformClosure` has no `entrypoints` field, so `bob install` installs every executable in `bin/` of the closure roots (§02.8) |
 | `artifacts[].file` | string | `appimage`/`tarball`: file name, e.g. `api-1.0.1-x86_64.AppImage` |
 | `artifacts[].sha256`, `size` | string, int | `appimage`/`tarball`: of the file |
 | `artifacts[].repo`, `tags`, `index` | string, []string, string | `oci`: repo, `[<version>]`, index digest |
@@ -772,6 +779,7 @@ of the `bob.release/v1` manifest) and the profile semantics below.
 | OCI `User` root implicit | n/a (default is 65534; `"0:0"` allowed) | – | – |
 | `MaxLayers` out of range | `//…: invalid MaxLayers: must be between 2 and 125 (got <n>)` | 1020 | 3 |
 | too many roots for MaxLayers | `//…: invalid MaxLayers: <n> roots need MaxLayers ≥ <n+2>` | 1020 | 3 |
+| invalid release version (`bob build --version`) | `--version: invalid release version "<v>": a version is 1 to 64 letters, digits and . + _ - starting with a letter or digit` | 1020 | 3 |
 | nothing installable in a release | §02 R-INST-002 | 0009 | 2 |
 
 Exit statuses follow §02.2 (aligned at integration: option errors in `bob.go` are definition

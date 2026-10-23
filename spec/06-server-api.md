@@ -1574,7 +1574,8 @@ Steps (orchestrator, idempotent, re-run until done):
       412 = another orchestrator won = success.
 4. Images: stream-verify each blob digest, copy to `oci/blobs/sha256/<hex>` (ETag guard) unless
    present, update `oci/vis/sha256/<hex>.json`, then update `oci/repos/<repo>/index.json` (tag
-   last, CAS). Non-release builds tag `b-<build-id>`; release tags are written by §6.8.
+   last, CAS). Non-release builds are tagged with the build id itself (`b-<ULID>`, §05 R-STORE-104);
+   release tags are written by §6.8.
 5. Assets are verified (sha256, size) and stay in staging until a release copies them (§6.8);
    the release controller copies before the staging lifecycle expires (7 d) or the asset is lost
    and the release fails with `release asset expired; re-run the release pipeline`.
@@ -1624,10 +1625,13 @@ Signing keys: `SigningKeyRecord` (`skey/<keyname>`, §05.4.5) in the control buc
 ```
 substituters = https://cache.nixos.org https://<server>/nix
 trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= <WhoAmI.nix.public_keys…>
-netrc-file = <home>/etc/nix/netrc        # §01 R-NIX-024; machine <server> login bob password <bob_dt_…>, mode 0600
+netrc-file = <home>/etc/nix/netrc        # §01 R-NIX-024; machine <server> login bob password <token>, mode 0600
 narinfo-cache-negative-ttl = 60
 ```
-The CLI calls `AuthService/WhoAmI` with the download token before any Nix call that may hit the
+`<token>` is the login's access token (`bob_at_…`, or the service token of `bob login
+--token-stdin`): the cache accepts it like a download token (§6.6 credentials), so one token
+serves the API and the cache; a `bob_dt_` download token works in the netrc too.
+The CLI calls `AuthService/WhoAmI` with that token before any Nix call that may hit the
 server (Nix hides 401 behind a level-1 warning and then builds locally, STATUS finding S15), and
 passes `--option narinfo-cache-negative-ttl 0` to the Nix call that fetches a remote build result
 or a release.
@@ -2006,7 +2010,7 @@ checks of this flow).
 not ignored). Caps: 512 MiB compressed **[proposal]**, ≤ 200,000 entries, regular files,
 directories and symlinks only (no absolute or `..` targets; checked by the worker on unpack).
 The server streams to `src/<project>/<hex>.tar.zst` with `If-None-Match: *` while hashing; hash
-mismatch → 400 `upload does not match its sha256`, object deleted; existing → 200 without reading
+mismatch → 400 `upload does not match its sha256`, object deleted; first write → 201; existing → 200 without reading
 the body beyond the headers (client sends `Expect: 100-continue`). Lifecycle 7 days.
 
 #### R-PIPE-009 Remote source snapshots (new)

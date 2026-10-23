@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -176,11 +177,15 @@ func runEnv(e *env) int {
 		return e.out.fail(err)
 	}
 	if e.out.json {
-		e.out.result(f)
+		e.out.result(f.Result())
 		return e.out.finish(0, translate.Counts{}, nil)
 	}
-	if format == "json" { // the result data as it is: env.json
-		e.out.printf("%s", b)
+	if format == "json" { // the result event's data (SPEC §02.4), with outside.prepend.PATH
+		j, err := json.Marshal(f.Result())
+		if err != nil {
+			return e.out.fail(err)
+		}
+		e.out.printf("%s\n", j)
 		return 0
 	}
 	shell := "sh"

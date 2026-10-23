@@ -243,3 +243,27 @@ func TestEditorMerge(t *testing.T) {
 		t.Errorf("a commented file: %v", err)
 	}
 }
+
+// TestResultPrependsShimDir: the `bob env` result data has the SPEC §02.4 shape, with the shim
+// directory as outside.prepend.PATH (what the hook's enter script puts in front of PATH).
+func TestResultPrependsShimDir(t *testing.T) {
+	f := &File{V: 1, Root: "/r", Shell: "default", Outside: Outside{Set: map[string]string{"CGO_ENABLED": "0"}},
+		InsideOnly: []string{"GOROOT"}, Tools: map[string]Tool{"gopls": {}, "go": {}}}
+	b, err := json.Marshal(f.Result())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"root":"/r","shell":"default","outside":{"set":{"CGO_ENABLED":"0"},"prepend":{"PATH":["/r/.bob/bin"]}},"insideOnly":["GOROOT"],"tools":["go","gopls"]}`
+	if string(b) != want {
+		t.Errorf("result = %s\nwant      %s", b, want)
+	}
+	s := NewScript("sh", []string{"PATH=/usr/bin"})
+	s.Enter("/r", f, "h")
+	if !strings.Contains(s.String(), "export PATH='"+f.Result().Outside.Prepend["PATH"][0]+":/usr/bin'") {
+		t.Errorf("enter script does not prepend outside.prepend.PATH:\n%s", s.String())
+	}
+	empty, _ := json.Marshal((&File{Root: "/r"}).Result())
+	if !strings.Contains(string(empty), `"set":{}`) || !strings.Contains(string(empty), `"insideOnly":[]`) || !strings.Contains(string(empty), `"tools":[]`) {
+		t.Errorf("empty result has null fields: %s", empty)
+	}
+}

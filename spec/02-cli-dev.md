@@ -1204,7 +1204,9 @@ Install steps:
    exec "${BOB:-/home/u/.local/bin/bob}" exec --installed acme/cli -- acme "$@"
    ```
    `bob exec --installed <name>` reads `current`, enters the namespace and runs the binary with
-   the caller's environment.
+   the caller's environment. Entry binaries in v1 = every executable in `<root>/bin` of each
+   closure root: `PlatformClosure` (§06) carries no `entrypoints`, so the release manifest's
+   `entrypoints` (§04 §4.11) do not reach `bob install` yet (v1 limitation).
 6. A binary name already provided by another entry or by an existing non-bob file in `binDir` →
    `BOB-E-0004` (`acme is already provided by infra/dt; use --as`), and nothing changes.
    `--as <name>` installs under another entry name and prefixes the shims (`<as>-<bin>`).

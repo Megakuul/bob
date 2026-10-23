@@ -311,6 +311,9 @@ var specSharedResults = map[string]map[string][]string{
 	"pkg/rust": {"*Lib": {"Library", "ProcMacro"}, "*CLib": {"CDylib", "StaticLib"}},
 	// §03.6.1: proto.Lint and proto.Breaking are both "check packages" returning *proto.Check.
 	"pkg/proto": {"*Check": {"Breaking", "Lint"}},
+	// §1.5: the extension API's node constructors New, NewIn and NewAt all return bob.Node
+	// (Here takes no *P and Elsewhere returns *bob.P, so they are not constructors here).
+	"pkg/bob/ext": {"bob.Node": {"New", "NewAt", "NewIn"}},
 }
 
 func specShared(rel, ret string, names []string) bool {

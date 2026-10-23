@@ -133,7 +133,11 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
   - `hash64(s)` = hex SHA-256 (64 chars);
   - `sh2(id)` = `%02d` of `fnv32a(id) mod shards`.
 
-  Ids: `ULID` = 26-char Crockford ULID (48-bit ms time + 80 random bits).
+  Ids: `ULID` = 26-char Crockford ULID (48-bit ms time + 80 random bits). Build ids are
+  `b-<ULID>` with the ULID in upper case (`b-01JB7Q8V3K…`); older lower-case ids still parse.
+  Keys that join an id and a name in one segment write `<id>.<enc(name)>` (e.g.
+  `bbr/<projectID.enc(branch)>`); when that exceeds 100 characters the name part is
+  `h` + the first 40 hex chars of SHA-256(name), so the 2- or 4-segment rule always holds.
 - **Acceptance:** fuzz test: no input to the key builders yields an invalid or colliding
   segment (10⁶ random strings, including `/`, empty, 1 KiB). `sh2` is total over non-empty strings;
   ids are validated at the API boundary, not in the key builders. An empty segment returns
@@ -468,7 +472,7 @@ type LeaseState struct {
 type Lease struct {
 	Bucket *Bucket
 	Owner  string        // this process's orchestrator id
-	TTL    time.Duration // 3 × controller interval
+	TTL    time.Duration // 2 × controller interval
 	// unexported: record builder and accessor
 }
 
@@ -480,7 +484,7 @@ func NewLease[L any](b *Bucket, build func(s LeaseState) *L, state func(*L) Leas
 //
 // Example:
 //
-//	l := store.NewControllerLease(fleet, "job-reconciler", self.ID, 30*time.Second)
+//	l := store.NewControllerLease(fleet, "job-reconciler", self.ID, 20*time.Second)
 //	if held, epoch, err := l.TryAcquire(ctx); held { reconcile(ctx, epoch) }
 func NewControllerLease(fleet *Bucket, name, owner string, ttl time.Duration) *Lease
 
@@ -545,7 +549,7 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 | `bidx/failed` | ring of the last 200 failed builds | build controller (CAS) | UI overview (GC) | yes |
 | `bnodes/<buildID>` | `BuildNodes`: drv count, bitmaps assigned/promoted/failed, job → drv index ranges (S14 §5.2) | build controller (CAS) | build controller, UI graph (G) | yes |
 | `rel/<projectID>/n/<num10>` | `ReleaseRecord` (§05.6.4) | release controller (C, CAS) | API, cache auth (GC) | yes |
-| `relv/<projectID>/<enc(name)>/v/<enc(version)>` | release number (uniqueness of name + version) | release controller (C: uniqueness) | API, `bob install` (G) | yes |
+| `relv/<projectID.enc(name)>/v/<enc(version)>` | release number (uniqueness of name + version) | release controller (C: uniqueness) | API, `bob install` (G) | yes |
 | `rpage/<projectID>/p/<num10>` | 50 release entries | release controller (CAS) | UI (GC) | yes |
 | `ridx/all/p/<num10>` + `ridxm/all` | registry-wide release index (P = 50) | release controller (CAS) | UI registry (GC) | yes |
 | `user/<userID>` | `UserRecord`: name, email, kind, pw hash, `ro` role bindings [{role, project \| `*`, source manual\|oidc}] (truth; §06's `RoleBinding`), `tk` token ids (≤ 100), `ss` session ids (≤ 100), disabled | AccessService (CAS) | auth (GC ≤ 10 s) | yes |
@@ -561,6 +565,8 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 | `forge/<forgeID>`, `forges/all` | `ForgeRecord` (forge integration; secrets sealed with the orchestrator data key); index | ForgeService (CAS) | pipeline controller (GC) | yes |
 | `ftok/<sh2(jobID)>` | `CheckoutRecord`s: outstanding per-job forge tokens {jobID → epoch, forge, handle (token id), expiresAt, forgeExpires}; never the token value (D62) | `GetCheckoutCredential`, revoke at job end, sweeper (CAS) | same + sweeper (GC) | yes |
 | `set/<name>` | `SettingRecord`: setting value | SettingsService (CAS) | all (GC 30 s) | yes |
+| `bkey/<hash64(delivery key)>` | `BuildKey`: `b` build id, `at` created: the build one forge delivery created (idempotent build creation from a webhook event; delivery key = the `fdel` key value) | webhook intake through build creation (C) | same, when the create conflicts (G) | no |
+| `plock/<jobID>` | promotion lock, a `Lease` (§05.3.4: `o`, `ep`, `ex`, `cu`; TTL 1 min); deleted after the job's promotion; correctness does not depend on it, it makes concurrent promotions of one job deterministic | promoting orchestrator (C, CAS, D) | same (G) | yes |
 | `promo/<yyyymmdd>/s/<seq20>` + `promot/<yyyymmdd>` | promotion log: {storehash, project, build, at} (SeqLog without head) | promoting orchestrator (Append, **before** the narinfo write) | cache GC (G, walks days older than retention) | no |
 
 ### 05.4.3 `JobRecord` and `JobSpec`
@@ -643,7 +649,7 @@ access is a GET or a conditional write (D60). `hash64` = lowercase hex SHA-256.
 
 | Key | Record / value | Writer (op) | Reader (op) | Hot |
 |---|---|---|---|---|
-| `repo/<forgeID>/<enc(forge repo id)>` | `RepoLinkRecord`: projectID | ProjectService (C, D) | webhook intake (GC) | yes |
+| `repo/<forgeID.enc(forge repo id)>` | `RepoLinkRecord`: projectID | ProjectService (C, D) | webhook intake (GC) | yes |
 | `sess/<hash64(token)>` | `SessionRecord`: user, kind `cli`\|`browser`, user agent, created, last-used day, idle/max expiry (refresh token `bob_rt_` or cookie `bob_st_`) | AuthService / OAuth token endpoint (C, CAS, D) | every cookie request, refresh (G, cache 10 s) | yes |
 | `oac/<hash64(code)>` | `OAuthCodeRecord`: user, client, redirect URI, PKCE challenge, expiry (60 s) | `/oauth/authorize` (C) | `/oauth/token` (G, D If-Match = single use) | no |
 | `devc/<hash64(device_code)>` + `devu/<user_code>` | `DeviceCodeRecord`: user code, state pending\|approved\|denied, user, expiry (600 s), last poll; `devu` → device-code hash | `/oauth/device/code` (C), `/device` approval (CAS) | token polling (G) | no |
@@ -651,11 +657,12 @@ access is a GET or a conditional write (D60). `hash64` = lowercase hex SHA-256.
 | `oidcp/<providerID>`, `oidcps/all` | `OidcProviderRecord` (issuer, client id, sealed secret, `require_mapping`); index (≤ 50) | OidcService (CAS) | login (GC) | yes |
 | `oidcmap/all` | `OidcMappingRecord` list (§05.4.2) | OidcService (CAS) | OIDC login (GC) | yes |
 | `adminidx` | `AdminIndex`: count of `admin@*` bindings of enabled principals | AccessService (CAS, together with the binding write) | same | no |
-| `fdel/<forgeID>/<enc(delivery id)>` | `ForgeDeliveryRecord`: received, event, result, build id (dedupe) | webhook intake (C: create-only) | webhook intake (G) | yes |
+| `fdel/<forgeID.h(delivery id)>` (`h` = first 40 hex chars of SHA-256) | `ForgeDeliveryRecord`: received, event, result, build id (dedupe) | webhook intake (C: create-only) | webhook intake (G) | yes |
 | `fdelr/<forgeID>` | ring of the last 200 deliveries (for `ListForgeDeliveries`) | webhook intake (CAS best effort) | UI (GC) | no |
-| `skey/<keyname>`, `skeys/all` | `SigningKeyRecord`: Ed25519 seed (sealed), state `ACTIVE`\|`VERIFY_ONLY`\|`RETIRED`, created; index | SettingsService (C, CAS) | promotion, `GetServerInfo` (GC) | yes |
+| `skey/<keyname>`, `skeys/all` | `SigningKeyRecord`: Ed25519 seed (sealed), created; `skeys/all` holds every key's name, public key and state `ACTIVE`\|`VERIFY_ONLY`\|`RETIRED` (a rotation is one write); names `<server_name>-<n>` (default `bob-<n>`) | SettingsService (C, CAS) | promotion, `GetServerInfo` (GC) | yes |
 | `ocihmac/<kid>`, `ocihmacs/all` | `OciHmacKey`: 32-byte key (sealed), created, notAfter | key controller (C) | OCI token endpoint + `/v2/*` (GC) | yes |
 | `nhook/<id>`, `nhooks/all` | `NotifyWebhookRecord` (URL, sealed secret, events, project filter); index | NotifyService (CAS) | notifier (GC) | yes |
+| `nout/<sh2(delivery id)>` | notify outbox shard (4 shards): delivery id → {hook, event, body (fixed at publish), attempts, created}; an entry is removed after delivery or the last attempt (§06 §6.9.8 schedule) | publishing orchestrator (CAS), notify controller (CAS) | notify controller (G every pass) | yes |
 
 Mappings of other §06 names: `OrchestratorRecord` = `OrchRecord` (`orch/<orchID>`, its public
 keys are in `FleetConfig.k`); `ForgeIntegrationRecord` = `ForgeRecord`; `SettingsRecord` =
@@ -857,7 +864,8 @@ Published releases are immutable apart from visibility. Retention never selects 
 | held(X) | TryAcquire | ex + skew < now | o=me, ep+1 | held(me) |
 | held(me) | shutdown | — | ex=now (CAS) | free |
 
-TTL = 3 × interval. Correctness never depends on the lease: every action of a controller is a
+TTL = 2 × interval (a takeover also waits out the clock skew, so 3 × could never meet R-SRV-004's
+"new owner within 3 × interval"). Correctness never depends on the lease: every action of a controller is a
 CAS that is safe if two leaders overlap (S9 §3.3 measured no-leader runs as correct).
 
 ---
@@ -1241,7 +1249,9 @@ The tables are S10 §5.1 `LogLine` and `PackageRun`, without a `sort` tag (L1 st
   - no `sort` tags;
   - compaction only by the `lake-maintenance` leader, with a `lake.Bucket` object used by
     nothing else;
-  - readers retry a query once with a fresh `lake.Bucket` on `NoSuchKey`;
+  - readers open a fresh `lake.Bucket` for every query (no retry on `NoSuchKey`: a fresh
+    catalog per query never names a shard compacted away before it, L4, and sees new commits,
+    L7);
   - compaction only for partitions that are older than 10 min and written within the last
     2 days (F7).
 - **Acceptance:** the S10 repro tests L3 (two compactors) and L4 (read during compaction) pass
@@ -1286,8 +1296,9 @@ persisted seq (`JobResult.LogLast` of the previous attempt, or a lake read) and 
     - a follower has a gap for 1 s;
     - no live chunk arrived for 6 s;
     - the job's worker is not attached to O.
-  - While degraded, O reads the lake every 5 s, shared per (O, build) and cached by object key,
-    and sets `delayed = true`.
+  - While degraded, O reads the lake every 5 s, shared per (O, build), and sets
+    `delayed = true` (no shard cache: lake downloads whole shards by design; GetLog p99 12–27 ms
+    without one).
 - **Acceptance:** the S17 failure matrix (12 runs) with pull instead of push: 0 gaps, 0
   duplicates, final stream = lake content. Degraded latency p99 ≤ `flush_interval` + 10 s
   **[proposal]**.
@@ -1316,8 +1327,8 @@ package logstore // import "github.com/megakuul/bob/internal/logstore"
 // Reader reads persisted logs from lake partitions.
 type Reader struct{ /* unexported */ }
 
-// NewReader returns a reader over the analytics bucket; it keeps the last 4 downloaded
-// shards (≤ 256 MiB) in memory keyed by object key.
+// NewReader returns a reader over the analytics bucket; every query opens a fresh
+// lake.Bucket (no shard cache, R-LOG-100).
 //
 // Example:
 //
@@ -1377,6 +1388,7 @@ func Follow(ctx context.Context, src *Sources, buildID string, cur map[string]Cu
 | `forge-sweeper` | 60 s | revoke expired per-job forge tokens (`ftok/*`, D62) |
 | `index-repair` | 10 min | finish intent-first entries older than 5 min (`bpage`, `rmem`, `jact`, `pidx`); rehash shards after a gen change |
 | `key` | 1 h | create the next orchestrator key 7 d before `notAfter`; publish it in `fleet/cfg.k` |
+| `notify` | event + 2 s | deliver due `nout/*` entries (§06 §6.9.8) |
 
 - **Acceptance:** with 3 orchestrators and `kill -9` of a random orchestrator every 20 s during a
   300-job drain plus 20 build triggers: every build reaches a terminal state, no job runs

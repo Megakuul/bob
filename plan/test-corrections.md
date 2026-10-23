@@ -314,3 +314,31 @@ access and the primitive constructors change.
    used`); the import is now written only when the root declares an importer. I-S2's audit (item 25)
    had only checked the root package. After the fix all 10 graphs, TestRNPM001aPeerSplit and the
    hostile-document tests pass against the recorded snapshot.
+
+## I-FIN1 (2026-10-22, owner-approved evidence-based corrections, A143)
+41. APPLIED 2026-10-22 I-FIN1. tests/install/auth_test.go checkNo401: the substring check for
+   "401" failed on bob's own `BOB-E-4010`, which TestRINST003PrivateNeedsLogin requires in the
+   same output, so the test could not pass for any implementation (evidence plan/progress/I-C2.md
+   TEST PROBLEM 1). The HTTP status is now matched as a word of its own
+   (`(?:^|[^\w-])401(?:[^\w]|$)`: `HTTP 401`, `401 Unauthorized`, ` 401 `); "Unauthorized",
+   "HTTP error", "unable to download" and "warning: error:" are still checked as substrings.
+42. APPLIED 2026-10-22 I-FIN1. tests/core/api_test.go specSharedResults: SPEC §1.5 declares the
+   extension API's node constructors `ext.New`, `ext.NewIn` and `ext.NewAt`, all returning
+   `bob.Node` (one constructor family differing only in label directory / definedAt; SPEC §1.5
+   listing completed by I-FIN1, A144): `"pkg/bob/ext": {"bob.Node": {"New", "NewAt", "NewIn"}}`.
+   `Here` takes no *P and `Elsewhere` returns *bob.P, so they are not in the set. TestAPISurface
+   now reports only the (pre-existing) missing Example tests.
+43. APPLIED 2026-10-22 I-FIN1. tests/eco/gen/generate_test.go TestRGEN002aUndefinedTypeInSchema:
+   the expected excerpt lines started with `│`, which bob prints only on a terminal; the test
+   captures stderr (no TTY), where §02.5 rule 2 prints `|` (same fix as item 40 for
+   TestRGEN001aProtoSyntaxError). Expects `| failed to load schema: …` and `| Unknown type: "Nope".`;
+   SPEC R-GEN-002a acceptance amended (spec/03 + SPEC.md).
+44. APPLIED 2026-10-22 I-B19 (recorded by I-FIN1; A141 second entry). tests/store/fleet/lease_test.go
+   chaos(): `l.q.Now = l.clk.Now` after `l.clk = realClock()`. newLab binds the queue to the
+   injected clock, so every enqueued job got qa = the lab's fixed start time while the reconcilers
+   ran on the wall clock: each queued job was re-slotted once (passes of 12-17 s spent in re-slots).
+   Assertions unchanged.
+45. APPLIED 2026-10-22 I-B19 (recorded by I-FIN1; A141 second entry). tests/store/fleet/e2e_test.go
+   TestRFLEET001ZeroSetupRegistration: `harness.Bin(t, "bob-server")` once before the timing loop.
+   The first Bin call built three binaries inside the first measurement (first samples 7.9 s and
+   17.4 s, the build accounting for all but ~3 s; other samples 1.5-6 s). Assertions unchanged.

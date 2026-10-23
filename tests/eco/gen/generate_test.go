@@ -164,8 +164,8 @@ func TestRGEN002aUndefinedTypeInSchema(t *testing.T) {
 	schema := fixtureFile(dir, "schema/schema.graphqls")
 	ecotest.WriteFile(t, schema, strings.TrimRight(ecotest.ReadFile(t, schema), "\n")+"\ntype Other { ff: Nope }\n")
 	for _, c := range []struct{ label, want string }{
-		{"//svc:gen-graph", "│ failed to load schema: schema/schema.graphqls:9:18: Undefined type Nope."},
-		{"//web:gen-graphql", `│ Unknown type: "Nope".`},
+		{"//svc:gen-graph", "| failed to load schema: schema/schema.graphqls:9:18: Undefined type Nope."},
+		{"//web:gen-graphql", `| Unknown type: "Nope".`},
 	} {
 		r := ecotest.BobEnv(t, dir, env, "build", c.label)
 		if harness.Red(t, r) {

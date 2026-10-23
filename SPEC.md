@@ -944,9 +944,30 @@ func (c Config) Features(l bob.Label) []string
 // New creates a node of kind for p. name is the label name; deps are the node's direct
 // package dependencies (order is kept); spec is the kind's payload, serialised into the IR.
 func New(p *bob.P, kind, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node
+// NewIn is New with the label directory dir (relative to the repository or the dependency
+// repo's module root) instead of the calling bob.go's: e.g. a Go binary //<module dir>/<dir>:<name>
+// declared in the module's bob.go (§03.2.1).
+func NewIn(p *bob.P, kind, dir, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node
+// Here captures the bob.go position of the running call; NewAt is New with that definedAt
+// (codegen recipes: the consumer's package is defined at the recipe's line, R-FW-016).
+type Site struct{ /* unexported */ }
+func Here() Site
+func NewAt(p *bob.P, at Site, kind, name string, deps []bob.Package, srcs []bob.Sources, spec any) bob.Node
 // ConfigOf returns the projected configuration of a node.
 func ConfigOf(n *bob.Node) Config
+
+// Elsewhere runs the current constructor once more for platform pl ("nested" configuration,
+// never a target) and returns that configuration; output kinds use it for their programs on
+// other platforms (oci.ImageOpts.Platforms, release.ReleaseOpts.Platforms). The nested run
+// stores what it got with Record (Nested(p) is true), the outer run reads it with Recorded.
+func Elsewhere(p *bob.P, pl bob.Platform) *bob.P
+func Nested(p *bob.P) bool
+func Record(p *bob.P, key string, v any)
+func Recorded(p *bob.P, key string) (any, bool)
 ```
+
+- `New`, `NewIn` and `NewAt` are one constructor family (they differ only in the label's
+  directory and `definedAt`) and all return `bob.Node`; the kind's typed result wraps it.
 
 - **Acceptance:** A unit test registers a kind with `Axes={AxisPlatform}`; its constructor
   calling `ext.ConfigOf(n).Profile()` panics with `ext: kind <k> reads the profile but did not declare
@@ -1018,7 +1039,12 @@ type PlanRequest struct {
 	Sources map[string]string   // node id → imported source store path (R-NIX-009)
 	Nixpkgs *nixidx.Index
 	Builder string              // bob-builder store path for the host system
+	Store   PlanStore           // store access while planning: HostPath, ImportSources, Ensure
 }
+// Optional extensions of PlanStore, found by a type assertion on PlanRequest.Store:
+// PlanRealiser.RealiseNow builds derivations planned so far (early cutoff: §03.6.3, R-GO-005);
+// PlanCloser.Closure makes outputs valid and returns their closure with references (§04 images
+// and tarballs: R-OUT-004, R-OUT-007, R-OUT-011). A failed closure build wraps ErrClosureBuild.
 type PlanResult struct {
 	Drvs    []*drv.Derivation        // new derivations, any order (bob sorts topologically)
 	Nodes   map[string]Resolved      // node id → its outputs and, for Linkables, filled LinkInfo
@@ -2953,7 +2979,9 @@ Install steps:
    exec "${BOB:-/home/u/.local/bin/bob}" exec --installed acme/cli -- acme "$@"
    ```
    `bob exec --installed <name>` reads `current`, enters the namespace and runs the binary with
-   the caller's environment.
+   the caller's environment. Entry binaries in v1 = every executable in `<root>/bin` of each
+   closure root: `PlatformClosure` (§06) carries no `entrypoints`, so the release manifest's
+   `entrypoints` (§04 §4.11) do not reach `bob install` yet (v1 limitation).
 6. A binary name already provided by another entry or by an existing non-bob file in `binDir` →
    `BOB-E-0004` (`acme is already provided by infra/dt; use --as`), and nothing changes.
    `--as <name>` installs under another entry name and prefixes the shims (`<as>-<bin>`).
@@ -4799,8 +4827,9 @@ func TS(s *Spec, o TSOpts) npm.Generated
 #### R-GEN-002a GraphQL for Go and TypeScript
 - **Acceptance:** In the codegen fixture, gqlgen output compiles with the user's resolvers and
   graphql-codegen output type-checks the TS operations; an undefined type in the schema gives
-  `│ failed to load schema: schema/schema.graphqls:9:18: Undefined type Nope.` (gqlgen) and
-  `│ Unknown type: "Nope".` (TS), no Node stack trace into the store.
+  `| failed to load schema: schema/schema.graphqls:9:18: Undefined type Nope.` (gqlgen) and
+  `| Unknown type: "Nope".` (TS) (excerpt prefix `|` outside a terminal, `│` on one: §02.5), no
+  Node stack trace into the store.
 - **Source:** R-GEN-002, S6 §3.3–3.4.
 
 #### R-GEN-003a OpenAPI for Go and TypeScript
@@ -5053,7 +5082,9 @@ images, AppImages, tarballs, closures as outputs, releases as built objects, the
   (`drv.Derivation`, structured attributes, `Name`), `bob-builder` subcommands, the per-package
   fixup step (§01 §1.13: strip; references are prevented with prefix maps such as
   `--remap-path-prefix`/`-trimpath` instead of rewritten, and a forbidden reference fails with
-  BOB-E-9003), and the embedded Nix config.
+  BOB-E-9003), and the embedded Nix config; `ext.Elsewhere` (§1.5: the programs of the other
+  platforms) and the planner's optional `engine.PlanCloser` (§1.6.1: closures while planning,
+  for layers, the static-tarball check and pruning).
   **Required from §01:** the derivation layer supports `__structuredAttrs` with
   `unsafeDiscardReferences` (R-OUT-011). No experimental feature is needed: `discard-references`
   is stable in Nix 2.34 (enabling it only warns `unknown experimental feature`; §01 R-NIX-024).
@@ -5361,7 +5392,10 @@ func (p *P) Toolchain() Toolchain
 - **Statement:** `oci.Image` produces an OCI image layout (`oci-layout`, `index.json`,
   `blobs/sha256/…`) with one image index over the requested platforms (default amd64 +
   arm64, cross-built per R-PLAT-004), written by bob's own Go code (stdlib `archive/tar`,
-  `compress/gzip`, `encoding/json`; no go-containerregistry, no Docker).
+  `compress/gzip`, `encoding/json`; no go-containerregistry, no Docker). Mechanism: the
+  constructor gets the programs of each other platform with `ext.Elsewhere(p, pl)` (§1.5, a
+  nested run of the same constructor), and the planner reads each closure through
+  `engine.PlanCloser` (§1.6.1).
 - **Acceptance:** `crane validate --remote` of the pushed fixture index → PASS for each platform;
   index media type `application/vnd.oci.image.index.v1+json`, platforms
   `[{linux,amd64},{linux,arm64}]` sorted amd64 first; rootless `podman run` (bobtest) of the
@@ -5411,7 +5445,9 @@ func NewImage(p *bob.P, name string, opts ImageOpts) *Image
   layer each, the rest share one layer; (4) one layer per root in root order; (5) the
   customisation layer (R-OUT-012) last.
 - **Acceptance:** Fixture `api` v1 → 14 layers; v2 (one string changed in `api`) differs from
-  v1 in exactly one layer blob and the config/manifest; new compressed bytes ≤ 16 % of the image
+  v1 in exactly one layer blob apart from the customisation layer (its `/.bob/licences.json` lists
+  the root, whose path changes) and the config/manifest; new compressed bytes (all new blobs,
+  the customisation layer included) ≤ 16 % of the image
   (S8: 3.78 / 25.4 MB). With `MaxLayers: 4`: 4 layers, the root alone in layer 3.
 - **Source:** S8 §3.2, §5.2, S8-2.
 
@@ -5709,8 +5745,8 @@ func New(p *bob.P, name string, opts ReleaseOpts) *Release
   arrays sorted by `name`, then `platform`), consumed by §06 (publish) and `bob install`.
 - **Acceptance:** Golden `release.json` of the fixture; JSON-schema test (the schema file lives
   in `pkg/release/schema/release-v1.json`); `version` matches
-  `^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$` (else evaluation error
-  `✗ invalid release version "<v>"`).
+  `^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$` (else BOB-E-1020, exit 3, with the flag as label:
+  `✗ --version: invalid release version "<v>"`; §4.11).
 - **Source:** R-REG-004, R-INST-001.
 
 | Field | Type | Meaning |
@@ -5726,7 +5762,7 @@ func New(p *bob.P, name string, opts ReleaseOpts) *Release
 | `artifacts[].kind` | `closure` \| `oci` \| `appimage` \| `tarball` | |
 | `artifacts[].platform` | `linux-amd64` \| `linux-arm64` \| `multi` | `multi` only for `oci` |
 | `artifacts[].storePath` | string | the artifact's output path |
-| `artifacts[].entrypoints` | map name→relative path | `closure` only: executables installed by `bob install` (default `{<name>: <MainProgram>}`; all of `bin/*` when `MainProgram` is empty) |
+| `artifacts[].entrypoints` | map name→relative path | `closure` only: executables installed by `bob install` (default `{<name>: <MainProgram>}`; all of `bin/*` when `MainProgram` is empty). v1 limitation: the proto `PlatformClosure` has no `entrypoints` field, so `bob install` installs every executable in `bin/` of the closure roots (§02.8) |
 | `artifacts[].file` | string | `appimage`/`tarball`: file name, e.g. `api-1.0.1-x86_64.AppImage` |
 | `artifacts[].sha256`, `size` | string, int | `appimage`/`tarball`: of the file |
 | `artifacts[].repo`, `tags`, `index` | string, []string, string | `oci`: repo, `[<version>]`, index digest |
@@ -5810,6 +5846,7 @@ of the `bob.release/v1` manifest) and the profile semantics below.
 | OCI `User` root implicit | n/a (default is 65534; `"0:0"` allowed) | – | – |
 | `MaxLayers` out of range | `//…: invalid MaxLayers: must be between 2 and 125 (got <n>)` | 1020 | 3 |
 | too many roots for MaxLayers | `//…: invalid MaxLayers: <n> roots need MaxLayers ≥ <n+2>` | 1020 | 3 |
+| invalid release version (`bob build --version`) | `--version: invalid release version "<v>": a version is 1 to 64 letters, digits and . + _ - starting with a letter or digit` | 1020 | 3 |
 | nothing installable in a release | §02 R-INST-002 | 0009 | 2 |
 
 Exit statuses follow §02.2 (aligned at integration: option errors in `bob.go` are definition
@@ -5982,7 +6019,11 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
   - `hash64(s)` = hex SHA-256 (64 chars);
   - `sh2(id)` = `%02d` of `fnv32a(id) mod shards`.
 
-  Ids: `ULID` = 26-char Crockford ULID (48-bit ms time + 80 random bits).
+  Ids: `ULID` = 26-char Crockford ULID (48-bit ms time + 80 random bits). Build ids are
+  `b-<ULID>` with the ULID in upper case (`b-01JB7Q8V3K…`); older lower-case ids still parse.
+  Keys that join an id and a name in one segment write `<id>.<enc(name)>` (e.g.
+  `bbr/<projectID.enc(branch)>`); when that exceeds 100 characters the name part is
+  `h` + the first 40 hex chars of SHA-256(name), so the 2- or 4-segment rule always holds.
 - **Acceptance:** fuzz test: no input to the key builders yields an invalid or colliding
   segment (10⁶ random strings, including `/`, empty, 1 KiB). `sh2` is total over non-empty strings;
   ids are validated at the API boundary, not in the key builders. An empty segment returns
@@ -6317,7 +6358,7 @@ type LeaseState struct {
 type Lease struct {
 	Bucket *Bucket
 	Owner  string        // this process's orchestrator id
-	TTL    time.Duration // 3 × controller interval
+	TTL    time.Duration // 2 × controller interval
 	// unexported: record builder and accessor
 }
 
@@ -6329,7 +6370,7 @@ func NewLease[L any](b *Bucket, build func(s LeaseState) *L, state func(*L) Leas
 //
 // Example:
 //
-//	l := store.NewControllerLease(fleet, "job-reconciler", self.ID, 30*time.Second)
+//	l := store.NewControllerLease(fleet, "job-reconciler", self.ID, 20*time.Second)
 //	if held, epoch, err := l.TryAcquire(ctx); held { reconcile(ctx, epoch) }
 func NewControllerLease(fleet *Bucket, name, owner string, ttl time.Duration) *Lease
 
@@ -6394,7 +6435,7 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 | `bidx/failed` | ring of the last 200 failed builds | build controller (CAS) | UI overview (GC) | yes |
 | `bnodes/<buildID>` | `BuildNodes`: drv count, bitmaps assigned/promoted/failed, job → drv index ranges (S14 §5.2) | build controller (CAS) | build controller, UI graph (G) | yes |
 | `rel/<projectID>/n/<num10>` | `ReleaseRecord` (§05.6.4) | release controller (C, CAS) | API, cache auth (GC) | yes |
-| `relv/<projectID>/<enc(name)>/v/<enc(version)>` | release number (uniqueness of name + version) | release controller (C: uniqueness) | API, `bob install` (G) | yes |
+| `relv/<projectID.enc(name)>/v/<enc(version)>` | release number (uniqueness of name + version) | release controller (C: uniqueness) | API, `bob install` (G) | yes |
 | `rpage/<projectID>/p/<num10>` | 50 release entries | release controller (CAS) | UI (GC) | yes |
 | `ridx/all/p/<num10>` + `ridxm/all` | registry-wide release index (P = 50) | release controller (CAS) | UI registry (GC) | yes |
 | `user/<userID>` | `UserRecord`: name, email, kind, pw hash, `ro` role bindings [{role, project \| `*`, source manual\|oidc}] (truth; §06's `RoleBinding`), `tk` token ids (≤ 100), `ss` session ids (≤ 100), disabled | AccessService (CAS) | auth (GC ≤ 10 s) | yes |
@@ -6410,6 +6451,8 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 | `forge/<forgeID>`, `forges/all` | `ForgeRecord` (forge integration; secrets sealed with the orchestrator data key); index | ForgeService (CAS) | pipeline controller (GC) | yes |
 | `ftok/<sh2(jobID)>` | `CheckoutRecord`s: outstanding per-job forge tokens {jobID → epoch, forge, handle (token id), expiresAt, forgeExpires}; never the token value (D62) | `GetCheckoutCredential`, revoke at job end, sweeper (CAS) | same + sweeper (GC) | yes |
 | `set/<name>` | `SettingRecord`: setting value | SettingsService (CAS) | all (GC 30 s) | yes |
+| `bkey/<hash64(delivery key)>` | `BuildKey`: `b` build id, `at` created: the build one forge delivery created (idempotent build creation from a webhook event; delivery key = the `fdel` key value) | webhook intake through build creation (C) | same, when the create conflicts (G) | no |
+| `plock/<jobID>` | promotion lock, a `Lease` (§05.3.4: `o`, `ep`, `ex`, `cu`; TTL 1 min); deleted after the job's promotion; correctness does not depend on it, it makes concurrent promotions of one job deterministic | promoting orchestrator (C, CAS, D) | same (G) | yes |
 | `promo/<yyyymmdd>/s/<seq20>` + `promot/<yyyymmdd>` | promotion log: {storehash, project, build, at} (SeqLog without head) | promoting orchestrator (Append, **before** the narinfo write) | cache GC (G, walks days older than retention) | no |
 
 ### 05.4.3 `JobRecord` and `JobSpec`
@@ -6492,7 +6535,7 @@ access is a GET or a conditional write (D60). `hash64` = lowercase hex SHA-256.
 
 | Key | Record / value | Writer (op) | Reader (op) | Hot |
 |---|---|---|---|---|
-| `repo/<forgeID>/<enc(forge repo id)>` | `RepoLinkRecord`: projectID | ProjectService (C, D) | webhook intake (GC) | yes |
+| `repo/<forgeID.enc(forge repo id)>` | `RepoLinkRecord`: projectID | ProjectService (C, D) | webhook intake (GC) | yes |
 | `sess/<hash64(token)>` | `SessionRecord`: user, kind `cli`\|`browser`, user agent, created, last-used day, idle/max expiry (refresh token `bob_rt_` or cookie `bob_st_`) | AuthService / OAuth token endpoint (C, CAS, D) | every cookie request, refresh (G, cache 10 s) | yes |
 | `oac/<hash64(code)>` | `OAuthCodeRecord`: user, client, redirect URI, PKCE challenge, expiry (60 s) | `/oauth/authorize` (C) | `/oauth/token` (G, D If-Match = single use) | no |
 | `devc/<hash64(device_code)>` + `devu/<user_code>` | `DeviceCodeRecord`: user code, state pending\|approved\|denied, user, expiry (600 s), last poll; `devu` → device-code hash | `/oauth/device/code` (C), `/device` approval (CAS) | token polling (G) | no |
@@ -6500,11 +6543,12 @@ access is a GET or a conditional write (D60). `hash64` = lowercase hex SHA-256.
 | `oidcp/<providerID>`, `oidcps/all` | `OidcProviderRecord` (issuer, client id, sealed secret, `require_mapping`); index (≤ 50) | OidcService (CAS) | login (GC) | yes |
 | `oidcmap/all` | `OidcMappingRecord` list (§05.4.2) | OidcService (CAS) | OIDC login (GC) | yes |
 | `adminidx` | `AdminIndex`: count of `admin@*` bindings of enabled principals | AccessService (CAS, together with the binding write) | same | no |
-| `fdel/<forgeID>/<enc(delivery id)>` | `ForgeDeliveryRecord`: received, event, result, build id (dedupe) | webhook intake (C: create-only) | webhook intake (G) | yes |
+| `fdel/<forgeID.h(delivery id)>` (`h` = first 40 hex chars of SHA-256) | `ForgeDeliveryRecord`: received, event, result, build id (dedupe) | webhook intake (C: create-only) | webhook intake (G) | yes |
 | `fdelr/<forgeID>` | ring of the last 200 deliveries (for `ListForgeDeliveries`) | webhook intake (CAS best effort) | UI (GC) | no |
-| `skey/<keyname>`, `skeys/all` | `SigningKeyRecord`: Ed25519 seed (sealed), state `ACTIVE`\|`VERIFY_ONLY`\|`RETIRED`, created; index | SettingsService (C, CAS) | promotion, `GetServerInfo` (GC) | yes |
+| `skey/<keyname>`, `skeys/all` | `SigningKeyRecord`: Ed25519 seed (sealed), created; `skeys/all` holds every key's name, public key and state `ACTIVE`\|`VERIFY_ONLY`\|`RETIRED` (a rotation is one write); names `<server_name>-<n>` (default `bob-<n>`) | SettingsService (C, CAS) | promotion, `GetServerInfo` (GC) | yes |
 | `ocihmac/<kid>`, `ocihmacs/all` | `OciHmacKey`: 32-byte key (sealed), created, notAfter | key controller (C) | OCI token endpoint + `/v2/*` (GC) | yes |
 | `nhook/<id>`, `nhooks/all` | `NotifyWebhookRecord` (URL, sealed secret, events, project filter); index | NotifyService (CAS) | notifier (GC) | yes |
+| `nout/<sh2(delivery id)>` | notify outbox shard (4 shards): delivery id → {hook, event, body (fixed at publish), attempts, created}; an entry is removed after delivery or the last attempt (§06 §6.9.8 schedule) | publishing orchestrator (CAS), notify controller (CAS) | notify controller (G every pass) | yes |
 
 Mappings of other §06 names: `OrchestratorRecord` = `OrchRecord` (`orch/<orchID>`, its public
 keys are in `FleetConfig.k`); `ForgeIntegrationRecord` = `ForgeRecord`; `SettingsRecord` =
@@ -6706,7 +6750,8 @@ Published releases are immutable apart from visibility. Retention never selects 
 | held(X) | TryAcquire | ex + skew < now | o=me, ep+1 | held(me) |
 | held(me) | shutdown | — | ex=now (CAS) | free |
 
-TTL = 3 × interval. Correctness never depends on the lease: every action of a controller is a
+TTL = 2 × interval (a takeover also waits out the clock skew, so 3 × could never meet R-SRV-004's
+"new owner within 3 × interval"). Correctness never depends on the lease: every action of a controller is a
 CAS that is safe if two leaders overlap (S9 §3.3 measured no-leader runs as correct).
 
 ---
@@ -7090,7 +7135,9 @@ The tables are S10 §5.1 `LogLine` and `PackageRun`, without a `sort` tag (L1 st
   - no `sort` tags;
   - compaction only by the `lake-maintenance` leader, with a `lake.Bucket` object used by
     nothing else;
-  - readers retry a query once with a fresh `lake.Bucket` on `NoSuchKey`;
+  - readers open a fresh `lake.Bucket` for every query (no retry on `NoSuchKey`: a fresh
+    catalog per query never names a shard compacted away before it, L4, and sees new commits,
+    L7);
   - compaction only for partitions that are older than 10 min and written within the last
     2 days (F7).
 - **Acceptance:** the S10 repro tests L3 (two compactors) and L4 (read during compaction) pass
@@ -7135,8 +7182,9 @@ persisted seq (`JobResult.LogLast` of the previous attempt, or a lake read) and 
     - a follower has a gap for 1 s;
     - no live chunk arrived for 6 s;
     - the job's worker is not attached to O.
-  - While degraded, O reads the lake every 5 s, shared per (O, build) and cached by object key,
-    and sets `delayed = true`.
+  - While degraded, O reads the lake every 5 s, shared per (O, build), and sets
+    `delayed = true` (no shard cache: lake downloads whole shards by design; GetLog p99 12–27 ms
+    without one).
 - **Acceptance:** the S17 failure matrix (12 runs) with pull instead of push: 0 gaps, 0
   duplicates, final stream = lake content. Degraded latency p99 ≤ `flush_interval` + 10 s
   **[proposal]**.
@@ -7165,8 +7213,8 @@ package logstore // import "github.com/megakuul/bob/internal/logstore"
 // Reader reads persisted logs from lake partitions.
 type Reader struct{ /* unexported */ }
 
-// NewReader returns a reader over the analytics bucket; it keeps the last 4 downloaded
-// shards (≤ 256 MiB) in memory keyed by object key.
+// NewReader returns a reader over the analytics bucket; every query opens a fresh
+// lake.Bucket (no shard cache, R-LOG-100).
 //
 // Example:
 //
@@ -7226,6 +7274,7 @@ func Follow(ctx context.Context, src *Sources, buildID string, cur map[string]Cu
 | `forge-sweeper` | 60 s | revoke expired per-job forge tokens (`ftok/*`, D62) |
 | `index-repair` | 10 min | finish intent-first entries older than 5 min (`bpage`, `rmem`, `jact`, `pidx`); rehash shards after a gen change |
 | `key` | 1 h | create the next orchestrator key 7 d before `notAfter`; publish it in `fleet/cfg.k` |
+| `notify` | event + 2 s | deliver due `nout/*` entries (§06 §6.9.8) |
 
 - **Acceptance:** with 3 orchestrators and `kill -9` of a random orchestrator every 20 s during a
   300-job drain plus 20 build triggers: every build reaches a terminal state, no job runs
@@ -8924,7 +8973,8 @@ Steps (orchestrator, idempotent, re-run until done):
       412 = another orchestrator won = success.
 4. Images: stream-verify each blob digest, copy to `oci/blobs/sha256/<hex>` (ETag guard) unless
    present, update `oci/vis/sha256/<hex>.json`, then update `oci/repos/<repo>/index.json` (tag
-   last, CAS). Non-release builds tag `b-<build-id>`; release tags are written by §6.8.
+   last, CAS). Non-release builds are tagged with the build id itself (`b-<ULID>`, §05 R-STORE-104);
+   release tags are written by §6.8.
 5. Assets are verified (sha256, size) and stay in staging until a release copies them (§6.8);
    the release controller copies before the staging lifecycle expires (7 d) or the asset is lost
    and the release fails with `release asset expired; re-run the release pipeline`.
@@ -8974,10 +9024,13 @@ Signing keys: `SigningKeyRecord` (`skey/<keyname>`, §05.4.5) in the control buc
 ```
 substituters = https://cache.nixos.org https://<server>/nix
 trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= <WhoAmI.nix.public_keys…>
-netrc-file = <home>/etc/nix/netrc        # §01 R-NIX-024; machine <server> login bob password <bob_dt_…>, mode 0600
+netrc-file = <home>/etc/nix/netrc        # §01 R-NIX-024; machine <server> login bob password <token>, mode 0600
 narinfo-cache-negative-ttl = 60
 ```
-The CLI calls `AuthService/WhoAmI` with the download token before any Nix call that may hit the
+`<token>` is the login's access token (`bob_at_…`, or the service token of `bob login
+--token-stdin`): the cache accepts it like a download token (§6.6 credentials), so one token
+serves the API and the cache; a `bob_dt_` download token works in the netrc too.
+The CLI calls `AuthService/WhoAmI` with that token before any Nix call that may hit the
 server (Nix hides 401 behind a level-1 warning and then builds locally, STATUS finding S15), and
 passes `--option narinfo-cache-negative-ttl 0` to the Nix call that fetches a remote build result
 or a release.
@@ -9356,7 +9409,7 @@ checks of this flow).
 not ignored). Caps: 512 MiB compressed **[proposal]**, ≤ 200,000 entries, regular files,
 directories and symlinks only (no absolute or `..` targets; checked by the worker on unpack).
 The server streams to `src/<project>/<hex>.tar.zst` with `If-None-Match: *` while hashing; hash
-mismatch → 400 `upload does not match its sha256`, object deleted; existing → 200 without reading
+mismatch → 400 `upload does not match its sha256`, object deleted; first write → 201; existing → 200 without reading
 the body beyond the headers (client sends `Expect: 100-continue`). Lifecycle 7 days.
 
 #### R-PIPE-009 Remote source snapshots (new)
