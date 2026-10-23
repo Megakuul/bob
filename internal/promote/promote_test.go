@@ -742,3 +742,84 @@ func TestParseCompleteKinds(t *testing.T) {
 		}
 	}
 }
+
+// failJob turns the staged job id into a failed job: result status failed, naming its
+// COMPLETE.json (withComplete) or none. complete, if set, replaces the staged COMPLETE.json.
+func (e *env) failJob(j *job, withComplete bool, complete []byte) {
+	if complete != nil {
+		e.put(j.staging+"COMPLETE.json", complete)
+	}
+	res := store.JobResult{V: 1, Status: "failed", Failed: []string{"//cmd/api:test"}, Error: "BOB-E-2005 test failed"}
+	if withComplete {
+		body, _, err := e.obj.Read(e.ctx, j.staging+"COMPLETE.json", promote.MaxComplete)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		sum := sha256.Sum256(body)
+		res.Complete, res.CompSHA = j.staging+"COMPLETE.json", hex.EncodeToString(sum[:])
+	}
+	rs, err := fleet.Encode(res)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	err = store.Change(e.ctx, e.fleet, &store.JobRecord{ID: store.ID(j.id)}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		next := *cur
+		next.State, next.Result, next.ResultSig = store.Set[string]("failed"), store.Set(rs), store.Set(fleet.SignResult(e.wrkKey, j.id, 1, rs))
+		return &next, nil
+	})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+// TestFailedJobPromotesBuiltPaths (A200): the closure of the packages that built in a failed
+// job is verified and promoted like a succeeded job's; a failed job without COMPLETE.json
+// awaits nothing; a failed job that stages images fails verification.
+func TestFailedJobPromotesBuiltPaths(t *testing.T) {
+	e := newEnv(t)
+	a, b, _ := chain()
+	j := e.stage("j1", "p1", []*path{b, a}, nil)
+	e.failJob(j, true, nil)
+	if !promote.Awaits(e.record("j1")) {
+		t.Fatalf("a failed job with COMPLETE.json does not await promotion")
+	}
+	if err := e.promoter("o1").Run(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if pm := e.record("j1").Promotion.Value(); pm != promote.Done {
+		t.Fatalf("promotion = %q, want done", pm)
+	}
+	if ni := e.narinfo(b); len(ni.References) != 1 {
+		t.Errorf("narinfo of b: %+v", ni)
+	}
+
+	c := newPath("bob-c2", map[string]string{"f": "c\n"})
+	j2 := e.stage("j2", "p1", []*path{c}, nil)
+	e.failJob(j2, false, nil)
+	if promote.Awaits(e.record("j2")) {
+		t.Errorf("a failed job without COMPLETE.json awaits promotion")
+	}
+	if err := e.promoter("o1").Run(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if pm := e.record("j2").Promotion.Value(); pm != promote.Pending {
+		t.Errorf("failed job without COMPLETE.json: promotion = %q", pm)
+	}
+	if code, _, _ := e.get("/nix/"+c.hash+".narinfo", "p1-token", nil); code != http.StatusNotFound {
+		t.Errorf("path of a failed job without COMPLETE.json served: HTTP %d", code)
+	}
+
+	d := newPath("bob-d", map[string]string{"f": "d\n"})
+	j3 := e.stage("j3", "p1", []*path{d}, nil)
+	withImage, _ := json.Marshal(map[string]any{"v": 1, "job": "j3", "build": "b1", "project": "p1", "paths": []string{d.store()},
+		"images": []any{map[string]any{"repo": "p1/app", "tag": "b-1", "manifest": "sha256:" + strings.Repeat("a", 64),
+			"mediaType": "application/vnd.oci.image.index.v1+json", "blobs": []string{}}},
+		"assets": []any{}, "skipped": []string{}})
+	e.failJob(j3, true, withImage)
+	if err := e.promoter("o1").Run(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if pm := e.record("j3").Promotion.Value(); pm != promote.Failed {
+		t.Errorf("failed job with images: promotion = %q, want %q", pm, promote.Failed)
+	}
+}

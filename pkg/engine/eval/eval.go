@@ -108,6 +108,18 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 	if err := checkGenDir(root); err != nil {
 		return nil, err
 	}
+	// Concurrent evaluations of one repository (a build and an editor's shim): one generates and
+	// compiles at a time (the GOCACHE upper layer can be mounted only once); runs share. The
+	// lock is taken before anything below .bob/eval is read: claimGenDir discards state that
+	// bob did not write there (a committed .bob/, A201).
+	if err := os.MkdirAll(gen, 0o755); err != nil {
+		return nil, err
+	}
+	lf, err := claimGenDir(gen)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = lf.Close() }()
 	scanStart := time.Now()
 	scan, err := scanRepo(root)
 	if err != nil {
@@ -123,16 +135,6 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 	}
 	key := evalKey(index, fw.version, fw.h1, tc.version, runtime.GOARCH)
 	scanTime := time.Since(scanStart)
-	// Concurrent evaluations of one repository (a build and an editor's shim): one generates and
-	// compiles at a time (the GOCACHE upper layer can be mounted only once); runs share.
-	if err := os.MkdirAll(gen, 0o755); err != nil {
-		return nil, err
-	}
-	lf, err := lock(filepath.Join(gen, lockFile))
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = lf.Close() }()
 	cached := false
 	if old, err := os.ReadFile(filepath.Join(gen, keyFile)); err == nil && string(old) == key+"\n" {
 		if fi, err := os.Stat(filepath.Join(gen, binSub, evalBin)); err == nil && fi.Mode().IsRegular() {
@@ -332,7 +334,7 @@ func writeCgoStub(root, dir, pkg string) error {
 // lock opens p and takes an exclusive flock lock on it; closing the file releases it. The
 // lock belongs to the open file, so it is converted to shared on the same descriptor.
 func lock(p string) (*os.File, error) {
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o644) // never a committed link's target
 	if err != nil {
 		return nil, err
 	}

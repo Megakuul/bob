@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -157,6 +158,13 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 		hello.SlotsFree, hello.ClassIds = int32(w.FreeSlots()), w.classes
 	}
 	if err := send(&workerv1.AttachRequest{Msg: &workerv1.AttachRequest_Hello{Hello: hello}}); err != nil {
+		// A Send error wrapping io.EOF means the server already ended the stream (e.g. it
+		// refused the token); connect hands out the server's error from Receive (A170).
+		if errors.Is(err, io.EOF) {
+			if _, rerr := bs.Receive(); rerr != nil {
+				return fmt.Errorf("hello: %w", rerr)
+			}
+		}
 		return fmt.Errorf("hello: %w", err)
 	}
 	first, err := bs.Receive()

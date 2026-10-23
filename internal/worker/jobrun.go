@@ -41,7 +41,7 @@ const (
 // RunResult is out/result.json: what the runner built, for the worker process to stage.
 type RunResult struct {
 	Failed []string   `json:"failed,omitempty"` // failing labels
-	Paths  []PathInfo `json:"paths,omitempty"`  // the closure of the built outputs
+	Paths  []PathInfo `json:"paths,omitempty"`  // the closure of the built outputs (also of a failed job's)
 	// Outputs are the outputs of the built (or cached) requested packages: the worker process
 	// stages the OCI images and releases among them (R-OUT-013, §6.8).
 	Outputs []BuiltOutput `json:"outputs,omitempty"`
@@ -183,9 +183,15 @@ func (r EngineRunner) Run(ctx context.Context, j Job, out Output) Outcome {
 	if len(rep.Packages) > jobspec.MaxReportPackages {
 		rep.Packages = rep.Packages[:jobspec.MaxReportPackages]
 	}
-	if outcome.Status == "ok" && len(outputs) > 0 {
+	if len(outputs) > 0 {
+		// A failed job leaves the closure of the packages that did build, so that they are
+		// staged and promoted like any other output and a retry finds them (decision A200).
+		// Without it the job still fails for its own reason, not for infrastructure.
 		if res.Paths, err = closure(ctx, st, outputs); err != nil {
-			return r.finish(work, rep, res, Outcome{Status: "infra", Error: "closure of the outputs: " + err.Error()})
+			res.Paths = nil
+			if outcome.Status == "ok" {
+				return r.finish(work, rep, res, Outcome{Status: "infra", Error: "closure of the outputs: " + err.Error()})
+			}
 		}
 	}
 	return r.finish(work, rep, res, outcome)

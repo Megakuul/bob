@@ -30,7 +30,25 @@ const (
 	Blocked     = "blocked: staging incomplete"
 	Failed      = "failed: artifact verification"
 	jobSucceded = "succeeded"
+	jobFailed   = "failed"
 )
+
+// Awaits reports whether job rec waits for a promotion verdict: it succeeded, or it failed
+// with a staged COMPLETE.json of the packages that did build (decision A200), and has no
+// verdict yet. Finalising such a job would delete the record promotion works from.
+func Awaits(rec *store.JobRecord) bool {
+	if rec.Promotion.Value() != Pending {
+		return false
+	}
+	switch rec.State.Value() {
+	case jobSucceded:
+		return true
+	case jobFailed:
+		res, ok := fleet.DecodeResult(rec.Result.Value())
+		return ok && res.Status == "failed" && res.Complete != ""
+	}
+	return false
+}
 
 // Limits of SPEC §6.6.4.
 const (
@@ -199,7 +217,7 @@ type Job struct {
 }
 
 // Run is one promotion pass (the promotion controller calls it every 10 s): every active
-// job that succeeded and is not promoted yet. Jobs are found through jact (no LIST).
+// job that awaits promotion (Awaits). Jobs are found through jact (no LIST).
 func (p *Promoter) Run(ctx context.Context) error {
 	active, err := store.ActiveJobs(p.c.Fleet, p.c.JobShards).All(ctx)
 	if err != nil {
@@ -222,8 +240,8 @@ func (p *Promoter) Run(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// Promote promotes job id if it succeeded and is not promoted yet (also the event path:
-// called as soon as a job's result lands). An error means "try again later".
+// Promote promotes job id if it awaits promotion (also the event path: called as soon as a
+// job's result lands). An error means "try again later".
 func (p *Promoter) Promote(ctx context.Context, id string) error {
 	if _, err := store.Segment(id); err != nil {
 		return nil
@@ -235,7 +253,7 @@ func (p *Promoter) Promote(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if rec.State.Value() != jobSucceded || rec.Promotion.Value() != Pending {
+	if !Awaits(rec) {
 		return nil
 	}
 	return p.promote(ctx, rec)
@@ -277,7 +295,7 @@ func (p *Promoter) job(ctx context.Context, rec *store.JobRecord, log *slog.Logg
 		return nil, "", "", false
 	}
 	res, ok := fleet.DecodeResult(rec.Result.Value())
-	if !ok || res.Status != "ok" {
+	if !ok || !(res.Status == "ok" || res.Status == "failed" && res.Complete != "") {
 		return nil, "", "", false
 	}
 	parts := strings.Split(res.Complete, "/")
@@ -403,6 +421,10 @@ func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
 	if j.Complete, err = ParseComplete(body, j.ID, j.Build, j.Project); err != nil {
 		return p.fail(ctx, rec, log, err.Error())
 	}
+	if rec.State.Value() == jobFailed && (len(j.Complete.Images) > 0 || len(j.Complete.Assets) > 0) {
+		// a failed job stages only the closure of what did build; it publishes nothing
+		return p.fail(ctx, rec, log, "a failed job staged images or release assets")
+	}
 	paths, err := p.claims(ctx, j)
 	if err != nil {
 		if isVerify(err) {
@@ -500,7 +522,7 @@ func (p *Promoter) fail(ctx context.Context, rec *store.JobRecord, log *slog.Log
 // finish CASes the verdict into the job record (only the attempt that was promoted).
 func (p *Promoter) finish(ctx context.Context, rec *store.JobRecord, verdict string, nonRepro []string) error {
 	err := store.Change(ctx, p.c.Fleet, &store.JobRecord{ID: rec.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
-		if cur == nil || cur.State.Value() != jobSucceded || cur.Epoch.Value() != rec.Epoch.Value() || cur.Owner.Value() != rec.Owner.Value() || cur.Promotion.Value() != Pending {
+		if cur == nil || cur.State.Value() != rec.State.Value() || cur.Epoch.Value() != rec.Epoch.Value() || cur.Owner.Value() != rec.Owner.Value() || cur.Promotion.Value() != Pending {
 			return nil, store.ErrNoChange
 		}
 		next := *cur

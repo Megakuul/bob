@@ -306,11 +306,15 @@ func (p *Process) stage(ctx context.Context, c Claim, spec store.JobSpec, work s
 	if len(o.Failed) > maxFailed {
 		o.Failed = o.Failed[:maxFailed]
 	}
+	done := promote.Complete{V: 1, Job: c.JobID, Build: spec.BuildID, Project: spec.Project,
+		Paths: []string{}, Images: []promote.Image{}, Assets: []promote.Asset{}, Skipped: []string{}}
+	if o.Status == "failed" && len(res.Paths) > 0 {
+		p.stagePartial(ctx, c, staging, work, res.Paths, &done, o)
+		return
+	}
 	if o.Status != "ok" {
 		return
 	}
-	done := promote.Complete{V: 1, Job: c.JobID, Build: spec.BuildID, Project: spec.Project,
-		Paths: []string{}, Images: []promote.Image{}, Assets: []promote.Asset{}, Skipped: []string{}}
 	if err := p.stagePaths(ctx, staging, work, res.Paths, &done); err != nil {
 		*o = Outcome{Status: "infra", Error: "staging: " + err.Error(), LogLast: o.LogLast, EvalSHA: o.EvalSHA}
 		return
@@ -331,6 +335,28 @@ func (p *Process) stage(ctx context.Context, c Claim, spec store.JobSpec, work s
 	}
 	if err != nil {
 		*o = Outcome{Status: "infra", Error: "staging COMPLETE.json: " + err.Error(), LogLast: o.LogLast, EvalSHA: o.EvalSHA}
+		return
+	}
+	o.Complete, o.CompSHA = staging+"COMPLETE.json", jobspec.SHA256(body)
+}
+
+// stagePartial stages the closure of the packages that built in a failed job (decision A200):
+// NARs, claims and COMPLETE.json like a succeeded job's, but no images or release assets (a
+// failed job publishes nothing). The orchestrator verifies and promotes these paths like any
+// other, so a retry gets them as cache hits. A staging error leaves the job failed, without a
+// COMPLETE.json; it never turns the job's own failure into infrastructure.
+func (p *Process) stagePartial(ctx context.Context, c Claim, staging, work string, paths []PathInfo, done *promote.Complete, o *Outcome) {
+	err := p.stagePaths(ctx, staging, work, paths, done)
+	var body []byte
+	if err == nil {
+		if body, err = json.Marshal(done); err == nil {
+			_, err = p.cfg.Artifacts.Put(ctx, staging+"COMPLETE.json", body, "application/json", cache.Cond{})
+		}
+	}
+	if err != nil {
+		if p.cfg.Log != nil {
+			p.cfg.Log.Warn("worker: outputs of a failed job not staged", "job", c.JobID, "err", err.Error())
+		}
 		return
 	}
 	o.Complete, o.CompSHA = staging+"COMPLETE.json", jobspec.SHA256(body)

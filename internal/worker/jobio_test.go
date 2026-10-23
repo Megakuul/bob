@@ -117,6 +117,67 @@ func TestStageWritesPromotableStaging(t *testing.T) {
 	}
 }
 
+// TestStageFailedJobStagesBuiltPaths: a failed job stages the closure of the packages that
+// built (A200) and stays failed; a failed job without such paths stages no COMPLETE.json.
+func TestStageFailedJobStagesBuiltPaths(t *testing.T) {
+	dir := t.TempDir()
+	host := filepath.Join(dir, "store", "store", strings.TrimPrefix(testPath, "/nix/store/"))
+	if err := os.MkdirAll(host, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(host, "lib.a"), []byte("built before the failure\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum, size, err := nar.Hash(host, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		paths []PathInfo
+	}{
+		{"with built packages", []PathInfo{{Path: testPath, NarHash: "sha256:" + cache.Nix32(sum[:]), NarSize: uint64(size)}}},
+		{"nothing built", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			work := filepath.Join(t.TempDir(), "work")
+			if err := os.MkdirAll(filepath.Join(work, workOut), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			b, _ := json.Marshal(RunResult{Failed: []string{"//cmd/api:test"}, Paths: tc.paths,
+				Outputs: []BuiltOutput{{Label: "//lib:lib", Path: testPath}}})
+			_ = os.WriteFile(filepath.Join(work, workOut, resultFile), b, 0o644)
+			_ = os.WriteFile(filepath.Join(work, workOut, reportFile), []byte(`{"v":1}`), 0o644)
+			art := &memArtifacts{m: map[string][]byte{}}
+			p := &Process{store: filepath.Join(dir, "store")}
+			p.UseArtifacts(art, "")
+			spec := store.JobSpec{V: 1, JobID: "b.j0001", BuildID: "bid", Project: "acme", Staging: "staging/bid/b.j0001/"}
+			o := Outcome{Status: "failed", Error: "BOB-E-2005 test failed"}
+			p.stage(context.Background(), Claim{JobID: "b.j0001", Attempt: 1}, spec, work, &o)
+			if o.Status != "failed" || o.Error == "" || len(o.Failed) != 1 || o.EvalSHA == "" {
+				t.Fatalf("outcome %+v", o)
+			}
+			staging := "staging/bid/b.j0001/1/"
+			if tc.paths == nil {
+				if o.Complete != "" || art.m[staging+"COMPLETE.json"] != nil {
+					t.Fatalf("COMPLETE.json staged for a failed job that built nothing: %+v", o)
+				}
+				return
+			}
+			if o.Complete != staging+"COMPLETE.json" || jobspec.SHA256(art.m[o.Complete]) != o.CompSHA {
+				t.Fatalf("outcome %+v", o)
+			}
+			c, err := promote.ParseComplete(art.m[o.Complete], "b.j0001", "bid", "acme")
+			if err != nil || len(c.Paths) != 1 || c.Paths[0] != testPath || len(c.Images) != 0 || len(c.Assets) != 0 {
+				t.Fatalf("COMPLETE.json %s: %v", art.m[o.Complete], err)
+			}
+			if art.m[staging+"nar/"+cache.HashOf(testPath)+".nar.zst"] == nil {
+				t.Errorf("NAR not staged")
+			}
+		})
+	}
+}
+
 func snapshot(t *testing.T, entries map[string]string) []byte {
 	var tb bytes.Buffer
 	tw := tar.NewWriter(&tb)

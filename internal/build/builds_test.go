@@ -222,6 +222,7 @@ func TestBuildController(t *testing.T) {
 	t.Run("cancel-retry-rerun", func(t *testing.T) { cancelRetryRerun(t, newLab(t, be)) })
 	t.Run("infra-retries", func(t *testing.T) { infraRetries(t, newLab(t, be)) })
 	t.Run("promotion", func(t *testing.T) { promotion(t, newLab(t, be, true)) })
+	t.Run("failed-job-promotion", func(t *testing.T) { failedJobPromotion(t, newLab(t, be, true)) })
 	t.Run("event-idempotent", func(t *testing.T) { eventIdempotent(t, newLab(t, be)) })
 }
 
@@ -556,5 +557,67 @@ func promotion(t *testing.T, l *lab) {
 	}
 	if st := l.statuses.states("bob/ci"); len(st) != 2 || !strings.HasPrefix(st[1], "success ") || len(rec.Pipelines.Value()) != 1 {
 		t.Errorf("bob/ci statuses %q pipelines %+v, want running then success for one ci run", st, rec.Pipelines.Value())
+	}
+}
+
+// staged gives the failed result of job j a COMPLETE.json of the packages that did build, as
+// the worker stages it (A200).
+func (l *lab) staged(j *store.JobRecord) {
+	l.t.Helper()
+	if err := store.Change(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}, func(cur *store.JobRecord) (*store.JobRecord, error) {
+		res, _ := fleet.DecodeResult(cur.Result.Value())
+		spec, _ := fleet.DecodeSpec(cur.Spec.Value())
+		res.Complete, res.CompSHA = jobspec.StagingPrefix(spec.Staging, cur.Attempt.Value())+"COMPLETE.json", strings.Repeat("0", 64)
+		rs, _ := fleet.Encode(res)
+		n := *cur
+		n.Result, n.ResultSig = store.Set(rs), store.Set(fleet.SignResult(l.key, j.ID.Value(), cur.Epoch.Value(), rs))
+		return &n, nil
+	}); err != nil {
+		l.t.Fatal(err)
+	}
+}
+
+// failedJobPromotion (A200, A202): a failed job that staged the packages it built is finalised
+// only after its promotion verdict, the build then fails for the job's own reason; a blocked
+// promotion of a failed job does not run it again; the retry's job prefers the worker that ran
+// the failed build.
+func failedJobPromotion(t *testing.T, l *lab) {
+	rec := apiBuild(t, l, "refs/heads/main", sha1)
+	l.pass()
+	j := l.job(rec.ID.Value())
+	l.run(j, "failed", okReport("ci"), "//cmd/api:test")
+	l.staged(j)
+	l.pass()
+	if got := l.build(rec.ID.Value()); buildctl.Terminal(got.State.Value()) {
+		t.Fatalf("build %s before the promotion verdict of its failed job", got.State.Value())
+	}
+	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}); err != nil {
+		t.Fatalf("failed job finalised before its promotion: %v", err)
+	}
+	setPM(t, l, j.ID.Value(), "done")
+	l.pass()
+	got := l.build(rec.ID.Value())
+	if got.State.Value() != buildctl.StateFailed || len(got.Pipelines.Value()) != 1 || got.Pipelines.Value()[0].State != buildctl.StateFailed || len(got.Jobs.Value()) != 1 {
+		t.Fatalf("after the verdict: %s pipelines %+v jobs %d", got.State.Value(), got.Pipelines.Value(), len(got.Jobs.Value()))
+	}
+	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("failed job not finalised after its verdict: %v", err)
+	}
+
+	retry, err := l.b.Retry(l.ctx, rec.ID.Value(), "user:u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.pass()
+	rj := l.job(retry.ID.Value())
+	if spec, _ := fleet.DecodeSpec(rj.Spec.Value()); spec.Prefer != l.wid {
+		t.Errorf("retry job prefers %q, want the worker of the failed build %q", spec.Prefer, l.wid)
+	}
+	l.run(rj, "failed", okReport("ci"), "//cmd/api:test")
+	l.staged(rj)
+	setPM(t, l, rj.ID.Value(), "blocked: staging incomplete")
+	l.pass()
+	if got := l.build(retry.ID.Value()); got.State.Value() != buildctl.StateFailed || len(got.Jobs.Value()) != 1 {
+		t.Errorf("blocked promotion of a failed job: %s with %d jobs, want FAILED without a re-run", got.State.Value(), len(got.Jobs.Value()))
 	}
 }

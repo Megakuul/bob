@@ -189,3 +189,6 @@
 | A193 internal/http: a route pattern equal to a pending prefix replaces it (generic; used for | I-B28 | self-ruled |
 | A194 The web build mirrors web/build into internal/ui/dist from svelte.config.js (adapter | I-B28 | self-ruled |
 | A195 `kit.version.name` is a content hash of the sources instead of a timestamp: reproducible | I-B28 | self-ruled |
+| A200 Outputs of packages that built inside a failed evalbuild job are staged and promoted | I-B29 | self-ruled |
+| A201 The evaluator trusts `.bob/eval` only when bob's ownership stamp matches: the file | I-B29 | self-ruled |
+| A202 Jobs of a retry or re-run build carry Prefer = the worker that ran the last job of the | I-B29 | self-ruled |

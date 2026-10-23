@@ -13,6 +13,7 @@ import (
 
 	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/orchestrator"
+	"github.com/megakuul/bob/internal/promote"
 	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -280,11 +281,40 @@ func (b *Builds) enqueue(ctx context.Context, rec *store.BuildRecord, row store.
 	if err != nil {
 		return err
 	}
-	_, _, err = b.cfg.Fleet.Enqueue(ctx, row.Class, orchestrator.Job{ID: row.ID, Build: rec.ID.Value(), Spec: raw, Repo: repo, Attempts: attempts})
+	_, _, err = b.cfg.Fleet.Enqueue(ctx, row.Class, orchestrator.Job{ID: row.ID, Build: rec.ID.Value(), Spec: raw, Repo: repo,
+		Prefer: b.affinity(ctx, rec, row), Attempts: attempts})
 	if errors.Is(err, store.ErrExists) {
 		return nil // the job record exists: an earlier enqueue got that far (the reconciler re-slots)
 	}
 	return err
+}
+
+// affinity is the Prefer worker of a retry or re-run job (decision A202): the worker that ran
+// the last job of the same kind and class in the build it repeats, whose store already holds
+// what that build built. A hint for the wake order only; "" when unknown.
+func (b *Builds) affinity(ctx context.Context, rec *store.BuildRecord, row store.BuildJob) string {
+	n := rec.RetryOf.Value()
+	if n == 0 {
+		n = rec.RerunOf.Value()
+	}
+	if n == 0 {
+		return ""
+	}
+	id, err := b.ByNumber(ctx, rec.Project.Value(), n)
+	if err != nil || id == "" {
+		return ""
+	}
+	old, err := b.Get(ctx, id)
+	if err != nil {
+		return ""
+	}
+	jobs := old.Jobs.Value()
+	for i := len(jobs) - 1; i >= 0; i-- {
+		if j := jobs[i]; j.Kind == row.Kind && j.Class == row.Class && j.Worker != "" {
+			return j.Worker
+		}
+	}
+	return ""
 }
 
 // progress follows the jobs of a queued or running build and finishes it when they are done.
@@ -414,7 +444,11 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 		}
 	}
 	blocked := false
-	if job.State.Value() == orchestrator.StateSucceeded && reject == "" && b.cfg.AwaitPromotion {
+	// A succeeded job, and a failed one that staged the packages it did build (A200), are
+	// finalised only after their promotion verdict.
+	staged := job.State.Value() == orchestrator.StateSucceeded ||
+		job.State.Value() == orchestrator.StateFailed && res.Status == "failed" && res.Complete != ""
+	if staged && reject == "" && b.cfg.AwaitPromotion {
 		switch {
 		case job.Promotion.Value() == "":
 			// the promotion controller has not finished this job yet: never finalise before it.
@@ -450,7 +484,9 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 			}
 			return b.writeNodes(ctx, next, job.ID.Value(), report)
 		case strings.HasPrefix(job.Promotion.Value(), "blocked"):
-			blocked = true // staging incomplete: run the job again (§6.6.4 step 1)
+			// staging incomplete: run the job again (§6.6.4 step 1); a failed job is not run
+			// again for the outputs it could not stage
+			blocked = job.State.Value() == orchestrator.StateSucceeded
 		case job.Promotion.Value() != "done":
 			reject = "promotion: " + job.Promotion.Value()
 		}
@@ -756,7 +792,7 @@ func (b *Builds) settle(ctx context.Context, rec *store.BuildRecord) error {
 		case err != nil:
 			return err
 		}
-		if job.State.Value() == orchestrator.StateSucceeded && job.Promotion.Value() == "" && b.cfg.AwaitPromotion {
+		if promote.Awaits(job) && b.cfg.AwaitPromotion {
 			open++ // promotion pending: never finalise before the verdict
 			continue
 		}

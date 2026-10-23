@@ -466,3 +466,14 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    same normalised text) is unchanged.
 
 56. tests/serverenv/serverenv.go, tests/golden/golden.go: repo-root detection matched go.mod only if it started with `module github.com/megakuul/bob`; once bob owns go.mod its first line is the generated header (SPEC §03.0.2). Now matches `(?m)^module github\.com/megakuul/bob\s*$` as tests/core/layout_test.go does. APPLIED (coordinator, evidence: I-B25 incident 1).
+
+## I-B27 (continued, 2026-10-23; numbers 51, 53, 57 are I-B27's)
+57. PROPOSED 2026-10-23 I-B27. tests/cli/events_test.go knownEvents lacks the `note` event that
+   SPEC §02.4 lists (event table, `note` **new**: `type`, `code` (string), `message`, optional
+   `label`, `attr`, `platform`, `field`; SPEC §03 R-cross text line ~5272 shows
+   `{"type":"note","code":"uncached-target-lib",...}`) and that tests/core/platform_test.go:664
+   requires. TestRCLI002JSONStream (build //... --json, --json-log, --print-paths; test //... --json)
+   fails `line 6: unknown event "note"` (I-B27 acceptance run, 05:16). pkg/cli/cmd_build.go:305
+   emits exactly the SPEC fields. Edit: add
+   `"note": {"type": "s", "code": "s", "message": "s"},` to knownEvents (optional fields are not
+   listed, as for the other events). No assertion is removed.
