@@ -112,6 +112,27 @@ Coordinates with I-M10a (pkg/proto, pkg/connect, shared codegen early cutoff).
   fixture's web App is compiled by esbuild), PrepareDev adds the pinned nixpkgs typescript
   (tsc, tsserver shims). Without it R-GEN-002a/003a's `.bob/bin/tsc` does not exist.
 
+- Acceptance (tests/eco/gen against a private recording mirror, /var/tmp/i-m10b/registry =
+  copy of the shared snapshot + what the codegen fixture loads; BOB_TEST_REGISTRY_URL; aarch64
+  8c/15G, load ~25-35): TestRGEN002aGraphQLWorks PASS (397 s), TestRGEN002aUndefinedTypeInSchema
+  PASS, TestRGEN003aOpenAPIWorks PASS (473 s), TestRGEN003aBadRef PASS, TestRGEN006 F4 PASS
+  with golden candidate out/golden-candidates/tests/goldens/gen/runtime-mismatch-f4.txt.
+  One earlier 002a run failed the server build with an empty excerpt (not reproduced in 3 later
+  runs, fresh home included; load-related) and one lock hit the harness's 5-min bob timeout.
+- tools/ci -only fmt,vet,lint,layering: fmt, lint, layering ok; vet fails only on R-ARCH-001
+  (out/ib22scratch, out/uicheck: other units). go test of builder, npm, golang, graphql,
+  openapi, engine, engine/build, engine/store, engine/eval, pkg: all ok.
+- framework.zip regenerated (after the last API change), builders.go regenerated (v12).
+- Caches removed (GOCACHE/XDG/TMPDIR, bob homes, scratch repos); kept the mirror copy and logs.
+
+## NEEDS
+1. owner/coordinator: record into the shared registry snapshot what the codegen fixture loads:
+   packuments @bufbuild/protobuf, @connectrpc/connect, @connectrpc/connect-node, graphql and 65
+   tarballs (the graphql-codegen + openapi-typescript tool locks, @types/node, connect); a
+   ready copy is /var/tmp/i-m10b/registry/{manifests,blobs} (recorded with regmirror
+   -record-npm). Without it tests/eco/gen fail offline.
+2. coordinator: commit pkg/builder (unpack + BuilderVersion 12) together with
+   pkg/engine/store/builders.go and builderbin.
+
 ## next
-- fixture acceptance tests (TestRGEN002a*, TestRGEN003a*) with a private recording mirror
-  (/var/tmp/i-m10b/registry, copy of the shared snapshot + what the codegen fixture loads).
+- nothing in this chain beyond NEEDS.

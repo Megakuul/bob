@@ -33,7 +33,8 @@ func forgeParts(env *server.Env, parts *server.OrchestratorParts) *forgeWiring {
 	reg := &integration.Registry{Control: env.Storage.Control, Now: env.Now, Log: env.Log}
 	w := &forgeWiring{Registry: reg, Intake: &integration.Intake{Registry: reg},
 		Notifier: notify.New(env.Storage.Control, env.Now, env.Log)}
-	parts.Services.Forge = &integration.Service{Registry: reg, BaseURL: env.Config.BaseURL}
+	// Webhook URLs need an absolute base: server.base_url, else the listen address (as workers).
+	parts.Services.Forge = &integration.Service{Registry: reg, BaseURL: endpoint(env.Config)}
 	parts.Services.Notify = notify.Service{N: w.Notifier}
 	if parts.Routes == nil {
 		parts.Routes = map[string]http.Handler{}

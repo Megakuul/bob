@@ -35,7 +35,7 @@ func projectParts(ctx context.Context, env *server.Env, parts *server.Orchestrat
 		env.Log.Error("projects not available: the control bucket is missing")
 		return nil
 	}
-	cfg := project.Config{Control: env.Storage.Control, BaseURL: env.Config.BaseURL, Now: env.Now, Log: env.Log}
+	cfg := project.Config{Control: env.Storage.Control, BaseURL: endpoint(env.Config), Now: env.Now, Log: env.Log} // webhook URLs
 	if fw != nil && fw.Registry != nil {
 		cfg.Links = fw.Registry
 	}
