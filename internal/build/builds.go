@@ -18,6 +18,7 @@ import (
 	"github.com/megakuul/bob/internal/forge"
 	"github.com/megakuul/bob/internal/logstore"
 	"github.com/megakuul/bob/internal/orchestrator"
+	"github.com/megakuul/bob/internal/safe"
 	"github.com/megakuul/bob/internal/store"
 )
 
@@ -487,22 +488,32 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	if len(platforms) == 0 {
 		platforms = []string{b.cfg.DefaultPlatform}
 	}
-	// intent first: index entries before the record (R-SRV-101)
-	if err := b.setRunning(ctx, id, store.RunningBuild{Project: r.Project, N: n}); err != nil {
-		return nil, err
-	}
+	// intent first: index entries before the record (R-SRV-101). The three indexes are
+	// independent documents, so they are written concurrently: the webhook → BuildRecord
+	// budget (B-071, 500 ms after receipt) cannot afford three sequential CAS round trips.
 	entry := store.BuildEntry{N: n, Build: id, State: StatePending, Branch: r.Branch, Commit: commit,
 		Trigger: r.Trigger.Kind, Created: now}
 	if len(entry.Commit) > 12 {
 		entry.Commit = entry.Commit[:12]
 	}
-	if err := b.buildPages(r.Project).Set(ctx, n-1, entry); err != nil {
-		return nil, fmt.Errorf("bpage: %w", err)
+	writes := []<-chan error{
+		safe.Go(func() error { return b.setRunning(ctx, id, store.RunningBuild{Project: r.Project, N: n}) }),
+		safe.Go(func() error {
+			if err := b.buildPages(r.Project).Set(ctx, n-1, entry); err != nil {
+				return fmt.Errorf("bpage: %w", err)
+			}
+			return nil
+		}),
 	}
 	if ref := refOf(r.Trigger, r.Source, r.Branch); ref != "" {
-		if err := b.addBranchEntry(ctx, r.Project, ref, n); err != nil {
-			return nil, err
-		}
+		writes = append(writes, safe.Go(func() error { return b.addBranchEntry(ctx, r.Project, ref, n) }))
+	}
+	var werr error
+	for _, w := range writes {
+		werr = errors.Join(werr, <-w)
+	}
+	if werr != nil {
+		return nil, werr
 	}
 	if err := store.Create(ctx, b.cfg.Control, &store.BuildRecord{ID: store.ID(id), Project: store.Set(r.Project), Number: store.Set(n),
 		State: store.Set[string](StatePending), Trigger: store.Set(r.Trigger), Branch: store.Set(r.Branch), Commit: store.Set(commit),

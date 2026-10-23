@@ -217,6 +217,7 @@ func TestBuildController(t *testing.T) {
 	t.Run("push-succeeds", func(t *testing.T) { pushSucceeds(t, newLab(t, be)) })
 	t.Run("forged-match-rejected", func(t *testing.T) { forgedMatch(t, newLab(t, be)) })
 	t.Run("supersede", func(t *testing.T) { supersede(t, newLab(t, be)) })
+	t.Run("supersede-after-evaluation", func(t *testing.T) { supersedeAfterEvaluation(t, newLab(t, be)) })
 	t.Run("queue", func(t *testing.T) { queue(t, newLab(t, be)) })
 	t.Run("cancel-retry-rerun", func(t *testing.T) { cancelRetryRerun(t, newLab(t, be)) })
 	t.Run("infra-retries", func(t *testing.T) { infraRetries(t, newLab(t, be)) })
@@ -340,6 +341,49 @@ func supersede(t *testing.T, l *lab) {
 	l.pass()
 	if j, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: store.ID(got.Jobs.Value()[0].ID)}); err == nil && j.State.Value() != "cancelled" {
 		t.Errorf("job of the superseded build: %s", j.State.Value())
+	}
+}
+
+// supersedeAfterEvaluation (A162): a forge push supersedes older builds of its branch only
+// once its evaluation matched a pipeline; a push that matches none (SKIPPED) cancels nothing.
+func supersedeAfterEvaluation(t *testing.T, l *lab) {
+	// branch topic matches no pipeline (ci runs on main and feature*)
+	topic := apiBuild(t, l, "refs/heads/topic", sha1)
+	l.pass()
+	skippedID, err := l.b.CreateFromEvent(l.ctx, "acme", "k-skip", push("topic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.pass()
+	if st := l.build(topic.ID.Value()).State.Value(); st == buildctl.StateSuperseded {
+		t.Fatalf("an unevaluated push superseded the running build")
+	}
+	l.run(l.job(skippedID), "ok", okReport())
+	l.pass()
+	if st := l.build(skippedID).State.Value(); st != buildctl.StateSkipped {
+		t.Fatalf("push without a matching pipeline: %s, want skipped", st)
+	}
+	if st := l.build(topic.ID.Value()).State.Value(); st == buildctl.StateSuperseded {
+		t.Fatalf("a skipped push superseded the running build")
+	}
+	// a push to feature matches ci: it supersedes once evaluated
+	feature := apiBuild(t, l, "refs/heads/feature", sha1)
+	l.pass()
+	ev := push("feature")
+	ev.Push.After = strings.Repeat("ef", 20)
+	matchID, err := l.b.CreateFromEvent(l.ctx, "acme", "k-match", ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.pass()
+	if st := l.build(feature.ID.Value()).State.Value(); st == buildctl.StateSuperseded {
+		t.Fatalf("the push superseded before its evaluation")
+	}
+	l.run(l.job(matchID), "ok", okReport("ci"))
+	l.pass()
+	got := l.build(feature.ID.Value())
+	if got.State.Value() != buildctl.StateSuperseded || got.SupersededBy.Value() != l.build(matchID).Number.Value() {
+		t.Fatalf("after the matching push was evaluated: feature build %s sp %d", got.State.Value(), got.SupersededBy.Value())
 	}
 }
 
@@ -472,6 +516,14 @@ func promotion(t *testing.T, l *lab) {
 	if rec := l.build(id); rec.State.Value() != buildctl.StateRunning || rec.Phase.Value() != buildctl.PhasePromoting {
 		t.Fatalf("waiting for promotion: %s %s", rec.State.Value(), rec.Phase.Value())
 	}
+	// A160: the accepted evaluation is taken in while the outputs are promoted, so bob/ci
+	// reports running before its final state (§6.9.4 pending → running → success)
+	if rec := l.build(id); !rec.Evaluated.Value() || len(rec.Pipelines.Value()) != 1 || rec.Pipelines.Value()[0].State != buildctl.StateRunning {
+		t.Fatalf("waiting for promotion: evaluated %v pipelines %+v, want ci running", rec.Evaluated.Value(), rec.Pipelines.Value())
+	}
+	if st := l.statuses.states("bob/ci"); len(st) != 1 || !strings.HasPrefix(st[0], "running ") {
+		t.Fatalf("bob/ci while promoting: %q, want one running status", st)
+	}
 	if _, err := store.Get(l.ctx, l.fleet, &store.JobRecord{ID: j.ID}); err != nil {
 		t.Fatalf("job finalised before its promotion: %v", err)
 	}
@@ -501,5 +553,8 @@ func promotion(t *testing.T, l *lab) {
 	}
 	if row.Promotion != "done" || len(rec.NonReproducible.Value()[j2.ID.Value()]) != 1 {
 		t.Errorf("row %+v nr %v", row, rec.NonReproducible.Value())
+	}
+	if st := l.statuses.states("bob/ci"); len(st) != 2 || !strings.HasPrefix(st[1], "success ") || len(rec.Pipelines.Value()) != 1 {
+		t.Errorf("bob/ci statuses %q pipelines %+v, want running then success for one ci run", st, rec.Pipelines.Value())
 	}
 }

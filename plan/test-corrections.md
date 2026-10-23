@@ -441,7 +441,7 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    (internal/worker/attach.go) was fixed in place by I-B27 (A170).
 
 ## I-B25 (2026-10-23, evidence-based fixture correction)
-50. APPLIED 2026-10-23 I-B25. tests/cli/testdata/repos/pipe: libs/bob.go removed, its three
+55. APPLIED 2026-10-23 I-B25. tests/cli/testdata/repos/pipe: libs/bob.go removed, its three
    declarations moved unchanged in substance into the root bob.go (Module `example.com/pipe` Go
    1.26, the binary of `./app` with CGoOff, Tests("./...")). SPEC §03.2.1: NewModule's root is
    the directory of the calling bob.go and Binary's dir is module-relative, so libs/bob.go
@@ -465,4 +465,4 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    Edit: norm also replaces `manifest <tag> in` by `manifest TAG in`. The assertion (both fail,
    same normalised text) is unchanged.
 
-51. tests/serverenv/serverenv.go, tests/golden/golden.go: repo-root detection matched go.mod only if it started with `module github.com/megakuul/bob`; once bob owns go.mod its first line is the generated header (SPEC §03.0.2). Now matches `(?m)^module github\.com/megakuul/bob\s*$` as tests/core/layout_test.go does. APPLIED (coordinator, evidence: I-B25 incident 1).
+56. tests/serverenv/serverenv.go, tests/golden/golden.go: repo-root detection matched go.mod only if it started with `module github.com/megakuul/bob`; once bob owns go.mod its first line is the generated header (SPEC §03.0.2). Now matches `(?m)^module github\.com/megakuul/bob\s*$` as tests/core/layout_test.go does. APPLIED (coordinator, evidence: I-B25 incident 1).

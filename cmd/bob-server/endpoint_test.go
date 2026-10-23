@@ -39,10 +39,11 @@ func TestWebhookURLFallback(t *testing.T) {
 }
 
 // TestWebhookWiringUsesEndpoint: both places that create forge webhooks (the forge service's
-// repository links and project creation) take their base from endpoint, not from the raw
-// base_url, which is "" on a stack without one.
+// repository links and project creation) and the build controller (commit status target URLs,
+// Build.web_url) take their base from endpoint, not from the raw base_url, which is "" on a
+// stack without one.
 func TestWebhookWiringUsesEndpoint(t *testing.T) {
-	for _, f := range []string{"parts_forge.go", "parts_project.go"} {
+	for _, f := range []string{"parts_forge.go", "parts_project.go", "parts_build.go"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)

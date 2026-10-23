@@ -193,7 +193,7 @@ LEVEL = Info
 [actions]
 ENABLED = false
 [queue]
-TYPE = level
+TYPE = channel
 `, dir, port, s["SECRET_KEY"], s["INTERNAL_TOKEN"], s["JWT_SECRET"])
 }
 

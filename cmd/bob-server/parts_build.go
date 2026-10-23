@@ -34,7 +34,7 @@ func buildParts(ctx context.Context, env *server.Env, parts *server.Orchestrator
 	params = fleetsrv.Merge(params, fleetsrv.DefaultParams())
 	cfg := buildctl.Config{Name: env.Config.Name, Control: env.Storage.Control, Jobs: env.Storage.Fleet, Fleet: f,
 		Cancel: f.Hub, MaxAttempts: params.MaxAttempts, JobShards: params.JobShards, AwaitPromotion: true,
-		BaseURL: strings.TrimRight(env.Config.BaseURL, "/"), Skew: params.Skew, Now: env.Now, Log: env.Log,
+		BaseURL: endpoint(env.Config), Skew: params.Skew, Now: env.Now, Log: env.Log,
 		Projects: pw.projects()}
 	sc := env.Storage.Config
 	if objs, err := cache.OpenObjects(ctx, s3client.Options{Endpoint: sc.Endpoint, Region: sc.Region}, sc.Artifacts); err == nil {

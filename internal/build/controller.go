@@ -96,6 +96,13 @@ func (b *Builds) advance(ctx context.Context, rec *store.BuildRecord, recs map[s
 		rec, err = b.plan(ctx, rec, recs)
 	default:
 		rec, err = b.progress(ctx, rec)
+		// a forge event build supersedes once its evaluation matched (A162), also when it
+		// finished in the same pass; a cancelled or superseded one never does
+		if err == nil && rec != nil && SelectionOf(rec).Event != "" {
+			if st := rec.State.Value(); st != StateCancelled && st != StateSuperseded {
+				err = b.supersedeOlder(ctx, rec, recs)
+			}
+		}
 	}
 	if rec != nil {
 		recs[rec.ID.Value()] = rec
@@ -161,28 +168,66 @@ func (b *Builds) mode(ctx context.Context, older *store.BuildRecord) string {
 	return m
 }
 
+// olderInLane returns the active builds of rec's project and lane that are older than rec.
+func olderInLane(rec *store.BuildRecord, recs map[string]*store.BuildRecord) []*store.BuildRecord {
+	l := lane(rec)
+	if l == "" {
+		return nil
+	}
+	var out []*store.BuildRecord
+	for _, o := range recs {
+		if o.ID.Value() == rec.ID.Value() || o.Project.Value() != rec.Project.Value() || o.Number.Value() >= rec.Number.Value() || Terminal(o.State.Value()) || lane(o) != l {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// knowsPipelines reports whether rec's pipelines are known: an API, retry, rerun or remote
+// build names them (or its targets), a forge event build only after its evaluation matched
+// at least one. Only such a build supersedes older ones (decision A162): a push that turns
+// out to match no pipeline (SKIPPED) must not cancel a running build of the same branch.
+func knowsPipelines(rec *store.BuildRecord) bool {
+	if SelectionOf(rec).Event == "" {
+		return true
+	}
+	return rec.Evaluated.Value() && len(rec.Pipelines.Value()) > 0
+}
+
+// supersedeOlder moves the older active builds of rec's lane whose rule is supersede to
+// SUPERSEDED by rec, once rec knows its pipelines (plan, and again after the evaluation of a
+// forge event build).
+func (b *Builds) supersedeOlder(ctx context.Context, rec *store.BuildRecord, recs map[string]*store.BuildRecord) error {
+	if !knowsPipelines(rec) {
+		return nil
+	}
+	for _, o := range olderInLane(rec, recs) {
+		if b.mode(ctx, o) != ModeSupersede {
+			continue
+		}
+		stopped, err := b.stop(ctx, o.ID.Value(), StateSuperseded, rec.Number.Value())
+		if err != nil && !errors.Is(err, ErrFinished) {
+			return err
+		}
+		if stopped != nil {
+			recs[o.ID.Value()] = stopped
+			b.report(ctx, stopped)
+		}
+	}
+	return nil
+}
+
 // plan applies the concurrency rule to a pending build and, when it may run, enqueues its
 // first jobs: one evalbuild closure job per platform (R-FLEET-005 default; decision D-IB11-2).
 func (b *Builds) plan(ctx context.Context, rec *store.BuildRecord, recs map[string]*store.BuildRecord) (*store.BuildRecord, error) {
-	if l := lane(rec); l != "" {
-		for _, o := range recs {
-			if o.ID.Value() == rec.ID.Value() || o.Project.Value() != rec.Project.Value() || o.Number.Value() >= rec.Number.Value() || Terminal(o.State.Value()) || lane(o) != l {
-				continue
-			}
-			switch b.mode(ctx, o) {
-			case ModeQueue:
-				return rec, nil // waits in pending until the older build is terminal
-			case ModeSupersede:
-				stopped, err := b.stop(ctx, o.ID.Value(), StateSuperseded, rec.Number.Value())
-				if err != nil && !errors.Is(err, ErrFinished) {
-					return rec, err
-				}
-				if stopped != nil {
-					recs[o.ID.Value()] = stopped
-					b.report(ctx, stopped)
-				}
-			}
+	for _, o := range olderInLane(rec, recs) {
+		if b.mode(ctx, o) == ModeQueue {
+			return rec, nil // waits in pending until the older build is terminal
 		}
+	}
+	if err := b.supersedeOlder(ctx, rec, recs); err != nil {
+		return rec, err
 	}
 	sel := SelectionOf(rec)
 	targets, err := sel.Encode()
@@ -372,8 +417,12 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 	if job.State.Value() == orchestrator.StateSucceeded && reject == "" && b.cfg.AwaitPromotion {
 		switch {
 		case job.Promotion.Value() == "":
-			// the promotion controller has not finished this job yet: never finalise before it
-			return b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
+			// the promotion controller has not finished this job yet: never finalise before it.
+			// The accepted evaluation result is taken in now (decision A160): the matched
+			// pipelines then report `running` while the outputs are promoted (§6.9.4 pending →
+			// running → success) instead of appearing only with the final state.
+			first := report != nil && !rec.Evaluated.Value()
+			next, err := b.update(ctx, rec.ID.Value(), func(cur *store.BuildRecord) error {
 				r := rowOf(job, row)
 				r.State = orchestrator.StateRunning // the row ends with the verdict
 				changed := setRow(cur, r)
@@ -383,11 +432,23 @@ func (b *Builds) terminalJob(ctx context.Context, rec *store.BuildRecord, row st
 				if cur.Phase.Value() != PhasePromoting {
 					cur.Phase, changed = store.Set[string](PhasePromoting), true
 				}
+				if report != nil && !cur.Evaluated.Value() {
+					pipes, result, errs := applyReport(cur.Pipelines.Value(), cur.Result.Value(), cur.Errors.Value(), report)
+					cur.Pipelines, cur.Result, cur.Errors = store.Set(pipes), store.Set(result), store.Set(errs)
+					cur.Evaluated, changed = store.Set(true), true
+				}
 				if !changed {
 					return store.ErrNoChange
 				}
 				return nil
 			})
+			if err != nil || !first || !next.Evaluated.Value() {
+				return next, err
+			}
+			if b.cfg.Evaluated != nil {
+				b.cfg.Evaluated(ctx, next, report)
+			}
+			return b.writeNodes(ctx, next, job.ID.Value(), report)
 		case strings.HasPrefix(job.Promotion.Value(), "blocked"):
 			blocked = true // staging incomplete: run the job again (§6.6.4 step 1)
 		case job.Promotion.Value() != "done":

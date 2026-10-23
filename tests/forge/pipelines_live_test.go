@@ -192,7 +192,7 @@ func TestPIPE005CancelRetryRerunConcurrency(t *testing.T) {
 	}
 	waitFor(t, "cancelled status of the superseded build", 2*time.Minute, func() bool {
 		for _, s := range e.Statuses("demo", sha1) {
-			if s.State == "error" && strings.Contains(s.Description, fmt.Sprintf("superseded by #%v", second.Number)) {
+			if s.State == "warning" && strings.Contains(s.Description, fmt.Sprintf("superseded by #%v", second.Number)) {
 				return true
 			}
 		}

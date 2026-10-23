@@ -180,3 +180,6 @@
 | A159 go.mod/go.sum stay hand-written for now (see TEST PROBLEM 1). bob.go's Require list equals | I-B25 | self-ruled |
 | A151 | I-B24 | Registry tag visibility is per project: a tag is visible only if the caller sees the repo's project, or it is a release tag whose release id is in the object's public list; digest requests keep the document-only rule. | self-ruled |
 | A180 | I-B24 | Job row field `e` keeps the first line of the job error (<=300 bytes, credentials stripped) after the job ends. | self-ruled |
+| A160 The evaluation result of an evalbuild job is taken into the build when the job has | I-B26 | self-ruled |
+| A161 Builds.Create writes its three intent-first index entries concurrently (safe.Go): they | I-B26 | self-ruled |
+| A162 Supersede is decided by the newer build only when its pipelines are known (API, retry, | I-B26 | self-ruled |
