@@ -3,20 +3,23 @@ module github.com/megakuul/bob
 go 1.26.9
 
 require (
+	codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3 v3.0.0
 	connectrpc.com/connect v1.21.1
 	github.com/chromedp/cdproto v0.157.8
 	github.com/chromedp/chromedp v0.21.0
 	github.com/coreos/go-oidc/v3 v3.17.0
+	github.com/google/go-github/v88 v88.0.0
 	github.com/klauspost/compress v1.20.3
+	github.com/megakuul/dynamitedb v0.6.1
 	github.com/megakuul/lake v0.5.3
 	github.com/ulikunitz/xz v0.5.17
+	gitlab.com/gitlab-org/api/client-go v1.46.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.12
 )
 
 require (
-	codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3 v3.0.0 // indirect
 	github.com/42wim/httpsig v1.2.3 // indirect
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
@@ -37,20 +40,17 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/google/go-github/v88 v88.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
-	github.com/megakuul/dynamitedb v0.6.1 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/parquet-go/bitpack v1.0.0 // indirect
 	github.com/parquet-go/jsonlite v1.5.2 // indirect
 	github.com/parquet-go/parquet-go v0.30.2-0.20260721183652-ef5d53accfc9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
-	gitlab.com/gitlab-org/api/client-go v1.46.0 // indirect
 	go.mongodb.org/mongo-driver v1.17.6 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.60.0 // indirect

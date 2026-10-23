@@ -417,6 +417,10 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    PASS for all nine fixtures; TestRFW047IRValidation (incl. unknown_kind "nope.x"), TestRFW044*,
    TestRFW047SchemaFile unchanged PASS; TestRFW046* and TestRFW047GoldenIR fail identically with
    and without the edit (other causes, plan/progress/I-B27.md). No assertion loosened.
+   Edit (a) also fixes the same in-process `unknown kind` failures of TestRFW016DefinedAtIsConstructorLine
+   (label_test.go:210 `ir.Parse: … node //crates/rcore:rcore@linux-amd64 has the unknown kind
+   "rust.crate"`) and TestRFW021IgnoredFilesDoNotChangeSources / ChangeOneFileChangesOnePackage /
+   ModesAndMtimes (`build.SourcePaths: … unknown kind "rust.crate"`), seen in the I-B27 run 11:44.
 
 ## I-B26 (continued, 2026-10-23, evidence-based test correction; 51 is I-B27's)
 52. APPLIED 2026-10-23 I-B26. tests/forge/pipelines_live_test.go TestPIPE005 (1): the cancelled
@@ -467,7 +471,7 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
 
 56. tests/serverenv/serverenv.go, tests/golden/golden.go: repo-root detection matched go.mod only if it started with `module github.com/megakuul/bob`; once bob owns go.mod its first line is the generated header (SPEC §03.0.2). Now matches `(?m)^module github\.com/megakuul/bob\s*$` as tests/core/layout_test.go does. APPLIED (coordinator, evidence: I-B25 incident 1).
 
-## I-B27 (continued, 2026-10-23; numbers 51, 53, 57 are I-B27's)
+## I-B27 (continued, 2026-10-23; numbers 51, 53, 57, 58 are I-B27's)
 57. PROPOSED 2026-10-23 I-B27. tests/cli/events_test.go knownEvents lacks the `note` event that
    SPEC §02.4 lists (event table, `note` **new**: `type`, `code` (string), `message`, optional
    `label`, `attr`, `platform`, `field`; SPEC §03 R-cross text line ~5272 shows
@@ -477,3 +481,17 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    emits exactly the SPEC fields. Edit: add
    `"note": {"type": "s", "code": "s", "message": "s"},` to knownEvents (optional fields are not
    listed, as for the other events). No assertion is removed.
+58. PROPOSED 2026-10-23 I-B27. tests/eco/golang/helpers_test.go:52 and tests/eco/cc/helpers_test.go:52
+   noLeak leak-check `r.Combined()` including the package.finish `paths` of `--print-paths --json`,
+   which are host store paths by contract (SPEC §02.4 `paths[]` "host paths, only with
+   --print-paths"; §02.6). Same defect and fix as item 29 (tests/eco/rust, I-M8b) and item 13a
+   (TestRFW051, A116); tests/eco/internal/ecotest Bob already strips them. Every outputPaths call
+   fails `shows raw Nix text: store path: "{...\"event\":\"package.finish\",...\"paths\":[\".../nix/store/<hash>-..."]}"`:
+   TestRGO001aBuildTestCrossAndReproducible (both platforms), TestRGO005CutoffEarlyCutoff,
+   TestRCC001aBuildTestCrossAndReproducible (both), TestRCC005aExternalPinnedAndVerified (I-B27
+   acceptance run 08:19-08:58). Edit: copy tests/eco/rust's `withoutFinishPaths` into both
+   packages and check `withoutFinishPaths(r.Stdout) + r.Stderr`; stderr, other events and other
+   fields stay checked. Same defect in tests/core/ir_test.go:83 TestRFW046ProjectionIgnoresUndeclaredAxes
+   (`noLeak(t, r)` on `build //toy:b@linux-arm64 --print-paths --json`): apply the same filter there
+   (TestRFW046 also has a real failure after the leak lines: //toy:a has no paths[] in the +debug
+   run, see plan/progress/I-B27.md).

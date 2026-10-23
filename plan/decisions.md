@@ -197,3 +197,7 @@
 | A212 "Revoked at job end" = the forge-sweeper pass (≤ 60 s after the job is terminal, plus | I-B30 | self-ruled |
 | A213 Worker jobs pass bob's caches to the engine (EngineRunner: build.Options.Caches parsed | I-B30 | self-ruled |
 | A214 Root-mode nix.conf sets `narinfo-cache-negative-ttl = 0`: Nix's lookup cache lives in | I-B30 | self-ruled |
+| A170 internal/worker/attach.go: when Send(hello) fails with an error wrapping io.EOF, return | I-B27 | self-ruled |
+| A171 out/uicheck -> out/_uicheck (vet R-ARCH-001; leftover copy, content kept). | I-B27 | self-ruled |
+| A172 go mod tidy (4 deps to direct) and the dbusage.todo comment refresh. | I-B27 | self-ruled |
+| A173 Acceptance triage method: package-sequential with a disk guard; test failures are | I-B27 | self-ruled |
