@@ -18,6 +18,12 @@ import (
 // DefaultChannel is the nixpkgs channel of a repository whose RepoOpts.Nixpkgs is empty.
 const DefaultChannel = "nixos-26.05"
 
+// DefaultRev is the nixpkgs revision of DefaultChannel that bob's typed nixpkgs surface
+// (pkg/nixpkgs, nixext.SurfaceRev) was generated from. A new bob.lock of a repository with the
+// default channel and no RepoOpts.NixpkgsRev pins it, so the typed handles and the pin agree
+// (R-NIX-005, R-NIX-032, ADR 0020 §3); bob lock --update nixpkgs moves to the channel head.
+const DefaultRev = "da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36"
+
 // NixpkgsSpec is the parsed RepoOpts.Nixpkgs: "<channel>" or "<channel>@<40-hex rev>".
 type NixpkgsSpec struct {
 	Channel string
