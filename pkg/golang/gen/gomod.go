@@ -241,7 +241,8 @@ func explainGoMod(goWant string, direct, indirect []gospec.Requirement, bobGo st
 	return func(onDisk []byte) []engine.DriftLine {
 		got := parseGoMod(onDisk)
 		var out []engine.DriftLine
-		if got.goVersion != goWant {
+		// "go 1.26" (go mod init, a hand-written go.mod) is the release bob writes as 1.26.0 (A452).
+		if goDirective(got.goVersion) != goWant {
 			out = append(out, engine.DriftLine{Op: "~", Text: fmt.Sprintf("go %s → %s (set Go in %s)", goWant, orNone(got.goVersion), bobGo)})
 		}
 		paths := map[string]bool{}

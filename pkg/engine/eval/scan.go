@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io"
 	"maps"
 	"os"
@@ -26,7 +25,7 @@ import (
 
 // keyVersion changes whenever the evaluator generation changes in a way the key's inputs do
 // not show.
-const keyVersion = "bob-eval-key-2"
+const keyVersion = "bob-eval-key-3"
 
 // repoScan is what one scan found.
 type repoScan struct {
@@ -231,6 +230,3 @@ func writeIfChanged(p string, content []byte) error {
 	}
 	return os.Rename(tmp, p)
 }
-
-// errNoGoMod is a repository root without go.mod.
-var errNoGoMod = errors.New("the repository has no go.mod")

@@ -504,8 +504,7 @@ var Demo = bob.Define(func(p *bob.P) *ocaml.Exe {
 
 `connect.Go`, `graphql.Gqlgen` and `openapi.Go` return a `golang.Generated` for
 `ModuleOpts.Generated`; the `TS` functions return an `npm.Generated` for the `Generated`
-field of an npm importer. The [code generation quickstart](../03-quickstart/06-codegen.md) uses
-all of them. See also [Generated code](04-generated-code.md).
+field of an npm importer. [Generated code](04-generated-code.md) shows each of them.
 
 ## Services (pkg/services/postgres)
 

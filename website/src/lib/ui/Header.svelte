@@ -12,8 +12,8 @@
 		<Logo />
 		<nav class="flex flex-1 items-center gap-5 font-mono text-sm" aria-label="Main">
 			<a href="/docs" class="hover:text-fg {docs ? 'text-fg underline decoration-accent decoration-2 underline-offset-[6px]' : 'text-muted'}" aria-current={docs ? 'page' : undefined}>docs</a>
-			<a href="/#features" class="hidden text-muted hover:text-fg sm:inline">features</a>
-			<a href="/#how" class="hidden text-muted hover:text-fg sm:inline">how it works</a>
+			<a href="/#pain" class="hidden text-muted hover:text-fg sm:inline">why bob</a>
+			<a href="/#install" class="hidden text-muted hover:text-fg sm:inline">install</a>
 			<a href="/#status" class="hidden text-muted hover:text-fg md:inline">status</a>
 		</nav>
 		<a href={repo} class="font-mono text-sm text-muted hover:text-fg" rel="external noopener">github</a>

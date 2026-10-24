@@ -1,34 +1,26 @@
 ---
-title: TypeScript and npm quickstart
+title: TypeScript quickstart
 section: Quickstart
 order: 4
-summary: Build a TypeScript library with vitest tests, a Node program and a Vite site from npm dependencies, without running npm install.
+summary: Build, test and run a tiny TypeScript program on Node with a vitest test - bob resolves npm packages itself, no npm install.
 ---
 
-In this quickstart you build three npm "importers" with bob: a TypeScript library with a
-vitest test, a Node program that uses the library, and a static Vite site. bob resolves the
-npm packages itself, pins them in `bob.lock`, and writes `package.json`, `tsconfig.json` and
-`node_modules` for your editor. You never run `npm install`.
+In this quickstart you build a one-file TypeScript program for Node, with a vitest test. bob
+resolves the npm packages, pins them in `bob.lock`, and writes `package.json`,
+`tsconfig.json` and `node_modules` for your editor. You never run `npm install`.
 
 You need [bob installed](../02-install/02-install-bob.md). You do not need Node.js installed.
 
 ## The project
 
-```text
-hello-ts/
-├── go.mod               needed to evaluate bob.go
-├── bob.go               nixpkgs pin
-├── greet/               the library @hello/greet
-│   ├── bob.go
-│   └── src/index.ts, src/index.test.ts
-├── app/                 a Node program
-│   ├── bob.go
-│   └── src/main.ts
-└── web/                 a Vite site
-    ├── bob.go
-    ├── index.html
-    ├── vite.config.ts
-    └── src/main.ts
+```tree
+📁 hello-ts/
+  📄 go.mod
+  📄 bob.go
+  📁 src/
+    📄 main.ts
+    📄 greeting.ts
+    📄 greeting.test.ts
 ```
 
 ```bash
@@ -36,161 +28,58 @@ mkdir hello-ts && cd hello-ts
 git init
 ```
 
-## The library
+## Write the code
 
-`greet/src/index.ts` validates its input with zod:
-
-```ts file=greet/src/index.ts
-import { z } from "zod";
-
-export const User = z.object({ name: z.string().min(1) });
-export type User = z.infer<typeof User>;
-
-export function greet(u: User): string {
-  return `hello, ${User.parse(u).name}`;
+```ts file=src/greeting.ts
+export function greeting(name: string): string {
+  return `hello, ${name}`;
 }
 ```
 
-`greet/src/index.test.ts`:
+```ts file=src/main.ts
+import { greeting } from "./greeting.js";
 
-```ts file=greet/src/index.test.ts
+console.log(greeting("bob"));
+```
+
+```ts file=src/greeting.test.ts
 import { expect, test } from "vitest";
-import { greet } from "./index.js";
+import { greeting } from "./greeting.js";
 
-test("greet", () => {
-  expect(greet({ name: "bob" })).toBe("hello, bob");
+test("greeting", () => {
+  expect(greeting("bob")).toBe("hello, bob");
 });
 ```
 
-`greet/bob.go`. `npm.Dev()` marks tooling: it is available to builds and tests but never
-reaches a runtime closure.
-
-```go file=greet/bob.go
-//go:build bob
-
-package greet
-
-import (
-	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/npm"
-)
-
-// Lib is the TypeScript library @hello/greet (label //greet:greet).
-var Lib = bob.Define(func(p *bob.P) *npm.Lib {
-	return npm.Library(p, npm.LibOpts{
-		Name: "@hello/greet",
-		Deps: []npm.Dependency{
-			npm.Dep("zod", "^4.0.0"),
-			npm.Dep("typescript", "~5.9.2", npm.Dev()),
-			npm.Dep("@types/node", "^24", npm.Dev()),
-			npm.Dep("vitest", "^3.2.0", npm.Dev()),
-		},
-	})
-})
-
-// Test runs vitest over src/**/*.test.ts (label //greet:test).
-var Test = bob.Define(func(p *bob.P) *npm.Test {
-	return npm.NewTest(p, npm.TestOpts{Of: Lib(p)})
-})
-```
-
-## The Node program
-
-`app/src/main.ts` imports the library by its package name:
-
-```ts file=app/src/main.ts
-import { greet } from "@hello/greet";
-
-const name = process.argv[2] ?? "world";
-console.log(greet({ name }));
-```
-
-`app/bob.go` adds the library as a dependency, by value. bob bundles the program with esbuild
-and wraps it in `bin/app`, which calls the pinned Node:
-
-```go file=app/bob.go
-//go:build bob
-
-package app
-
-import (
-	"example.com/hellots/greet"
-	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/npm"
-)
-
-// App is a Node program (label //app:app).
-var App = bob.Define(func(p *bob.P) *npm.App {
-	return npm.NewApp(p, npm.AppOpts{
-		Entry: "src/main.ts",
-		Deps: []npm.Dependency{
-			greet.Lib(p),
-			npm.Dep("@types/node", "^24", npm.Dev()),
-		},
-	})
-})
-```
-
-## The Vite site
-
-`web/index.html`, `web/vite.config.ts` and `web/src/main.ts` are ordinary Vite files. The
-Vite config stays yours: bob does not generate it.
-
-```html file=web/index.html
-<!doctype html>
-<html>
-  <body>
-    <p id="msg"></p>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
-</html>
-```
-
-```ts file=web/vite.config.ts
-import { defineConfig } from "vite";
-
-export default defineConfig({});
-```
-
-```ts file=web/src/main.ts
-import { greet } from "@hello/greet";
-
-document.getElementById("msg")!.textContent = greet({ name: "web" });
-```
-
-```go file=web/bob.go
-//go:build bob
-
-package web
-
-import (
-	"example.com/hellots/greet"
-	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/npm"
-)
-
-// Site is a static Vite site (label //web:web).
-var Site = bob.Define(func(p *bob.P) *npm.Site {
-	return npm.Vite(p, npm.ViteOpts{
-		Deps: []npm.Dependency{
-			greet.Lib(p),
-			npm.Dep("vite", "^7.1.0", npm.Dev()),
-		},
-	})
-})
-```
-
-## The root files
+## Describe the build
 
 ```go file=bob.go
 //go:build bob
 
 package hellots
 
-import "github.com/megakuul/bob/pkg/bob"
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/npm"
+)
 
 var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+
+var Hello = bob.Define(func(p *bob.P) *npm.App {
+	return npm.NewApp(p, npm.AppOpts{
+		Name:  "hello",
+		Entry: "src/main.ts",
+		Deps:  []npm.Dependency{npm.Dep("vitest", "^3.2.0", npm.Dev())},
+	})
+})
+
+var Test = bob.Define(func(p *bob.P) *npm.Test {
+	return npm.NewTest(p, npm.TestOpts{Of: Hello(p)})
+})
 ```
+
+`npm.Dev()` marks a tool: tests and builds see it, the program's runtime does not. bob
+bundles the program with esbuild and wraps it in `bin/hello`, which runs the pinned Node.
 
 ```text file=go.mod
 module example.com/hellots
@@ -200,9 +89,8 @@ go 1.26.0
 
 ## Lock, build, test, run
 
-`bob lock` resolves every importer's dependencies against the npm registry (semver ranges,
-peer and optional dependencies, platform packages) and pins each package with its integrity
-hash:
+`bob lock` resolves vitest and everything it needs from the npm registry and pins each
+package with its integrity hash:
 
 ```bash run
 bob lock
@@ -212,100 +100,50 @@ bob lock
 bob.lock: … changes
   + nixpkgs  nixpkgs   …
 …
-  + npm      zod   4.…
+  + npm      vitest   3.…
 ```
 
 ```bash run
 bob build
-```
-
-```text expect
-built   //app:app
-built   //greet:greet
-built   //web:web
-bob: 3 built
-```
-
-```bash run
 bob test
+bob run //:hello
 ```
 
 ```text expect
-PASS    //greet:test (…s)
+built   //:hello
+bob: 1 built
+PASS    //:test (…s)
 bob: 1 passed, 0 failed, 0 cached
-```
-
-```bash run
-bob run //app:app -- bob
-```
-
-```text expect
 hello, bob
 ```
 
-The site's output is the static `dist` directory of `vite build`. `--print-paths` shows where
-it is:
+## Editor support
+
+bob writes `package.json`, `tsconfig.json` and `node_modules` (links into bob's store), so the
+TypeScript language server resolves every import. Node, `tsc` and the commands of your direct
+dependencies are in the dev shell:
 
 ```bash run
-bob build //web:web --print-paths
-```
-
-```text expect
-//web:web …/nix/store/…-web
-```
-
-## Lifecycle scripts
-
-bob does not run npm `install`/`postinstall` scripts unless you allow them per package.
-A package that needs one fails with `BOB-E-2013` and a hint. Allow it in the importer's
-options; the script then runs sandboxed and offline:
-
-```go
-Options: []npm.Option{npm.AllowScripts("esbuild", "better-sqlite3")},
-```
-
-## Editor support and the dev server
-
-bob writes `package.json`, `tsconfig.json` and `node_modules` (links into bob's store) in each
-importer directory, so the TypeScript language server resolves every import. Commands of your
-direct dependencies (`tsc`, `vite`, `vitest`) are on `PATH` inside the dev shell:
-
-```bash run
-bob dev -- sh -c 'node --version; command -v vite'
+bob dev -- sh -c 'node --version; vitest --version'
 ```
 
 ```text expect
 bob: dev shell default (… node 24.… · …
 v24.…
-…/web/node_modules/.bin/vite
+vitest/3.…
 ```
 
-Run the Vite dev server with hot reload from the dev shell:
+## Libraries, sites and scripts
 
-```bash
-bob dev -- sh -c 'cd web && vite'
-```
+- `npm.Library` builds a TypeScript library that other importers depend on by value.
+- `npm.Vite` builds a static site with `vite build`. Run its dev server inside the dev shell
+  (`bob dev -- sh -c 'vite'`); `bob dev` does not start dev servers by itself yet.
+- Packages with install scripts must be allowed: `npm.AllowScripts("esbuild")` (otherwise
+  `BOB-E-2013`).
 
-To check it from a script, start it in the background on a fixed port and fetch a module:
-
-```bash run
-bob dev -- sh -c 'cd web && exec vite --port 5199 --strictPort' > vite.log 2>&1 &
-sleep 15
-curl -s http://localhost:5199/src/main.ts | head -1
-```
-
-```text expect
-import { greet } from "/node_modules/.vite/deps/@hello_greet.js…";
-```
-
-> [!WARNING]
-> Declaring dev servers in a dev shell (`bob.DevShell{Servers: …}`) is accepted, but
-> `bob dev` does not start them yet: it reports `dev shell default has no dev servers`. Start
-> Vite yourself inside `bob dev`, as above.
+See the [bob.go reference](../04-guides/01-bob-go-reference.md#typescript-and-npm).
 
 ## Next steps
 
-- All npm options (Bun runtime, hoisted layout, phantom dependencies, test runners):
-  [bob.go reference](../04-guides/01-bob-go-reference.md#typescript-and-npm).
-- Generate a typed API client: [Code generation quickstart](06-codegen.md).
-- Ship the site or the program: [Images, tarballs and AppImages](07-outputs.md).
+- [Code generation quickstart](06-codegen.md).
+- Ship it: [Images, tarballs and AppImages](07-outputs.md).

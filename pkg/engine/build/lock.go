@@ -214,7 +214,7 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		}
 		e, err := resolveSource(ctx, f, n.Label, s, want)
 		if err != nil {
-			return nil, err
+			return nil, offlineError(n.Label, err)
 		}
 		if lf.Sources == nil {
 			lf.Sources = map[string]lock.Source{}
@@ -230,7 +230,7 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		if missing := missingSections(g, lf); len(missing) > 0 {
 			return nil, diag.New(1012, "what", missing[0]+" is not locked and --offline forbids locking it")
 		}
-	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, nil, lazyIndex(st, f, g, lf)); err != nil {
+	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, r.o.Offline, nil, lazyIndex(st, f, g, lf)); err != nil {
 		return nil, err
 	}
 	after, err := lf.Encode()
@@ -293,8 +293,10 @@ func lazyIndex(st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) fun
 // bob.lock has no section for). Sections that bob.lock cannot hold (an ecosystem without a
 // lock section key) are left to their ecosystem. index opens the nixpkgs index the resolvers
 // read pinned toolchain versions from (LockRequest.Nixpkgs: npm's engines check, Rust's
-// rust-version fallback); nil passes none.
-func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, root string, update []string, all, onlyMissing bool, note func(string),
+// rust-version fallback); nil passes none. offline (--offline) keeps every section that is
+// present, fresh (engine.LockFreshness) and not named by --update, and refuses to resolve any
+// other: the resolvers download registry metadata and sources (BOB-E-3002, A456).
+func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.File, root string, update []string, all, onlyMissing, offline bool, note func(string),
 	index func(context.Context) (*nixidx.Index, error)) ([]LockChange, error) {
 	ecos, err := ecosystemsOf(g)
 	if err != nil {
@@ -309,6 +311,12 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 		upd := update
 		if all {
 			upd = []string{}
+		}
+		if offline {
+			if err := offlineSection(ctx, e, g, lf, f, root, len(update) > 0 || all); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		var idx *nixidx.Index
 		if index != nil {
@@ -340,6 +348,34 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 		}
 	}
 	return changes, nil
+}
+
+// offlineSection checks that bob lock --offline can keep e's section as it is: present, not
+// to be moved (update) and fresh. Anything else needs the network.
+func offlineSection(ctx context.Context, e engine.Ecosystem, g *ir.Graph, lf *lock.File, f fetch.Fetcher, root string, update bool) error {
+	name := e.Name()
+	refuse := func(why string) error {
+		return diag.New(3002, "label", "bob.lock section "+name, "reason", why+", which needs the network (--offline)", "attempts", "0")
+	}
+	prev := lf.Sections[name]
+	switch {
+	case prev == nil:
+		return refuse("it is not locked yet")
+	case update:
+		return refuse("bob lock --update resolves it again")
+	}
+	lfr, ok := e.(engine.LockFreshness)
+	if !ok {
+		return nil
+	}
+	what, _, err := lfr.Stale(ctx, engine.LockRequest{Graph: g, Prev: prev, Fetch: f, Root: root})
+	if err != nil {
+		return err
+	}
+	if what != "" {
+		return refuse(what)
+	}
+	return nil
 }
 
 // missingSections are the lock sections of g's ecosystems that bob.lock does not have.
@@ -395,7 +431,14 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		}
 	}
 	old := *lf
-	f := fetch.New(st, fetch.Policy{})
+	var f fetch.Fetcher = fetch.New(st, fetch.Policy{})
+	var channelRev func(context.Context, string) (string, error) // nil: lock.ChannelRev
+	if o.Offline { // --offline: what the store holds and the pins bob.lock has, nothing else (A456)
+		f = offlineFetcher{st: st}
+		channelRev = func(context.Context, string) (string, error) {
+			return "", fmt.Errorf("the channel's current revision: %w", errOffline)
+		}
+	}
 	updates := map[string]bool{}
 	for _, u := range lo.Update {
 		updates[u] = true
@@ -421,9 +464,9 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 				prev.Channel = spec.Channel // keep the salvaged revision
 			}
 		}
-		pin, err := lock.PinNixpkgs(ctx, f, decl, prev, lo.All || updates["nixpkgs"], nil)
+		pin, err := lock.PinNixpkgs(ctx, f, decl, prev, lo.All || updates["nixpkgs"], channelRev)
 		if err != nil {
-			return nil, err
+			return nil, offlineError("nixpkgs", err)
 		}
 		if pin.Rev != old.Nixpkgs.Rev {
 			op := "update"
@@ -453,7 +496,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		}
 		e, err := resolveSource(ctx, f, n.Label, s, want)
 		if err != nil {
-			return nil, err
+			return nil, offlineError(n.Label, err)
 		}
 		sources[n.Label] = e
 		switch {
@@ -474,7 +517,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 	}
 
 	var notes []string
-	ecoChanges, err := lockEcosystems(ctx, f, g, lf, o.Root, lo.Update, lo.All, false, func(n string) { notes = append(notes, n) },
+	ecoChanges, err := lockEcosystems(ctx, f, g, lf, o.Root, lo.Update, lo.All, false, o.Offline, func(n string) { notes = append(notes, n) },
 		lazyIndex(st, f, g, lf))
 	if err != nil {
 		return nil, err
@@ -508,6 +551,14 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+// offlineError is err as BOB-E-3002 when it is the offline fetcher's refusal (--offline).
+func offlineError(what string, err error) error {
+	if errors.Is(err, errOffline) {
+		return diag.New(3002, "label", what, "reason", err.Error()+" (--offline)", "attempts", "0")
+	}
+	return err
 }
 
 func short(rev string) string {

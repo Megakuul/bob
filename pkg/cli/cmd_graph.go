@@ -201,7 +201,7 @@ func runGraph(e *env) int {
 	why := e.a.vals["why"]
 	var whyPaths [][]string
 	if len(why) >= 2 {
-		from, to := why[len(why)-2], why[len(why)-1]
+		from, to := resolvePattern(e.relDir(root), why[len(why)-2]), resolvePattern(e.relDir(root), why[len(why)-1])
 		for _, l := range []string{from, to} {
 			if _, ok := g.nodes[l]; !ok {
 				return e.out.fail(diag.New(3, "pattern", l))
@@ -230,9 +230,9 @@ func runGraph(e *env) int {
 		g = g.reverse()
 	}
 	var roots []string
-	pats := e.a.pos
-	if len(pats) == 0 && !e.a.bool("rdeps") {
-		pats = e.patterns(root, nil)
+	var pats []string
+	if len(e.a.pos) > 0 || !e.a.bool("rdeps") {
+		pats = e.patterns(root, e.a.pos)
 	}
 	for l := range g.nodes {
 		for _, p := range pats {

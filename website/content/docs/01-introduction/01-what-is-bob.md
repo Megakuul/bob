@@ -11,7 +11,7 @@ On this page you learn what bob is, what it is good at, and how its two programs
 
 bob is a build system. You describe your software in small Go files named `bob.go`, next to
 the code they describe. bob turns those descriptions into many small, cached, sandboxed build
-steps and runs them with an embedded copy of [Nix](https://nixos.org). You never write Nix,
+steps and runs them with [Nix](https://nixos.org). You never write Nix,
 and you never see a Nix error: bob reports problems in its own words, with the position in
 your `bob.go`.
 
@@ -58,8 +58,8 @@ shared caching, remote builds on a worker fleet, CI pipelines and a place to pub
 ## Where bob runs
 
 bob runs on Linux, on `x86_64` (amd64) and `aarch64` (arm64). It needs unprivileged user
-namespaces, which most distributions allow. It does not need root, a system Nix, Docker, or a
-daemon. See [Requirements](../02-install/01-requirements.md).
+namespaces, which most distributions allow. It does not need root, Docker or a daemon, and
+the AppImage does not even need Nix. See [Requirements](../02-install/01-requirements.md).
 
 ## Next steps
 

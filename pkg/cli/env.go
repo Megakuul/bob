@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -66,13 +67,60 @@ func (e *env) root(orGit bool) (string, error) { return findRoot(e.cwd, orGit) }
 // package below the current directory (SPEC §02.1).
 func (e *env) patterns(root string, pos []string) []string {
 	if len(pos) > 0 {
-		return pos
+		out := make([]string, len(pos))
+		for i, p := range pos {
+			out[i] = resolvePattern(e.relDir(root), p)
+		}
+		return out
 	}
+	if rel := e.relDir(root); rel != "" {
+		return []string{"//" + rel + "/..."}
+	}
+	return []string{"//..."}
+}
+
+// relDir is the current directory relative to root, "" at the root or outside it.
+func (e *env) relDir(root string) string {
 	rel, err := filepath.Rel(root, e.cwd)
-	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
-		return []string{"//..."}
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, "../") {
+		return ""
 	}
-	return []string{"//" + filepath.ToSlash(rel) + "/..."}
+	return filepath.ToSlash(rel)
+}
+
+// resolvePattern makes a command-line label or pattern absolute (SPEC R-FW-015: the relative
+// forms ":name", "./...", "." resolve against the current directory rel, A455) and writes the
+// short form "//dir" as the label it stands for, "//dir:<last element of dir>" (the pattern
+// grammar's "//a/b" = "//a/b:b"). "." is every package of the current directory
+// ("//rel:all"); "./<dir>…" is "<dir>…" below it. Everything else is returned unchanged.
+func resolvePattern(rel, p string) string {
+	abs := func(dir string) string {
+		switch {
+		case rel == "":
+			return dir
+		case dir == "":
+			return rel
+		}
+		return rel + "/" + dir
+	}
+	switch {
+	case p == ".":
+		return "//" + abs("") + ":all"
+	case p == "./...":
+		if rel == "" {
+			return "//..."
+		}
+		return "//" + rel + "/..."
+	case strings.HasPrefix(p, ":"):
+		return "//" + abs("") + p
+	case strings.HasPrefix(p, "./"):
+		p = "//" + abs(strings.TrimPrefix(p, "./"))
+	}
+	if dir, ok := strings.CutPrefix(p, "//"); ok && dir != "" && dir != "..." &&
+		!strings.ContainsAny(dir, ":@") && !strings.HasSuffix(dir, "/...") {
+		return p + ":" + path.Base(dir)
+	}
+	return p
 }
 
 // configDir is $XDG_CONFIG_HOME/bob (default ~/.config/bob).

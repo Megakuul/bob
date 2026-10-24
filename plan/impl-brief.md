@@ -14,6 +14,9 @@ Done for a task = its covered R-id tests pass WITHOUT any `red:` text (run them 
 `go test <pkg> -run <Test> -count=1`, `export CGO_ENABLED=0` if gcc is missing), `gofmt -l` empty,
 `GOWORK=off go vet` clean for packages you touched, `go run ./tools/ci -only fmt,vet,lint,layering`
 passes, and the full set of tests you did not intend to change does not get worse.
+Docs (AGENTS.md §5.9): update `website/content/docs/` in the same change as any public-surface
+change and add `docs:` notes to your progress file; `go run ./tools/ci -only docs` must pass
+(or the change carries `docs-exempt: <reason>`).
 Guardrails: no panic/log.Fatal/os.Exit outside main; recover at goroutine/RPC boundaries;
 `pkg/` never imports `internal/`; errors wrapped with %w; context on I/O; no global mutable state;
 licences: any new dependency needs a licence check (AGPL-compatible) and an ATTRIBUTION.md row.

@@ -2,29 +2,22 @@
 title: Rust quickstart
 section: Quickstart
 order: 3
-summary: Build a Rust library crate and a binary with crates.io dependencies - bob compiles every crate separately, without Cargo.
+summary: Build, test and run a tiny Rust program with bob - one crate, compiled with rustc from nixpkgs, without Cargo.
 ---
 
-In this quickstart you build a Rust library crate with a unit test and a binary that uses it
-and two crates from crates.io. bob resolves the crates like Cargo, pins them in `bob.lock`,
-and compiles one crate per build step. It also writes `Cargo.toml` files so rust-analyzer and
-`cargo` keep working.
+In this quickstart you build a one-file Rust program with a unit test. bob compiles it with
+rustc from nixpkgs and writes a `Cargo.toml` so rust-analyzer and `cargo` keep working.
 
-You need [bob installed](../02-install/02-install-bob.md). You do not need Rust installed: rustc
-comes from nixpkgs.
+You need [bob installed](../02-install/02-install-bob.md). You do not need Rust installed.
 
 ## The project
 
-```text
-hello-rust/
-├── go.mod              needed to evaluate bob.go
-├── bob.go              nixpkgs pin
-├── greet/
-│   ├── bob.go          library crate "greet" and its tests
-│   └── src/lib.rs
-└── hello/
-    ├── bob.go          binary crate "hello"
-    └── src/main.rs
+```tree
+📁 hello-rust/
+  📄 go.mod
+  📄 bob.go
+  📁 src/
+    🦀 main.rs
 ```
 
 ```bash
@@ -34,98 +27,49 @@ git init
 
 ## Write the code
 
-`greet/src/lib.rs` uses the `itoa` crate and has one unit test:
+```rust file=src/main.rs
+fn greeting(name: &str) -> String {
+    format!("hello, {name}")
+}
 
-```rust file=greet/src/lib.rs
-//! Greetings.
-
-/// Returns a greeting for `name` with the number formatted by itoa.
-pub fn hello(name: &str, n: u64) -> String {
-    let mut buf = itoa::Buffer::new();
-    format!("hello, {name} #{}", buf.format(n))
+fn main() {
+    println!("{}", greeting("bob"));
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn hello_formats() {
-        assert_eq!(super::hello("bob", 7), "hello, bob #7");
+    fn greets() {
+        assert_eq!(super::greeting("bob"), "hello, bob");
     }
 }
 ```
 
-`hello/src/main.rs` uses the local crate and `anyhow`:
-
-```rust file=hello/src/main.rs
-fn main() -> anyhow::Result<()> {
-    let name = std::env::args().nth(1).unwrap_or_else(|| "world".to_string());
-    println!("{}", greet::hello(&name, 42));
-    Ok(())
-}
-```
-
 ## Describe the build
-
-A crate's name defaults to its directory name, and its root to `src/lib.rs` or
-`src/main.rs`. Dependencies take a Cargo version requirement:
-
-```go file=greet/bob.go
-//go:build bob
-
-package greet
-
-import (
-	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/rust"
-)
-
-// Lib is the greet library crate (label //greet:greet).
-var Lib = bob.Define(func(p *bob.P) *rust.Lib {
-	return rust.Library(p, rust.LibOpts{
-		Deps: []rust.Dep{rust.Crate("itoa", "1")},
-	})
-})
-
-// Test runs the unit tests of greet (label //greet:greet_test).
-var Test = bob.Define(func(p *bob.P) *rust.TestSet {
-	return rust.Test(p, rust.TestOpts{Crate: Lib(p)})
-})
-```
-
-A local crate is a dependency like a crates.io crate: pass the value.
-
-```go file=hello/bob.go
-//go:build bob
-
-package hello
-
-import (
-	"example.com/hellorust/greet"
-	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/rust"
-)
-
-// Bin is bin/hello (label //hello:hello).
-var Bin = bob.Define(func(p *bob.P) *rust.Bin {
-	return rust.Binary(p, rust.BinOpts{
-		Deps: []rust.Dep{greet.Lib(p), rust.Crate("anyhow", "1")},
-	})
-})
-```
-
-The root `bob.go` pins nixpkgs, which decides the Rust version:
 
 ```go file=bob.go
 //go:build bob
 
 package hellorust
 
-import "github.com/megakuul/bob/pkg/bob"
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/rust"
+)
 
 var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+
+var Hello = bob.Define(func(p *bob.P) *rust.Bin {
+	return rust.Binary(p, rust.BinOpts{Name: "hello"})
+})
+
+var Test = bob.Define(func(p *bob.P) *rust.TestSet {
+	return rust.Test(p, rust.TestOpts{Crate: Hello(p)})
+})
 ```
 
-And the `go.mod` every bob repository needs today:
+The crate root is `src/main.rs` by default. Without `Name`, the crate is named after its
+directory.
 
 ```text file=go.mod
 module example.com/hellorust
@@ -135,27 +79,17 @@ go 1.26.0
 
 ## Lock, build, test, run
 
-`bob lock` resolves the crates against the crates.io index, the way Cargo's resolver would,
-and writes every crate with its checksum and features to `bob.lock`:
-
 ```bash run
 bob lock
-```
-
-```text expect
-bob.lock: 2 changes
-  + nixpkgs  nixpkgs   …
-  + rust     rust
-```
-
-```bash run
 bob build
 ```
 
 ```text expect
-built   //greet:greet
-built   //hello:hello
-bob: 2 built
+…
+  + nixpkgs  nixpkgs   …
+…
+built   //:hello
+bob: 1 built
 ```
 
 ```bash run
@@ -163,66 +97,47 @@ bob test
 ```
 
 ```text expect
-PASS    //greet:greet_test (…s)
+PASS    //:hello_test (…s)
 bob: 1 passed, 0 failed, 0 cached
 ```
 
 ```bash run
-bob run //hello:hello -- bob
+bob run //:hello
 ```
 
 ```text expect
-hello, bob #42
+hello, bob
 ```
 
-Each crate (yours and every crates.io crate) is its own build step. Change `greet/src/lib.rs`
-and only `greet`, `hello` and the test rebuild; `anyhow` and `itoa` stay cached.
+## Crates from crates.io
 
-## Generated Cargo files
+Add a dependency with a Cargo version requirement and run `bob lock`. bob resolves it like
+Cargo, pins every crate with its checksum in `bob.lock`, and compiles each crate as its own
+cached step:
 
-bob writes a Cargo workspace for tooling: `Cargo.toml` at the root and in each crate,
-`Cargo.lock`, and `.cargo/config.toml`. The versions match `bob.lock` exactly:
+```go
+rust.Binary(p, rust.BinOpts{
+	Name: "hello",
+	Deps: []rust.Dep{rust.Crate("anyhow", "1"), rust.Crate("serde", "1", rust.Features("derive"))},
+})
+```
+
+## Editor support
+
+bob writes `Cargo.toml`, `Cargo.lock` and `.cargo/config.toml` for tooling. Do not edit them;
+bob never runs Cargo to build. `cargo` and rust-analyzer are in the dev shell:
 
 ```bash run
-cat hello/Cargo.toml
-```
-
-```text expect
-# generated by bob from bob.go — do not edit
-[package]
-name = "hello"
-…
-[dependencies]
-anyhow = { version = "=…" }
-greet = { path = "../greet" }
-```
-
-Do not edit them; change `bob.go` instead. bob never runs Cargo to build, but `cargo check`
-and rust-analyzer work in the dev shell:
-
-```bash run
-bob dev -- sh -c 'cargo --version; command -v rust-analyzer'
+bob dev -- sh -c 'cargo --version'
 ```
 
 ```text expect
 bob: dev shell default (… rustc 1.95.0, cargo 1.95.0, rust-analyzer … · …
 cargo 1.95.0 …
-/nix/store/…-rust-analyzer-…/bin/rust-analyzer
 ```
-
-## Features, build scripts and C code
-
-- Enable features of a dependency: `rust.Crate("serde", "1", rust.Features("derive"))`;
-  turn off its defaults with `rust.NoDefaultFeatures()`.
-- Declare your crate's own features with `LibOpts.Features` and `LibOpts.Default`.
-- A `build.rs` next to `Cargo.toml` (in the crate directory) runs automatically.
-- Give a crates.io crate's build script a native library:
-  `Options: []rust.Option{rust.Uses("openssl-sys", nixpkgs.Lib(p, "openssl"))}`.
-- Link bob C/C++ libraries into a crate with `Native`, or build a crate for C consumers with
-  `rust.StaticLib` / `rust.CDylib`. See [Multi-language projects](../04-guides/03-multi-language.md).
 
 ## Next steps
 
-- All Rust options: [bob.go reference](../04-guides/01-bob-go-reference.md#rust).
-- [Dependencies and locking](../04-guides/02-dependencies-and-locking.md): updating crates.
+- Libraries, features, build scripts, C interop: [bob.go reference](../04-guides/01-bob-go-reference.md#rust).
+- [Multi-language projects](../04-guides/03-multi-language.md): a Rust static library in a Go program.
 - Ship it: [Images, tarballs and AppImages](07-outputs.md).

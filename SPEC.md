@@ -1523,10 +1523,18 @@ type Fixup struct {
   `nix-env`, `nix-hash`, `nix-daemon` → `nix`. Later runs only stat. The host's `nix` is never
   executed. `ATTRIBUTION.md` lists Nix (LGPL-2.1-or-later), its static dependencies and busybox
   (GPL-2.0) with source locations (D52).
+  **Flake variant (ADR 0002a, owner chat 2026-10-24):** bob built from the repository's
+  `flake.nix` (`go build -tags nixsystem`) embeds no Nix; instead the absolute path of a static
+  Nix 2.34.x from its own Nix closure is set at link time, and on first use that binary is
+  checked (statically linked, `nix --version` reports Nix in the 2.34 series, at least 2.34.0;
+  otherwise BOB-E-1026 with the fix) and copied to `<home>/bin/nix-<first 12 hex of sha256 of its
+  path>/bin/nix` with the same symlinks, temp dir and atomic rename; everything after that (store,
+  namespace, nix.conf, flags) is as above. The AppImage and `scripts/bootstrap.sh` builds always
+  embed Nix as stated above.
 - **Acceptance:** under `env -i PATH=/usr/bin:/bin` as a user without Nix, `bob build` of
   `examples/cpp-lib` works; first extraction ≤ 500 ms [8c/15G] (measured 294 ms); `strace -f -e
   execve` shows no exec of a `nix` outside `<home>/bin`.
-- **Source:** R-NIX-020/023, D50, D52, ADR 0002 Decisions 2–3.
+- **Source:** R-NIX-020/023, D50, D52, ADR 0002 Decisions 2–3, ADR 0002a.
 
 #### R-NIX-021 Namespace mechanism
 - **Statement:** As ADR 0002 Decision 1: re-exec of `/proc/self/exe` with

@@ -68,6 +68,7 @@ when a later stage fails.
 | 7 | `licence` | Go dependency licences (`go-licenses report` over `./cmd/...`, checked against `tools/ci/licences.allow`: MIT, BSD-2/3, Apache-2.0, ISC, MPL-2.0, Unlicense, CC0, Zlib. Anything else fails unless it is listed with an owner-approval reference.) Web dependencies are checked through `web/package-lock.json` licence fields with the same allowlist. A check also verifies that every file under `assets/`, `web/static/` and every embedded binary (static Nix, AppImage runtimes, busybox) has a row in `ATTRIBUTION.md`. |
 | 8 | `proto` | `buf lint`; `buf breaking --against '.git#branch=main'` (before the first release, `main`; after it, the last release tag) |
 | 9 | `web` | `svelte-check --fail-on-warnings`, the web dependency allowlist test (R-UI-005), `vite build`, bundle-size budget (R-UI-007) |
+| 9 | `docs` | documentation guardrail (§17): `go test ./tests/docs` (docs against the CLI table, the API packages, the error codes, the server variables; snippets, links, frontmatter) and the change-coupling rule |
 | 10 | `unit` | `go test -race -shuffle=on -count=1 ./...` including fuzz seed corpora and goleak checks |
 | 11 | `golden` | golden suite (§3) |
 | 12 | `errors` | error-quality suite (§5) |
@@ -838,3 +839,83 @@ report. After approval, protection (§2.1) is enforced.
 6. Pinned Node + `npm ci` for `web/` until bob builds it (§1.4).
 7. Owner SSH signing key for protected changes (§2.1).
 8. `tools/devstack` stays a harness tool, not a `bob-server dev` command (§13.2).
+
+---
+
+## 17. Documentation guardrail (stage `docs`)
+
+The user documentation lives in `website/content/docs/<NN-section>/<NN-page>.md` (rendered by
+the static site in `website/`). It must stay upstream of the implementation (AGENTS.md §5.9).
+Stage `docs` (order 9, part of `go run ./tools/ci` and `-fast`) runs two checks.
+
+### 17.1 `go test ./tests/docs`
+
+Plain Go tests (no build tag, no network, no Nix; they also run in the `unit` stage):
+
+| Test | Fails when |
+|---|---|
+| `TestFrontmatter` | a page lacks exactly the keys `title`, `section`, `order`, `summary`; `order` differs from the file's `NN`; a section title differs within a directory; a page has an `#` heading or does not end with `## Next steps`. Pages with `placeholder: true` (the website unit's stand-ins) are skipped. |
+| `TestLinks` | a relative link names a file that is not a page, or an anchor that no heading of the target produces (anchors as the website renders them: `website/src/lib/server/markdown.ts` `slugify`); absolute and repository-file links are refused |
+| `TestCLIReference` | a command or flag of the command table (`commands()` in `pkg/cli/cli.go`, read with go/ast) or a global flag (`globalFlags` in `pkg/cli/args.go`) has no `### bob <cmd>` section or flags-table row in `05-cli/01-commands.md`; the page documents a command or flag that does not exist; `## Exit codes` lacks a status that `diag.ExitCode` can return |
+| `TestAPIReference` | an exported function of a public API package (`apiPackages` in `surface_test.go`: `pkg/bob`, `pkg/nixpkgs`, the ecosystem, codegen, service and output packages, `pkg/release`) is not written as `pkg.Func` in the prose of some page; a package under `pkg/output` or `pkg/services` is missing from the list; the generated page `07-reference/02-api-index.md` differs from the source |
+| `TestErrorTable` | the generated page `05-cli/02-errors.md` differs from `diag.Codes()` / `diag.Lookup` |
+| `TestEnvironmentVariables` | a `BOB_*` literal of the non-test, non-`bobtest` Go files under `internal/` and `cmd/bob-server/` has no table row in `06-server/03-configuration.md`; one under `pkg/` and `cmd/bob` appears on no page; a page names a `BOB_*` variable that no code reads (`BOB_TEST_*` hooks are excluded) |
+| `TestServerModes` | a mode in bob-server's usage text is not documented in `06-server/` |
+| `TestSnippetsTypeCheck` | the `bob.go` files of a page's example project, or a standalone `verify` block, fail `go vet -tags=bob` in a scratch module whose `github.com/megakuul/bob` is replaced by this checkout (`GOFLAGS=-mod=mod GOPROXY=off`, the repository's `go.sum`) |
+
+Generated pages are regenerated with `BOB_DOCS_UPDATE=1 go test ./tests/docs`; review the diff.
+Their whole body is generated, because the website renders raw HTML (and so HTML comments) as
+text, so there is no invisible marker for a generated region.
+
+**Markers** are words after the language in a code fence's info string; the website shows only
+the language:
+
+| Fence | Meaning |
+|---|---|
+| ` ```go file=cmd/hello/bob.go ` | a file of the page's example project (any language; written in order, later blocks replace earlier ones) |
+| ` ```go verify ` | a complete `bob.go` file, type-checked on its own |
+| ` ```bash run ` (optionally `exit=<n>`) | commands the end-to-end test runs in the project directory |
+| ` ```text expect ` | lines the preceding run block must print, in order; `…` matches any text, a line of only `…` is skipped, white space runs compare equal |
+
+### 17.2 End-to-end run of the documented projects (opt-in)
+
+`TestQuickstartsE2E` builds every page's example project with a real bob: an empty git
+repository, the `file=` blocks written, the `run` blocks executed with `bash -e`, the `expect`
+blocks matched. It needs network and minutes per page, so it is skipped unless
+`BOB_DOCS_E2E` names a bob binary:
+
+```
+BOB_DOCS_E2E=$PWD/bob BOB_HOME=/var/tmp/docs-home BOB_DOCS_E2E_DIR=/var/tmp/docs-e2e \
+  go test ./tests/docs -run TestQuickstartsE2E -v -timeout 3h          # default: ^03-quickstart/
+BOB_DOCS_E2E_PAGES='^04-guides/0[36]' …                                 # other pages
+```
+
+Use a fresh `BOB_HOME` (outputs then say `built`, not `cached`). Background processes a block
+starts are killed when its page ends.
+
+### 17.3 Change-coupling rule
+
+After the tests, the stage compares the tree with a base commit: `$BOB_DOCS_BASE`, else the
+merge base of `HEAD` with the newest `docs-verified*` tag, `origin/HEAD`, `main` or `master`;
+on the default branch itself the base is `HEAD` when the work tree is dirty, else `HEAD~1`.
+Committed, uncommitted and untracked files count. git runs read-only
+(`GIT_OPTIONAL_LOCKS=0`). Without git or history the rule is skipped with a notice.
+
+The rule fails when the change touches a public surface and nothing under
+`website/content/docs/`:
+
+- `pkg/cli/cli.go`, `pkg/cli/args.go`, `pkg/bob/diag/codes.go`, `cmd/bob-server/main.go`,
+  `SPEC.md`, `spec/*.md`;
+- non-test Go files directly in the public API packages (`apiDirs` in
+  `tools/ci/stage_docs.go`);
+- non-test Go files under `internal/` and `cmd/bob-server/` whose changed lines add or remove a
+  `"BOB_…` literal.
+
+An exemption is a line `docs-exempt: <reason>` in a commit message since the base, or an added
+line of `plan/decisions.md` or a `plan/progress/*.md` file. Tagging a commit `docs-verified-<n>`
+after a docs review narrows the base for later changes.
+
+### 17.4 Validation
+
+Mutation results are in `docs/harness-validation.md` §4.
+

@@ -138,6 +138,18 @@ func (r *Runner) runMode(ctx context.Context, e Entry, mode, replay string, res 
 		}
 		return o, true
 	}
+	// A live run first builds everything the fault does not break; the three measured runs then
+	// start from the same store, so the -v run is comparable line by line with the default one
+	// (otherwise the packages the first run built show up as `cached` in the later runs).
+	if replay == "" {
+		warm, ok := run("")
+		if !ok {
+			return
+		}
+		if msg := crashed(warm); msg != "" {
+			res.failf("%s: `%s` (warm-up) %s", mode, strings.Join(warm.Args, " "), msg)
+		}
+	}
 	plain, ok1 := run("")
 	jsonOut, ok2 := run("--json")
 	verbose, ok3 := run("-v")

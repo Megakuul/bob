@@ -12,11 +12,28 @@ programs written in C/C++, Rust, TypeScript or OCaml.
 
 ## The project
 
-The Go project again, with the outputs declared next to the binary in `cmd/hello/bob.go`:
+The Go program of the [Go quickstart](01-go.md), with the outputs declared in `bob.go`:
+
+```tree
+📁 hello-ship/
+  📄 go.mod
+  📄 bob.go
+  📁 cmd/
+    📁 hello/
+      🐹 main.go
+```
 
 ```bash
 mkdir hello-ship && cd hello-ship
 git init
+```
+
+```go file=cmd/hello/main.go
+package main
+
+import "fmt"
+
+func main() { fmt.Println("hello, bob") }
 ```
 
 ```text file=go.mod
@@ -24,6 +41,9 @@ module example.com/hello
 
 go 1.26.0
 ```
+
+Each output takes the program by value (`Hello(p)`), so the image, the tarball and the
+AppImage contain exactly the binary that `bob build` produces:
 
 ```go file=bob.go
 //go:build bob
@@ -33,78 +53,37 @@ package hello
 import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/golang"
-)
-
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
-
-// Module is the Go module example.com/hello (label //:module).
-var Module = bob.Define(func(p *bob.P) *golang.Module {
-	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/hello", Go: "1.26"})
-})
-```
-
-```go file=cmd/hello/main.go
-// Command hello prints a greeting.
-package main
-
-import (
-	"fmt"
-	"os"
-)
-
-func main() {
-	name := "world"
-	if len(os.Args) > 1 {
-		name = os.Args[1]
-	}
-	fmt.Println("hello,", name)
-}
-```
-
-## Declare the outputs
-
-Each output takes the program by value (`Binary(p)`), so the image, the tarball and the
-AppImage all contain exactly the binary that `bob build` produces:
-
-```go file=cmd/hello/bob.go
-//go:build bob
-
-package main
-
-import (
-	"example.com/hello"
-	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/golang"
 	"github.com/megakuul/bob/pkg/output/appimage"
 	"github.com/megakuul/bob/pkg/output/oci"
 	"github.com/megakuul/bob/pkg/output/tarball"
 	"github.com/megakuul/bob/pkg/release"
 )
 
-// Binary is the hello command (label //cmd/hello:hello).
-var Binary = bob.Define(func(p *bob.P) *golang.Binary {
-	return hello.Module(p).Binary("./cmd/hello", golang.BinaryOpts{})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+
+var Module = bob.Define(func(p *bob.P) *golang.Module {
+	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/hello", Go: "1.26"})
 })
 
-// Image is an OCI image of hello for linux-amd64 and linux-arm64 (label //cmd/hello:hello-image).
+var Hello = bob.Define(func(p *bob.P) *golang.Binary {
+	return Module(p).Binary("./cmd/hello", golang.BinaryOpts{})
+})
+
 var Image = bob.Define(func(p *bob.P) *oci.Image {
-	return oci.NewImage(p, "hello-image", oci.ImageOpts{Program: Binary(p)})
+	return oci.NewImage(p, "hello-image", oci.ImageOpts{Program: Hello(p)})
 })
 
-// Tar is hello-tar-<platform>.tar.gz with hello and everything it needs (label //cmd/hello:hello-tar).
 var Tar = bob.Define(func(p *bob.P) *tarball.Tarball {
-	return tarball.New(p, "hello-tar", tarball.TarballOpts{Program: Binary(p), Kind: tarball.Closure})
+	return tarball.New(p, "hello-tar", tarball.TarballOpts{Program: Hello(p), Kind: tarball.Closure})
 })
 
-// Bundle is an AppImage of hello (label //cmd/hello:hello-appimage).
 var Bundle = bob.Define(func(p *bob.P) *appimage.Bundle {
-	return appimage.NewBundle(p, "hello-appimage", appimage.BundleOpts{Program: Binary(p)})
+	return appimage.NewBundle(p, "hello-appimage", appimage.BundleOpts{Program: Hello(p)})
 })
 
-// Release groups everything under one version (label //cmd/hello:hello-release).
 var Release = bob.Define(func(p *bob.P) *release.Release {
 	return release.New(p, "hello-release", release.ReleaseOpts{
-		Closures:  []bob.Executable{Binary(p)},
+		Closures:  []bob.Executable{Hello(p)},
 		Images:    []*oci.Image{Image(p)},
 		Tarballs:  []*tarball.Tarball{Tar(p)},
 		AppImages: []*appimage.Bundle{Bundle(p)},
@@ -113,27 +92,27 @@ var Release = bob.Define(func(p *bob.P) *release.Release {
 ```
 
 > [!NOTE]
-> A package is identified by its label. If you declare the same binary again in another
-> `bob.go` with different options, bob stops with `package //cmd/hello:hello is already
-> defined`. Declare outputs next to the program, or call the same function that declares it.
+> A package is identified by its label. Declaring the same binary again elsewhere with
+> different options fails with `package //cmd/hello:hello is already defined`. Declare outputs
+> next to the program, or call the function that declares it, as here.
 
 ## Build them
 
 ```bash run
 bob lock
-bob build //cmd/hello:hello-image //cmd/hello:hello-tar //cmd/hello:hello-appimage --print-paths
+bob build //:hello-image //:hello-tar //:hello-appimage --print-paths
 ```
 
 ```text expect
 …
+built   //:hello-appimage
+built   //:hello-image
+built   //:hello-tar
 built   //cmd/hello:hello
-built   //cmd/hello:hello-appimage
-built   //cmd/hello:hello-image
-built   //cmd/hello:hello-tar
 bob: 4 built
-//cmd/hello:hello-appimage …/nix/store/…-appimage-hello-appimage
-//cmd/hello:hello-image …/nix/store/…-oci-image-hello-image
-//cmd/hello:hello-tar …/nix/store/…-tarball-hello-tar-linux-…
+//:hello-appimage …/nix/store/…-appimage-hello-appimage
+//:hello-image …/nix/store/…-oci-image-hello-image
+//:hello-tar …/nix/store/…-tarball-hello-tar-linux-…
 ```
 
 The image has one manifest per platform. bob builds the Go program for the other
@@ -145,9 +124,9 @@ The AppImage is one executable file. It carries the program's closure and runs o
 machines without bob or Nix:
 
 ```bash run
-cp "$(bob build //cmd/hello:hello-appimage --print-paths | awk '/^\/\// {print $2}')"/*.AppImage hello.AppImage
+cp "$(bob build //:hello-appimage --print-paths | awk '/^\/\// {print $2}')"/*.AppImage hello.AppImage
 chmod +x hello.AppImage
-./hello.AppImage bob
+./hello.AppImage
 ```
 
 ```text expect
@@ -164,7 +143,7 @@ hello, bob
 `bob/` directory with the closure roots and licence data:
 
 ```bash run
-tar tzf "$(bob build //cmd/hello:hello-tar --print-paths | awk '/^\/\// {print $2}')"/*.tar.gz | head -3
+tar tzf "$(bob build //:hello-tar --print-paths | awk '/^\/\// {print $2}')"/*.tar.gz | head -3
 ```
 
 ```text expect
@@ -183,7 +162,7 @@ The image output is a standard OCI image layout directory (`index.json`, `oci-la
 `blobs/`):
 
 ```bash run
-ls "$(bob build //cmd/hello:hello-image --print-paths | awk '/^\/\// {print $2}')"
+ls "$(bob build //:hello-image --print-paths | awk '/^\/\// {print $2}')"
 ```
 
 ```text expect
@@ -195,8 +174,8 @@ oci-layout
 Copy it into a container engine with any tool that reads OCI layouts. With podman:
 
 ```bash
-podman pull oci:"$(bob build //cmd/hello:hello-image --print-paths | awk '/^\/\// {print $2}')"
-podman run --rm <image id> bob
+podman pull oci:"$(bob build //:hello-image --print-paths | awk '/^\/\// {print $2}')"
+podman run --rm <image id>
 ```
 
 ```text
@@ -220,12 +199,12 @@ A release is built with a version. Its output is a manifest, `release.json`, tha
 artifact for every platform:
 
 ```bash run
-bob build //cmd/hello:hello-release --version 1.0.0 --print-paths
-cat "$(bob build //cmd/hello:hello-release --version 1.0.0 --print-paths | awk '/^\/\// {print $2}')"/release.json | head -12
+bob build //:hello-release --version 1.0.0 --print-paths
+cat "$(bob build //:hello-release --version 1.0.0 --print-paths | awk '/^\/\// {print $2}')"/release.json | head -12
 ```
 
 ```text expect
-built   //cmd/hello:hello-release
+built   //:hello-release
 …
 {
   "artifacts": [

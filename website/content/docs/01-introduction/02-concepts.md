@@ -110,18 +110,26 @@ your `.gitignore`.
 
 bob keeps build outputs in its own store, in your home directory:
 
-```text
-~/.local/share/bob/          (or $BOB_HOME)
-├── nix/store/               build outputs, one directory per output
-├── nix/var/                 the store database
-├── bin/nix-<hash>/          the embedded Nix, unpacked on first use
-├── etc/nix/nix.conf         generated configuration (substituters, keys)
-└── cache/                   evaluation, download and index caches
+```tree
+📁 ~/.local/share/bob/
+  📁 nix/
+    📁 store/
+    📁 var/
+  📁 bin/
+  📁 etc/
+    📁 nix/
+      📄 nix.conf
+  📁 cache/
 ```
+
+`nix/store/` holds the build outputs, one directory per output, and `nix/var/` the store
+database. `bin/` holds the unpacked embedded Nix (AppImage and source builds), `etc/nix/nix.conf`
+the generated configuration (binary caches and their keys), and `cache/` evaluation, download
+and index caches.
 
 Inside bob, that directory is mounted at `/nix` in a private mount namespace, so store paths
 look like ordinary Nix store paths (`/nix/store/…`). This needs no root: bob uses unprivileged
-user namespaces. A system Nix installation, if there is one, is hidden and never touched.
+user namespaces. Your system's Nix store, if there is one, is hidden and never touched.
 
 `bob build --print-paths` prints where outputs are on the host
 (`~/.local/share/bob/nix/store/…`). You can read files there. Programs built by bob run
@@ -163,7 +171,9 @@ no clock. `bob check --determinism` evaluates twice and compares the results.
 
 ## How bob uses Nix
 
-bob embeds a static Nix (version 2.34.9) and uses it only as an engine:
+bob uses Nix only as an engine. Installed with Nix (a Nix profile or NixOS), bob runs the Nix
+that installed it; the AppImage and source builds embed a static Nix (version 2.34.9). Either
+way bob uses its own store and configuration:
 
 1. bob compiles your `bob.go` files into a small evaluator program and runs it. The output
    is a build graph.

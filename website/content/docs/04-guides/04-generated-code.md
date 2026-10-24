@@ -40,6 +40,61 @@ mismatch") and tells you which requirement to remove.
 Each recipe owns exactly one directory. Two recipes cannot write the same directory, and a
 file of yours in an owned directory is refused (`BOB-E-1016`).
 
+## GraphQL, OpenAPI and TypeScript clients
+
+A schema is declared once and can feed several generators. This file declares a GraphQL
+schema and an OpenAPI document, generates Go code for both into a module, and TypeScript code
+into a Node program:
+
+```go verify
+//go:build bob
+
+package api
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+	"github.com/megakuul/bob/pkg/graphql"
+	"github.com/megakuul/bob/pkg/npm"
+	"github.com/megakuul/bob/pkg/openapi"
+)
+
+var Schema = bob.Define(func(p *bob.P) *graphql.Schema { return graphql.NewSchema(p, bob.Glob("*.graphqls")) })
+
+var Items = bob.Define(func(p *bob.P) *openapi.Spec { return openapi.NewSpec(p, "items.yaml") })
+
+var Module = bob.Define(func(p *bob.P) *golang.Module {
+	return golang.NewModule(p, golang.ModuleOpts{
+		Path: "example.com/api",
+		Go:   "1.26",
+		Generated: []golang.Generated{
+			graphql.Gqlgen(Schema(p), graphql.GqlgenOpts{}),
+			openapi.Go(Items(p), openapi.GoOpts{Package: "rest", Server: openapi.StdHTTP}),
+		},
+	})
+})
+
+var Client = bob.Define(func(p *bob.P) *npm.App {
+	return npm.NewApp(p, npm.AppOpts{
+		Name:  "client",
+		Entry: "src/client.ts",
+		Generated: []npm.Generated{
+			graphql.TS(Schema(p), graphql.TSOpts{Documents: bob.Glob("src/**/*.graphql")}),
+			openapi.TS(Items(p), openapi.TSOpts{}),
+		},
+	})
+})
+```
+
+- `graphql.Gqlgen` writes the executable schema and models to `gen/graph`; the resolvers
+  stay yours.
+- `openapi.Go` writes models and, with `Server: openapi.StdHTTP`, a `net/http` handler
+  interface to `gen/rest`.
+- The TypeScript recipes write to `gen/graphql` and `gen/openapi` of the importer.
+
+The repository fixture `tests/fixtures/repos/codegen` is a complete, tested project with a
+connect, GraphQL and REST server and Go and TypeScript clients.
+
 ## Caching and early cutoff
 
 Every generated tree is a package of its own: `//:gen-proto-greet-v1` for `gen/proto/greet/v1`

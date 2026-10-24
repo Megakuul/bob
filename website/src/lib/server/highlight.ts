@@ -1,5 +1,5 @@
 // A small hand-written syntax highlighter for the languages the docs use. It knows comments,
-// strings, numbers and keywords, nothing more: light highlighting on the existing palette
+// strings, numbers and keywords (go, bash, yaml, json, proto, ts, nix), nothing more: light highlighting on the existing palette
 // (classes t-k keyword, t-s string, t-c comment, t-n number/variable, t-p punctuation/prompt).
 // Input is raw source; output is escaped HTML.
 
@@ -19,6 +19,7 @@ const tsKw = words(`as async await break case catch class const continue default
 const protoKw = words(`syntax package import option message service rpc returns stream enum repeated
 	optional required map oneof reserved extend true false string bytes bool int32 int64 uint32 uint64
 	sint32 sint64 fixed32 fixed64 sfixed32 sfixed64 float double`);
+const nixKw = words(`let in with inherit rec if then else assert import true false null`);
 const shKw = words(`if then else elif fi for in do done while until case esac function return export
 	local set unset cd echo exit`);
 
@@ -45,6 +46,13 @@ const langs: Record<string, Rule[]> = {
 		sq,
 		{ re: /\$\{[^}\n]*\}|\$[A-Za-z_]\w*|\$[0-9@#?*!$]/y, cls: 't-n' },
 		{ re: /[A-Za-z_][\w-]*/y, cls: (m) => (shKw.has(m) ? 't-k' : '') }
+	],
+	nix: [
+		hashC,
+		blockC,
+		{ re: /"(?:[^"\\]|\\.|\$\{[^}]*\})*"?|''[\s\S]*?(?:''|$)/y, cls: 't-s' },
+		num,
+		{ re: /[A-Za-z_][\w'-]*/y, cls: (m) => (nixKw.has(m) ? 't-k' : '') }
 	],
 	yaml: [
 		hashC,

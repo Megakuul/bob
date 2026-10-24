@@ -312,6 +312,10 @@ func Enter(ctx context.Context, c Config) (inside bool, exit int, err error) {
 			return false, 0, accessError(err)
 		}
 	}
+	// The flake variant's Nix lives in the host store, which the namespace hides: copy it first.
+	if err := prepareNix(ctx, home); err != nil {
+		return false, 0, err
+	}
 	// Pdeathsig belongs to the thread that forks: keep this goroutine on one thread until the
 	// child is gone, so the child dies with the outer bob and never earlier.
 	runtime.LockOSThread()

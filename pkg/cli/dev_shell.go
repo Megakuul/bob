@@ -218,10 +218,7 @@ func (s *session) reportExits() int {
 // run runs the shell or command in the foreground and returns its exit status. ^C goes to it
 // from the terminal; SIGTERM and SIGHUP sent to bob are passed on.
 func (s *session) run(argv []string) int {
-	c := exec.Command(argv[0], argv[1:]...)
-	if p, err := lookTool(s.f, argv[0], s.env, identity); err == nil {
-		c.Path = p
-	}
+	c := devCommand(s.f, argv, s.env)
 	c.Env = s.env
 	c.Dir = s.e.cwd
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -249,6 +246,20 @@ func (s *session) run(argv []string) int {
 			return exitStatus(err)
 		}
 	}
+}
+
+// devCommand is the command for argv in the dev environment: the program is one of the
+// shell's tools or found on the dev environment's PATH, else on bob's own PATH. exec.Command
+// is not used: it searches only bob's PATH and its lookup error stays in Cmd.Err, which made
+// Start fail for a toolchain command (`bob dev -- go version`: BOB-E-0005, A454).
+func devCommand(f *devenv.File, argv, env []string) *exec.Cmd {
+	c := &exec.Cmd{Path: argv[0], Args: argv}
+	if p, err := lookTool(f, argv[0], env, identity); err == nil {
+		c.Path = p
+	} else if p, err := exec.LookPath(argv[0]); err == nil {
+		c.Path = p
+	}
+	return c
 }
 
 // serve is --servers-only: the servers in the foreground until a signal or until all ended.

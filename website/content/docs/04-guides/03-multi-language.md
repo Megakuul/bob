@@ -16,13 +16,31 @@ protobuf code generation and a Svelte frontend to the example below.
 
 ## The project
 
-```text
-polyglot/
-├── go.mod, bob.go            the Go module, the cgo declaration and the binary
-├── libs/foo/                 C++ library libfoo.so (OpenSSL)
-├── crates/rcore/             Rust static library librcore.a
-└── cmd/api/main.go           Go program using both through cgo
+```tree
+📁 polyglot/
+  📄 go.mod
+  📄 bob.go
+  📁 libs/
+    📁 foo/
+      📄 bob.go
+      📁 include/
+        📄 foo.h
+      📁 src/
+        📄 foo.cpp
+  📁 crates/
+    📁 rcore/
+      📄 bob.go
+      📁 include/
+        📄 rcore.h
+      📁 src/
+        🦀 lib.rs
+  📁 cmd/
+    📁 api/
+      🐹 main.go
 ```
+
+The root `bob.go` declares the Go module, the cgo package and the binary; `libs/foo` is a C++
+library (`libfoo.so`, using OpenSSL) and `crates/rcore` a Rust static library (`librcore.a`).
 
 ```bash
 mkdir polyglot && cd polyglot

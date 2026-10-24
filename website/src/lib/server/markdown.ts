@@ -3,6 +3,7 @@
 // a copy button and light highlighting, block quotes with [!NOTE]/[!TIP]/[!WARNING] callouts,
 // nested lists, tables and rules. Raw HTML in the source is escaped, not passed through.
 import { highlight, language } from './highlight';
+import { treeHTML, treeText } from './tree';
 
 export type Heading = { depth: number; text: string; id: string };
 
@@ -200,6 +201,13 @@ class Renderer {
 	}
 
 	code(body: string, info: string): string {
+		if (info.trim().split(/\s+/)[0] === 'tree') {
+			return (
+				`<div class="code tree"><div class="code-head"><span>tree</span>` +
+				`<button type="button" class="copy" data-copy data-copy-text="${esc(treeText(body))}" aria-label="Copy file tree">copy</button></div>` +
+				`<div class="tree-body" role="group" aria-label="File tree">${treeHTML(body)}</div></div>`
+			);
+		}
 		const lang = language(info);
 		const label = info.trim().split(/\s+/)[0] || 'text';
 		return (

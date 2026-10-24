@@ -75,3 +75,38 @@ are red for the stub reason, so they prove nothing.
 3. `protected` does not fail (row L, D68) against HARNESS §10 row 27.
 4. A single widened identity policy is caught statically, not by the live RustFS matrix (B2).
 5. `go run ./tools/ci selfcheck` does not exist, so none of this is repeatable by one command.
+
+## 4. Documentation guardrail (stage `docs`, HARNESS.md §17), W2 2026-10-24
+
+Run on a private copy (`/var/tmp/W2/repo`, deleted afterwards), one mutation at a time, each
+reverted before the next. Command: `go test ./tests/docs -run <test>` for the content checks;
+`go run ./tools/ci -only docs` in a git repository made of the copy for the coupling rule.
+
+| # | Planted fault | Caught by | Result |
+|---|---|---|---|
+| D1 | remove the `--rerun` row from `05-cli/01-commands.md` | `TestCLIReference` | caught: `flag --rerun of bob test is not in the section's flags table` |
+| D2 | add command `frobnicate` to the command table | `TestCLIReference` | caught: `command "frobnicate" (pkg/cli/cli.go) has no ### bob frobnicate section` |
+| D3 | add flag `--deep` to `bob doctor` | `TestCLIReference` | caught |
+| D4 | add global flag `--profile` | `TestCLIReference` | caught |
+| D5 | add exported `golang.Replace` | `TestAPIReference` | caught twice: not mentioned in prose; API index out of date |
+| D6 | add error code 0012 | `TestErrorTable` | caught: generated page out of date |
+| D7 | server reads new `BOB_SERVER_PUBLIC_URL` | `TestEnvironmentVariables` | caught |
+| D8 | CLI reads new `BOB_SERVER_URL` | `TestEnvironmentVariables` | caught |
+| D9 | config page renames `BOB_WORKER_SLOTS` to `BOB_WORKER_THREADS` | `TestEnvironmentVariables` | caught twice (missing and stale) |
+| D10 | link to a missing anchor | `TestLinks` | caught |
+| D11 | link to a missing page | `TestLinks` | caught |
+| D12 | unknown field in a quickstart `bob.go` | `TestSnippetsTypeCheck` | caught: `vet: ./bob.go:17:59: unknown field Nme` |
+| D13 | type error in a `verify` block | `TestSnippetsTypeCheck` | caught |
+| D14 | misspelled frontmatter key | `TestFrontmatter` | caught |
+| D15 | hand edit of the generated API index | `TestAPIReference` | caught |
+| D16 | new bob-server mode `replay` in the usage text | `TestServerModes` | caught |
+| D17 | comment change in `pkg/golang/golang.go`, no docs | coupling rule | caught: `the change touches the public surface but not website/content/docs/` |
+| D18 | D17 plus `docs-exempt: <reason>` in an untracked progress file | coupling rule | passes with the exemption printed |
+| D19 | D17 committed with `docs-exempt:` in the message | coupling rule | passes with the exemption printed |
+| D20 | new `"BOB_…` literal line in `internal/server/config.go`, no docs | coupling rule | caught: `internal/server/config.go (BOB_* variable)` |
+| D21 | D20 plus a docs page change | coupling rule | passes |
+| D22 | no `.git` | coupling rule | skipped with notice `not a git work tree` |
+
+On the shared tree the guardrail found a real gap on its first run: `BOB_SERVER_OUTBOUND_ALLOW`,
+added by another unit the same day, was undocumented (fixed in `06-server/03-configuration.md`).
+Unit tests of the rule: `tools/ci/stage_docs_test.go`.

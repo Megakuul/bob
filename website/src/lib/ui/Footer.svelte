@@ -8,7 +8,7 @@
 		<div class="flex flex-col gap-3">
 			<Logo />
 			<p class="max-w-[46ch] text-base text-muted">
-				Typed Go build definitions on an invisible Nix engine, plus a build and cache server that needs only S3.
+				One Go program describes your whole build: every language, the same result on every machine, one shared cache.
 			</p>
 		</div>
 		<nav class="flex flex-col gap-2 font-mono text-sm" aria-label="Footer">

@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -90,8 +92,8 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
-		return nil, fmt.Errorf("%w: %v", errNoGoMod, err)
+	if _, err := os.Lstat(filepath.Join(root, "go.mod")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 	tc, err := findToolchain(ctx, r.GoRoot)
 	if err != nil {
@@ -166,19 +168,56 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 	return &Result{IR: out.Graph, Cached: cached, Stderr: out.Stderr, Scan: scanTime}, nil
 }
 
+// newRepoModule is the module path of the bob.go files of a repository without a root go.mod
+// (a new repository: bob writes the root go.mod, R-FW-022, §03.2.5, A451). It is the path the
+// bob.go files import each other by (`import "example.com/app/libs"` from the root bob.go
+// with libs/bob.go: example.com/app); without such an import, the root directory's name
+// with the characters a module path element cannot hold removed ("repo" when nothing is left).
+// A Go module at the root names its own path in its generated go.mod; the root go.mod of
+// another repository keeps this path.
+func newRepoModule(root string, own map[string]*bobFile) string {
+	dirs := slices.Sorted(maps.Keys(own))
+	for _, d := range dirs {
+		for _, imp := range own[d].imports {
+			for _, od := range dirs {
+				if od == "." {
+					continue
+				}
+				if prefix, ok := strings.CutSuffix(imp.path, "/"+od); ok && prefix != "" && checkModulePath(prefix, true) == nil {
+					return prefix
+				}
+			}
+		}
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(filepath.Base(root)) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		}
+	}
+	if name := strings.Trim(b.String(), ".-"); name != "" && checkModulePath(name, true) == nil {
+		return name
+	}
+	return "repo"
+}
+
 // compile checks the rules, generates the evaluator's sources and compiles them in the sandbox
 // into .bob/eval/bin/bob-eval.
 func compile(ctx context.Context, r Request, root string, tc toolchain, fw *framework, scan *repoScan) error {
 	if err := scan.load(root); err != nil {
 		return err
 	}
-	rootMod := parseGoMod(scan.content["go.mod"])
-	if rootMod.module == "" {
-		return fmt.Errorf("%s has no module line", filepath.Join(root, "go.mod"))
-	}
 	own := map[string]*bobFile{}
 	for _, d := range scan.bobDirs {
 		own[d] = parseBob(d, bobPath(d), scan.content[bobPath(d)])
+	}
+	gm, haveGoMod := scan.content["go.mod"]
+	rootMod := parseGoMod(gm)
+	if !haveGoMod {
+		rootMod.module = newRepoModule(root, own)
+	}
+	if rootMod.module == "" {
+		return fmt.Errorf("%s has no module line", filepath.Join(root, "go.mod"))
 	}
 	if err := addBobImports(&rootMod, own); err != nil {
 		return err
@@ -232,6 +271,7 @@ func compile(ctx context.Context, r Request, root string, tc toolchain, fw *fram
 			{Host: root, Sandbox: srcDir},
 			{Host: modcache, Sandbox: modDir},
 			{Host: bin, Sandbox: binDir, Writable: true},
+			{Host: filepath.Join(gen, renameSub), Sandbox: renameDir},
 		},
 		Seed:     seed,
 		CacheDir: cache,

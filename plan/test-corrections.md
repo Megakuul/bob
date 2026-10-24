@@ -860,3 +860,74 @@ explained), T9 (polyglot has no nixpkgs.Tool("protobuf"): fixture decision), RFW
    unchanged. Result: the hash works; TestRCLI009Check now reaches its assertions and fails on
    commands_test.go:85 (bob check rewrites .bob/eval after a go.mod edit; TEST PROBLEM 1 in
    plan/progress/I-B42.md, needs a ruling, not applied).
+
+## I-B45 (2026-10-24, evidence-based test, harness and fixture corrections; evidence plan/progress/I-B45.md)
+89. APPLIED 2026-10-24 I-B45 (A381). tests/nix/layer_test.go TestRNIX002NixpkgsStaysUsable: with the
+   bob.go edit (Go "1.26" -> "1.25") the test also edits the fixture's committed root go.mod
+   `go 1.26.0` -> `go 1.25.0` (fails as a harness error if the line is missing). Before: the only
+   error event was BOB-E-1011 "generated file go.mod was edited by hand" (`~ go 1.25.0 → 1.26.0`):
+   a fresh copy has no .bob/state/native.json record that bob wrote go.mod, so the stale go line
+   is drift by R-FW-061 ("any difference fails"); deleting go.mod instead does not work (the
+   evaluator needs the root go.mod: BOB-E-9005 "the repository has no go.mod"). The commit that
+   lowers Go in bob.go carries the regenerated go.mod. The assertion (only 1008/2006 may fail
+   against nixos-25.11) is unchanged. Result: PASS (278 s).
+90. APPLIED 2026-10-24 I-B45 (A382). tests/nix/env_test.go recomputeClosure (TestRNIX006RecomputeHello):
+   Finalize gets a memoising resolver (new memoClosure: each derivation's hashDerivationModulo
+   computed once, as bob's own resolvers do, pkg/engine/build resolver.memo). parsedClosure
+   alone re-hashed every input once per path leading to it, exponential in the depth of the
+   stdenv bootstrap: the test ran > 75 min and hit the package timeout (I-B27, I-B44). The
+   comparison of every recomputed output path and drv path with the recorded ones is unchanged.
+   Result: PASS (156 s incl. the nixpkgs fetch; 228 derivations).
+91. APPLIED 2026-10-24 I-B45 (A383). tests/eco/golang helpers_test.go runGuest (+ build_test.go
+   callers, new dir argument; runEnvI removed, it had no other caller): the host-platform binary
+   runs through `bob env --format json` + `bob exec -- env -i /nix/store/<out>/bin/<prog>` in the
+   fixture with the same bob home, as correction 85 (RCC005a). SPEC §02.6: --print-paths host
+   paths `<home>/nix/store/…` run only through bob run/bob exec; executed directly the loader
+   looks in the host's /nix/store: `api: error while loading shared libraries: libfoo.so`
+   (TestRGO001a/linux-arm64 since I-B27). The other platform keeps qemu-user -L <home>. Result:
+   TestRGO001aBuildTestCrossAndReproducible PASS (both platforms).
+92. APPLIED 2026-10-24 I-B45 (A384). tests/eco/golang/resolve_test.go TestRGO002bBuildListEqualsGoCommand:
+   "bob.lock has no build list for workspace module" fires only when bob.lock has no entry for
+   the module; an empty build list is valid (the fixture's example.com/lib "has no third-party
+   requirements" per its bob.go; pkg/golang/gen/lock.go writes `{"go":"1.26.0","modules":[]}`;
+   `go list -m all` prints only the main module there). Result: the lib check passes; fixture-go
+   still fails on the cgo package (FEAT/RULE row in I-B45.md).
+93. APPLIED 2026-10-24 I-B45 (A385). tests/eco/golang/toolchain_test.go TestRGO004aToolchainPerModule:
+   (a) with lib/bob.go's Go lowered to 1.25 the test also edits lib/go.mod `go 1.26.0` -> `go 1.25.0`
+   (same cause as 89: BOB-E-1011 `~ go 1.25.0 → 1.26.0 (set Go in lib/bob.go)` before any build);
+   (b) a compile job is identified by `-p <pkg>` or `importPath <pkg>`: main packages are compiled
+   with `-p main` (as the go command does; measured: the job of example.com/api/cmd/api has
+   `"flags":["-p","main","-lang=go1.26"]` and `"importPath":"example.com/api/cmd/api"`), so
+   "no compile job found for example.com/api/cmd/api" was a matching error (stamp only matched
+   through its go-test job). Toolchain/-lang/std assertions unchanged. Result: PASS (162 s).
+94. APPLIED 2026-10-24 I-B45 (A386). tests/errors runner (catalogue.go, run.go) and fault 71:
+   (a) inject kind `env` (HARNESS §5.1) is implemented: fault.json `inject.env` (K=V list) is added
+   to bob's environment in live runs (a note when the list is empty); fault 71 gets
+   `"env": ["BOB_TEST_CLONE_ERRNO=EPERM"]` (the bobtest hook of R-NIX-022, as tests/rootless uses it).
+   Before, the runner ignored the kind and the build simply succeeded (exit 0).
+   (b) SPEC writes some codes as a `✗ <message>` line without an `error[CODE]:` head: 7005
+   (R-NIX-022 block, which tests/rootless checks line by line), 2013/2014 (§03.4.4), 2015
+   (R-OUT-007). For these the runner counts the code when a default-output line starts with
+   `✗ ` (+ for 7005 the exact head) and the --json stream of the same run has an error event
+   with that code (`markLines`, `jsonReports`); every other code still needs `error[CODE]`.
+   (c) expect.json 71 messages: the R-NIX-022 layout `\n  cause: ` and
+   `\n  fix (run once as an administrator):\n    <exact EPERM/container fix of the SPEC table>\n`
+   instead of `fix (run once as an administrator): ` (a trailing space SPEC's layout never prints);
+   fault.json 71 hint false (the R-NIX-022 block has the fix line in place of a hint line).
+   Result: TestRNIX022UserNamespacesBlockedFault PASS; tests/errors TestCatalogue,
+   TestRunnerClassifies, TestCheckJSON, TestMissingLine PASS.
+95. APPLIED 2026-10-24 I-B45 (A387). tests/errors/run.go live mode: one warm-up run of the fault's
+   command (crash-checked) before the three measured runs (default, --json, -v), so they start
+   from the same store. Before, the -v run (third) showed `cached` for packages the first run
+   printed as `built`, and "-v output lacks the default line \"built   //native:native\"" failed every
+   live fault with a successful sibling package (seen on 52, 53, 54). Checks unchanged.
+96. APPLIED 2026-10-24 I-B45 (A388). tests/faults/54-prune-needed-file/patch.diff authored (none
+   existed; I-B34 table): npm fixture native/bob.go gets an AppImage of //native:native with
+   `Prune: {"/nix/store/*-gcc-*-lib/lib/libstdc++.so*"}` and the `//bob:fault 54-prune-needed-file`
+   marker before `appimage.NewBundle` (the position bob reports). An OCI image was tried first: its
+   default platforms include x86_64, which an npm native addon cannot be cross-built for
+   (BOB-E-1010), so the AppImage (host platform) is used. Measured output: `✗ //native:native-appimage:
+   prune pattern "…libstdc++.so*" removes libstdc++.so.6, which libmerve.so.1.2.2 needs`, defined-at
+   with column, hint, exit 1. Result: TestRNIX017BuilderExitCodesInRealRuns/54 PASS (with 94b, 95).
+Not applied: fault 74 capture (needs an owner-approved golden; candidate in
+out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixture design, I-B45.md).

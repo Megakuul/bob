@@ -17,8 +17,9 @@ Check these before you install bob. Most Linux desktops and CI runners meet them
 
 bob refuses other architectures with `BOB-E-0008`. macOS and Windows are not supported.
 
-You do **not** need Nix, Docker, a C compiler, Go (except to build bob itself from source), or a
-daemon. bob brings its own Nix, and every toolchain comes from nixpkgs on first use.
+You do **not** need Docker, a C compiler, Go or a daemon: every toolchain comes from nixpkgs on
+first use. Nix is needed only if you install bob with Nix; the AppImage brings its own static
+Nix (see [Install bob](02-install-bob.md#which-nix-bob-uses)).
 
 ## Unprivileged user namespaces
 

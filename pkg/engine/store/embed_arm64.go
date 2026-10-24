@@ -1,3 +1,5 @@
+//go:build !nixsystem
+
 package store
 
 import "embed"

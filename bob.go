@@ -8,6 +8,7 @@ package bobrepo
 import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/golang"
+	"github.com/megakuul/bob/pkg/output/appimage"
 )
 
 var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
@@ -84,6 +85,19 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 // write them, scripts/bootstrap.sh runs both.
 var Bob = bob.Define(func(p *bob.P) *golang.Binary {
 	return Module(p).Binary("./cmd/bob", golang.BinaryOpts{CGo: golang.CGoOff})
+})
+
+// AppImage is the bob AppImage of the GitHub release (label //:bob, file bob-<arch>.AppImage,
+// .github/workflows/release.yml): //cmd/bob:bob with its embedded static Nix and builder, for
+// the host platform (the release runs once per architecture). bob is a static binary, so the
+// bundle needs no glibc, locales, iconv or CA certificates of its own (bob embeds its fallback
+// roots, A242).
+var AppImage = bob.Define(func(p *bob.P) *appimage.Bundle {
+	return appimage.NewBundle(p, "bob", appimage.BundleOpts{
+		Program:   Bob(p),
+		NoCACerts: true,
+		NoIconv:   true,
+	})
 })
 
 // Builder is bob-builder (label //cmd/bob-builder:bob-builder). The copy bob embeds is the one

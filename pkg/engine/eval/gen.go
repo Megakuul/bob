@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -20,6 +21,15 @@ import (
 const (
 	genDir  = ".bob/eval"
 	mainDir = "_bobeval"
+	// renameSub (below genDir) holds the copies of bob.go files the evaluator compiles in
+	// place of the originals; the sandbox mounts it at renameDir, outside srcDir. go build
+	// -trimpath maps an overlay file back to the name of the file it replaces only when no
+	// package directory prefix matches it first: below srcDir, the root package's prefix
+	// ("/src => <module>") would claim it, so the root bob.go's frames were named
+	// "<module>/.bob/eval/rename/<n>.go" and no call was found in a bob.go (A450). The name
+	// must not start with srcDir either (the rewrite is a plain string prefix).
+	renameSub = "rename"
+	renameDir = "/bobren"
 )
 
 // hiddenExts are the compilable files the overlay hides in a bob.go directory (S1 §5.3).
@@ -29,7 +39,7 @@ var hiddenExts = map[string]bool{".go": true, ".c": true, ".cc": true, ".cpp": t
 
 // generated is what the generation wrote.
 type generated struct {
-	renames map[string]string // .bob/eval/rename/<n>.go → original bob.go (repo-relative)
+	renames map[string]string // renameDir/<n>.go → original bob.go (repo-relative)
 	files   map[string][]byte // name below .bob/eval → content
 }
 
@@ -85,7 +95,7 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 		if f.pkg != "main" && rewritten == nil {
 			continue
 		}
-		rn := "rename/" + strconv.Itoa(n) + ".go"
+		rn := strconv.Itoa(n) + ".go"
 		renamed := rewritten
 		if f.pkg == "main" {
 			// A main package cannot be imported: the evaluator sees a copy whose package clause
@@ -98,10 +108,18 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 				return nil, err
 			}
 		}
-		g.files[rn] = renamed
-		g.renames[path.Join(genDir, rn)] = f.shown
-		replace[sandboxPath(d, "bob.go")] = sandboxPath(genDir, rn)
+		// A trailing comment (no line moves) keeps the content apart from copies compiled by
+		// earlier bob versions at another path: go build's cache keys an overlay file by its
+		// content, and a cached package keeps the file names it was compiled with (A450).
+		g.files[path.Join(renameSub, rn)] = slices.Concat(bytes.TrimRight(renamed, "\n"), []byte("\n\n// bob: evaluator copy of "+f.shown+"\n"))
+		g.renames[path.Join(renameDir, rn)] = f.shown
+		replace[sandboxPath(d, "bob.go")] = path.Join(renameDir, rn)
 		n++
+	}
+	if _, ok := s.content["go.mod"]; !ok {
+		// A new repository without a root go.mod (A451): go build -modfile still needs one to
+		// find the main module's directory; the overlay provides it.
+		replace[sandboxPath("go.mod")] = sandboxPath(genDir, "go.mod")
 	}
 	ov, err := json.MarshalIndent(map[string]any{"Replace": replace}, "", "  ")
 	if err != nil {
@@ -153,13 +171,16 @@ func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, 
 		return nil, err
 	}
 	// Remove what an earlier generation wrote and this one does not.
-	for _, d := range []string{"rename", "mods"} {
+	for _, d := range []string{renameSub, "mods"} {
 		if err := makeWritable(filepath.Join(out, d)); err != nil {
 			return nil, err
 		}
 		if err := os.RemoveAll(filepath.Join(out, d)); err != nil {
 			return nil, err
 		}
+	}
+	if err := os.MkdirAll(filepath.Join(out, renameSub), 0o755); err != nil { // mounted at renameDir
+		return nil, err
 	}
 	for name, content := range g.files {
 		p := filepath.Join(out, filepath.FromSlash(name))

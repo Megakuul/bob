@@ -240,7 +240,7 @@ func Open(ctx context.Context, c Config) (*Store, error) {
 		if err := writeConfig(home, c.Substituters); err != nil {
 			return "", err
 		}
-		return extractNix(home)
+		return extractNix(ctx, home)
 	}()
 	if err != nil {
 		return nil, err

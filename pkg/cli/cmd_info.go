@@ -205,13 +205,13 @@ func runLog(e *env) int {
 	if len(e.a.pos) != 1 {
 		return e.out.fail(diag.New(4, "flag", "bob log", "what", "one label"))
 	}
-	label := e.a.pos[0]
-	if _, err := bob.ParseLabel(label); err != nil {
-		return e.out.fail(diag.New(1, "kind", "label", "name", label))
-	}
 	root, err := e.root(false)
 	if err != nil {
 		return e.out.fail(err)
+	}
+	label := resolvePattern(e.relDir(root), e.a.pos[0])
+	if _, err := bob.ParseLabel(label); err != nil {
+		return e.out.fail(diag.New(1, "kind", "label", "name", e.a.pos[0]))
 	}
 	m := map[string]string{}
 	_ = readJSON(filepath.Join(root, filepath.FromSlash(lastBuild)), &m)

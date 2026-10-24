@@ -492,11 +492,15 @@ func runRun(e *env) int {
 	if p := e.a.str("platform"); p != "" && p != "native" {
 		return e.out.fail(diag.New(10, "platform", p, "known", "native"))
 	}
-	label := e.a.pos[0]
 	root, err := e.root(false)
 	if err != nil {
 		return e.out.fail(err)
 	}
+	arg := e.a.pos[0]
+	if arg == "." {
+		arg = "./" // bob run .: the package named like the current directory ("//dir:dir")
+	}
+	label := resolvePattern(e.relDir(root), arg)
 	st, caches, warns, exit, done := e.openStore(true)
 	if done {
 		return exit

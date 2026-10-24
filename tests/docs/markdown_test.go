@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-		"strconv"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode"
@@ -31,8 +31,8 @@ type heading struct {
 //	```bash run                   commands TestQuickstartsE2E runs in the project directory
 //	```text expect                lines the preceding run block must print (… is a wildcard)
 type block struct {
-	lang  string            // info string's first word
-	attrs map[string]string // "file" → path; "verify", "run", "expect" → ""
+	lang    string            // info string's first word
+	attrs   map[string]string // "file" → path; "verify", "run", "expect" → ""
 	content string
 	line    int // 1-based line of the opening fence
 }

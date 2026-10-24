@@ -22,6 +22,9 @@ const replacePrefix = "../replace/"
 // evaluation would refuse, adds nothing (the generation reports it when it is used).
 func addReplaceKeys(root string, prev, index map[string]indexEntry, untrusted bool) error {
 	gm, err := readCapped(filepath.Join(root, "go.mod"), "go.mod", maxGoModBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // a new repository: no replace lines yet (A451)
+	}
 	if err != nil {
 		return err
 	}

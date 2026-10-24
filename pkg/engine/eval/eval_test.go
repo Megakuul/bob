@@ -433,3 +433,104 @@ func TestEvaluateConcurrently(t *testing.T) {
 		}
 	}
 }
+
+// rootMainRepo is a one-program repository: the root holds the main package and its bob.go
+// (the quickstart layout, A450).
+func rootMainRepo() map[string]string {
+	return map[string]string{
+		"go.mod":   "module example.com/hello\n\ngo 1.26.0\n",
+		"bob.lock": "{\n  \"lockVersion\": 1\n}\n",
+		"main.go":  "// Command hello does nothing.\npackage main\n\nfunc main() {}\n",
+		"bob.go": `//go:build bob
+
+package main
+
+import "github.com/megakuul/bob/pkg/bob"
+
+// Hello is //:hello.
+var Hello = bob.Define(func(p *bob.P) *bob.Step {
+	return bob.Run(p, "hello", bob.RunOpts{Cmd: []string{"true"}, Outputs: []string{"out"}})
+})
+`,
+	}
+}
+
+// TestEvaluateRootMainPackage: a root bob.go in package main is evaluated at its own position
+// (before A450 its copy was named <module>/.bob/eval/rename/0.go in the evaluator's frames:
+// "ext.New(...) was called from , which is not a bob.go file of this build").
+func TestEvaluateRootMainPackage(t *testing.T) {
+	res, err := evaluate(t, writeRepo(t, "hello", rootMainRepo()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Nodes []struct {
+			Label     string `json:"label"`
+			DefinedAt struct {
+				File string `json:"file"`
+				Line int    `json:"line"`
+			} `json:"definedAt"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(res.IR, &doc); err != nil {
+		t.Fatalf("IR: %v\n%s", err, res.IR)
+	}
+	found := false
+	for _, n := range doc.Nodes {
+		if n.Label == "//:hello" {
+			found = true
+			if got := n.DefinedAt.File + ":" + itoa(n.DefinedAt.Line); got != "bob.go:9" {
+				t.Errorf("//:hello defined at %s, want bob.go:9", got)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no //:hello in the IR:\n%s", res.IR)
+	}
+
+	// A type error in the root main bob.go names bob.go, not the evaluator's copy.
+	files := rootMainRepo()
+	line := strings.Count(files["bob.go"], "\n") + 2
+	files["bob.go"] += "\nvar _ int = \"not an int\"\n"
+	_, err = evaluate(t, writeRepo(t, "hello", files))
+	if err == nil || !regexp.MustCompile(`(^|\s)bob\.go:`+itoa(line)+`:13: `).MatchString(err.Error()) {
+		t.Fatalf("type error: err = %v, want bob.go:%d:13", err, line)
+	}
+	if text := err.Error(); strings.Contains(text, "bobmain") || strings.Contains(text, renameDir) || strings.Contains(text, ".bob/eval") {
+		t.Errorf("message names generated files:\n%s", text)
+	}
+}
+
+// TestEvaluateWithoutGoMod: a new repository has no root go.mod; bob writes it after the first
+// evaluation (A451). Before, Evaluate stopped with "the repository has no go.mod" (BOB-E-9005).
+func TestEvaluateWithoutGoMod(t *testing.T) {
+	files := coreRepo()
+	delete(files, "go.mod")
+	res, err := evaluate(t, writeRepo(t, "My_Repo", files))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Module string `json:"module"`
+	}
+	if err := json.Unmarshal(res.IR, &doc); err != nil {
+		t.Fatal(err)
+	}
+	// cmd/app/bob.go imports example.com/core/lib: the module path the bob.go files use.
+	if doc.Module != "example.com/core" {
+		t.Errorf("module %q, want example.com/core (from the bob.go imports)", doc.Module)
+	}
+	// Without such an import: the directory name.
+	files = rootMainRepo()
+	delete(files, "go.mod")
+	res, err = evaluate(t, writeRepo(t, "My_Repo", files))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(res.IR, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Module != "my_repo" {
+		t.Errorf("module %q, want my_repo (the directory name)", doc.Module)
+	}
+}

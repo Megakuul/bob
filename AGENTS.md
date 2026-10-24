@@ -141,6 +141,17 @@ the framework's generic interfaces.
 Never claim a library, API or protocol supports something without verifying it. Never report a
 task done unless the CI command passed. Label measurements with machine and conditions.
 
+### 5.9 Docs stay upstream of the implementation
+- The user documentation is `website/content/docs/` (HARNESS.md §17). A change to a public
+  surface (CLI commands and flags, the `bob.go` API packages, error codes, `bob-server`
+  variables and modes, `spec/`) updates the docs **in the same change**, and the unit writes a
+  `docs:` note in its progress file (which pages, or why none).
+- Documented flows must work: never document a feature that does not work as if it works;
+  put it on the status page (`07-reference/03-status.md`) with the workaround.
+- The CI stage `docs` enforces both (tests in `tests/docs`, change-coupling rule). A change
+  that needs no docs carries `docs-exempt: <reason>` in the commit message or its progress
+  file / `plan/decisions.md` row.
+
 ---
 
 ## 6. Harness requirements (designed in `HARNESS.md`, built in Phase 3.1)

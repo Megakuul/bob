@@ -1,8 +1,11 @@
+//go:build !nixsystem
+
 package store
 
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -14,14 +17,6 @@ import (
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 )
-
-// NixVersion is the version of the Nix that scripts/fetch-nix.sh embeds (nixpkgs nixStatic at
-// the pin; run.start "nix", bob version). TestNixVersion checks it against the embedded binary.
-const NixVersion = "2.34.9"
-
-// nixLinks are the legacy command names; Nix dispatches on argv[0], so they are symlinks to nix
-// (rootless-results "Embedding").
-var nixLinks = []string{"nix-store", "nix-build", "nix-instantiate", "nix-env", "nix-hash", "nix-daemon"}
 
 // embeddedNix returns the hex sha256 of the embedded Nix binary (from nix.sha256, written with
 // it by scripts/fetch-nix.sh), or a 7003 error for a bob built without it.
@@ -37,6 +32,10 @@ func embeddedNix() (string, error) {
 	return sum, nil
 }
 
+// prepareNix runs before the namespace is entered. The embedded Nix is extracted by Open, inside
+// or outside the namespace alike, so there is nothing to do here (nixsystem.go copies its Nix).
+func prepareNix(context.Context, string) error { return nil }
+
 // nixBinDir is <home>/bin/nix-<first 12 hex of sha256>/bin.
 func nixBinDir(home, sum string) string {
 	return filepath.Join(home, "bin", "nix-"+sum[:12], "bin")
@@ -46,7 +45,10 @@ func nixBinDir(home, sum string) string {
 // bin directory. An existing directory is only stat'ed. Otherwise the binary is decompressed into
 // a temporary directory <home>/bin/.nix-<h>-*, checked against its sha256, synced, and renamed
 // into place atomically; a concurrent extraction that wins the rename is accepted.
-func extractNix(home string) (string, error) {
+//
+// This is the default build; a bob built with -tags nixsystem copies the Nix of its own closure
+// instead (nixsystem.go, ADR 0002a).
+func extractNix(_ context.Context, home string) (string, error) {
 	sum, err := embeddedNix()
 	if err != nil {
 		return "", err

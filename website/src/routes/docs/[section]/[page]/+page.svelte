@@ -9,8 +9,10 @@
 	// Copy buttons in the prerendered markdown: one delegated handler for the article.
 	function click(e: MouseEvent) {
 		const button = (e.target as HTMLElement).closest<HTMLElement>('[data-copy]');
-		const code = button?.closest('.code')?.querySelector('pre');
-		if (!button || !code) return;
+		if (!button) return;
+		if (button.dataset.copyText !== undefined) return void copyText(button.dataset.copyText, button);
+		const code = button.closest('.code')?.querySelector('pre');
+		if (!code) return;
 		const text = code.textContent ?? '';
 		copyText(code.querySelector('[data-lang=bash]') ? shellCommands(text) : text, button);
 	}
