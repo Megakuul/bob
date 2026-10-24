@@ -112,7 +112,7 @@ func (pl *planner) defaultNatives(ctx context.Context, d *NativeDefault, target 
 }
 
 // addNative puts a native package's bin/ on PATH and its pkg-config directories on pcs.
-func addNative(in *inputs, rv engine.Resolved, r *buildRunJSON, pcs []string) []string {
+func addNative(in *engine.Inputs, rv engine.Resolved, r *buildRunJSON, pcs []string) []string {
 	outs := make([]string, 0, len(rv.Outputs))
 	for o := range rv.Outputs {
 		outs = append(outs, o)
@@ -122,7 +122,7 @@ func addNative(in *inputs, rv engine.Resolved, r *buildRunJSON, pcs []string) []
 		if o != "out" && o != "dev" && o != "lib" && o != "bin" {
 			continue
 		}
-		p := in.add(rv, o)
+		p := in.Add(rv, o)
 		r.Path = append(r.Path, p+"/bin")
 		pcs = append(pcs, p+"/lib/pkgconfig", p+"/share/pkgconfig")
 	}

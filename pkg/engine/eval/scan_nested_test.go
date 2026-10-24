@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/megakuul/bob/pkg/engine"
 )
 
 // A103: a directory with a bob-generated go.mod belongs to the repository's definitions; one
@@ -13,7 +15,7 @@ func TestScanBobGeneratedGoMod(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
 		"bob.go":     "//go:build bob\n",
-		"api/go.mod": generatedGoMod + "\n// Edit api/bob.go and run bob lock.\nmodule example.com/api\n",
+		"api/go.mod": engine.GoModHeader + "\n// Edit api/bob.go and run bob lock.\nmodule example.com/api\n",
 		"api/go.sum": "",
 		"api/bob.go": "//go:build bob\n",
 		"ext/go.mod": "module example.com/ext\n",
@@ -49,7 +51,7 @@ func TestScanStopsAtNestedRepo(t *testing.T) {
 		"bob.go":         "//go:build bob\n",
 		"lib/bob.go":     "//go:build bob\n",
 		"sub/bob.lock":   "",
-		"sub/go.mod":     generatedGoMod + "\n// Edit bob.go and run bob lock.\nmodule sub\n",
+		"sub/go.mod":     engine.GoModHeader + "\n// Edit bob.go and run bob lock.\nmodule sub\n",
 		"sub/bob.go":     "//go:build bob\n",
 		"sub/api/bob.go": "//go:build bob\n",
 	}

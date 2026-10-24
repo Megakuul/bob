@@ -68,7 +68,7 @@ func (pl *planner) workspace() error {
 		}
 		var s gospec.Module
 		if err := json.Unmarshal(n.Spec, &s); err != nil {
-			return internal(n, "module spec: %v", err)
+			return engine.Internal(n, "module spec: %v", err)
 		}
 		if old, ok := pl.mods[s.Path]; ok && old.dir != labelDir(n.Label) {
 			e := diag.New(1020, "label", n.Label, "option", "Path", "reason",

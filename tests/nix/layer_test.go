@@ -343,6 +343,15 @@ func TestRNIX002NixpkgsStaysUsable(t *testing.T) {
 		t.Fatal("harness: the polyglot fixture no longer has the Nixpkgs and Go lines this test edits")
 	}
 	mustWrite(t, bobgo, []byte(edited), 0o644)
+	// The committed go.mod records the Go version of the unedited bob.go (go 1.26.0). A fresh
+	// copy has no record that bob wrote it, so the stale line is drift (R-FW-061); the commit
+	// that lowers Go in bob.go carries the regenerated go.mod with it.
+	gomod := filepath.Join(dir, "go.mod")
+	m := string(mustRead(t, gomod))
+	if strings.Count(m, "\ngo 1.26.0\n") != 1 {
+		t.Fatal("harness: the polyglot go.mod no longer has the go line this test edits")
+	}
+	mustWrite(t, gomod, []byte(strings.Replace(m, "\ngo 1.26.0\n", "\ngo 1.25.0\n", 1)), 0o644)
 	r := e.run(t, "polyglot", "build", "--json", "//...")
 	if harness.Red(t, r) {
 		return

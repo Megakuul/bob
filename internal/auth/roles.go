@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -54,6 +55,27 @@ func (id *Identity) adminAdd(ctx context.Context, principal string) error {
 	})
 	return storageError(err)
 }
+
+// restoreAdmin undoes adminRemove after the write that took the admin binding away failed.
+// That failure may be the request context itself, so the undo runs on a context without its
+// cancellation, is tried twice and logs when the index stays without the principal: adminRemove
+// relies on the index to keep the last admin.
+func (id *Identity) restoreAdmin(ctx context.Context, principal string) {
+	ctx = context.WithoutCancel(ctx)
+	var err error
+	for range 2 {
+		c, cancel := context.WithTimeout(ctx, restoreTimeout)
+		err = id.adminAdd(c, principal)
+		cancel()
+		if err == nil {
+			return
+		}
+	}
+	id.log.Error("admin index not restored", "principal", principal, "err", err.Error())
+}
+
+// restoreTimeout bounds one restoreAdmin attempt.
+const restoreTimeout = 30 * time.Second
 
 // adminRemove removes principal from AdminIndex; it refuses when principal is the last admin.
 // It runs before the write that takes the admin binding away (and is undone when that write
@@ -342,7 +364,7 @@ func (s roleService) DeleteRole(ctx context.Context, req *connect.Request[access
 		return nil, storageError(err)
 	}
 	if e := req.Msg.GetEtag(); e != "" && e != store.ETagOf(r.ETag) {
-		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+		return nil, api.ETagMismatch()
 	}
 	if mem, err := store.Get(ctx, s.id.control, store.RoleMembersKey(rid)); err == nil {
 		for _, p := range mem.Principals.Value() {
@@ -493,7 +515,7 @@ func (id *Identity) updateBindings(ctx context.Context, principal string, fn fun
 	}
 	if err != nil {
 		if wasAdmin && !willAdmin {
-			_ = id.adminAdd(ctx, principal)
+			id.restoreAdmin(ctx, principal)
 		}
 		return nil, nil, storageError(err)
 	}

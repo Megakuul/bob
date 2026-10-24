@@ -315,8 +315,8 @@ func (w *WorkerControl) checkout(ctx context.Context, wid, jobID string, epoch i
 func checkoutError(err error) error {
 	var de *diag.Error
 	switch {
-	case strings.HasPrefix(err.Error(), "permission_denied: "):
-		return api.Forbidden(strings.TrimPrefix(err.Error(), "permission_denied: "))
+	case errors.Is(err, api.ErrWorkerPermissionDenied):
+		return api.WorkerPermissionDenied(err)
 	case errors.As(err, &de) && de.Code == 9008:
 		return api.Unavailable("checkout credentials are not available yet: " + de.Error())
 	}

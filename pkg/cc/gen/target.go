@@ -55,7 +55,7 @@ func (pl *planner) libOf(id string) (*lib, error) {
 	switch {
 	case n.Kind == ccspec.KindLibrary:
 		if err := json.Unmarshal(n.Spec, &l.t); err != nil {
-			return nil, internal(n, "spec: %v", err)
+			return nil, engine.Internal(n, "spec: %v", err)
 		}
 		l.kind = libStatic
 		if l.t.Type == ccspec.TypeShared {
@@ -63,7 +63,7 @@ func (pl *planner) libOf(id string) (*lib, error) {
 		}
 	case n.Kind == ccspec.KindExternal:
 		if err := json.Unmarshal(n.Spec, &l.x); err != nil {
-			return nil, internal(n, "spec: %v", err)
+			return nil, engine.Internal(n, "spec: %v", err)
 		}
 		l.kind = libExternal
 	case strings.HasPrefix(n.Kind, "nixpkgs."):
@@ -77,7 +77,7 @@ func depIDs(n *ir.Node, idx []int) ([]string, error) {
 	out := make([]string, 0, len(idx))
 	for _, i := range idx {
 		if i < 0 || i >= len(n.Deps) {
-			return nil, internal(n, "dep index %d out of range", i)
+			return nil, engine.Internal(n, "dep index %d out of range", i)
 		}
 		out = append(out, n.Deps[i])
 	}
@@ -129,7 +129,7 @@ func (pl *planner) linkDeps(n *ir.Node, t ccspec.Target) ([]*lib, error) {
 	var visit func(id string, depth int) error
 	visit = func(id string, depth int) error {
 		if depth > 256 {
-			return internal(n, "library dependencies nest deeper than 256")
+			return engine.Internal(n, "library dependencies nest deeper than 256")
 		}
 		l, err := pl.libOf(id)
 		if err != nil {
@@ -186,12 +186,12 @@ type pkgConfig struct {
 // and inputs.
 type libFlags struct {
 	pl  *planner
-	in  *inputs
+	in  *engine.Inputs
 	pcs []pkgConfig
 	pcN map[string]int // node id → pkg-config entry
 }
 
-func (pl *planner) newLibFlags(in *inputs) *libFlags {
+func (pl *planner) newLibFlags(in *engine.Inputs) *libFlags {
 	return &libFlags{pl: pl, in: in, pcs: []pkgConfig{}, pcN: map[string]int{}}
 }
 
@@ -199,7 +199,7 @@ func (pl *planner) newLibFlags(in *inputs) *libFlags {
 func (f *libFlags) outputs(l *lib) (map[string]string, *bob.LinkInfo, error) {
 	rv, ok := f.pl.req.Inputs[l.n.ID]
 	if !ok {
-		return nil, nil, internal(l.n, "is not planned")
+		return nil, nil, engine.Internal(l.n, "is not planned")
 	}
 	outs := map[string]string{}
 	names := []string{"out"}
@@ -215,7 +215,7 @@ func (f *libFlags) outputs(l *lib) (map[string]string, *bob.LinkInfo, error) {
 	}
 	for _, o := range names {
 		if _, ok := rv.Outputs[o]; ok {
-			outs[o] = f.in.add(rv, o)
+			outs[o] = f.in.Add(rv, o)
 		}
 	}
 	return outs, rv.LinkInfo, nil
@@ -237,8 +237,8 @@ func (f *libFlags) pc(l *lib, outs map[string]string) int {
 		if l.n.Nix != nil {
 			e.Modules = append(e.Modules, l.n.Nix.Modules...)
 		}
-		e.Include = append(e.Include, outs[pickOutput(outs, "dev", "out")]+"/include")
-		e.LibDir = outs[pickOutput(outs, "lib", "out")] + "/lib"
+		e.Include = append(e.Include, outs[engine.PickOutput(outs, "dev", "out")]+"/include")
+		e.LibDir = outs[engine.PickOutput(outs, "lib", "out")] + "/lib"
 	case libExternal:
 		e.Roots = append(e.Roots, outs["out"])
 		e.Include = append(e.Include, outs["out"]+"/"+l.x.Include)
@@ -415,15 +415,15 @@ func compileArgs(t ccspec.Target, c config, file, srcRoot string, own, deps []st
 func (pl *planner) planTarget(n *ir.Node) error {
 	var t ccspec.Target
 	if err := json.Unmarshal(n.Spec, &t); err != nil {
-		return internal(n, "spec: %v", err)
+		return engine.Internal(n, "spec: %v", err)
 	}
 	c, err := configOf(n)
 	if err != nil {
-		return internal(n, "%v", err)
+		return engine.Internal(n, "%v", err)
 	}
 	src, ok := pl.req.Sources[n.ID]
 	if !ok {
-		return internal(n, "its sources were not imported")
+		return engine.Internal(n, "its sources were not imported")
 	}
 	files, err := pl.files(n)
 	if err != nil {
@@ -436,10 +436,10 @@ func (pl *planner) planTarget(n *ir.Node) error {
 		}
 	}
 	if len(compiled) == 0 {
-		return invalid(n, "Srcs", "no .c, .cc, .cpp, .cxx or .S file matches")
+		return engine.Invalid(n, "Srcs", "no .c, .cc, .cpp, .cxx or .S file matches")
 	}
-	in := newInputs(pl.req.Builder)
-	in.srcs[src] = true
+	in := engine.NewInputs(pl.req.Builder)
+	in.AddSrc(src)
 	ts, err := pl.tools(n, t.Tools, c, in)
 	if err != nil {
 		return err
@@ -523,19 +523,19 @@ func (pl *planner) planTarget(n *ir.Node) error {
 		headers = append(headers, map[string]string{"from": src + "/" + joinDir(labelDir(n.Label), t.Hdrs), "to": out + "/include"})
 	}
 	args := map[string]any{"src": src, "path": ts.path, "pkgConfig": lf.pcs, "headers": headers, "compile": compile, "link": link}
-	fx := &fixup{Strip: c.profile != string(bob.Debug), ShrinkRPath: true,
+	fx := &engine.Fixup{Strip: c.profile != string(bob.Debug), ShrinkRPath: true,
 		Forbidden: append(append([]string{}, ts.forbids...), src, pl.req.Builder), Tools: ts.fixup}
 	if t.Type == ccspec.TypeStatic {
 		fx.ShrinkRPath = false
 	}
 	p, d, err := pl.job(c.name("cc", name), c.system, "cc-compile-link", n.Label, args, fx, in)
 	if err != nil {
-		return internal(n, "%v", err)
+		return engine.Internal(n, "%v", err)
 	}
-	rv := engine.Resolved{Drv: p, Outputs: map[string]string{"out": outPath(d)}}
+	rv := engine.Resolved{Drv: p, Outputs: map[string]string{"out": engine.OutPath(d)}}
 	switch t.Type {
 	case ccspec.TypeStatic, ccspec.TypeShared:
-		li, err = pl.linkInfo(n, t, outPath(d))
+		li, err = pl.linkInfo(n, t, engine.OutPath(d))
 		if err != nil {
 			return err
 		}
@@ -614,10 +614,10 @@ func (pl *planner) linkInfo(n *ir.Node, t ccspec.Target, out string) (*bob.LinkI
 			li.Libs = append(li.Libs, l.x.Libs...)
 			li.RuntimeDirs = append(li.RuntimeDirs, o+"/lib")
 		case libNixpkgs:
-			d := rv.Outputs[pickOutput(rv.Outputs, "lib", "out")] + "/lib"
+			d := rv.Outputs[engine.PickOutput(rv.Outputs, "lib", "out")] + "/lib"
 			li.LinkDirs = append(li.LinkDirs, d)
 			li.RuntimeDirs = append(li.RuntimeDirs, d)
-			li.PkgConfig = append(li.PkgConfig, rv.Outputs[pickOutput(rv.Outputs, "dev", "out")]+"/lib/pkgconfig")
+			li.PkgConfig = append(li.PkgConfig, rv.Outputs[engine.PickOutput(rv.Outputs, "dev", "out")]+"/lib/pkgconfig")
 		default:
 			if rv.LinkInfo != nil {
 				li.LinkDirs = append(li.LinkDirs, rv.LinkInfo.LinkDirs...)
@@ -641,7 +641,7 @@ func staticIncludes(l *lib, rv engine.Resolved) []string {
 	case libExternal:
 		return []string{rv.Outputs["out"] + "/" + l.x.Include}
 	case libNixpkgs:
-		return []string{rv.Outputs[pickOutput(rv.Outputs, "dev", "out")] + "/include"}
+		return []string{rv.Outputs[engine.PickOutput(rv.Outputs, "dev", "out")] + "/include"}
 	default:
 		if rv.LinkInfo != nil {
 			return rv.LinkInfo.IncludeDirs
@@ -652,18 +652,18 @@ func staticIncludes(l *lib, rv engine.Resolved) []string {
 
 // testRun plans the test-run job of a test: run the program once; TAP output gives the cases.
 func (pl *planner) testRun(n *ir.Node, name string, binD *drv.Derivation, binDrv string, c config) (engine.Resolved, error) {
-	in := newInputs(pl.req.Builder)
-	in.add(engine.Resolved{Drv: binDrv, Outputs: map[string]string{"out": outPath(binD)}}, "out")
-	argv := append([]string{outPath(binD) + "/bin/" + name}, pl.req.TestArgs...)
+	in := engine.NewInputs(pl.req.Builder)
+	in.Add(engine.Resolved{Drv: binDrv, Outputs: map[string]string{"out": engine.OutPath(binD)}}, "out")
+	argv := append([]string{engine.OutPath(binD) + "/bin/" + name}, pl.req.TestArgs...)
 	args := map[string]any{"argv": argv, "format": "tap", "timeoutSeconds": defaultTestTimeoutS}
 	if err := pl.emulate(n, c.tc, args, in); err != nil {
 		return engine.Resolved{}, err
 	}
 	p, d, err := pl.job(c.name("ccrun", name), c.system, "test-run", n.Label, args, nil, in)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
-	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": outPath(d)}}, nil
+	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": engine.OutPath(d)}}, nil
 }
 
 // defaultTestTimeoutS is the timeout of a C/C++ test unit: 10 minutes (A92).
@@ -672,22 +672,22 @@ const defaultTestTimeoutS = 600
 // emulate makes a test-run job of a cross-compiled test run its program under the emulator
 // (R-FW-039): argv becomes <qemu> <program> <args>. Sanitised and race tests of another
 // platform are not run at all (the engine reports them skipped).
-func (pl *planner) emulate(n *ir.Node, tc bob.Toolchain, args map[string]any, in *inputs) error {
+func (pl *planner) emulate(n *ir.Node, tc bob.Toolchain, args map[string]any, in *engine.Inputs) error {
 	if !tc.Cross() {
 		return nil
 	}
 	var t ccspec.Target
 	if err := json.Unmarshal(n.Spec, &t); err != nil {
-		return internal(n, "spec: %v", err)
+		return engine.Internal(n, "spec: %v", err)
 	}
 	if t.Tools.Emulator <= 0 {
-		return internal(n, "a test for %s has no emulator", tc.Target)
+		return engine.Internal(n, "a test for %s has no emulator", tc.Target)
 	}
 	_, rv, err := pl.dep(n, t.Tools.Emulator)
 	if err != nil {
 		return err
 	}
-	q := in.add(rv, pickOutput(rv.Outputs, "out"))
+	q := in.Add(rv, engine.PickOutput(rv.Outputs, "out"))
 	argv, _ := args["argv"].([]string)
 	args["argv"] = append([]string{q + "/bin/" + tc.EmulatorCmd}, argv...)
 	return nil

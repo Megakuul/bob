@@ -190,7 +190,7 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 func workspaceOf(n *ir.Node, root string) (resolve.Workspace, error) {
 	var s gospec.Module
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
-		return resolve.Workspace{}, internal(n, "module spec: %v", err)
+		return resolve.Workspace{}, engine.Internal(n, "module spec: %v", err)
 	}
 	dir := labelDir(n.Label)
 	w := resolve.Workspace{Path: s.Path, Go: s.Go, BobGo: path.Join(dir, "bob.go")}
@@ -372,7 +372,7 @@ type runtimes struct {
 func (rt runtimes) resolve(n *ir.Node, w *resolve.Workspace) error {
 	var s gospec.Module
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
-		return internal(n, "module spec: %v", err)
+		return engine.Internal(n, "module spec: %v", err)
 	}
 	declared := map[string]string{}
 	for _, r := range s.Require {
@@ -404,7 +404,7 @@ func (rt runtimes) resolve(n *ir.Node, w *resolve.Workspace) error {
 			attr, exact := strings.CutPrefix(spec, "=")
 			version, err := rt.version(attr)
 			if err != nil {
-				return internal(n, "%s: %v", label, err)
+				return engine.Internal(n, "%s: %v", label, err)
 			}
 			need := "v" + version
 			if have, ok := declared[r.Path]; ok {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -34,7 +35,7 @@ func Fsck(ctx context.Context, b *store.Bucket, role string, keys []string) ([]P
 		}
 		switch err := CheckRecord(ctx, b, role, k); {
 		case err == nil, errors.Is(err, store.ErrNotFound):
-		case strings.HasPrefix(err.Error(), "corrupt:"), strings.HasPrefix(err.Error(), "invalid:"):
+		case errors.Is(err, errCorrupt), errors.Is(err, errInvalid):
 			out = append(out, Problem{b.Name(), k, err.Error()})
 		default:
 			return out, fmt.Errorf("fsck: %s/%s: %w", b.Name(), k, err)
@@ -45,9 +46,18 @@ func Fsck(ctx context.Context, b *store.Bucket, role string, keys []string) ([]P
 
 func oneOf(s string, set ...string) bool { return slices.Contains(set, s) }
 
-func corrupt(err error) error { return fmt.Errorf("corrupt: %w", err) }
+// errCorrupt (the object does not decode) and errInvalid (it decodes but breaks a rule of its
+// record type) classify CheckRecord's findings; their text is the message prefix.
+var (
+	errCorrupt = errors.New("corrupt")
+	errInvalid = errors.New("invalid")
+)
 
-func invalid(format string, a ...any) error { return fmt.Errorf("invalid: "+format, a...) }
+func corrupt(err error) error { return fmt.Errorf("%w: %w", errCorrupt, err) }
+
+func invalid(format string, a ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{errInvalid}, a...)...)
+}
 
 // read reads the record at key with store.Get; a record that does not decode is "corrupt".
 func read[T any](ctx context.Context, b *store.Bucket, key *T) (*T, error) {
@@ -59,6 +69,9 @@ func read[T any](ctx context.Context, b *store.Bucket, key *T) (*T, error) {
 }
 
 // decodeFailed reports whether err is dynamitedb's CBOR decode error of a stored object.
+// dynamitedb returns the decoder's error unwrapped (get.go deserialize); fxamacker/cbor v2.9.2
+// also reports some malformed input with untyped errors.New("cbor: …") (valid.go: length
+// overflow), which only the message prefix identifies.
 func decodeFailed(err error) bool {
 	var syn *cbor.SyntaxError
 	var sem *cbor.SemanticError
@@ -69,13 +82,13 @@ func decodeFailed(err error) bool {
 	var depth *cbor.MaxNestedLevelError
 	return errors.As(err, &syn) || errors.As(err, &sem) || errors.As(err, &typ) || errors.As(err, &tag) ||
 		errors.As(err, &lim) || errors.As(err, &pairs) || errors.As(err, &depth) || errors.Is(err, store.ErrPanic) ||
-		strings.Contains(err.Error(), "cbor:") || strings.Contains(err.Error(), "unexpected EOF")
+		errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(err.Error(), "cbor:")
 }
 
 // CheckRecord reads one stored object of a control or fleet bucket by its key and checks the
 // invariants of its record type (the record type comes from the key's pk); objects of other
-// pks must be well-formed CBOR. The error starts with "corrupt:" (does not decode) or
-// "invalid:" (decodes, breaks a rule); a missing key is store.ErrNotFound.
+// pks must be well-formed CBOR. The error wraps errCorrupt ("corrupt: …", does not decode) or
+// errInvalid ("invalid: …", decodes, breaks a rule); a missing key is store.ErrNotFound.
 func CheckRecord(ctx context.Context, b *store.Bucket, role, key string) error {
 	parts := strings.Split(key, "/")
 	id := store.ID(parts[len(parts)-1])

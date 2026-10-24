@@ -69,49 +69,17 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 		case ccspec.KindExternal:
 			err = pl.planExternal(n)
 		default:
-			err = internal(n, "unknown C/C++ kind %s", n.Kind)
+			err = engine.Internal(n, "unknown C/C++ kind %s", n.Kind)
 		}
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
-		return pl.out, joinErrs(errs)
+		return pl.out, engine.JoinErrors(errs)
 	}
 	return pl.out, nil
 }
-
-// internal is an error that is bob's bug (the engine reports it as such).
-func internal(n *ir.Node, format string, a ...any) error {
-	return fmt.Errorf("%s: %s", n.Label, fmt.Sprintf(format, a...))
-}
-
-// invalid is BOB-E-1020 for a node: an option that is wrong for the files or deps it names.
-func invalid(n *ir.Node, option, reason string) error {
-	e := diag.New(1020, "label", n.Label, "option", option, "reason", reason)
-	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
-	return e
-}
-
-func joinErrs(errs []error) error {
-	if len(errs) == 1 {
-		return errs[0]
-	}
-	return errorList(errs)
-}
-
-// errorList joins errors so that the engine still sees each diagnostic (Unwrap []error).
-type errorList []error
-
-func (l errorList) Error() string {
-	s := make([]string, len(l))
-	for i, e := range l {
-		s[i] = e.Error()
-	}
-	return strings.Join(s, "\n")
-}
-
-func (l errorList) Unwrap() []error { return l }
 
 // ---- configuration ----
 
@@ -199,90 +167,10 @@ func (c config) sanitizeFlags() []string {
 
 // ---- inputs and jobs ----
 
-// inputs collects a job's input derivations and sources.
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs map[string]bool
-}
-
-func newInputs(builder string) *inputs {
-	return &inputs{drvs: map[string]map[string]bool{}, srcs: map[string]bool{builder: true}}
-}
-
-// add records output o of rv and returns its path.
-func (in *inputs) add(rv engine.Resolved, o string) string {
-	sp := rv.Outputs[o]
-	if sp == "" {
-		return ""
-	}
-	if rv.Drv == "" {
-		in.srcs[sp] = true
-		return sp
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	in.drvs[rv.Drv][o] = true
-	return sp
-}
-
-func (in *inputs) list() ([]drv.InputDrv, []string) {
-	var ds []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		ds = append(ds, d)
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
-	srcs := make([]string, 0, len(in.srcs))
-	for s := range in.srcs {
-		srcs = append(srcs, s)
-	}
-	sort.Strings(srcs)
-	return ds, srcs
-}
-
-// fixup is the fixup contract of a C/C++ job (R-NIX-019): strip in release, shrink RUNPATH,
-// never reference the compiler, binutils or the sources.
-type fixup struct {
-	Strip       bool       `json:"strip"`
-	DebugOut    bool       `json:"debugOut"`
-	ShrinkRPath bool       `json:"shrinkRpath"`
-	Forbidden   []string   `json:"forbidden"`
-	Tools       fixupTools `json:"tools"`
-}
-
-type fixupTools struct {
-	Strip    string `json:"strip"`
-	Objcopy  string `json:"objcopy"`
-	Patchelf string `json:"patchelf"`
-}
-
 // job finalises one bob-builder job and records it; it returns its path and derivation.
-func (pl *planner) job(name, system, kind, label string, args any, fx *fixup, in *inputs) (string, *drv.Derivation, error) {
-	var fixupSpec any = map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
-		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
-	var disallowed map[string][]string
-	if fx != nil {
-		fx.Forbidden = sortedUnique(fx.Forbidden)
-		fixupSpec = fx
-		disallowed = map[string][]string{"out": fx.Forbidden}
-	}
-	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": fixupSpec}
-	ds, ss := in.list()
-	j := drv.Job{Name: name, System: system, Builder: pl.req.Builder, Spec: spec, InputDrvs: ds, InputSrcs: ss,
-		Disallowed: disallowed, ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	d, err := j.Derivation()
-	if err != nil {
-		return "", nil, err
-	}
-	if err := d.Finalize(pl); err != nil {
-		return "", nil, err
-	}
-	p, err := d.Path()
+func (pl *planner) job(name, system, kind, label string, args any, fx *engine.Fixup, in *engine.Inputs) (string, *drv.Derivation, error) {
+	p, d, err := engine.BuilderJob{Name: name, System: system, Builder: pl.req.Builder, Kind: kind, Label: label,
+		Args: args, Fixup: fx, Inputs: in}.Finalize(pl)
 	if err != nil {
 		return "", nil, err
 	}
@@ -293,50 +181,14 @@ func (pl *planner) job(name, system, kind, label string, args any, fx *fixup, in
 	return p, d, nil
 }
 
-func outPath(d *drv.Derivation) string {
-	for _, o := range d.Outputs {
-		if o.Name == "out" {
-			return o.Path
-		}
-	}
-	return ""
-}
-
-func pickOutput(outs map[string]string, prefer ...string) string {
-	for _, o := range prefer {
-		if _, ok := outs[o]; ok {
-			return o
-		}
-	}
-	names := make([]string, 0, len(outs))
-	for o := range outs {
-		names = append(names, o)
-	}
-	sort.Strings(names)
-	if len(names) > 0 {
-		return names[0]
-	}
-	return ""
-}
-
-func sortedUnique(s []string) []string {
-	out := slices.Clone(s)
-	slices.Sort(out)
-	out = slices.Compact(out)
-	if out == nil {
-		out = []string{}
-	}
-	return out
-}
-
 // dep returns the resolved dep i of n.
 func (pl *planner) dep(n *ir.Node, i int) (*ir.Node, engine.Resolved, error) {
 	if i < 0 || i >= len(n.Deps) {
-		return nil, engine.Resolved{}, internal(n, "dep index %d out of range", i)
+		return nil, engine.Resolved{}, engine.Internal(n, "dep index %d out of range", i)
 	}
 	rv, ok := pl.req.Inputs[n.Deps[i]]
 	if !ok {
-		return nil, engine.Resolved{}, internal(n, "dependency %s is not planned", n.Deps[i])
+		return nil, engine.Resolved{}, engine.Internal(n, "dependency %s is not planned", n.Deps[i])
 	}
 	return pl.byID[n.Deps[i]], rv, nil
 }
@@ -346,27 +198,27 @@ type toolset struct {
 	path    []string // bin directories (compiler first)
 	cc      string   // cc-wrapper output
 	bin     string   // binutils output
-	fixup   fixupTools
+	fixup   engine.FixupTools
 	forbids []string
 	ccLib   string // the cross compiler's lib output (sanitised cross builds), "" otherwise
 }
 
-func (pl *planner) tools(n *ir.Node, t ccspec.Tools, c config, in *inputs) (toolset, error) {
+func (pl *planner) tools(n *ir.Node, t ccspec.Tools, c config, in *engine.Inputs) (toolset, error) {
 	var ts toolset
 	if t.CCLib > 0 {
 		_, rv, err := pl.dep(n, t.CCLib)
 		if err != nil {
 			return ts, err
 		}
-		ts.ccLib = in.add(rv, pickOutput(rv.Outputs, "lib", "out"))
+		ts.ccLib = in.Add(rv, engine.PickOutput(rv.Outputs, "lib", "out"))
 	}
 	for i, ix := range []int{t.CC, t.Binutils, t.Patchelf} {
 		_, rv, err := pl.dep(n, ix)
 		if err != nil {
 			return ts, err
 		}
-		o := pickOutput(rv.Outputs, "bin", "out")
-		p := in.add(rv, o)
+		o := engine.PickOutput(rv.Outputs, "bin", "out")
+		p := in.Add(rv, o)
 		switch i {
 		case 0:
 			ts.cc = p
@@ -386,7 +238,7 @@ func (pl *planner) tools(n *ir.Node, t ccspec.Tools, c config, in *inputs) (tool
 // sourceFiles lists the files of n's source set exactly as bob imported them (R-FW-021).
 func (pl *planner) sourceFiles(n *ir.Node) ([]string, error) {
 	if pl.req.Root == "" {
-		return nil, internal(n, "the planner has no repository root (PlanRequest.Root)")
+		return nil, engine.Internal(n, "the planner has no repository root (PlanRequest.Root)")
 	}
 	if !strings.HasPrefix(n.Label, "//") {
 		return nil, diag.NotImplemented("C/C++ packages of dependency repositories (" + n.Label + ")")

@@ -292,7 +292,7 @@ func (s userService) UpdateUser(ctx context.Context, req *connect.Request[access
 			return nil, api.NotFound("user")
 		}
 		if in.GetEtag() != "" && store.ETagOf(u.ETag) != in.GetEtag() {
-			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+			return nil, api.ETagMismatch()
 		}
 		if paths["displayname"] {
 			u.DisplayName = store.Set(in.GetDisplayName())
@@ -310,7 +310,7 @@ func (s userService) UpdateUser(ctx context.Context, req *connect.Request[access
 	})
 	if err != nil {
 		if wasAdmin && !willAdmin {
-			_ = s.id.adminAdd(ctx, principal)
+			s.id.restoreAdmin(ctx, principal)
 		}
 		return nil, storageError(err)
 	}
@@ -340,7 +340,7 @@ func (s userService) DeleteUser(ctx context.Context, req *connect.Request[access
 		return nil, err
 	}
 	if req.Msg.GetEtag() != "" && req.Msg.GetEtag() != store.ETagOf(cur.ETag) {
-		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+		return nil, api.ETagMismatch()
 	}
 	if err := s.id.deleteUser(ctx, cur); err != nil {
 		return nil, err
@@ -358,16 +358,16 @@ func (id *Identity) deleteUser(ctx context.Context, cur *store.UserRecord) error
 	}
 	if _, err := id.revokeSessions(ctx, cur.ID.Value(), func(store.SessionRef) bool { return false }); err != nil {
 		if admin {
-			_ = id.adminAdd(ctx, principal)
+			id.restoreAdmin(ctx, principal)
 		}
 		return err
 	}
 	if err := store.Delete(ctx, id.control, cur); err != nil {
 		if admin {
-			_ = id.adminAdd(ctx, principal)
+			id.restoreAdmin(ctx, principal)
 		}
 		if errors.Is(err, store.ErrConflict) {
-			return api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+			return api.ETagMismatch()
 		}
 		return storageError(err)
 	}

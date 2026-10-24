@@ -196,13 +196,7 @@ func CheckVersions(target bob.Platform, native, cross Versions, libs, rust bool)
 		errs = append(errs, mismatch(fmt.Sprintf("the Rust standard library for %s comes from rustc %s but the host compiler is rustc %s",
 			target, native.Rustc, cross.Rustc), "the nixpkgs pin must provide the same rustc for both systems"))
 	}
-	switch len(errs) {
-	case 0:
-		return nil
-	case 1:
-		return errs[0]
-	}
-	return errorList(errs)
+	return JoinErrors(errs)
 }
 
 // mismatch is the R-PLAT-007 error: BOB-E-1026 "nixpkgs mismatch: <what>" with the fix as hint.

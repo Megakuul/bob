@@ -113,14 +113,14 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 		case gospec.KindModule, gospec.KindPackage, gospec.KindTests:
 			pl.out.Nodes[n.ID] = engine.Resolved{} // declarations: nothing to build of their own
 		default:
-			err = internal(n, "unknown Go kind %s", n.Kind)
+			err = engine.Internal(n, "unknown Go kind %s", n.Kind)
 		}
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
-		return pl.out, joinErrs(errs)
+		return pl.out, engine.JoinErrors(errs)
 	}
 	return pl.out, nil
 }
@@ -154,16 +154,11 @@ func (pl *planner) planBlocked(n *ir.Node, failed []string) error {
 	_, name, _ := strings.Cut(n.Label, ":")
 	dp, out, err := engine.Blocked(jobs, n.Label, drv.Name("go-blocked", name), failed)
 	if err != nil {
-		return internal(n, "%v", err)
+		return engine.Internal(n, "%v", err)
 	}
 	pl.out.Drvs = append(pl.out.Drvs, jobs.Drvs...)
 	pl.out.Nodes[n.ID] = engine.Resolved{Drv: dp, Outputs: map[string]string{"out": out}}
 	return nil
-}
-
-// internal is an error that is bob's bug (the engine reports it as such).
-func internal(n *ir.Node, format string, a ...any) error {
-	return fmt.Errorf("%s: %s", n.Label, fmt.Sprintf(format, a...))
 }
 
 // defError is a definition error of the node being planned (BOB-E-1015, exit 3).
@@ -172,33 +167,6 @@ func (pl *planner) defError(_ string, reason string) error {
 	e.DefinedAt = diag.Pos{File: pl.cur.DefinedAt.File, Line: pl.cur.DefinedAt.Line}
 	return e
 }
-
-// invalid is BOB-E-1020 for the node being planned.
-func (pl *planner) invalid(option, reason string) error {
-	e := diag.New(1020, "label", pl.cur.Label, "option", option, "reason", reason)
-	e.DefinedAt = diag.Pos{File: pl.cur.DefinedAt.File, Line: pl.cur.DefinedAt.Line}
-	return e
-}
-
-func joinErrs(errs []error) error {
-	if len(errs) == 1 {
-		return errs[0]
-	}
-	return errorList(errs)
-}
-
-// errorList joins errors so that the engine still sees each diagnostic (Unwrap []error).
-type errorList []error
-
-func (l errorList) Error() string {
-	s := make([]string, len(l))
-	for i, e := range l {
-		s[i] = e.Error()
-	}
-	return strings.Join(s, "\n")
-}
-
-func (l errorList) Unwrap() []error { return l }
 
 // toolchain is a Go toolchain from nixpkgs.
 type toolchain struct {
@@ -214,16 +182,16 @@ var goStoreName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompi
 // toolchainOf returns the toolchain of module m and checks it against the module's Go.
 func (pl *planner) toolchainOf(m *wsModule) (*toolchain, error) {
 	if m.node == nil || m.spec.Toolchain < 0 || m.spec.Toolchain >= len(m.node.Deps) {
-		return nil, internal(pl.cur, "module %s has no toolchain", m.spec.Path)
+		return nil, engine.Internal(pl.cur, "module %s has no toolchain", m.spec.Path)
 	}
 	rv, ok := pl.req.Inputs[m.node.Deps[m.spec.Toolchain]]
 	if !ok {
-		return nil, internal(pl.cur, "toolchain of %s is not planned", m.spec.Path)
+		return nil, engine.Internal(pl.cur, "toolchain of %s is not planned", m.spec.Path)
 	}
 	out := rv.Outputs["out"]
 	mm := goStoreName().FindStringSubmatch(out)
 	if mm == nil {
-		return nil, pl.invalid("Go toolchain", fmt.Sprintf("%s is not a Go toolchain (want a store path named go-<version>)", path.Base(out)))
+		return nil, engine.Invalid(pl.cur, "Go toolchain", fmt.Sprintf("%s is not a Go toolchain (want a store path named go-<version>)", path.Base(out)))
 	}
 	minor, _ := strconv.Atoi(mm[2])
 	if "1."+mm[2] != m.spec.Go {
@@ -258,7 +226,7 @@ type target struct {
 // newTarget prepares the configuration of a binary or test node.
 func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 	if b.Module < 0 || b.Module >= len(n.Deps) {
-		return nil, internal(n, "module dep out of range")
+		return nil, engine.Internal(n, "module dep out of range")
 	}
 	var mod *wsModule
 	for _, m := range pl.mods {
@@ -267,7 +235,7 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 		}
 	}
 	if mod == nil {
-		return nil, internal(n, "its module node is not in the graph")
+		return nil, engine.Internal(n, "its module node is not in the graph")
 	}
 	tc, err := pl.toolchainOf(mod)
 	if err != nil {
@@ -275,18 +243,18 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 	}
 	plat, err := platformOf(n)
 	if err != nil {
-		return nil, internal(n, "%v", err)
+		return nil, engine.Internal(n, "%v", err)
 	}
 	v, err := variantOf(n)
 	if err != nil {
-		return nil, internal(n, "%v", err)
+		return nil, engine.Internal(n, "%v", err)
 	}
 	gt := engine.GoFor(engine.HostPlatform(), plat)
 	t := &target{node: n, mod: mod, build: b, system: engine.HostSystem(), plat: plat}
 	if b.CC >= 0 && b.CC < len(n.Deps) {
 		rv, ok := pl.req.Inputs[n.Deps[b.CC]]
 		if !ok {
-			return nil, internal(n, "C compiler is not planned")
+			return nil, engine.Internal(n, "C compiler is not planned")
 		}
 		t.cc = &rv
 		t.cgoOK = true
@@ -294,7 +262,7 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 	if b.CCLib > 0 && b.CCLib < len(n.Deps) {
 		rv, ok := pl.req.Inputs[n.Deps[b.CCLib]]
 		if !ok {
-			return nil, internal(n, "the cross compiler's lib output is not planned")
+			return nil, engine.Internal(n, "the cross compiler's lib output is not planned")
 		}
 		t.ccLib = &rv
 	}
@@ -303,10 +271,10 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 		target: gt, v: v}
 	if m := v.mode(); m != "" && !t.cgoOK {
 		// cmd/go: "-race requires cgo", "-asan requires cgo" (the runtimes are C code).
-		return nil, pl.invalid("CGo", fmt.Sprintf("the %s variant needs cgo, but the package sets golang.CGoOff", m))
+		return nil, engine.Invalid(pl.cur, "CGo", fmt.Sprintf("the %s variant needs cgo, but the package sets golang.CGoOff", m))
 	}
 	if v.race && v.asan {
-		return nil, pl.invalid("variant", "race and asan cannot be combined in one Go build")
+		return nil, engine.Invalid(pl.cur, "variant", "race and asan cannot be combined in one Go build")
 	}
 	return t, nil
 }
@@ -314,11 +282,11 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 // sanitiserRunpath is the external-link flag of R-FW-037: a sanitised cross program finds the
 // sanitiser runtimes (and libstdc++) of the cross compiler's lib output through its RUNPATH,
 // `-Wl,-rpath,<gcc-lib>/lib`; nothing for other builds.
-func (t *target) sanitiserRunpath(c buildCtx, in *inputs) []string {
+func (t *target) sanitiserRunpath(c buildCtx, in *engine.Inputs) []string {
 	if t.ccLib == nil || !c.cgo || len(c.v.csan) == 0 {
 		return nil
 	}
-	return []string{"-Wl,-rpath," + in.add(*t.ccLib, pickOutput(t.ccLib.Outputs, "lib", "out")) + "/lib"}
+	return []string{"-Wl,-rpath," + in.AddCutoff(*t.ccLib, engine.PickOutput(t.ccLib.Outputs, "lib", "out")) + "/lib"}
 }
 
 // loadTarget loads the closure of roots for t, deciding cgo: on iff a non-std package of the
@@ -341,7 +309,7 @@ func (pl *planner) loadTarget(t *target, roots []string, tests map[string]bool) 
 			p := cl.pkgs[ip]
 			for _, f := range p.bp.IgnoredGoFiles {
 				if importsC(filepath.Join(p.dir, f)) {
-					return nil, pl.invalid("CGo", fmt.Sprintf("%s imports \"C\" (%s) but the package sets golang.CGoOff", ip, f))
+					return nil, engine.Invalid(pl.cur, "CGo", fmt.Sprintf("%s imports \"C\" (%s) but the package sets golang.CGoOff", ip, f))
 				}
 			}
 		}
@@ -373,91 +341,18 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // ---- inputs and jobs ----
 
-// inputs collects a job's input derivations and sources.
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs map[string]bool
-}
-
-func newInputs(builder string) *inputs {
-	return &inputs{drvs: map[string]map[string]bool{}, srcs: map[string]bool{builder: true}}
-}
-
-// add records output o of rv and returns its path.
-func (in *inputs) add(rv engine.Resolved, o string) string {
-	if c, ok := rv.Cutoff[o]; ok { // codegen early cutoff (§03.6.3): depend on the content
-		in.srcs[c] = true
-		return c
-	}
-	sp := rv.Outputs[o]
-	if rv.Drv == "" {
-		in.srcs[sp] = true
-		return sp
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	in.drvs[rv.Drv][o] = true
-	return sp
-}
-
-func (in *inputs) addDrv(d *drv.Derivation, path string) {
-	if in.drvs[path] == nil {
-		in.drvs[path] = map[string]bool{}
-	}
-	for _, o := range d.Outputs {
-		in.drvs[path][o.Name] = true
-	}
-}
-
-func (in *inputs) list() ([]drv.InputDrv, []string) {
-	var ds []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		ds = append(ds, d)
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
-	return ds, sortedKeys(in.srcs)
-}
-
-// fixupSpec: Go kinds do not strip or patch (archives stay byte-exact; the link strips itself
-// with -s -w); only the reference check runs, for the forbidden paths of a link.
-func fixupSpec(forbidden []string) map[string]any {
-	fs := make([]any, 0, len(forbidden))
-	for _, f := range forbidden {
-		fs = append(fs, f)
-	}
-	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": fs,
-		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
-}
-
 // job finalises one bob-builder job and records it; it returns its path and derivation.
-func (pl *planner) job(name, system, kind, label string, args any, in *inputs) (string, *drv.Derivation, error) {
+func (pl *planner) job(name, system, kind, label string, args any, in *engine.Inputs) (string, *drv.Derivation, error) {
 	return pl.jobFixup(name, system, kind, label, args, in, nil)
 }
 
-// jobFixup is job with forbidden references of the output (sorted, unique, non-empty paths).
-func (pl *planner) jobFixup(name, system, kind, label string, args any, in *inputs, forbidden []string) (string, *drv.Derivation, error) {
-	forbidden = slices.Compact(slices.Sorted(slices.Values(slices.DeleteFunc(slices.Clone(forbidden), func(f string) bool { return f == "" }))))
-	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": fixupSpec(forbidden)}
-	ds, ss := in.list()
-	j := drv.Job{Name: name, System: system, Builder: pl.req.Builder, Spec: spec, InputDrvs: ds, InputSrcs: ss,
-		ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	if len(forbidden) > 0 {
-		j.Disallowed = map[string][]string{"out": forbidden}
-	}
-	d, err := j.Derivation()
-	if err != nil {
-		return "", nil, err
-	}
-	if err := d.Finalize(pl); err != nil {
-		return "", nil, err
-	}
-	p, err := d.Path()
+// jobFixup is job with forbidden references of the output (sorted, unique, non-empty paths). Go
+// kinds do not strip or patch (archives stay byte-exact; the link strips itself with -s -w);
+// only the reference check runs, for the forbidden paths of a link.
+func (pl *planner) jobFixup(name, system, kind, label string, args any, in *engine.Inputs, forbidden []string) (string, *drv.Derivation, error) {
+	forbidden = slices.DeleteFunc(slices.Clone(forbidden), func(f string) bool { return f == "" })
+	p, d, err := engine.BuilderJob{Name: name, System: system, Builder: pl.req.Builder, Kind: kind, Label: label,
+		Args: args, Fixup: &engine.Fixup{Forbidden: forbidden}, Inputs: in}.Finalize(pl)
 	if err != nil {
 		return "", nil, err
 	}
@@ -468,13 +363,13 @@ func (pl *planner) jobFixup(name, system, kind, label string, args any, in *inpu
 	return p, d, nil
 }
 
-func outPath(d *drv.Derivation) string {
-	for _, o := range d.Outputs {
-		if o.Name == "out" {
-			return o.Path
-		}
+// addDrv records every output of the derivation d at path.
+func addDrv(in *engine.Inputs, d *drv.Derivation, path string) {
+	outs := make([]string, len(d.Outputs))
+	for i, o := range d.Outputs {
+		outs[i] = o.Name
 	}
-	return ""
+	in.AddDrv(path, outs...)
 }
 
 // toolchainArgs is the Toolchain part of a job.
@@ -497,16 +392,16 @@ const (
 	jobLink        // the link: race/asan, and the C sanitisers when cgo is linked
 )
 
-func (pl *planner) toolchainArgs(c buildCtx, cc *engine.Resolved, in *inputs) toolchainArgs {
+func (pl *planner) toolchainArgs(c buildCtx, cc *engine.Resolved, in *engine.Inputs) toolchainArgs {
 	return pl.toolchainArgsFor(c, cc, in, jobPure)
 }
 
-func (pl *planner) toolchainArgsFor(c buildCtx, cc *engine.Resolved, in *inputs, kind int) toolchainArgs {
-	in.add(c.tc.rv, "out")
+func (pl *planner) toolchainArgsFor(c buildCtx, cc *engine.Resolved, in *engine.Inputs, kind int) toolchainArgs {
+	in.AddCutoff(c.tc.rv, "out")
 	a := toolchainArgs{GoRoot: c.tc.goroot, GOOS: c.goos, GOARCH: c.goarch, Path: []string{}, Env: c.target.Env()}
 	if c.cgo && cc != nil {
-		o := pickOutput(cc.Outputs, "bin", "out")
-		a.Path = append(a.Path, in.add(*cc, o)+"/bin")
+		o := engine.PickOutput(cc.Outputs, "bin", "out")
+		a.Path = append(a.Path, in.AddCutoff(*cc, o)+"/bin")
 		a.CC = c.target.CC
 	}
 	if c.target.Cross {
@@ -553,22 +448,9 @@ func (a toolchainArgs) with(kv ...any) map[string]any {
 	return m
 }
 
-func pickOutput(outs map[string]string, prefer ...string) string {
-	for _, o := range prefer {
-		if _, ok := outs[o]; ok {
-			return o
-		}
-	}
-	names := sortedKeys(outs)
-	if len(names) > 0 {
-		return names[0]
-	}
-	return ""
-}
-
 // std plans the standard library for c (one derivation per toolchain, target and cgo).
 func (pl *planner) std(c buildCtx, cc *engine.Resolved, system string) (string, *drv.Derivation, error) {
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	tca := pl.toolchainArgs(c, cc, in)
 	if c.v.asan {
 		// Go cannot link an -asan program whose standard library is compiled with -N: the
@@ -588,8 +470,8 @@ func (pl *planner) std(c buildCtx, cc *engine.Resolved, system string) (string, 
 
 // tools plans cmd/pack for the toolchain (host).
 func (pl *planner) tools(c buildCtx, system string) (string, *drv.Derivation, error) {
-	in := newInputs(pl.req.Builder)
-	in.add(c.tc.rv, "out")
+	in := engine.NewInputs(pl.req.Builder)
+	in.AddCutoff(c.tc.rv, "out")
 	goos, goarch := hostGo()
 	args := map[string]any{"goroot": c.tc.goroot, "goos": goos, "goarch": goarch, "path": []string{}, "cc": "",
 		"out": drv.Placeholder("out")}
@@ -923,7 +805,7 @@ func compileFlags(p, lang string) []string { return []string{"-p", p, "-lang=" +
 
 // cgoFlags returns the cgo CFLAGS/LDFLAGS of p: its #cgo directives, then the include and
 // link flags of the C libraries its Module.Cgo declaration gives it (R-GO-001).
-func (pl *planner) cgoFlags(t *target, p *pkg, in *inputs) ([]string, []string, error) {
+func (pl *planner) cgoFlags(t *target, p *pkg, in *engine.Inputs) ([]string, []string, error) {
 	cflags := slices.Clone(p.bp.CgoCFLAGS)
 	ldflags := slices.Clone(p.bp.CgoLDFLAGS)
 	if p.mod == nil {
@@ -939,7 +821,7 @@ func (pl *planner) cgoFlags(t *target, p *pkg, in *inputs) ([]string, []string, 
 		}
 		var s gospec.Package
 		if err := json.Unmarshal(n.Spec, &s); err != nil {
-			return nil, nil, internal(n, "package spec: %v", err)
+			return nil, nil, engine.Internal(n, "package spec: %v", err)
 		}
 		if s.Dir != rel || s.Module < 0 || s.Module >= len(n.Deps) || p.mod.node == nil || n.Deps[s.Module] != p.mod.node.ID {
 			continue
@@ -950,7 +832,7 @@ func (pl *planner) cgoFlags(t *target, p *pkg, in *inputs) ([]string, []string, 
 		}
 		for _, li := range s.Libs {
 			if li < 0 || li >= len(n.Deps) {
-				return nil, nil, internal(n, "library dep out of range")
+				return nil, nil, engine.Internal(n, "library dep out of range")
 			}
 			rv, ok := pl.req.Inputs[n.Deps[li]]
 			if !ok {
@@ -966,18 +848,18 @@ func (pl *planner) cgoFlags(t *target, p *pkg, in *inputs) ([]string, []string, 
 
 // linkFlags turns a C library's link info into cgo flags; a library without link info (a
 // nixpkgs library) contributes its include and lib directories.
-func linkFlags(rv engine.Resolved, in *inputs) ([]string, []string) {
+func linkFlags(rv engine.Resolved, in *engine.Inputs) ([]string, []string) {
 	var cflags, ldflags []string
 	for o := range rv.Outputs {
-		in.add(rv, o)
+		in.AddCutoff(rv, o)
 	}
 	li := rv.LinkInfo
 	if li == nil {
 		li = &bob.LinkInfo{}
-		if o := pickOutput(rv.Outputs, "dev", "out"); o != "" {
+		if o := engine.PickOutput(rv.Outputs, "dev", "out"); o != "" {
 			li.IncludeDirs = []string{rv.Outputs[o] + "/include"}
 		}
-		if o := pickOutput(rv.Outputs, "lib", "out"); o != "" {
+		if o := engine.PickOutput(rv.Outputs, "lib", "out"); o != "" {
 			li.LinkDirs = []string{rv.Outputs[o] + "/lib"}
 			li.RuntimeDirs = []string{rv.Outputs[o] + "/lib"}
 		}
@@ -1006,9 +888,9 @@ func (pl *planner) compileClosure(t *target, cl *closure, tests map[string]bool)
 	cc := t.cc
 	stdDrv, stdD, err := pl.std(c, cc, t.system)
 	if err != nil {
-		return nil, internal(t.node, "%v", err)
+		return nil, engine.Internal(t.node, "%v", err)
 	}
-	res := &compiled{std: outPath(stdD) + "/importcfg", stdDrv: stdDrv, stdD: stdD}
+	res := &compiled{std: engine.OutPath(stdD) + "/importcfg", stdDrv: stdDrv, stdD: stdD}
 	for _, p := range cl.pkgs {
 		if p.cgo() {
 			res.cgo = true
@@ -1020,9 +902,9 @@ func (pl *planner) compileClosure(t *target, cl *closure, tests map[string]bool)
 	if res.pack != "" || res.cgo {
 		res.packDrv, res.packD, err = pl.tools(c, t.system)
 		if err != nil {
-			return nil, internal(t.node, "%v", err)
+			return nil, engine.Internal(t.node, "%v", err)
 		}
-		res.pack = outPath(res.packD) + "/bin/pack"
+		res.pack = engine.OutPath(res.packD) + "/bin/pack"
 	}
 	// Embeds and sources.
 	for _, ip := range sortedKeys(cl.pkgs) {
@@ -1068,14 +950,14 @@ func (pl *planner) groupDrv(t *target, cl *closure, res *compiled, g *group, src
 			kind = "go-cgo"
 		}
 	}
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	var cc *engine.Resolved
 	jk := jobPure
 	if kind == "go-cgo" {
 		cc, jk = t.cc, jobCgo
 	}
 	tca := pl.toolchainArgsFor(cl.ctx, cc, in, jk)
-	in.addDrv(res.stdD, res.stdDrv)
+	addDrv(in, res.stdD, res.stdDrv)
 	var pkgs []pkgJob
 	self := drv.Placeholder("out")
 	for _, p := range g.pkgs {
@@ -1087,16 +969,16 @@ func (pl *planner) groupDrv(t *target, cl *closure, res *compiled, g *group, src
 	}
 	pack := ""
 	if res.packD != nil && (kind == "go-cgo" || hasObjects(g.pkgs)) {
-		in.addDrv(res.packD, res.packDrv)
+		addDrv(in, res.packD, res.packDrv)
 		pack = res.pack
 	}
 	args := tca.with("std", res.std, "pack", pack, "packages", pkgs)
 	p, d, err := pl.job(drv.Name(append([]string{groupName(g)}, nameParts(cl.ctx.target, cl.ctx.v.tag(jk == jobCgo))...)...),
 		t.system, kind, groupLabel(g), args, in)
 	if err != nil {
-		return internal(t.node, "%v", err)
+		return engine.Internal(t.node, "%v", err)
 	}
-	g.drv, g.d, g.out = p, d, outPath(d)
+	g.drv, g.d, g.out = p, d, engine.OutPath(d)
 	return nil
 }
 
@@ -1129,12 +1011,12 @@ func groupName(g *group) string {
 }
 
 // pkgJob is the compile of one package inside a group derivation whose output is self.
-func (pl *planner) pkgJob(t *target, cl *closure, res *compiled, g *group, p *pkg, src, self string, in *inputs) (pkgJob, error) {
+func (pl *planner) pkgJob(t *target, cl *closure, res *compiled, g *group, p *pkg, src, self string, in *engine.Inputs) (pkgJob, error) {
 	if src == "" {
-		return pkgJob{}, internal(t.node, "%s has no source path", p.ip)
+		return pkgJob{}, engine.Internal(t.node, "%s has no source path", p.ip)
 	}
 	if p.ref.kind == refWorkspace {
-		in.srcs[src] = true
+		in.AddSrc(src)
 	} else {
 		pl.addStoreInput(p, in)
 	}
@@ -1170,7 +1052,7 @@ func (pl *planner) pkgJob(t *target, cl *closure, res *compiled, g *group, p *pk
 	for _, imp := range p.imports {
 		dg := res.byPkg[imp]
 		if dg == nil {
-			return pkgJob{}, internal(t.node, "%s imports %s, which has no group", p.ip, imp)
+			return pkgJob{}, engine.Internal(t.node, "%s imports %s, which has no group", p.ip, imp)
 		}
 		if dg == g {
 			j.Imports[imp] = archive(self, imp)
@@ -1185,14 +1067,14 @@ func (pl *planner) pkgJob(t *target, cl *closure, res *compiled, g *group, p *pk
 }
 
 // addStoreInput records the store path a third-party or generated package is read from.
-func (pl *planner) addStoreInput(p *pkg, in *inputs) {
+func (pl *planner) addStoreInput(p *pkg, in *engine.Inputs) {
 	if p.ref.kind == refGen {
 		g := p.ref.ws.spec.Generated[p.ref.gen]
-		in.add(pl.req.Inputs[p.ref.ws.node.Deps[g.Dep]], "out")
+		in.AddCutoff(pl.req.Inputs[p.ref.ws.node.Deps[g.Dep]], "out")
 		return
 	}
 	if sp, ok := pl.storeOf[pl.storeRoot(p)]; ok {
-		in.srcs[sp] = true
+		in.AddSrc(sp)
 	}
 }
 
@@ -1201,7 +1083,7 @@ func (pl *planner) addStoreInput(p *pkg, in *inputs) {
 func (pl *planner) planBinary(n *ir.Node) error {
 	var s gospec.Binary
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
-		return internal(n, "binary spec: %v", err)
+		return engine.Internal(n, "binary spec: %v", err)
 	}
 	t, err := pl.newTarget(n, s.Build)
 	if err != nil {
@@ -1213,20 +1095,20 @@ func (pl *planner) planBinary(n *ir.Node) error {
 		return err
 	}
 	if p := cl.pkgs[ip]; p.bp.Name != "main" {
-		return pl.invalid("main package", fmt.Sprintf("%s is package %s, not a main package", ip, p.bp.Name))
+		return engine.Invalid(pl.cur, "main package", fmt.Sprintf("%s is package %s, not a main package", ip, p.bp.Name))
 	}
 	res, err := pl.compileClosure(t, cl, nil)
 	if err != nil {
 		return err
 	}
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	tca := pl.toolchainArgsFor(cl.ctx, t.cc, in, jobLink)
 	tca.CFlags = append(tca.CFlags, t.sanitiserRunpath(cl.ctx, in)...)
-	in.addDrv(res.stdD, res.stdDrv)
+	addDrv(in, res.stdD, res.stdDrv)
 	link := map[string]string{}
 	for _, dep := range cl.transitive(ip) {
 		g := res.byPkg[dep]
-		in.addDrv(g.d, g.drv)
+		addDrv(in, g.d, g.drv)
 		link[dep] = archive(g.out, dep)
 	}
 	out := drv.Placeholder("out")
@@ -1252,14 +1134,14 @@ func (pl *planner) planBinary(n *ir.Node) error {
 	p, d, err := pl.jobFixup(drv.Name(append([]string{"go-link", s.Name}, nameParts(cl.ctx.target, cl.ctx.v.tag(cl.ctx.cgo))...)...),
 		t.system, "go-link", n.Label, args, in, forbidden)
 	if err != nil {
-		return internal(n, "%v", err)
+		return engine.Internal(n, "%v", err)
 	}
-	rv := engine.Resolved{Drv: p, Outputs: map[string]string{"out": outPath(d)}}
+	rv := engine.Resolved{Drv: p, Outputs: map[string]string{"out": engine.OutPath(d)}}
 	if linkInfo != nil {
-		linkInfo.IncludeDirs = []string{outPath(d) + "/include"}
-		linkInfo.LinkDirs = []string{outPath(d) + "/lib"}
+		linkInfo.IncludeDirs = []string{engine.OutPath(d) + "/include"}
+		linkInfo.LinkDirs = []string{engine.OutPath(d) + "/lib"}
 		if s.Mode == gospec.ModeCShared {
-			linkInfo.RuntimeDirs = []string{outPath(d) + "/lib"}
+			linkInfo.RuntimeDirs = []string{engine.OutPath(d) + "/lib"}
 		}
 		rv.LinkInfo = linkInfo
 	} else {

@@ -261,7 +261,7 @@ func TestGenJobsDecode(t *testing.T) {
 
 	var run bspec.TestRunArgs
 	j = job(t, drvs["ccrun-mathx_test"], &run)
-	if j.Kind != "test-run" || run.Format != "tap" || run.Argv[0] != outPath(drvs["cc-mathx_test"])+"/bin/mathx_test" {
+	if j.Kind != "test-run" || run.Format != "tap" || run.Argv[0] != engine.OutPath(drvs["cc-mathx_test"])+"/bin/mathx_test" {
 		t.Errorf("test run: %+v %+v", j, run)
 	}
 

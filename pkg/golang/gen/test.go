@@ -25,7 +25,7 @@ const defaultTestTimeoutS = 600
 func (pl *planner) planTest(n *ir.Node) error {
 	var s gospec.Test
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
-		return internal(n, "test spec: %v", err)
+		return engine.Internal(n, "test spec: %v", err)
 	}
 	t, err := pl.newTarget(n, s.Build)
 	if err != nil {
@@ -45,7 +45,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	tf.ImportPath, tf.ModulePath = ip, t.mod.spec.Path
 	main, err := testmain(tf)
 	if err != nil {
-		return internal(n, "test main: %v", err)
+		return engine.Internal(n, "test main: %v", err)
 	}
 
 	// The packages the test binary links, except the package under test (compiled with its
@@ -82,7 +82,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	}
 	src := srcPaths[ip]
 
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	var cc *engine.Resolved
 	if cl.ctx.cgo {
 		cc = t.cc
@@ -93,18 +93,18 @@ func (pl *planner) planTest(n *ir.Node) error {
 	}
 	tca.CFlags = append(tca.CFlags, t.sanitiserRunpath(cl.ctx, in)...)
 	tca.GCFlags = cl.ctx.v.gcflags()
-	in.addDrv(res.stdD, res.stdDrv)
+	addDrv(in, res.stdD, res.stdDrv)
 	if under.ref.kind == refWorkspace {
-		in.srcs[src] = true
+		in.AddSrc(src)
 	} else {
 		pl.addStoreInput(under, in)
 	}
 	archiveOf := func(q string) (string, error) {
 		g := res.byPkg[q]
 		if g == nil {
-			return "", internal(n, "%s has no compiled archive", q)
+			return "", engine.Internal(n, "%s has no compiled archive", q)
 		}
-		in.addDrv(g.d, g.drv)
+		addDrv(in, g.d, g.drv)
 		return archive(g.out, q), nil
 	}
 	// importOf is what a compile of the test job reads for q: its archive, or in the cutoff
@@ -112,7 +112,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	importOf := func(q string) (string, error) {
 		g := res.byPkg[q]
 		if g == nil {
-			return "", internal(n, "%s has no compiled archive", q)
+			return "", engine.Internal(n, "%s has no compiled archive", q)
 		}
 		return res.compileImport(g, q, in), nil
 	}
@@ -199,11 +199,11 @@ func (pl *planner) planTest(n *ir.Node) error {
 	if under.cgo() || len(bp.SFiles)+len(bp.SysoFiles) > 0 {
 		if res.packD == nil {
 			if res.packDrv, res.packD, err = pl.tools(cl.ctx, t.system); err != nil {
-				return internal(n, "%v", err)
+				return engine.Internal(n, "%v", err)
 			}
-			res.pack = outPath(res.packD) + "/bin/pack"
+			res.pack = engine.OutPath(res.packD) + "/bin/pack"
 		}
-		in.addDrv(res.packD, res.packDrv)
+		addDrv(in, res.packD, res.packDrv)
 		pack = res.pack
 	}
 	binName := path.Base(ip) + ".test"
@@ -214,7 +214,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	testDrv, testD, err := pl.job(drv.Name(append([]string{"go-test", ip}, nameParts(cl.ctx.target, cl.ctx.v.tag(cl.ctx.cgo))...)...),
 		t.system, "go-testmain", n.Label, args, in)
 	if err != nil {
-		return internal(n, "%v", err)
+		return engine.Internal(n, "%v", err)
 	}
 
 	run, err := pl.testRun(n, s, ip, testD, testDrv, binName, cl.ctx)
@@ -278,26 +278,26 @@ type probeJob struct {
 // testRun plans the test-run job of a unit: run the test binary once with -test.v (parsed
 // into cases), its services started first (R-FW-025).
 func (pl *planner) testRun(n *ir.Node, s gospec.Test, ip string, testD *drv.Derivation, testDrv, binName string, c buildCtx) (engine.Resolved, error) {
-	in := newInputs(pl.req.Builder)
-	in.addDrv(testD, testDrv)
+	in := engine.NewInputs(pl.req.Builder)
+	addDrv(in, testD, testDrv)
 	timeout := s.TimeoutS
 	if timeout <= 0 {
 		timeout = defaultTestTimeoutS
 	}
-	argv := []string{outPath(testD) + "/bin/" + binName, "-test.v=true", "-test.paniconexit0",
+	argv := []string{engine.OutPath(testD) + "/bin/" + binName, "-test.v=true", "-test.paniconexit0",
 		"-test.timeout=" + strconv.FormatInt(timeout, 10) + "s"}
 	argv = append(argv, s.Args...)
 	argv = append(argv, pl.req.TestArgs...)
 	if c.target.Cross {
 		// R-FW-039: a test for another platform runs under the emulator (qemu-user).
 		if s.Emulator <= 0 || s.Emulator >= len(n.Deps) {
-			return engine.Resolved{}, internal(n, "a test for %s/%s has no emulator", c.goos, c.goarch)
+			return engine.Resolved{}, engine.Internal(n, "a test for %s/%s has no emulator", c.goos, c.goarch)
 		}
 		rv, ok := pl.req.Inputs[n.Deps[s.Emulator]]
 		if !ok {
-			return engine.Resolved{}, internal(n, "its emulator is not planned")
+			return engine.Resolved{}, engine.Internal(n, "its emulator is not planned")
 		}
-		q := in.add(rv, pickOutput(rv.Outputs, "out"))
+		q := in.AddCutoff(rv, engine.PickOutput(rv.Outputs, "out"))
 		argv = append([]string{q + "/bin/qemu-" + strings.TrimSuffix(c.target.Platform.NixSystem(), "-linux")}, argv...)
 	}
 	a := testRunArgs{Argv: argv, Format: "go", TimeoutS: timeout}
@@ -307,14 +307,14 @@ func (pl *planner) testRun(n *ir.Node, s gospec.Test, ip string, testD *drv.Deri
 		var first string
 		for _, ti := range sv.Tools {
 			if ti < 0 || ti >= len(n.Deps) {
-				return engine.Resolved{}, internal(n, "service tool out of range")
+				return engine.Resolved{}, engine.Internal(n, "service tool out of range")
 			}
 			rv, ok := pl.req.Inputs[n.Deps[ti]]
 			if !ok {
-				return engine.Resolved{}, internal(n, "service tool %s is not planned", n.Deps[ti])
+				return engine.Resolved{}, engine.Internal(n, "service tool %s is not planned", n.Deps[ti])
 			}
-			o := pickOutput(rv.Outputs, "bin", "out")
-			root := in.add(rv, o)
+			o := engine.PickOutput(rv.Outputs, "bin", "out")
+			root := in.AddCutoff(rv, o)
 			if first == "" {
 				first = root
 			}
@@ -331,7 +331,7 @@ func (pl *planner) testRun(n *ir.Node, s gospec.Test, ip string, testD *drv.Deri
 	p, d, err := pl.job(drv.Name(append([]string{"go-test", ip, "run"}, nameParts(c.target, c.v.tag(c.cgo))...)...),
 		testD.System, "test-run", n.Label, a, in)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
-	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": outPath(d)}}, nil
+	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": engine.OutPath(d)}}, nil
 }

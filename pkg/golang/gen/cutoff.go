@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/srcs"
 )
@@ -21,12 +22,12 @@ func exportFile(out, ip string) string { return out + "/export/" + ip + ".a" }
 
 // compileImport is what a compile reads for package q of group g: the export data by content
 // when the cutoff built g while planning, else g's archive. It records the input in in.
-func (r *compiled) compileImport(g *group, q string, in *inputs) string {
+func (r *compiled) compileImport(g *group, q string, in *engine.Inputs) string {
 	if sp, ok := g.exports[q]; ok {
-		in.srcs[sp] = true
+		in.AddSrc(sp)
 		return sp + "/" + q + ".a"
 	}
-	in.addDrv(g.d, g.drv)
+	addDrv(in, g.d, g.drv)
 	return archive(g.out, q)
 }
 

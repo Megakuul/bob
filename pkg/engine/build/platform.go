@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -77,27 +79,116 @@ func (ix *indexes) check(ctx context.Context, g *ir.Graph) (map[string]nixidx.En
 			DefinedAt:   diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line},
 			AllowUnfree: n.Nix.Allow.Unfree, AllowInsecure: n.Nix.Allow.Insecure})
 	}
-	entries := map[string]nixidx.Entry{}
-	systems := make([]string, 0, len(needs))
+	// The attributes the cross pre-check (precheck) asks for are looked up in the same
+	// evaluation as the nodes' attributes of their system, and the systems are evaluated in
+	// parallel: each evaluation loads nixpkgs anew (about 1-2 s cold), which is what the cold
+	// index budget B-078 is spent on.
+	extra := map[string][]string{}
+	if _, _, useTest, err := engine.TestVersions(); err == nil && !useTest {
+		for _, c := range crossNeeds(g) {
+			tattrs, hattrs := versionAttrs(c)
+			extra[c.t.NixSystem()] = append(extra[c.t.NixSystem()], tattrs...)
+			extra[store.HostSystem()] = append(extra[store.HostSystem()], hattrs...)
+		}
+	}
+	systems := make([]string, 0, len(needs)+len(extra))
 	for s := range needs {
 		systems = append(systems, s)
 	}
+	for s := range extra {
+		if _, ok := needs[s]; !ok {
+			systems = append(systems, s)
+		}
+	}
 	sort.Strings(systems)
-	var errs []error
-	for _, sys := range systems {
+	idxs := make([]*nixidx.Index, len(systems))
+	for k, sys := range systems {
 		idx, err := ix.get(ctx, sys)
 		if err != nil {
-			return entries, err
+			return map[string]nixidx.Entry{}, err
 		}
-		es, err := idx.Check(ctx, needs[sys])
-		for attr, e := range es {
+		idxs[k] = idx
+	}
+	found := make([]map[string]nixidx.Entry, len(systems))
+	errs := make([]error, len(systems))
+	var wg sync.WaitGroup
+	for k, sys := range systems {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if v := recover(); v != nil {
+					errs[k] = internalf("//...", "nixpkgs index of %s panicked: %v", sys, v)
+				}
+			}()
+			if len(extra[sys]) > 0 {
+				attrs := slices.Clone(extra[sys])
+				for _, n := range needs[sys] {
+					attrs = append(attrs, n.Attr)
+				}
+				// A failure here is reported by Check below (nodes) or by precheck (its
+				// attributes), which look the failing attributes up again.
+				_, _ = idxs[k].Lookup(ctx, attrs)
+			}
+			if len(needs[sys]) > 0 {
+				found[k], errs[k] = idxs[k].Check(ctx, needs[sys])
+			}
+		}()
+	}
+	wg.Wait()
+	entries := map[string]nixidx.Entry{}
+	for k, sys := range systems {
+		for attr, e := range found[k] {
 			entries[entryKey(sys, attr)] = e
-		}
-		if err != nil {
-			errs = append(errs, err)
 		}
 	}
 	return entries, errors.Join(errs...)
+}
+
+// crossNeed is a cross target of the graph with what R-PLAT-007's pre-check compares for it:
+// libs when target libraries come from the target system's set, rust when Rust code is built
+// for it.
+type crossNeed struct {
+	t          bob.Platform
+	libs, rust bool
+}
+
+// crossNeeds returns the cross targets of g the pre-check covers.
+func crossNeeds(g *ir.Graph) []crossNeed {
+	var out []crossNeed
+	for _, t := range crossTargets(g) {
+		c := crossNeed{t: t}
+		for _, n := range g.Nodes {
+			p, err := engine.NodePlatform(n)
+			if err != nil || p != t {
+				continue
+			}
+			c.libs = c.libs || n.Nix != nil && n.Nix.Set == "target"
+			c.rust = c.rust || strings.HasPrefix(n.Kind, "rust.")
+		}
+		if c.libs || c.rust {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// versionAttrs returns the attributes the pre-check of c reads from the target system's set
+// (its own glibc and rustc) and from the host set (the cross toolchain's glibc, the host rustc).
+func versionAttrs(c crossNeed) (tattrs, hattrs []string) {
+	if c.libs {
+		tattrs = append(tattrs, "glibc")
+		hattrs = append(hattrs, crossLibc(c.t))
+	}
+	if c.rust {
+		tattrs, hattrs = append(tattrs, "rustc"), append(hattrs, "rustc")
+	}
+	return tattrs, hattrs
+}
+
+// crossLibc is the host-set attribute of the cross toolchain's C library for t.
+func crossLibc(t bob.Platform) string {
+	return bob.ToolchainFor(engine.HostPlatform(), t).CC + ".libc"
 }
 
 // crossTargets returns the platforms other than the host's that nodes of g are built for.
@@ -120,8 +211,8 @@ func crossTargets(g *ir.Graph) []bob.Platform {
 // the target system's own set (when target libraries come from it) must equal the cross
 // toolchain's, and the target system's rustc the host's (when Rust code is built for it).
 func (ix *indexes) precheck(ctx context.Context, g *ir.Graph) error {
-	targets := crossTargets(g)
-	if len(targets) == 0 {
+	needs := crossNeeds(g)
+	if len(needs) == 0 {
 		return nil
 	}
 	testNative, testCross, useTest, err := engine.TestVersions()
@@ -129,26 +220,14 @@ func (ix *indexes) precheck(ctx context.Context, g *ir.Graph) error {
 		return err
 	}
 	var errs []error
-	for _, t := range targets {
-		libs, rust := false, false
-		for _, n := range g.Nodes {
-			p, err := engine.NodePlatform(n)
-			if err != nil || p != t {
-				continue
-			}
-			libs = libs || n.Nix != nil && n.Nix.Set == "target"
-			rust = rust || strings.HasPrefix(n.Kind, "rust.")
-		}
-		if !libs && !rust {
-			continue
-		}
+	for _, c := range needs {
 		native, cross := testNative, testCross
 		if !useTest {
-			if native, cross, err = ix.versions(ctx, t, libs, rust); err != nil {
+			if native, cross, err = ix.versions(ctx, c); err != nil {
 				return err
 			}
 		}
-		if err := engine.CheckVersions(t, native, cross, libs, rust); err != nil {
+		if err := engine.CheckVersions(c.t, native, cross, c.libs, c.rust); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -156,20 +235,14 @@ func (ix *indexes) precheck(ctx context.Context, g *ir.Graph) error {
 }
 
 // versions looks up the facts of the pre-check in the indexes: native = the target system's
-// own glibc and rustc, cross = the cross toolchain's glibc and the host's rustc.
-func (ix *indexes) versions(ctx context.Context, t bob.Platform, libs, rust bool) (native, cross engine.Versions, err error) {
-	tidx, err := ix.get(ctx, t.NixSystem())
+// own glibc and rustc, cross = the cross toolchain's glibc and the host's rustc. check has
+// already looked them up, so this normally reads the indexes' memory.
+func (ix *indexes) versions(ctx context.Context, c crossNeed) (native, cross engine.Versions, err error) {
+	tidx, err := ix.get(ctx, c.t.NixSystem())
 	if err != nil {
 		return native, cross, err
 	}
-	var tattrs, hattrs []string
-	crossLibc := bob.ToolchainFor(engine.HostPlatform(), t).CC + ".libc"
-	if libs {
-		tattrs, hattrs = append(tattrs, "glibc"), append(hattrs, crossLibc)
-	}
-	if rust {
-		tattrs, hattrs = append(tattrs, "rustc"), append(hattrs, "rustc")
-	}
+	tattrs, hattrs := versionAttrs(c)
 	te, err := tidx.Lookup(ctx, tattrs)
 	if err != nil {
 		return native, cross, err
@@ -178,8 +251,8 @@ func (ix *indexes) versions(ctx context.Context, t bob.Platform, libs, rust bool
 	if err != nil {
 		return native, cross, err
 	}
-	native.Glibc, cross.Glibc = te["glibc"].Version, he[crossLibc].Version
-	if rust {
+	native.Glibc, cross.Glibc = te["glibc"].Version, he[crossLibc(c.t)].Version
+	if c.rust {
 		native.Rustc, cross.Rustc = te["rustc"].Version, he["rustc"].Version
 	}
 	return native, cross, nil

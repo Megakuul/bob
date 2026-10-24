@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/golang/resolve"
 )
@@ -34,7 +35,7 @@ func TestRootGoMod(t *testing.T) {
 		"use/bob.go":     "//go:build bob\n\npackage use\n\nimport b \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = b.Import(\"example.com/dep\", \"v1.2.0\")\nvar _ = b.Import(\"example.com/other\", \"v0.1.0\")\n",
 		"x/go.mod":       "module example.com/x\n",
 		"x/bob.go":       "//go:build bob\n\npackage x\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Import(\"example.com/ignored\", \"v1.0.0\")\n",
-		"gen/go.mod":     goModHeader + "\nmodule example.com/gen\n",
+		"gen/go.mod":     engine.GoModHeader + "\nmodule example.com/gen\n",
 		"gen/bob.go":     "//go:build bob\n\npackage gen\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Import(\"example.com/third\", \"v2.0.0+incompatible\")\n",
 		".hidden/bob.go": "//go:build bob\n\npackage h\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Import(\"example.com/hidden\", \"v1.0.0\")\n",
 	})
@@ -42,7 +43,7 @@ func TestRootGoMod(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	want := goModHeader + "\n// Edit bob.go and run bob lock.\nmodule example.com/app\n\ngo 1.26.0\n\nrequire (\n" +
+	want := engine.GoModHeader + "\n// Edit bob.go and run bob lock.\nmodule example.com/app\n\ngo 1.26.0\n\nrequire (\n" +
 		"\texample.com/dep v1.2.0\n\texample.com/other v0.1.0\n\texample.com/third v2.0.0+incompatible\n\tgithub.com/megakuul/bob v0.0.0-dev\n)\n"
 	if string(f.Content) != want {
 		t.Errorf("root go.mod:\n%s\nwant:\n%s", f.Content, want)

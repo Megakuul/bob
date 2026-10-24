@@ -218,7 +218,8 @@ func (o *out) configure(a *args) {
 	o.style = translate.StyleFor(o.isTTY, getenv, o.verbose > 0)
 }
 
-// notYet is the answer of a command that a later milestone implements.
+// notYet is the answer of a command no task has implemented yet (bob gc: plan/execution-plan.md
+// has no task for it; raised by I-B47).
 func notYet(e *env) int {
 	return e.out.fail(diag.NotImplemented("bob " + e.cmd.name))
 }

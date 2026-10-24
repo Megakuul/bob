@@ -21,9 +21,6 @@ type Config struct {
 	Params         store.FleetParams
 	Now            func() time.Time
 	Log            *slog.Logger
-	// Forge mints per-job checkout tokens (the forge adapters, M17.1); nil until they exist:
-	// GetCheckoutCredential then answers that checkout is not available.
-	Forge orchestrator.ForgeMinter
 }
 
 // SecondWakeAfter is when a still queued job wakes a second worker (R-FLEET-012).
@@ -72,11 +69,8 @@ func New(ctx context.Context, cfg Config) (*Fleet, error) {
 	f.Hub = orchestrator.NewHub(f.jobs)
 	f.Reconciler = &orchestrator.Reconciler{Fleet: cfg.Fleet, Shards: cfg.Params.JobShards, LeaseTTL: cfg.Params.LeaseTTL,
 		Skew: cfg.Params.Skew, ReslotAge: cfg.Params.ReslotAfter, Now: cfg.Now, Name: cfg.Name, UseLease: true, Queue: f.jobs}
-	forge := cfg.Forge
-	if forge == nil {
-		forge = noForge{}
-	}
-	f.Checkouts = &orchestrator.Checkouts{Control: cfg.Control, Queue: f.jobs, Forge: forge, Now: cfg.Now}
+	f.Checkouts = &orchestrator.Checkouts{Control: cfg.Control, Queue: f.jobs, Forge: noForge{}, Now: cfg.Now,
+		LeaseTTL: cfg.Params.LeaseTTL, Skew: cfg.Params.Skew}
 	return f, nil
 }
 
@@ -176,7 +170,9 @@ func (f *Fleet) Components() []*orchestrator.Controller {
 	return cs
 }
 
-// noForge is the checkout minter until the forge adapters exist (M17.1).
+// noForge is the checkout minter of a fleet without forge integrations. bob-server replaces it
+// with the forge minter (Checkouts.Forge, cmd/bob-server/parts_forge.go) once the forge parts
+// are wired; until then GetCheckoutCredential answers that checkout is not available.
 type noForge struct{}
 
 func (noForge) Mint(context.Context, string, time.Time) (string, orchestrator.Checkout, error) {

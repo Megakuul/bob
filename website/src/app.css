@@ -1,0 +1,297 @@
+@import "tailwindcss";
+
+/* Design tokens: the colours, radius and fonts of web/src/app.css (SPEC §6.10.2), plus a display
+   type scale for the website. Defined here once; components use only these. The default Tailwind
+   palette, radii, shadows and type scale are cleared so nothing else can creep in. */
+@theme {
+	--color-*: initial;
+	--radius-*: initial;
+	--shadow-*: initial;
+	--inset-shadow-*: initial;
+	--drop-shadow-*: initial;
+	--blur-*: initial;
+	--text-*: initial;
+	--font-*: initial;
+	--breakpoint-*: initial;
+
+	--breakpoint-sm: 600px;
+	--breakpoint-md: 900px;
+	--breakpoint-lg: 1200px;
+
+	--font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+	--text-xs: 11px;
+	--text-sm: 12px;
+	--text-base: 13px;
+	--text-lg: 15px;
+	--text-xl: 18px;
+	--text-2xl: 24px;
+	--text-3xl: 32px;
+	--text-4xl: 44px;
+	--text-5xl: 64px;
+	--radius-xs: 2px;
+	--spacing: 4px;
+
+	--color-bg: #ffffff;
+	--color-surface: #f6f6f3;
+	--color-line: #deded8;
+	--color-fg: #111110;
+	--color-muted: #5e5e58;
+	--color-accent: #ffd400; /* fills only */
+	--color-on-accent: #111110;
+	--color-focus: #111110;
+	--color-ok: #1e7b34;
+	--color-fail: #b42318;
+	--color-warn: #8a5a00;
+	--color-idle: #77776f;
+	/* website only: lit wires of the build graph (yellow lines vanish on white) */
+	--color-wire: #111110;
+}
+
+/* Dark is the website's default (app.html); light follows prefers-color-scheme or the toggle. */
+[data-theme="dark"] {
+	--color-bg: #0e0e0d;
+	--color-surface: #171715;
+	--color-line: #2c2c29;
+	--color-fg: #edede8;
+	--color-muted: #a3a39b;
+	--color-accent: #ffd400;
+	--color-on-accent: #111110;
+	--color-focus: #ffd400;
+	--color-ok: #4cc26b;
+	--color-fail: #f2685c;
+	--color-warn: #e0a526;
+	--color-idle: #8c8c84;
+	--color-wire: #ffd400;
+	color-scheme: dark;
+}
+
+@layer base {
+	html {
+		scroll-padding-top: 72px; /* the sticky header */
+	}
+	body {
+		background-color: var(--color-bg);
+		color: var(--color-fg);
+		font-family: var(--font-sans);
+		font-size: var(--text-lg);
+		line-height: 1.6;
+		-webkit-font-smoothing: antialiased;
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
+	::selection {
+		background-color: var(--color-accent);
+		color: var(--color-on-accent);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+			scroll-behavior: auto !important;
+		}
+	}
+}
+
+/* Rendered markdown (src/lib/server/markdown.ts emits plain elements; styled here because the
+   HTML comes from content files, not from components). */
+@layer components {
+	.md {
+		font-size: var(--text-lg);
+		line-height: 1.7;
+	}
+	.md > * + * {
+		margin-top: 1em;
+	}
+	.md h2,
+	.md h3,
+	.md h4 {
+		font-weight: 700;
+		letter-spacing: -0.01em;
+		line-height: 1.25;
+		position: relative;
+	}
+	.md h2 {
+		font-size: var(--text-2xl);
+		margin-top: 2.2em;
+		padding-top: 0.6em;
+		border-top: 1px solid var(--color-line);
+	}
+	.md h3 {
+		font-size: var(--text-xl);
+		margin-top: 1.8em;
+	}
+	.md h4 {
+		font-size: var(--text-lg);
+		margin-top: 1.5em;
+	}
+	.md .anchor {
+		color: var(--color-muted);
+		text-decoration: none;
+		margin-left: 0.4em;
+		font-family: var(--font-mono);
+		font-weight: 400;
+		opacity: 0;
+	}
+	.md h2:hover .anchor,
+	.md h3:hover .anchor,
+	.md h4:hover .anchor,
+	.md .anchor:focus-visible {
+		opacity: 1;
+	}
+	.md a {
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 3px;
+	}
+	.md a:hover {
+		text-decoration-color: var(--color-accent);
+		text-decoration-thickness: 2px;
+	}
+	.md ul,
+	.md ol {
+		padding-left: 1.4em;
+	}
+	.md ul {
+		list-style: square;
+	}
+	.md ol {
+		list-style: decimal;
+	}
+	.md li + li {
+		margin-top: 0.3em;
+	}
+	.md li::marker {
+		color: var(--color-muted);
+	}
+	.md strong {
+		font-weight: 700;
+	}
+	.md hr {
+		border: 0;
+		border-top: 1px solid var(--color-line);
+		margin: 2em 0;
+	}
+	.md :not(pre) > code {
+		font-family: var(--font-mono);
+		font-size: 0.88em;
+		background: var(--color-surface);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-xs);
+		padding: 0.05em 0.35em;
+	}
+	.md .code {
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-xs);
+		background: var(--color-surface);
+	}
+	.md .code-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		border-bottom: 1px solid var(--color-line);
+		padding: 4px 6px 4px 12px;
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		color: var(--color-muted);
+		text-transform: lowercase;
+	}
+	.md .code pre {
+		overflow-x: auto;
+		padding: 12px 14px;
+		font-family: var(--font-mono);
+		font-size: var(--text-base);
+		line-height: 1.6;
+	}
+	.md .copy {
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-xs);
+		padding: 1px 8px;
+		color: var(--color-fg);
+		background: var(--color-bg);
+		cursor: pointer;
+	}
+	.md .copy:hover {
+		border-color: var(--color-fg);
+	}
+	.md .copy[data-done] {
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		border-color: var(--color-accent);
+	}
+	.md .table {
+		overflow-x: auto;
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius-xs);
+	}
+	.md table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: var(--text-base);
+	}
+	.md th,
+	.md td {
+		text-align: left;
+		padding: 7px 12px;
+		border-bottom: 1px solid var(--color-line);
+		vertical-align: top;
+	}
+	.md tr:last-child td {
+		border-bottom: 0;
+	}
+	.md th {
+		background: var(--color-surface);
+		font-weight: 600;
+	}
+	.md blockquote {
+		border-left: 2px solid var(--color-line);
+		padding-left: 14px;
+		color: var(--color-muted);
+	}
+	.md .callout {
+		border: 1px solid var(--color-line);
+		border-left: 4px solid var(--color-accent);
+		border-radius: var(--radius-xs);
+		background: var(--color-surface);
+		padding: 10px 14px;
+		color: var(--color-fg);
+	}
+	.md .callout-warning {
+		border-left-color: var(--color-fail);
+	}
+	.md .callout-title {
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-weight: 700;
+		margin-bottom: 4px;
+	}
+	.md .callout > * + * {
+		margin-top: 0.6em;
+	}
+	/* syntax tokens: three tones on the existing palette, no extra colours */
+	.md .t-k {
+		font-weight: 700;
+	}
+	.md .t-s {
+		color: var(--color-ok);
+	}
+	.md .t-c {
+		color: var(--color-muted);
+		font-style: italic;
+	}
+	.md .t-n {
+		color: var(--color-warn);
+	}
+	.md .t-p {
+		color: var(--color-muted);
+	}
+}

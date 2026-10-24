@@ -76,7 +76,7 @@ func CheckETag(field, requested, stored string) error {
 		return InvalidArgument(field, "etag is required")
 	}
 	if requested != stored {
-		return Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+		return ETagMismatch()
 	}
 	return nil
 }

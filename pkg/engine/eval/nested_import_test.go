@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/megakuul/bob/pkg/engine"
 )
 
 // nestedRepo has a Go module of the repository at tools/ (bob generated its go.mod, module
@@ -11,7 +13,7 @@ import (
 // module's path, as the go fixture's tools/tar/bob.go does (R-FW-002 R7, I-M12a NEEDS 2).
 func nestedRepo() map[string]string {
 	files := coreRepo()
-	files["tools/go.mod"] = generatedGoMod + "\n// Edit tools/bob.go and run bob lock.\nmodule example.com/tools\n\ngo 1.26.0\n"
+	files["tools/go.mod"] = engine.GoModHeader + "\n// Edit tools/bob.go and run bob lock.\nmodule example.com/tools\n\ngo 1.26.0\n"
 	files["tools/bob.go"] = `//go:build bob
 
 package tools

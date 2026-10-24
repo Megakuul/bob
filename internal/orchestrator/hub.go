@@ -7,11 +7,17 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+
+	"github.com/megakuul/bob/internal/api"
 )
+
+// ErrPermissionDenied marks the refusal of a worker request about a job the worker does not
+// hold. It is the API's sentinel, so the API boundary maps it to PermissionDenied.
+var ErrPermissionDenied = api.ErrWorkerPermissionDenied
 
 // errNoLease is the refusal of every worker request about a job the worker does not hold.
 func errNoLease(jobID string) error {
-	return fmt.Errorf("permission_denied: worker holds no lease on job %s", jobID)
+	return fmt.Errorf("%w: worker holds no lease on job %s", ErrPermissionDenied, jobID)
 }
 
 // ErrNotAttached is returned when the worker that holds a job has no Attach stream here.

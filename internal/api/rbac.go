@@ -1,7 +1,6 @@
 package api
 
 import (
-	"connectrpc.com/connect"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	accessv1 "github.com/megakuul/bob/internal/gen/bob/access/v1"
@@ -20,11 +19,6 @@ import (
 	workerv1 "github.com/megakuul/bob/internal/gen/bob/worker/v1"
 )
 
-// Hooks for RBAC (internal/rbac, M15.4), which implements Authorizer and RoleService.
-
-// Forbidden is PermissionDenied with a message of its own (e.g. "binding would grant
-// permissions you do not have").
-func Forbidden(msg string) error { return newError(connect.CodePermissionDenied, "", msg) }
 
 // AllRules is the rule table of every service the API serves (the permission catalogue's
 // source). It is the table New builds; New refuses to start when it is invalid.

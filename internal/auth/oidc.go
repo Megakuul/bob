@@ -552,7 +552,7 @@ func (s oidcService) DeleteOidcProvider(ctx context.Context, req *connect.Reques
 		return nil, err
 	}
 	if e := req.Msg.GetEtag(); e != "" && e != store.ETagOf(p.ETag) {
-		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+		return nil, api.ETagMismatch()
 	}
 	if err := store.Delete(ctx, s.id.control, p); err != nil {
 		return nil, storageError(err)

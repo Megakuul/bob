@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -65,20 +66,49 @@ type CheckoutRecord struct {
 	Download     bool      `cbor:"dt,omitempty"`
 }
 
-// checkoutShard is ftok/<sh2(jobID)>: job id -> its outstanding tokens.
+// LeaseBinding is the lease of a job that an orchestrator accepted (the first
+// GetCheckoutCredential of that worker and epoch). It lives in the control bucket, which
+// workers cannot write, because the job record they can rewrite (ADR 0013 T10) is no proof of
+// ownership on its own (I-R2 F2, decision A390).
+type LeaseBinding struct {
+	Worker string    `cbor:"w,omitempty"`
+	Epoch  int64     `cbor:"ep,omitempty"`
+	At     time.Time `cbor:"at,omitzero"`
+}
+
+// checkoutShard is ftok/<sh2(jobID)>: job id -> its outstanding tokens, and job id -> the
+// lease the orchestrators accepted for it.
 type checkoutShard struct {
-	Shard store.KeyField                               `pk:"ftok" cbor:"-"`
-	ETag  store.ETagField                              `etag:"true" cbor:"-"`
-	Jobs  store.DataField[map[string][]CheckoutRecord] `cbor:"m,omitempty"`
+	Shard  store.KeyField                               `pk:"ftok" cbor:"-"`
+	ETag   store.ETagField                              `etag:"true" cbor:"-"`
+	Jobs   store.DataField[map[string][]CheckoutRecord] `cbor:"m,omitempty"`
+	Leases store.DataField[map[string]LeaseBinding]     `cbor:"l,omitempty"`
 }
 
 // Draft returns a fresh update value with r's keys, ETag and data, for a CAS write.
 func (r *checkoutShard) Draft() *checkoutShard {
 	return &checkoutShard{
-		Shard: r.Shard,
-		ETag:  r.ETag,
-		Jobs:  store.Carry(r.Jobs),
+		Shard:  r.Shard,
+		ETag:   r.ETag,
+		Jobs:   store.Carry(r.Jobs),
+		Leases: store.Carry(r.Leases),
 	}
+}
+
+// withJobs is the update value of shard key with token entries jobs and the leases of cur
+// (nil: none); nil when both are empty, which deletes the document.
+func withJobs(key *checkoutShard, cur *checkoutShard, jobs map[string][]CheckoutRecord) *checkoutShard {
+	next := &checkoutShard{Shard: key.Shard}
+	if len(jobs) > 0 {
+		next.Jobs = store.Set(jobs)
+	}
+	if cur != nil {
+		next.Leases = store.Carry(cur.Leases)
+	}
+	if next.Jobs == nil && next.Leases == nil {
+		return nil
+	}
+	return next
 }
 
 func shardOf(jobID string) (*checkoutShard, error) {
@@ -98,6 +128,10 @@ type Checkouts struct {
 	// only public paths).
 	Downloads DownloadIssuer
 	Now       func() time.Time
+	// LeaseTTL and Skew are fleet.lease_ttl and the clock skew allowance (defaults 60 s, 5 s):
+	// a lease the orchestrators accepted moves to another worker only when the reconciler
+	// would requeue the job (its holder is revoked, gone or has no live heartbeat).
+	LeaseTTL, Skew time.Duration
 
 	cache store.Cache[checkoutShard]
 }
@@ -155,8 +189,10 @@ func (c *Checkouts) Get(ctx context.Context, wid, jobID string, epoch int64) (Ch
 	return co, nil
 }
 
-// held returns the spec of job jobID when worker wid holds it at epoch (owner + epoch on
-// job/<id>, state claimed or running), else errNoLease.
+// held returns the spec of job jobID when worker wid holds it at epoch, else errNoLease. The
+// job record is worker-writable (ADR 0013 T10), so it is only the first check: the spec must
+// be signed by an orchestrator for this job id, and the lease must be the one the
+// orchestrators accepted in the control bucket (bind).
 func (c *Checkouts) held(ctx context.Context, wid, jobID string, epoch int64) (store.JobSpec, error) {
 	rec, err := c.Queue.record(ctx, jobID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -168,8 +204,149 @@ func (c *Checkouts) held(ctx context.Context, wid, jobID string, epoch int64) (s
 	if rec.Owner.Value() != wid || rec.Epoch.Value() != epoch || (rec.State.Value() != StateClaimed && rec.State.Value() != StateRunning) {
 		return store.JobSpec{}, errNoLease(jobID)
 	}
-	spec, _ := fleet.DecodeSpec(rec.Spec.Value())
+	spec, ok := fleet.DecodeSpec(rec.Spec.Value())
+	if !ok || spec.JobID != jobID || !fleet.VerifySpec(c.specKeys(ctx), rec.Spec.Value(), rec.SpecSig.Value()) {
+		slog.Warn("security: checkout refused: the job spec is not signed by an orchestrator for this job", "job", jobID, "worker", wid)
+		return store.JobSpec{}, errNoLease(jobID)
+	}
+	if err := c.bind(ctx, wid, jobID, epoch); err != nil {
+		return store.JobSpec{}, err
+	}
 	return spec, nil
+}
+
+// specKeys are the orchestrator keys a job spec may be signed with: the queue's own key and
+// the keys published in fleet/cfg.k (rotation).
+func (c *Checkouts) specKeys(ctx context.Context) []ed25519.PublicKey {
+	var keys []ed25519.PublicKey
+	if len(c.Queue.Key) == ed25519.PrivateKeySize {
+		if pub, ok := c.Queue.Key.Public().(ed25519.PublicKey); ok {
+			keys = append(keys, pub)
+		}
+	}
+	if fc, err := store.Get(ctx, c.Queue.Fleet, store.FleetConfigKey()); err == nil {
+		for _, k := range fc.Keys.Value() {
+			keys = append(keys, k.Pub)
+		}
+	}
+	return keys
+}
+
+// bind records (or confirms) that worker wid holds job jobID at epoch, in ftok/<sh2(jobID)> of
+// the control bucket. A lease that was accepted for another worker, or for a later epoch, is
+// refused, unless the reconciler's requeue rule says the accepted holder's lease is over (it
+// is revoked or gone, or has no live heartbeat signed by its key that lists the job). So a
+// worker that rewrites the job record cannot take over a job another live worker holds
+// (I-R2 F2, decision A390).
+func (c *Checkouts) bind(ctx context.Context, wid, jobID string, epoch int64) error {
+	key, err := shardOf(jobID)
+	if err != nil {
+		return err
+	}
+	now := c.now()
+	type verdict struct {
+		b    LeaseBinding
+		over bool
+	}
+	var seen []verdict // the holder checks of earlier CAS rounds (fn may run again)
+	refused := false
+	err = store.Change(ctx, c.Control, key, func(cur *checkoutShard) (*checkoutShard, error) {
+		refused = false
+		leases := map[string]LeaseBinding{}
+		var jobs map[string][]CheckoutRecord
+		if cur != nil {
+			maps.Copy(leases, cur.Leases.Value())
+			jobs = cur.Jobs.Value()
+		}
+		b, ok := leases[jobID]
+		switch {
+		case ok && b.Worker == wid && b.Epoch == epoch:
+			return nil, store.ErrNoChange
+		case ok && epoch <= b.Epoch:
+			refused = true
+			return nil, store.ErrNoChange
+		case ok && b.Worker != wid:
+			over, known := false, false
+			for _, v := range seen {
+				if v.b == b {
+					over, known = v.over, true
+				}
+			}
+			if !known {
+				o, err := c.leaseOver(ctx, b, jobID)
+				if err != nil {
+					return nil, err
+				}
+				over = o
+				seen = append(seen, verdict{b, o})
+			}
+			if !over {
+				refused = true
+				return nil, store.ErrNoChange
+			}
+		}
+		leases[jobID] = LeaseBinding{Worker: wid, Epoch: epoch, At: now}
+		next := &checkoutShard{Shard: key.Shard, Leases: store.Set(leases)}
+		if len(jobs) > 0 {
+			next.Jobs = store.Set(jobs)
+		}
+		return next, nil
+	})
+	if err != nil {
+		return err
+	}
+	if refused {
+		slog.Warn("security: checkout refused: another worker holds the job's accepted lease", "job", jobID, "worker", wid, "epoch", epoch)
+		return errNoLease(jobID)
+	}
+	return nil
+}
+
+// leaseOver reports whether the accepted lease b of job jobID has ended by the reconciler's
+// rule (§05.6.1), judged only from state its holder alone can write: its worker record is
+// revoked, gone or absent; its heartbeat is absent, not signed by its key or older than
+// lease_ttl + skew; or a heartbeat newer than the binding no longer lists the job.
+func (c *Checkouts) leaseOver(ctx context.Context, b LeaseBinding, jobID string) (bool, error) {
+	if _, err := store.Segment(b.Worker); err != nil {
+		return true, nil
+	}
+	w, err := store.Get(ctx, c.Queue.Fleet, &store.WorkerRecord{Wid: store.ID(b.Worker)})
+	if errors.Is(err, store.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if st := w.State.Value(); st == "revoked" || st == "gone" {
+		return true, nil
+	}
+	hb, err := store.Get(ctx, c.Queue.Fleet, &store.Heartbeat{Wid: store.ID(b.Worker)})
+	if errors.Is(err, store.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	ttl, skew := c.LeaseTTL, c.Skew
+	if ttl <= 0 {
+		ttl = 60 * time.Second
+	}
+	if skew <= 0 {
+		skew = 5 * time.Second
+	}
+	at := hb.At.Value()
+	if !fleet.VerifyHeartbeat(w.SigPub.Value(), hb) || at.Add(ttl+skew).Before(c.now()) {
+		return true, nil
+	}
+	if !at.After(b.At.Add(skew)) {
+		return false, nil // the holder has not had a heartbeat since the binding
+	}
+	for _, j := range hb.Jobs.Value() {
+		if j.Job == jobID && (j.Epoch == b.Epoch || j.Epoch == 0) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // Lease is what GetCheckoutCredential knows of a held job besides its forge credential.
@@ -218,7 +395,7 @@ func (c *Checkouts) Lease(ctx context.Context, wid, jobID string, epoch int64) (
 			}
 		}
 		jobs[jobID] = append(append([]CheckoutRecord(nil), jobs[jobID]...), entry)
-		return &checkoutShard{Shard: key.Shard, Jobs: store.Set(jobs)}, nil
+		return withJobs(key, cur, jobs), nil
 	})
 	if err != nil {
 		// No record means no sweeper: revoke now rather than leak the token.
@@ -297,8 +474,48 @@ func (c *Checkouts) Sweep(ctx context.Context) (revoked int, err error) {
 		if err != nil {
 			errs = append(errs, err)
 		}
+		// A lease binding stays while the job record exists (only orchestrators delete job
+		// records, at finalise); a terminal state is no reason, workers can write it.
+		var finished []string
+		for jobID := range cur.Leases.Value() {
+			if _, err := c.Queue.Job(ctx, jobID); errors.Is(err, store.ErrNotFound) {
+				finished = append(finished, jobID)
+			} else if err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if err := c.dropLeases(ctx, key, finished); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	return revoked, errors.Join(errs...)
+}
+
+// dropLeases removes the lease bindings of finalised jobs from the shard.
+func (c *Checkouts) dropLeases(ctx context.Context, key *checkoutShard, jobIDs []string) error {
+	if len(jobIDs) == 0 {
+		return nil
+	}
+	return store.Change(ctx, c.Control, &checkoutShard{Shard: key.Shard}, func(cur *checkoutShard) (*checkoutShard, error) {
+		if cur == nil {
+			return nil, store.ErrNoChange
+		}
+		leases := maps.Clone(cur.Leases.Value())
+		for _, id := range jobIDs {
+			delete(leases, id)
+		}
+		if len(leases) == len(cur.Leases.Value()) {
+			return nil, store.ErrNoChange
+		}
+		next := &checkoutShard{Shard: key.Shard, Jobs: store.Carry(cur.Jobs)}
+		if len(leases) > 0 {
+			next.Leases = store.Set(leases)
+		}
+		if next.Jobs == nil && next.Leases == nil {
+			return nil, nil
+		}
+		return next, nil
+	})
 }
 
 // revoke revokes the given tokens at the forge and removes those that were revoked from the
@@ -335,10 +552,8 @@ func (c *Checkouts) revoke(ctx context.Context, key *checkoutShard, due map[stri
 				jobs[jobID] = keep
 			}
 		}
-		if len(jobs) == 0 {
-			return nil, nil // last entry: delete the shard document
-		}
-		return &checkoutShard{Shard: key.Shard, Jobs: store.Set(jobs)}, nil
+		// nil (no tokens and no leases left) deletes the shard document
+		return withJobs(key, cur, jobs), nil
 	})
 	if err != nil {
 		errs = append(errs, err)

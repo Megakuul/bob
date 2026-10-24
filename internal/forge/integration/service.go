@@ -262,7 +262,7 @@ func (s *Service) UpdateForgeIntegration(ctx context.Context, req *connect.Reque
 			return nil, api.NotFound("forge integration")
 		}
 		if in.GetEtag() != "" && in.GetEtag() != store.ETagOf(cur.ETag) {
-			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+			return nil, api.ETagMismatch()
 		}
 		c := ConfigOf(cur)
 		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
@@ -297,7 +297,7 @@ func (s *Service) DeleteForgeIntegration(ctx context.Context, req *connect.Reque
 		return nil, err
 	}
 	if req.Msg.GetEtag() != "" && req.Msg.GetEtag() != store.ETagOf(rec.ETag) {
-		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+		return nil, api.ETagMismatch()
 	}
 	if n := len(rec.Repos.Value()); n > 0 {
 		return nil, api.FailedPrecondition(fmt.Sprintf("forge integration %s is linked to %d repositories; unlink the projects first", rec.ID.Value(), n))

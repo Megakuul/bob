@@ -48,7 +48,8 @@ func Handler(r Routes, log *slog.Logger) http.Handler {
 }
 
 // AdminHandler serves /healthz (process alive) and /readyz (ready() == nil) on the admin
-// listener (server.admin_listen). /metrics joins with the metrics milestone.
+// listener (server.admin_listen). /metrics (SPEC §06, admin listener) is not served yet: no
+// task of plan/execution-plan.md covers it (raised by I-B47).
 func AdminHandler(ready func() error, log *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

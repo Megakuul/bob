@@ -169,20 +169,25 @@ func (s *Server) authenticate(ctx context.Context, rule *Rule, h http.Header, me
 	return context.WithValue(ctx, principalKey{}, p), p, nil
 }
 
-// workerError keeps the registrar's "unauthenticated: …" and "permission_denied: …" texts.
+// workerError maps the worker refusal sentinels to the API error model; the client sees the
+// reason after the sentinel ("token expired").
 func workerError(err error) error {
 	var ce *connect.Error
-	if errors.As(err, &ce) {
+	switch {
+	case errors.As(err, &ce):
 		return err
-	}
-	msg := err.Error()
-	if rest, ok := strings.CutPrefix(msg, "unauthenticated: "); ok {
-		return Unauthenticated(rest)
-	}
-	if strings.HasPrefix(msg, "permission_denied: ") {
-		return newError(connect.CodePermissionDenied, "", strings.TrimPrefix(msg, "permission_denied: "))
+	case errors.Is(err, ErrWorkerUnauthenticated):
+		return Unauthenticated(workerReason(err, ErrWorkerUnauthenticated))
+	case errors.Is(err, ErrWorkerPermissionDenied):
+		return WorkerPermissionDenied(err)
 	}
 	return err
+}
+
+// WorkerPermissionDenied is the PermissionDenied answer to an error wrapping
+// ErrWorkerPermissionDenied (a worker asking about a job it holds no lease on).
+func WorkerPermissionDenied(err error) error {
+	return Forbidden(workerReason(err, ErrWorkerPermissionDenied))
 }
 
 // resourceName is the "<what> not found" noun of a rule's project resolution.

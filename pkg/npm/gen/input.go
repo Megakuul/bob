@@ -72,7 +72,7 @@ func importers(g *ir.Graph) ([]*importer, map[string]*importer, error) {
 	return out, byID, nil
 }
 
-// depIndex resolves a dep index of n to the importer it names.
+// depImporter resolves a dep index of n to the importer it names.
 func depImporter(n *ir.Node, i int, byID map[string]*importer) (*importer, error) {
 	if i < 0 || i >= len(n.Deps) {
 		return nil, fmt.Errorf("%s: dependency index %d out of range", n.Label, i)

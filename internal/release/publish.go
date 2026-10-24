@@ -252,14 +252,20 @@ func (s *Releases) create(ctx context.Context, r buildctl.ReleaseRequest, m *Man
 			images = append(images, store.ReleaseImage{Repo: a.Repo, Tag: m.Version, Digest: a.Index, MediaType: media})
 		}
 	}
-	paths, sizes, err := s.closure(ctx, roots)
+	nonRepro := map[string]bool{}
+	for _, ps := range rec.NonReproducible.Value() {
+		for _, p := range ps {
+			nonRepro[cache.HashOf(p)] = true
+		}
+	}
+	paths, sizes, err := s.closure(ctx, project, nonRepro, roots)
 	if err != nil {
 		return nil, err
 	}
 	var cl []store.ReleaseClosure
 	for _, p := range slices.Sorted(maps.Keys(closures)) {
 		c := store.ReleaseClosure{Platform: p, Roots: closures[p]}
-		sub, _, err := s.closure(ctx, closures[p])
+		sub, _, err := s.closure(ctx, project, nonRepro, closures[p])
 		if err != nil {
 			return nil, err
 		}
@@ -278,6 +284,17 @@ func (s *Releases) create(ctx context.Context, r buildctl.ReleaseRequest, m *Man
 	}
 	slices.Sort(blobs)
 	blobs = slices.Compact(blobs)
+	for _, d := range blobs {
+		// a public release makes every object it names public: only the project's own
+		// (I-R2 F5, decision A394)
+		doc, err := s.c.OCIVis.Get(ctx, d)
+		if err != nil {
+			return nil, err
+		}
+		if doc == nil || !slices.Contains(doc.Projects, project) {
+			return nil, failf("release image object sha256:%s is not an object of project %s", d, project)
+		}
+	}
 	staged, err := s.stagedAssets(ctx, rec, project, n, assets)
 	if err != nil {
 		return nil, err
@@ -394,8 +411,11 @@ func (s *Releases) imageObjects(ctx context.Context, digest string) ([]string, e
 }
 
 // closure walks the served narinfos from roots: the bob-served part of the closure (paths
-// served upstream have no narinfo here and are skipped, R-REG-005). sizes are NarSize.
-func (s *Releases) closure(ctx context.Context, roots []string) ([]string, map[string]int64, error) {
+// served upstream have no narinfo here and are skipped, R-REG-005). sizes are NarSize. Every
+// served path must be visible to project (its own promotion added it), and none may be a path
+// this build reproduced with other bytes (nonRepro, store hashes): a release publishes, and
+// signs for its project, only bytes the project built (I-R2 F1/F5, decision A394).
+func (s *Releases) closure(ctx context.Context, project string, nonRepro map[string]bool, roots []string) ([]string, map[string]int64, error) {
 	seen := map[string]bool{}
 	sizes := map[string]int64{}
 	var queue []string
@@ -419,6 +439,18 @@ func (s *Releases) closure(ctx context.Context, roots []string) ([]string, map[s
 		ni, err := cache.ParseNarInfo(body)
 		if err != nil {
 			return nil, nil, fmt.Errorf("narinfo %s: %w", h, err)
+		}
+		doc, err := s.c.NixVis.Get(ctx, h)
+		if err != nil {
+			return nil, nil, err
+		}
+		if doc == nil || !slices.Contains(doc.Projects, project) {
+			return nil, nil, failf("release closure path %s is not a path of project %s (another project published it; "+
+				"see the promotion log)", ni.StorePath, project)
+		}
+		if nonRepro[h] {
+			return nil, nil, failf("release closure path %s did not reproduce in this build (non_reproducible): "+
+				"the cache holds other bytes than the build produced", ni.StorePath)
 		}
 		out = append(out, h)
 		sizes[h] = int64(ni.NarSize)

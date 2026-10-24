@@ -61,11 +61,11 @@ func compileCommands(ctx context.Context, req engine.PlanRequest) ([]engine.Gene
 		n := nodes[l]
 		var t ccspec.Target
 		if err := json.Unmarshal(n.Spec, &t); err != nil {
-			return nil, internal(n, "spec: %v", err)
+			return nil, engine.Internal(n, "spec: %v", err)
 		}
 		c, err := configOf(n)
 		if err != nil {
-			return nil, internal(n, "%v", err)
+			return nil, engine.Internal(n, "%v", err)
 		}
 		files, err := pl.files(n)
 		if err != nil {
@@ -136,11 +136,11 @@ func (pl *planner) nixpkgsPaths(ctx context.Context, nodes map[string]*ir.Node) 
 		return nil, err
 	}
 	for a, e := range entries {
-		if o := pickOutput(e.Outputs, "dev", "out"); a != "gcc" && o != "" {
+		if o := engine.PickOutput(e.Outputs, "dev", "out"); a != "gcc" && o != "" {
 			out[a] = e.Outputs[o]
 		}
 		if a == "gcc" {
-			out[a] = e.Outputs[pickOutput(e.Outputs, "out")]
+			out[a] = e.Outputs[engine.PickOutput(e.Outputs, "out")]
 		}
 	}
 	return out, nil

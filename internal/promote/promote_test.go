@@ -49,6 +49,13 @@ type env struct {
 	logs             *syncBuf
 	srv              *httptest.Server
 	region, endpoint string
+	// upKey signs the upstream narinfos of skipped paths (the promoters' UpstreamKeys).
+	upKey *cache.SecretKey
+	// outputs overrides the package outputs of a job's evaluation report (job id → paths);
+	// by default every staged path is an output.
+	outputs map[string][]*path
+	// noUpstream lists skipped paths whose upstream narinfo stage leaves out.
+	noUpstream map[*path]bool
 }
 
 type syncBuf struct {
@@ -74,7 +81,11 @@ func newEnv(t *testing.T) *env {
 	t.Setenv("AWS_ACCESS_KEY_ID", rustfs.RootAccessKey)
 	t.Setenv("AWS_SECRET_ACCESS_KEY", rustfs.RootSecretKey)
 	t.Setenv("AWS_REGION", "us-east-1")
-	e := &env{t: t, ctx: ctx, url: s.URL, logs: &syncBuf{}, region: "us-east-1", endpoint: s.URL}
+	e := &env{t: t, ctx: ctx, url: s.URL, logs: &syncBuf{}, region: "us-east-1", endpoint: s.URL,
+		outputs: map[string][]*path{}, noUpstream: map[*path]bool{}}
+	if e.upKey, err = cache.GenerateKey("upstream-test-1"); err != nil {
+		t.Fatal(err)
+	}
 	open := func(name string) *store.Bucket {
 		b, err := store.Open(ctx, store.BucketConfig{Endpoint: s.URL, Region: "us-east-1", Name: name, Role: name})
 		if err != nil {
@@ -130,7 +141,7 @@ func newEnv(t *testing.T) *env {
 
 func (e *env) promoter(name string) *promote.Promoter {
 	p, err := promote.New(promote.Config{Name: name, Control: e.control, Fleet: e.fleet, Objects: e.obj, Vis: e.vis,
-		Keys: e.keys, Log: slog.New(slog.NewTextHandler(io.MultiWriter(e.logs, &prefixed{name, e.t}), nil))})
+		Keys: e.keys, UpstreamKeys: []string{e.upKey.Public()}, Log: slog.New(slog.NewTextHandler(io.MultiWriter(e.logs, &prefixed{name, e.t}), nil))})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -249,7 +260,30 @@ func (e *env) stageKinds(id, project string, paths []*path, claimRefs func(*path
 	skip := []string{}
 	for _, p := range skipped {
 		skip = append(skip, p.store())
+		if e.noUpstream[p] {
+			continue
+		}
+		// the worker stages the upstream cache's signed narinfo of every path it skips
+		if p.nar == nil {
+			p.nar = e.narOf(p)
+		}
+		info := cache.PathInfo{StorePath: p.store(), NarHash: narHash(p.nar), NarSize: uint64(len(p.nar))}
+		up := fmt.Sprintf("StorePath: %s\nURL: nar/x.nar.xz\nCompression: xz\nNarHash: %s\nNarSize: %d\nReferences: \nSig: %s\n",
+			p.store(), info.NarHash, info.NarSize, e.upKey.Sign(info))
+		e.put(j.staging+"upstream/"+p.hash+".narinfo", []byte(up))
 	}
+	outs := e.outputs[id]
+	if outs == nil {
+		outs = paths
+	}
+	var outStores []string
+	for _, p := range outs {
+		outStores = append(outStores, p.store())
+	}
+	report, _ := json.Marshal(map[string]any{"v": 1, "pipelines": []any{}, "matched": []string{}, "targets": []string{}, "tests": []string{},
+		"packages": []any{map[string]any{"label": "//x:all", "status": "built", "outputs": outStores}}, "errors": []any{}})
+	e.put(j.staging+"eval.json", report)
+	evalSum := sha256.Sum256(report)
 	doc := map[string]any{"v": 1, "job": id, "build": "b1", "project": project, "paths": stores,
 		"images": []any{}, "assets": []any{}, "skipped": skip}
 	if len(kinds) > 0 {
@@ -266,7 +300,8 @@ func (e *env) stageKinds(id, project string, paths []*path, claimRefs func(*path
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	rs, err := fleet.Encode(store.JobResult{V: 1, Status: "ok", Complete: j.staging + "COMPLETE.json", CompSHA: hex.EncodeToString(sum[:])})
+	rs, err := fleet.Encode(store.JobResult{V: 1, Status: "ok", Complete: j.staging + "COMPLETE.json", CompSHA: hex.EncodeToString(sum[:]),
+		EvalSHA: hex.EncodeToString(evalSum[:])})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -750,6 +785,10 @@ func (e *env) failJob(j *job, withComplete bool, complete []byte) {
 		e.put(j.staging+"COMPLETE.json", complete)
 	}
 	res := store.JobResult{V: 1, Status: "failed", Failed: []string{"//cmd/api:test"}, Error: "BOB-E-2005 test failed"}
+	if rep, _, err := e.obj.Read(e.ctx, j.staging+"eval.json", 4<<20); err == nil {
+		sum := sha256.Sum256(rep)
+		res.EvalSHA = hex.EncodeToString(sum[:])
+	}
 	if withComplete {
 		body, _, err := e.obj.Read(e.ctx, j.staging+"COMPLETE.json", promote.MaxComplete)
 		if err != nil {

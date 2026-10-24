@@ -184,7 +184,7 @@ func (s Service) UpdateNotifyWebhook(ctx context.Context, req *connect.Request[n
 			return nil, api.NotFound("notification webhook")
 		}
 		if in.GetEtag() != "" && in.GetEtag() != store.ETagOf(cur.ETag) {
-			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+			return nil, api.ETagMismatch()
 		}
 		for _, p := range req.Msg.GetUpdateMask().GetPaths() {
 			switch p {

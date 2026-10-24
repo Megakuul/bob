@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -73,6 +74,24 @@ type Resolver interface {
 // returns the worker id. orchestrator.Registrar.Authenticate has this shape.
 type WorkerAuthenticator interface {
 	Authenticate(ctx context.Context, authorization, pop, method, path string) (string, error)
+}
+
+// Sentinels of worker refusals. The orchestrator wraps them ("unauthenticated: token expired",
+// "permission_denied: worker holds no lease on job j1"); the API boundary maps them with
+// errors.Is, so a wrapping prefix added on the way does not turn them into Internal.
+var (
+	ErrWorkerUnauthenticated   = errors.New("unauthenticated")
+	ErrWorkerPermissionDenied = errors.New("permission_denied")
+)
+
+// workerReason is the text after the sentinel ("token expired" for
+// "unauthenticated: token expired"); the whole message if the sentinel text is not in it.
+func workerReason(err, sentinel error) string {
+	msg := err.Error()
+	if _, rest, ok := strings.Cut(msg, sentinel.Error()+": "); ok {
+		return rest
+	}
+	return msg
 }
 
 // StaticToken authenticates one fixed bearer token as a fixed principal. bob-server uses it

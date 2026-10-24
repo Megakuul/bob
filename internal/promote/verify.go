@@ -72,7 +72,10 @@ type refScanner struct {
 	known map[string]bool
 	found map[string]bool
 	extra map[string]bool
-	tail  []byte
+	// overflow: more than maxExtra unknown hashes; the rest were not recorded, so the scan is
+	// incomplete and verification must fail (I-R2 F4)
+	overflow bool
+	tail     []byte
 }
 
 func newRefScanner(known map[string]bool) *refScanner {
@@ -93,8 +96,12 @@ func (s *refScanner) scan(b []byte) {
 		switch {
 		case s.known[string(w)]:
 			s.found[string(w)] = true
-		case i >= len(storePrefix) && string(b[i-len(storePrefix):i]) == storePrefix && len(s.extra) < maxExtra:
-			s.extra[string(w)] = true
+		case i >= len(storePrefix) && string(b[i-len(storePrefix):i]) == storePrefix && !s.extra[string(w)]:
+			if len(s.extra) < maxExtra {
+				s.extra[string(w)] = true
+			} else {
+				s.overflow = true
+			}
 		}
 		i++
 	}
@@ -127,6 +134,7 @@ type verified struct {
 	ListingSize       int64
 	Found             map[string]bool // known hashes found in the NAR
 	Extra             map[string]bool // other hashes after /nix/store/
+	Overflow          bool            // more than maxExtra of those: Extra is incomplete
 	// Top holds the root directory's entries by name (≤ maxTop; the kind check, A149).
 	Top map[string]cache.NarEntry
 }
@@ -217,7 +225,7 @@ func verifyNAR(ctx context.Context, obj *cache.Objects, key string, known map[st
 	}
 	v.NarHash, v.NarSize = sum(narHash), narCount.n
 	v.FileHash, v.FileSize = sum(fileHash), fileCount.n
-	v.ListingSize, v.Found, v.Extra = fi.Size(), scanner.found, scanner.extra
+	v.ListingSize, v.Found, v.Extra, v.Overflow = fi.Size(), scanner.found, scanner.extra, scanner.overflow
 	return v, nil
 }
 

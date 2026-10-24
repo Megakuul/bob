@@ -200,9 +200,14 @@ func gitFetch(ctx context.Context, dst string, co fleet.CheckoutPlain, commit st
 		return err
 	}
 	auth := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(co.Username+":"+co.Token))
+	// The credential reaches git through its environment (GIT_CONFIG_COUNT/KEY/VALUE, git
+	// 2.31+), which only the worker's own uid can read, never through the command line that
+	// every local process can read in /proc/<pid>/cmdline (I-R2 F7).
+	withAuth := []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.extraHeader", "GIT_CONFIG_VALUE_0=" + auth}
+	var cmdEnv []string
 	git := func(args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dst}, args...)...)
-		cmd.Env = gitEnv(dst)
+		cmd.Env = append(gitEnv(dst), cmdEnv...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return out, fmt.Errorf("git %s: %w: %s", args[0], err, strings.ReplaceAll(firstLineOf(string(out)), co.Token, "[redacted]"))
@@ -212,7 +217,10 @@ func gitFetch(ctx context.Context, dst string, co fleet.CheckoutPlain, commit st
 	if _, err := git("init", "-q"); err != nil {
 		return err
 	}
-	if _, err := git("-c", "http.extraHeader="+auth, "fetch", "-q", "--depth=1", "--", co.CloneURL, what); err != nil {
+	cmdEnv = withAuth
+	_, err := git("fetch", "-q", "--depth=1", "--", co.CloneURL, what)
+	cmdEnv = nil
+	if err != nil {
 		return err
 	}
 	if _, err := git("checkout", "-q", "FETCH_HEAD"); err != nil {
@@ -460,8 +468,19 @@ func (p *Process) stagePaths(ctx context.Context, staging, work string, paths []
 		if !cache.ValidStorePath(pi.Path) {
 			return fmt.Errorf("closure path %q", pi.Path)
 		}
-		if upstream[pi.Path] {
+		if ni, ok := upstream[pi.Path]; ok {
+			// the upstream cache's signed narinfo goes with it: the orchestrator accepts a
+			// skipped path as upstream only with that signature (§6.6.4, I-R2 F3)
 			done.Skipped = append(done.Skipped, pi.Path)
+			sem <- struct{}{}
+			runs = append(runs, safe.Go(func() error {
+				defer func() { <-sem }()
+				_, err := p.cfg.Artifacts.Put(ctx, staging+"upstream/"+cache.HashOf(pi.Path)+".narinfo", ni, "text/x-nix-narinfo", cache.Cond{})
+				if err != nil {
+					return fmt.Errorf("upload upstream narinfo of %s: %w", pi.Path, err)
+				}
+				return nil
+			}))
 			continue
 		}
 		done.Paths = append(done.Paths, pi.Path)
@@ -518,11 +537,12 @@ func (p *Process) stagePath(ctx context.Context, staging, work string, pi PathIn
 	return nil
 }
 
-// upstream reports the paths cache.nixos.org serves (HEAD narinfo, 8 in parallel). Without
-// an upstream, or when it cannot be reached, nothing is skipped: the path is staged and the
+// upstream returns the narinfos of the paths cache.nixos.org serves (GET narinfo, 8 in
+// parallel), by path. Without an upstream, or when it cannot be reached or answers with
+// something that is not that path's narinfo, nothing is skipped: the path is staged and the
 // orchestrator verifies it like any other.
-func (p *Process) upstream(ctx context.Context, paths []PathInfo) map[string]bool {
-	out := map[string]bool{}
+func (p *Process) upstream(ctx context.Context, paths []PathInfo) map[string][]byte {
+	out := map[string][]byte{}
 	if p.cfg.Upstream == "" {
 		return out
 	}
@@ -534,7 +554,7 @@ func (p *Process) upstream(ctx context.Context, paths []PathInfo) map[string]boo
 		sem <- struct{}{}
 		runs = append(runs, safe.Go(func() error {
 			defer func() { <-sem }()
-			req, err := http.NewRequestWithContext(ctx, http.MethodHead, p.cfg.Upstream+"/"+cache.HashOf(pi.Path)+".narinfo", nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.Upstream+"/"+cache.HashOf(pi.Path)+".narinfo", nil)
 			if err != nil {
 				return nil
 			}
@@ -542,12 +562,20 @@ func (p *Process) upstream(ctx context.Context, paths []PathInfo) map[string]boo
 			if err != nil {
 				return nil
 			}
-			res.Body.Close()
-			if res.StatusCode == http.StatusOK {
-				mu.Lock()
-				out[pi.Path] = true
-				mu.Unlock()
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusOK {
+				return nil
 			}
+			body, err := io.ReadAll(io.LimitReader(res.Body, cache.MaxNarInfo+1))
+			if err != nil || len(body) > cache.MaxNarInfo {
+				return nil
+			}
+			if ni, err := cache.ParseNarInfo(body); err != nil || ni.StorePath != pi.Path {
+				return nil
+			}
+			mu.Lock()
+			out[pi.Path] = body
+			mu.Unlock()
 			return nil
 		}))
 	}

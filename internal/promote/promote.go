@@ -184,7 +184,14 @@ type Config struct {
 	// Images promotes the OCI part of a job (§6.6.4 step 4, the registry milestone). nil
 	// leaves staged images unpromoted (logged).
 	Images func(ctx context.Context, j *Job) error
+	// UpstreamKeys are the public keys ("<name>:<base64>") of the upstream cache whose paths
+	// workers skip (R-REG-005): a skipped path counts as upstream only with a narinfo signed by
+	// one of them (staged as <staging>upstream/<hash>.narinfo, I-R2 F3). nil: cache.nixos.org's.
+	UpstreamKeys []string
 }
+
+// NixOSCacheKey is cache.nixos.org's public key (SPEC §6.6.5), the default UpstreamKeys.
+const NixOSCacheKey = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
 
 // Promoter promotes the staging of succeeded jobs into the binary cache (SPEC §6.6.4,
 // R-REG-002, R-REG-152, R-REG-005). Every step is idempotent and every write conditional, so
@@ -208,6 +215,9 @@ func New(c Config) (*Promoter, error) {
 	if c.Log == nil {
 		c.Log = slog.Default()
 	}
+	if c.UpstreamKeys == nil {
+		c.UpstreamKeys = []string{NixOSCacheKey}
+	}
 	return &Promoter{c: c}, nil
 }
 
@@ -216,6 +226,8 @@ type Job struct {
 	ID, Build, Project, Worker string
 	Staging                    string // staging/<build>/<job>/<attempt>/
 	Complete                   *Complete
+
+	evalSHA string // JobResult.EvalSHA: binds <staging>eval.json to the owner's signature
 }
 
 // Run is one promotion pass (the promotion controller calls it every 10 s): every active
@@ -288,8 +300,8 @@ func (p *Promoter) specKeys(ctx context.Context) []ed25519.PublicKey {
 // the staging key of its result. ok is false for a record that is not (yet) trustworthy.
 func (p *Promoter) job(ctx context.Context, rec *store.JobRecord, log *slog.Logger) (j *Job, compSHA, bad string, ok bool) {
 	spec, ok := fleet.DecodeSpec(rec.Spec.Value())
-	if !ok || !fleet.VerifySpec(p.specKeys(ctx), rec.Spec.Value(), rec.SpecSig.Value()) {
-		log.Warn("security: job spec not signed by an orchestrator; not promoted")
+	if !ok || spec.JobID != rec.ID.Value() || !fleet.VerifySpec(p.specKeys(ctx), rec.Spec.Value(), rec.SpecSig.Value()) {
+		log.Warn("security: job spec not signed by an orchestrator for this job; not promoted")
 		return nil, "", "", false
 	}
 	if !fleet.VerifyResult(p.workerKey(ctx, rec.Owner.Value()), rec.ID.Value(), rec.Epoch.Value(), rec.Result.Value(), rec.ResultSig.Value()) {
@@ -306,7 +318,7 @@ func (p *Promoter) job(ctx context.Context, rec *store.JobRecord, log *slog.Logg
 		return nil, "", fmt.Sprintf("result names %.200q, not a staging key of this job", res.Complete), true
 	}
 	return &Job{ID: rec.ID.Value(), Build: spec.BuildID, Project: spec.Project, Worker: rec.Owner.Value(),
-		Staging: strings.Join(parts[:4], "/") + "/"}, res.CompSHA, "", true
+		Staging: strings.Join(parts[:4], "/") + "/", evalSHA: res.EvalSHA}, res.CompSHA, "", true
 }
 
 // lock is the per-job promotion lock: it keeps two orchestrators from doing the same work at
@@ -428,6 +440,9 @@ func (p *Promoter) promote(ctx context.Context, rec *store.JobRecord) error {
 		return p.fail(ctx, rec, log, "a failed job staged images or release assets")
 	}
 	paths, err := p.claims(ctx, j)
+	if err == nil {
+		err = p.bound(ctx, j, paths)
+	}
 	if err != nil {
 		if isVerify(err) {
 			return p.fail(ctx, rec, log, err.Error())
@@ -671,16 +686,16 @@ func (p *Promoter) promotePaths(ctx context.Context, j *Job, paths []*stagedPath
 			known[cache.HashOf(r)] = true
 		}
 	}
-	skipped := map[string]bool{}
+	skipped := map[string]string{} // hash -> skipped path (verified only when used, upstreamOf)
 	for _, s := range j.Complete.Skipped {
 		known[cache.HashOf(s)] = true
-		skipped[cache.HashOf(s)] = true
+		skipped[cache.HashOf(s)] = s
 	}
 	inJob := map[string]bool{}
 	for _, sp := range paths {
 		inJob[sp.hash] = true
 	}
-	r := &refs{p: p, inJob: inJob, skipped: skipped, known: known, servedCache: map[string]bool{}}
+	r := &refs{p: p, j: j, inJob: inJob, skipped: skipped, known: known, servedCache: map[string]bool{}, upstream: map[string]bool{}}
 	for start := 0; start < len(paths); {
 		end := start
 		for end < len(paths) && paths[end].level == paths[start].level {
@@ -715,10 +730,36 @@ func (p *Promoter) promotePaths(ctx context.Context, j *Job, paths []*stagedPath
 
 // refs answers "is this reference acceptable" for one job.
 type refs struct {
-	p                     *Promoter
-	inJob, skipped, known map[string]bool
-	mu                    sync.Mutex
-	servedCache           map[string]bool
+	p            *Promoter
+	j            *Job
+	inJob, known map[string]bool
+	skipped      map[string]string // as COMPLETE.json claims them: hash -> path
+	mu           sync.Mutex
+	servedCache  map[string]bool
+	upstream     map[string]bool // verified skipped hashes (upstreamOf)
+}
+
+// isUpstream reports whether hash h is a skipped path of the job that the upstream cache
+// signed (I-R2 F3): only those count as the job's closure without being staged.
+func (r *refs) isUpstream(ctx context.Context, h string) (bool, error) {
+	path, ok := r.skipped[h]
+	if !ok {
+		return false, nil
+	}
+	r.mu.Lock()
+	v, ok := r.upstream[h]
+	r.mu.Unlock()
+	if ok {
+		return v, nil
+	}
+	v, err := r.p.upstreamOf(ctx, r.j, h, path)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	r.upstream[h] = v
+	r.mu.Unlock()
+	return v, nil
 }
 
 func (r *refs) isServed(ctx context.Context, hash string) (bool, error) {
@@ -757,7 +798,12 @@ func (p *Promoter) promotePath(ctx context.Context, j *Job, sp *stagedPath, r *r
 	for _, ref := range sp.claim.References {
 		h := cache.HashOf(ref)
 		claimed[h] = true
-		if h == sp.hash || r.inJob[h] || r.skipped[h] {
+		if h == sp.hash || r.inJob[h] {
+			continue
+		}
+		if up, err := r.isUpstream(ctx, h); err != nil {
+			return err
+		} else if up {
 			continue
 		}
 		ok, err := r.isServed(ctx, h)
@@ -799,8 +845,7 @@ func (p *Promoter) promotePath(ctx context.Context, j *Job, sp *stagedPath, r *r
 	case err != nil:
 		return err
 	case nr:
-		out.add(func(o *outcome) { o.nonRepro = append(o.nonRepro, sp.path) })
-		return nil
+		return p.differs(ctx, j, sp, v.NarHash, out, log)
 	}
 	// d. listing and visibility
 	if err := p.c.Objects.PutFile(ctx, cache.ListingKey(sp.hash), v.Listing, v.ListingSize, "application/json"); err != nil {
@@ -853,13 +898,25 @@ func (p *Promoter) checkClaim(ctx context.Context, sp *stagedPath, v *verified, 
 		return fmt.Sprintf("the %s output contains the store hash %s, which is not in this job's closure "+
 			"(outputs that discard references may only name paths of their own job)", kind, h)
 	}
+	if v.Overflow {
+		// the scan stopped recording unknown hashes: what it did not look at may hide a served
+		// path the claim omits (I-R2 F4)
+		return fmt.Sprintf("the NAR holds more than %d store paths outside the job's closure; too many to check", maxExtra)
+	}
 	for h := range v.Found {
 		switch {
 		case claimed[h]:
 		case kind == "":
 			return "the NAR references " + h + ", which the claim does not list"
-		case !r.inJob[h] && !r.skipped[h]:
-			return foreign(h)
+		case r.inJob[h]:
+		default:
+			up, err := r.isUpstream(ctx, h)
+			if err != nil {
+				return "!" + err.Error()
+			}
+			if !up {
+				return foreign(h)
+			}
 		}
 	}
 	for h := range v.Extra {
@@ -914,10 +971,7 @@ func (p *Promoter) copyNAR(ctx context.Context, staged string, sp *stagedPath, v
 // naming its hash).
 func (p *Promoter) alreadyServed(ctx context.Context, j *Job, sp *stagedPath, srv *cache.NarInfo, out *outcome, log *slog.Logger) error {
 	if srv.NarHash != sp.claim.NarHash {
-		log.Warn("non-reproducible path: the published bytes are kept", "path", sp.path,
-			"published", srv.NarHash, "staged", sp.claim.NarHash)
-		out.add(func(o *outcome) { o.nonRepro = append(o.nonRepro, sp.path) })
-		return nil
+		return p.differs(ctx, j, sp, sp.claim.NarHash, out, log)
 	}
 	doc, err := p.c.Vis.Get(ctx, sp.hash)
 	if err != nil {
@@ -934,14 +988,40 @@ func (p *Promoter) alreadyServed(ctx context.Context, j *Job, sp *stagedPath, sr
 		}
 		v.close()
 		if v.NarHash != srv.NarHash {
-			out.add(func(o *outcome) { o.nonRepro = append(o.nonRepro, sp.path) })
-			return nil
+			return p.differs(ctx, j, sp, v.NarHash, out, log)
 		}
 		if err := p.c.Vis.AddProject(ctx, sp.hash, j.Project); err != nil {
 			return err
 		}
 	}
 	out.add(func(o *outcome) { o.already++ })
+	return nil
+}
+
+// differs handles a staged path whose bytes differ from its publication; the published bytes
+// always stay. When the job's project already sees the path, its own build did not reproduce
+// it: non_reproducible (R-REG-152 (3), R-NFR-006). When it does not, the path belongs to other
+// projects (I-R2 F1, decision A392): the job neither gains visibility of those bytes nor marks
+// another project's path non_reproducible; the conflict is a security event for the operator
+// (a compromised worker may have published first, docs/operations/worker-compromise.md §5.5).
+// The job's other paths are promoted; a release of the project that contains this path fails
+// (internal/release), so the other project's bytes never ship under this project's name.
+func (p *Promoter) differs(ctx context.Context, j *Job, sp *stagedPath, staged string, out *outcome, log *slog.Logger) error {
+	doc, err := p.c.Vis.Get(ctx, sp.hash)
+	if err != nil {
+		return err
+	}
+	if doc != nil && slices.Contains(doc.Projects, j.Project) {
+		log.Warn("non-reproducible path: the published bytes are kept", "path", sp.path, "staged", staged)
+		out.add(func(o *outcome) { o.nonRepro = append(o.nonRepro, sp.path) })
+		return nil
+	}
+	var owners []string
+	if doc != nil {
+		owners = doc.Projects
+	}
+	log.Warn("security: path conflict: the path is published by another project with different bytes; not visible to this project",
+		"path", sp.path, "project", j.Project, "published_by", strings.Join(owners, ","), "staged", staged)
 	return nil
 }
 

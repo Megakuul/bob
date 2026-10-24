@@ -193,8 +193,8 @@ func (n *Notifier) ReleasePublished(ctx context.Context, project string, release
 	return n.Publish(ctx, ReleasePublished, project, body)
 }
 
-func (h *HookRecord) wants(event, project string) bool {
-	return h.Enabled.Value() && slices.Contains(h.Events.Value(), event) && (len(h.Projects.Value()) == 0 || slices.Contains(h.Projects.Value(), project))
+func (r *HookRecord) wants(event, project string) bool {
+	return r.Enabled.Value() && slices.Contains(r.Events.Value(), event) && (len(r.Projects.Value()) == 0 || slices.Contains(r.Projects.Value(), project))
 }
 
 // Publish queues body for every enabled receiver of event and project, then wakes the

@@ -69,16 +69,16 @@ func (p *Platform) Matches(target string) (bool, error) {
 	return e.eval(p), nil
 }
 
-// CfgExpr is a parsed cfg(...) predicate.
-type CfgExpr struct {
+// CfgPredicate is a parsed cfg(...) predicate.
+type CfgPredicate struct {
 	op    string // "all", "any", "not", "name", "kv"
 	key   string
 	value string
-	args  []*CfgExpr
+	args  []*CfgPredicate
 }
 
 // eval evaluates the predicate on p.
-func (e *CfgExpr) eval(p *Platform) bool {
+func (e *CfgPredicate) eval(p *Platform) bool {
 	switch e.op {
 	case "all":
 		for _, a := range e.args {
@@ -105,7 +105,7 @@ func (e *CfgExpr) eval(p *Platform) bool {
 const maxCfgDepth = 64
 
 // ParseCfg parses "cfg(<predicate>)" with Cargo's cfg grammar.
-func ParseCfg(s string) (*CfgExpr, error) {
+func ParseCfg(s string) (*CfgPredicate, error) {
 	toks, err := lexCfg(s)
 	if err != nil {
 		return nil, fmt.Errorf("bad cfg %q: %w", s, err)
@@ -172,7 +172,7 @@ func (c *cfgParser) eat(t string) bool {
 	return false
 }
 
-func (c *cfgParser) expr(depth int) (*CfgExpr, error) {
+func (c *cfgParser) expr(depth int) (*CfgPredicate, error) {
 	if depth > maxCfgDepth {
 		return nil, fmt.Errorf("nested too deeply")
 	}
@@ -185,7 +185,7 @@ func (c *cfgParser) expr(depth int) (*CfgExpr, error) {
 	}
 	c.i++
 	if (id == "all" || id == "any" || id == "not") && c.eat("(") {
-		e := &CfgExpr{op: id}
+		e := &CfgPredicate{op: id}
 		for !c.eat(")") {
 			a, err := c.expr(depth + 1)
 			if err != nil {
@@ -210,7 +210,7 @@ func (c *cfgParser) expr(depth int) (*CfgExpr, error) {
 		}
 		v := c.toks[c.i]
 		c.i++
-		return &CfgExpr{op: "kv", key: id, value: v[1 : len(v)-1]}, nil
+		return &CfgPredicate{op: "kv", key: id, value: v[1 : len(v)-1]}, nil
 	}
-	return &CfgExpr{op: "name", key: id}, nil
+	return &CfgPredicate{op: "name", key: id}, nil
 }

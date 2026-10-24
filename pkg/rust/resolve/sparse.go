@@ -132,7 +132,7 @@ func (ix *Index) cachePath(rel string) string {
 func (ix *Index) fetch(ctx context.Context, rel string) ([]byte, error) {
 	file := ix.cachePath(rel)
 	var cached []byte
-	var cerr error = os.ErrNotExist
+	cerr := os.ErrNotExist
 	if file != "" {
 		cached, cerr = readCapped(file)
 	}

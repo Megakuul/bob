@@ -205,8 +205,8 @@ func elfEnd(r io.ReaderAt) (int64, error) {
 	return end, nil
 }
 
-// cacheBase is the directory holding extracted bundles: $XDG_CACHE_HOME/bob/appimage, else
-// ~/.cache/bob/appimage, else $TMPDIR/bob-appimage-<uid> (SPEC R-OUT-015).
+// cacheBases lists the directories that may hold extracted bundles, in order:
+// $XDG_CACHE_HOME/bob/appimage, ~/.cache/bob/appimage, $TMPDIR/bob-appimage-<uid> (R-OUT-015).
 func cacheBases() []string {
 	var out []string
 	if x := os.Getenv("XDG_CACHE_HOME"); filepath.IsAbs(x) {

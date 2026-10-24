@@ -191,7 +191,7 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 			return nil, api.NotFound("service account")
 		}
 		if in.GetEtag() != "" && store.ETagOf(sa.ETag) != in.GetEtag() {
-			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+			return nil, api.ETagMismatch()
 		}
 		if setDesc {
 			sa.Description = store.Set(in.GetDescription())
@@ -201,7 +201,7 @@ func (s saService) UpdateServiceAccount(ctx context.Context, req *connect.Reques
 	})
 	if err != nil {
 		if wasAdmin && !willAdmin {
-			_ = s.id.adminAdd(ctx, principal)
+			s.id.restoreAdmin(ctx, principal)
 		}
 		return nil, storageError(err)
 	}
@@ -220,7 +220,7 @@ func (s saService) DeleteServiceAccount(ctx context.Context, req *connect.Reques
 		return nil, err
 	}
 	if e := req.Msg.GetEtag(); e != "" && e != store.ETagOf(cur.ETag) {
-		return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+		return nil, api.ETagMismatch()
 	}
 	principal := "sa:" + cur.ID.Value()
 	admin := isAdmin(cur.Bindings.Value(), cur.Disabled.Value())
@@ -231,10 +231,10 @@ func (s saService) DeleteServiceAccount(ctx context.Context, req *connect.Reques
 	}
 	if err := store.Delete(ctx, s.id.control, cur); err != nil {
 		if admin {
-			_ = s.id.adminAdd(ctx, principal)
+			s.id.restoreAdmin(ctx, principal)
 		}
 		if errors.Is(err, store.ErrConflict) {
-			return nil, api.Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+			return nil, api.ETagMismatch()
 		}
 		return nil, storageError(err)
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 )
 
@@ -31,7 +32,7 @@ func (s *realisingStore) RealiseNow(_ context.Context, drvs map[string]*drv.Deri
 	}
 	out := map[string]map[string]string{}
 	for p, d := range drvs {
-		host := s.HostPath(outPath(d))
+		host := s.HostPath(engine.OutPath(d))
 		out[p] = map[string]string{"out": host}
 		s.built = append(s.built, d.Name)
 		b, err := json.Marshal(d.Structured["bobSpec"])
@@ -115,7 +116,7 @@ func TestPlanCutoff(t *testing.T) {
 	if libJob := jobJSON(t, lib); !strings.Contains(libJob, `"export":"`) {
 		t.Errorf("the library is not compiled with the -linkobj split:\n%s", libJob)
 	}
-	if link := jobJSON(t, before["go-link-x"]); !strings.Contains(link, outPath(lib)+"/pkg/example.com/m/lib/a.a") {
+	if link := jobJSON(t, before["go-link-x"]); !strings.Contains(link, engine.OutPath(lib)+"/pkg/example.com/m/lib/a.a") {
 		t.Errorf("the link does not take the library's object code:\n%s", link)
 	}
 

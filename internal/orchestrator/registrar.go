@@ -12,12 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/megakuul/bob/internal/api"
 	"github.com/megakuul/bob/internal/fleet"
 	"github.com/megakuul/bob/internal/store"
 )
 
-// ErrUnauthenticated marks every refusal of Authenticate; the message after it says why.
-var ErrUnauthenticated = errors.New("unauthenticated")
+// ErrUnauthenticated marks every refusal of Authenticate; the message after it says why. It is
+// the API's sentinel, so the API boundary maps it to Unauthenticated with errors.Is.
+var ErrUnauthenticated = api.ErrWorkerUnauthenticated
 
 func unauth(format string, args ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrUnauthenticated}, args...)...)
@@ -173,7 +175,7 @@ func (r *Registrar) consider(ctx context.Context, wid string) (approved bool, re
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return false, "registration record missing", nil
-	case err != nil && strings.Contains(err.Error(), "decode record"):
+	case err != nil && decodeFailed(err):
 		// Any worker may overwrite wreg/ (S11 §3.4); garbage is a rejection, not an error.
 		return false, "registration record unreadable", nil
 	case err != nil:

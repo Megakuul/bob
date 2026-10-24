@@ -6385,8 +6385,9 @@ func (l *Lease) TryAcquire(ctx context.Context) (held bool, epoch uint64, err er
 
 #### R-STORE-106 Primitives are the only data access
 - **Statement:** server packages use only the §05.3 API. No package other than `internal/store`
-  imports `github.com/megakuul/dynamitedb` or `service/s3`. The exceptions are
-  `internal/logstore` (lake) and `internal/artifacts` (plain S3 on the artifacts bucket).
+  imports `github.com/megakuul/dynamitedb` or `service/s3`. The exception is
+  `internal/logstore` (lake). Artifacts-bucket objects are plain S3 through `store.Objects`
+  in `internal/store`.
 - **Acceptance:** layering check in `go run ./tools/ci`. Unit tests for each primitive run
   against RustFS: SeqLog with 20 concurrent appenders × 50 → 1,000 dense unique slots;
   PagedIndex with 20 writers on one page → no lost entry; Lease with 3 contenders → exactly one

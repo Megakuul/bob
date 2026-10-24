@@ -118,30 +118,10 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 		}
 	}
 	if len(errs) > 0 {
-		return pl.out, joinErrs(errs)
+		return pl.out, engine.JoinErrors(errs)
 	}
 	return pl.out, nil
 }
-
-func joinErrs(errs []error) error {
-	if len(errs) == 1 {
-		return errs[0]
-	}
-	return errorList(errs)
-}
-
-// errorList joins errors so that the engine still sees each diagnostic (Unwrap []error).
-type errorList []error
-
-func (l errorList) Error() string {
-	s := make([]string, len(l))
-	for i, e := range l {
-		s[i] = e.Error()
-	}
-	return strings.Join(s, "\n")
-}
-
-func (l errorList) Unwrap() []error { return l }
 
 // lockMiss turns a registry dependency that bob.lock does not hold into the stale-lock error
 // (SPEC §03.0.3 R-FW-062: BOB-E-1012, "run bob lock"); other errors pass unchanged.
@@ -151,13 +131,6 @@ func lockMiss(err error) error {
 		return diag.New(1012, "what", fmt.Sprintf("crate %s needs rust %s %s (not pinned)", nl.Crate, nl.Dep, nl.Req))
 	}
 	return err
-}
-
-// invalid is BOB-E-1020 for node n.
-func invalid(n *ir.Node, option, reason string) error {
-	e := diag.New(1020, "label", n.Label, "option", option, "reason", reason)
-	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
-	return e
 }
 
 // ---- toolchain and platform ----
@@ -187,7 +160,7 @@ type toolchain struct {
 
 var rustcName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`-rustc(?:-wrapper)?-([0-9]+\.[0-9]+\.[0-9]+)[^/]*$`) })
 
-// toolchainOf returns the rustc of crate node n (its Toolchain dep).
+// rustcOf returns the rustc of crate node n (its Toolchain dep).
 func (pl *planner) rustcOf(n *ir.Node, s rsspec.Crate) (engine.Resolved, string, error) {
 	if s.Toolchain < 0 || s.Toolchain >= len(n.Deps) {
 		return engine.Resolved{}, "", fmt.Errorf("%s: no Rust toolchain", n.Label)
@@ -198,7 +171,7 @@ func (pl *planner) rustcOf(n *ir.Node, s rsspec.Crate) (engine.Resolved, string,
 	}
 	m := rustcName().FindStringSubmatch(rv.Outputs["out"])
 	if m == nil {
-		return engine.Resolved{}, "", invalid(n, "Toolchain", fmt.Sprintf("%s is not a rustc (want a store path named rustc-<version>)", path.Base(rv.Outputs["out"])))
+		return engine.Resolved{}, "", engine.Invalid(n, "Toolchain", fmt.Sprintf("%s is not a rustc (want a store path named rustc-<version>)", path.Base(rv.Outputs["out"])))
 	}
 	return rv, m[1], nil
 }
@@ -277,8 +250,8 @@ func (pl *planner) newToolchain(n *ir.Node, s rsspec.Crate) (*toolchain, error) 
 // rustStd plans rust-std-<triple> (R-FW-034): exactly the files the target rustc's
 // manifest-rust-std-<triple> lists, laid out as a sysroot. One derivation per target rustc.
 func (pl *planner) rustStd(tc *toolchain, std engine.Resolved) (engine.Resolved, error) {
-	in := newInputs(pl.req.Builder)
-	from := in.add(std, "out")
+	in := engine.NewInputs(pl.req.Builder)
+	from := in.Add(std, "out")
 	return pl.job(drv.Name("rust-std", tc.triple), tc.system, "rust-std", "rust-std-"+tc.triple, rustStdJSON{From: from, Triple: tc.triple}, in)
 }
 
@@ -302,14 +275,14 @@ func platformOf(n *ir.Node) (bob.Platform, error) {
 
 // path is the PATH of a job: rustc, the host C compiler (rustc's linker, build scripts' cc) and
 // binutils (ar); target units of a cross build put the cross tools first.
-func (tc *toolchain) path(in *inputs, host bool) []string {
-	p := []string{in.add(tc.rustc, "out") + "/bin"}
+func (tc *toolchain) path(in *engine.Inputs, host bool) []string {
+	p := []string{in.Add(tc.rustc, "out") + "/bin"}
 	if tc.cross != nil && !host {
-		p = append(p, in.add(tc.xcc, pickOutput(tc.xcc.Outputs, "bin", "out"))+"/bin",
-			in.add(tc.xbin, pickOutput(tc.xbin.Outputs, "bin", "out"))+"/bin")
+		p = append(p, in.Add(tc.xcc, engine.PickOutput(tc.xcc.Outputs, "bin", "out"))+"/bin",
+			in.Add(tc.xbin, engine.PickOutput(tc.xbin.Outputs, "bin", "out"))+"/bin")
 	}
-	return append(p, in.add(tc.cc, pickOutput(tc.cc.Outputs, "bin", "out"))+"/bin",
-		in.add(tc.bin, pickOutput(tc.bin.Outputs, "bin", "out"))+"/bin")
+	return append(p, in.Add(tc.cc, engine.PickOutput(tc.cc.Outputs, "bin", "out"))+"/bin",
+		in.Add(tc.bin, engine.PickOutput(tc.bin.Outputs, "bin", "out"))+"/bin")
 }
 
 // roleTriple is the triple a unit compiles for: the host's for host units.
@@ -321,84 +294,19 @@ func (tc *toolchain) roleTriple(host bool) string {
 }
 
 // targetArgs sets --target, --sysroot and the linker of a cross target unit.
-func (tc *toolchain) targetArgs(in *inputs, a *rustcArgsJSON, host bool) {
+func (tc *toolchain) targetArgs(in *engine.Inputs, a *rustcArgsJSON, host bool) {
 	if tc.cross == nil || host {
 		return
 	}
-	a.Target, a.Sysroot, a.Linker = tc.triple, in.add(tc.sysroot, "out"), tc.cross.Prefix+"cc"
-}
-
-func pickOutput(outs map[string]string, prefer ...string) string {
-	for _, o := range prefer {
-		if _, ok := outs[o]; ok {
-			return o
-		}
-	}
-	names := sortedKeys(outs)
-	if len(names) > 0 {
-		return names[0]
-	}
-	return ""
+	a.Target, a.Sysroot, a.Linker = tc.triple, in.Add(tc.sysroot, "out"), tc.cross.Prefix+"cc"
 }
 
 // ---- inputs and jobs ----
 
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs map[string]bool
-}
-
-func newInputs(builder string) *inputs {
-	return &inputs{drvs: map[string]map[string]bool{}, srcs: map[string]bool{builder: true}}
-}
-
-// add records output o of rv and returns its path.
-func (in *inputs) add(rv engine.Resolved, o string) string {
-	sp := rv.Outputs[o]
-	if rv.Drv == "" {
-		in.srcs[sp] = true
-		return sp
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	in.drvs[rv.Drv][o] = true
-	return sp
-}
-
-func (in *inputs) list() ([]drv.InputDrv, []string) {
-	var ds []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		ds = append(ds, d)
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
-	return ds, sortedKeys(in.srcs)
-}
-
-func emptyFixup() map[string]any {
-	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
-		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
-}
-
 // job finalises one bob-builder job and returns its resolved output.
-func (pl *planner) job(name, system, kind, label string, args any, in *inputs) (engine.Resolved, error) {
-	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": emptyFixup()}
-	ds, ss := in.list()
-	j := drv.Job{Name: name, System: system, Builder: pl.req.Builder, Spec: spec, InputDrvs: ds, InputSrcs: ss,
-		ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	d, err := j.Derivation()
-	if err != nil {
-		return engine.Resolved{}, err
-	}
-	if err := d.Finalize(pl); err != nil {
-		return engine.Resolved{}, err
-	}
-	p, err := d.Path()
+func (pl *planner) job(name, system, kind, label string, args any, in *engine.Inputs) (engine.Resolved, error) {
+	p, d, err := engine.BuilderJob{Name: name, System: system, Builder: pl.req.Builder, Kind: kind, Label: label,
+		Args: args, Inputs: in}.Finalize(pl)
 	if err != nil {
 		return engine.Resolved{}, err
 	}
@@ -406,13 +314,7 @@ func (pl *planner) job(name, system, kind, label string, args any, in *inputs) (
 		pl.own[p] = d
 		pl.out.Drvs = append(pl.out.Drvs, d)
 	}
-	o := ""
-	for _, x := range d.Outputs {
-		if x.Name == "out" {
-			o = x.Path
-		}
-	}
-	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": o}}, nil
+	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": engine.OutPath(d)}}, nil
 }
 
 // ---- units ----
@@ -507,7 +409,7 @@ func (pl *planner) newRoot(n *ir.Node, s rsspec.Crate, dev bool) (*rootCtx, erro
 			return nil, err
 		}
 		if rv.Outputs["out"] != tc.out {
-			return nil, invalid(n, "Toolchain", fmt.Sprintf("%s (rustc %s) depends on %s built with rustc %s; Rust crates linked together need the same toolchain",
+			return nil, engine.Invalid(n, "Toolchain", fmt.Sprintf("%s (rustc %s) depends on %s built with rustc %s; Rust crates linked together need the same toolchain",
 				n.Label, tc.version, dn.Label, v))
 		}
 	}
@@ -520,7 +422,7 @@ func (pl *planner) newRoot(n *ir.Node, s rsspec.Crate, dev bool) (*rootCtx, erro
 		if errors.As(err, new(*resolve.NotLockedError)) {
 			return nil, lockMiss(err)
 		}
-		return nil, invalid(n, "Deps", err.Error())
+		return nil, engine.Invalid(n, "Deps", err.Error())
 	}
 	rc := &rootCtx{node: n, tc: tc, units: map[resolve.UnitKey]*resolve.Unit{}, done: map[resolve.UnitKey]*unitOut{}, nodes: nodes,
 		debug: debugProfile(n)}
@@ -717,7 +619,7 @@ func (pl *planner) unitPlan(rc *rootCtx, k resolve.UnitKey) (*unitOut, error) {
 		}
 	}
 	a := pl.rustcArgs(rc, u, edition, root)
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	pl.commonInputs(rc, u, in, &a)
 	cr, err := pl.job(drv.Name(append([]string{base}, rc.tags(k.Host)...)...), rc.tc.system, "rustc", pl.label(u), a, in)
 	if err != nil {
@@ -881,25 +783,25 @@ func (pl *planner) rustcArgs(rc *rootCtx, u *unitOut, edition, root string) rust
 // commonInputs adds what every compile of u needs: toolchain, source, externs of its normal
 // dependencies, the transitive library directories, its build-script run and, for linking
 // types, the transitive runs' link search paths.
-func (pl *planner) commonInputs(rc *rootCtx, u *unitOut, in *inputs, a *rustcArgsJSON) {
+func (pl *planner) commonInputs(rc *rootCtx, u *unitOut, in *engine.Inputs, a *rustcArgsJSON) {
 	host := u.unit.Key.Host
 	a.Path = rc.tc.path(in, host)
 	a.Rustc = rc.tc.out + "/bin/rustc"
 	rc.tc.targetArgs(in, a, host)
 	pl.addSource(u, in)
 	for i, d := range u.deps {
-		a.Externs = append(a.Externs, externJSON{Name: u.depNames[i], File: in.add(d.compile, "out") + "/lib/" + d.libFile})
+		a.Externs = append(a.Externs, externJSON{Name: u.depNames[i], File: in.Add(d.compile, "out") + "/lib/" + d.libFile})
 	}
 	a.DepDirs = pl.depDirs(u.deps, in)
 	if u.run != nil {
-		a.BuildRun = in.add(*u.run, "out")
+		a.BuildRun = in.Add(*u.run, "out")
 	}
 	for _, r := range transitiveRuns(u.deps) {
-		a.LinkFrom = append(a.LinkFrom, in.add(*r, "out"))
+		a.LinkFrom = append(a.LinkFrom, in.Add(*r, "out"))
 	}
 }
 
-func (pl *planner) addSource(u *unitOut, in *inputs) {
+func (pl *planner) addSource(u *unitOut, in *engine.Inputs) {
 	src := u.src
 	if u.local != nil {
 		// The imported tree's root (the crate directory is a subdirectory).
@@ -907,11 +809,11 @@ func (pl *planner) addSource(u *unitOut, in *inputs) {
 			src = strings.TrimSuffix(src, "/"+u.local.dir)
 		}
 	}
-	in.srcs[src] = true
+	in.AddSrc(src)
 }
 
 // depDirs are the lib/ directories of the transitive dependencies (-L dependency=).
-func (pl *planner) depDirs(deps []*unitOut, in *inputs) []string {
+func (pl *planner) depDirs(deps []*unitOut, in *engine.Inputs) []string {
 	seen := map[*unitOut]bool{}
 	var out []string
 	var walk func(u *unitOut)
@@ -920,7 +822,7 @@ func (pl *planner) depDirs(deps []*unitOut, in *inputs) []string {
 			return
 		}
 		seen[u] = true
-		out = append(out, in.add(u.compile, "out")+"/lib")
+		out = append(out, in.Add(u.compile, "out")+"/lib")
 		for _, d := range u.deps {
 			walk(d)
 		}
@@ -960,7 +862,7 @@ func transitiveRuns(deps []*unitOut) []*engine.Resolved {
 // unit: it depends only on the host, the crate and its features, never on the target
 // (R-FW-035); the run is per target.
 func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script string, bdeps []*unitOut, bnames []string) error {
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	metas := []string{u.name, u.version, u.sum, "build-script", strings.Join(u.features, ","), rc.tc.out, rc.tc.hostTriple}
 	for i, d := range bdeps {
 		metas = append(metas, bnames[i]+"="+d.meta)
@@ -973,18 +875,18 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 	a.Rustc = rc.tc.out + "/bin/rustc"
 	pl.addSource(u, in)
 	for i, d := range bdeps {
-		a.Externs = append(a.Externs, externJSON{Name: bnames[i], File: in.add(d.compile, "out") + "/lib/" + d.libFile})
+		a.Externs = append(a.Externs, externJSON{Name: bnames[i], File: in.Add(d.compile, "out") + "/lib/" + d.libFile})
 	}
 	a.DepDirs = pl.depDirs(bdeps, in)
 	for _, r := range transitiveRuns(bdeps) {
-		a.LinkFrom = append(a.LinkFrom, in.add(*r, "out"))
+		a.LinkFrom = append(a.LinkFrom, in.Add(*r, "out"))
 	}
 	sc, err := pl.job(drv.Name(base, "build-script"), rc.tc.system, "rustc", pl.label(u)+" (build script)", a, in)
 	if err != nil {
 		return err
 	}
 	// The run: Cargo's build-script environment for the unit's platform.
-	rin := newInputs(pl.req.Builder)
+	rin := engine.NewInputs(pl.req.Builder)
 	host := u.unit.Key.Host
 	triple := rc.tc.roleTriple(host)
 	env := pkgEnv(u)
@@ -1035,10 +937,10 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 	if err := pl.nativeForBuildScript(rc, u, rin, &r); err != nil {
 		return err
 	}
-	r.Script = rin.add(sc, "out") + "/bin/build_script_build"
+	r.Script = rin.Add(sc, "out") + "/bin/build_script_build"
 	for _, d := range u.deps {
 		if d.links != "" && d.run != nil {
-			r.DepLinks = append(r.DepLinks, depLinksJSON{Links: d.links, Run: rin.add(*d.run, "out")})
+			r.DepLinks = append(r.DepLinks, depLinksJSON{Links: d.links, Run: rin.Add(*d.run, "out")})
 		}
 	}
 	run, err := pl.job(drv.Name(base, "build-run"), rc.tc.system, "rust-build-run", pl.label(u)+" (build script run)", r, rin)
@@ -1052,7 +954,7 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 // nativeForBuildScript gives a registry crate's build script the packages rust.Uses names
 // (PATH, PKG_CONFIG_PATH) and pkg-config; without a rust.Uses for the crate, the native-crate
 // defaults table applies (§03.3.6).
-func (pl *planner) nativeForBuildScript(rc *rootCtx, u *unitOut, in *inputs, r *buildRunJSON) error {
+func (pl *planner) nativeForBuildScript(rc *rootCtx, u *unitOut, in *engine.Inputs, r *buildRunJSON) error {
 	if u.local != nil {
 		return nil
 	}
@@ -1070,7 +972,7 @@ func (pl *planner) nativeForBuildScript(rc *rootCtx, u *unitOut, in *inputs, r *
 			}
 			if m.spec.PkgConfig >= 0 && m.spec.PkgConfig < len(n.Deps) {
 				if rv, ok := pl.req.Inputs[n.Deps[m.spec.PkgConfig]]; ok {
-					r.Path = append(r.Path, in.add(rv, pickOutput(rv.Outputs, "bin", "out"))+"/bin")
+					r.Path = append(r.Path, in.Add(rv, engine.PickOutput(rv.Outputs, "bin", "out"))+"/bin")
 				}
 			}
 			for _, li := range use.Libs {
@@ -1094,7 +996,7 @@ func (pl *planner) nativeForBuildScript(rc *rootCtx, u *unitOut, in *inputs, r *
 		if err != nil {
 			return err
 		}
-		r.Path = append(r.Path, in.add(pc, pickOutput(pc.Outputs, "bin", "out"))+"/bin")
+		r.Path = append(r.Path, in.Add(pc, engine.PickOutput(pc.Outputs, "bin", "out"))+"/bin")
 		for _, rv := range libs {
 			pcs = addNative(in, rv, r, pcs)
 		}
@@ -1165,7 +1067,7 @@ func (pl *planner) planCrate(n *ir.Node) error {
 	}
 	a := pl.rustcArgs(rc, u, edition, root)
 	a.CrateType = s.Type
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	pl.commonInputs(rc, u, in, &a)
 	if err := pl.native(n, s, in, &a); err != nil {
 		return err
@@ -1224,7 +1126,7 @@ func (pl *planner) depsOf(rc *rootCtx, ru *resolve.Unit) (*unitOut, error) {
 
 // native adds the crate's Native libraries (bob C/C++ libraries, nixpkgs libraries) to a
 // linking compile.
-func (pl *planner) native(n *ir.Node, s rsspec.Crate, in *inputs, a *rustcArgsJSON) error {
+func (pl *planner) native(n *ir.Node, s rsspec.Crate, in *engine.Inputs, a *rustcArgsJSON) error {
 	for _, i := range s.Native {
 		if i < 0 || i >= len(n.Deps) {
 			return fmt.Errorf("%s: native library index out of range", n.Label)
@@ -1234,7 +1136,7 @@ func (pl *planner) native(n *ir.Node, s rsspec.Crate, in *inputs, a *rustcArgsJS
 			return fmt.Errorf("%s: native library %s is not planned", n.Label, n.Deps[i])
 		}
 		for _, o := range sortedKeys(rv.Outputs) {
-			in.add(rv, o)
+			in.Add(rv, o)
 		}
 		if li := rv.LinkInfo; li != nil {
 			for _, d := range li.LinkDirs {
@@ -1253,7 +1155,7 @@ func (pl *planner) native(n *ir.Node, s rsspec.Crate, in *inputs, a *rustcArgsJS
 		}
 		// A nixpkgs library without link info: its lib/ directory, on the search path and
 		// the runtime path.
-		o := pickOutput(rv.Outputs, "lib", "out")
+		o := engine.PickOutput(rv.Outputs, "lib", "out")
 		a.Search = append(a.Search, "native="+rv.Outputs[o]+"/lib")
 		a.LinkArgs = append(a.LinkArgs, "-Wl,-rpath,"+rv.Outputs[o]+"/lib")
 	}
@@ -1345,7 +1247,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	a := pl.rustcArgs(rc, u, s.Edition, root)
 	a.CrateName, a.Test, a.OutName, a.CrateType = crateName, true, name, rsspec.TypeBin
 	a.Metadata = metadata(u.meta, "test", t.File)
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	if t.File != "" && (s.Type == rsspec.TypeLib || s.Type == rsspec.TypeProcMacro) {
 		// An integration test links the crate's library (built with the test features).
 		lu, err := pl.unitPlan(rc, ru.Key)
@@ -1400,12 +1302,12 @@ type probeJob struct {
 // testRun plans the test-run job of a unit (§03.0.5): the harness runs once with its services;
 // a test binary of another platform (emulate) runs under the user-mode emulator (R-FW-039).
 func (pl *planner) testRun(n *ir.Node, t rsspec.Test, tb engine.Resolved, bin, system string, emulate bool) (engine.Resolved, error) {
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	timeout := t.TimeoutS
 	if timeout <= 0 {
 		timeout = defaultTestTimeoutS
 	}
-	argv := []string{in.add(tb, "out") + "/bin/" + bin}
+	argv := []string{in.Add(tb, "out") + "/bin/" + bin}
 	if emulate {
 		if t.Emulator <= 0 || t.EmulatorCmd == "" || strings.ContainsAny(t.EmulatorCmd, "/\x00") {
 			return engine.Resolved{}, fmt.Errorf("%s: no emulator for a test of another platform", n.Label)
@@ -1414,7 +1316,7 @@ func (pl *planner) testRun(n *ir.Node, t rsspec.Test, tb engine.Resolved, bin, s
 		if err != nil {
 			return engine.Resolved{}, err
 		}
-		argv = append([]string{in.add(q, pickOutput(q.Outputs, "bin", "out")) + "/bin/" + t.EmulatorCmd}, argv...)
+		argv = append([]string{in.Add(q, engine.PickOutput(q.Outputs, "bin", "out")) + "/bin/" + t.EmulatorCmd}, argv...)
 	}
 	argv = append(argv, t.Args...)
 	argv = append(argv, pl.req.TestArgs...)
@@ -1430,7 +1332,7 @@ func (pl *planner) testRun(n *ir.Node, t rsspec.Test, tb engine.Resolved, bin, s
 			if !ok {
 				return engine.Resolved{}, fmt.Errorf("%s: service tool %s is not planned", n.Label, n.Deps[ti])
 			}
-			root := in.add(rv, pickOutput(rv.Outputs, "bin", "out"))
+			root := in.Add(rv, engine.PickOutput(rv.Outputs, "bin", "out"))
 			if first == "" {
 				first = root
 			}

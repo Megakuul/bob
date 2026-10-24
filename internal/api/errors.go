@@ -70,6 +70,10 @@ func PermissionDenied(method, project string) error {
 	return newError(connect.CodePermissionDenied, "", msg)
 }
 
+// Forbidden is PermissionDenied with a message of its own (e.g. "binding would grant
+// permissions you do not have").
+func Forbidden(msg string) error { return newError(connect.CodePermissionDenied, "", msg) }
+
 // NotFound is "<what> not found"; it is also the answer without any permission on the
 // project, so existence never leaks.
 func NotFound(what string) error { return newError(connect.CodeNotFound, "", what+" not found") }
@@ -82,6 +86,12 @@ func FailedPrecondition(msg string) error { return newError(connect.CodeFailedPr
 
 // Aborted is an etag mismatch or a lost CAS race.
 func Aborted(msg string) error { return newError(connect.CodeAborted, "", msg) }
+
+// ETagMismatch is the Aborted answer to a request whose etag is not the stored one; every
+// service uses this one wording.
+func ETagMismatch() error {
+	return Aborted("the resource was changed by someone else (etag mismatch); reload and retry")
+}
 
 // ResourceExhausted is a rate or stream limit.
 func ResourceExhausted(msg string) error {

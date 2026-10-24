@@ -148,7 +148,7 @@ func TestPlanBinaryAndTest(t *testing.T) {
 		t.Errorf("binary resolved to %+v", bin)
 	}
 	unit := res.Nodes["//m/lib/a:go_test"]
-	if d := names["go-test-example.com-m-lib-a-run"]; d == nil || unit.Outputs["out"] != outPath(d) {
+	if d := names["go-test-example.com-m-lib-a-run"]; d == nil || unit.Outputs["out"] != engine.OutPath(d) {
 		t.Errorf("test unit resolved to %+v", unit)
 	}
 	// The main package's job: -p main, embed of banner.txt only, a pure-Go group without cc.
