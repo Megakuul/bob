@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -235,5 +236,73 @@ func TestBuilderFailuresInNix(t *testing.T) {
 				t.Errorf("the failed output is valid: %v %v", inv, err)
 			}
 		})
+	}
+}
+
+// A build cannot change its inputs (R-FLEET-008, A370): Nix binds the input paths writable and
+// in bob's store the build's uid owns them, so bob-builder remounts them read-only before any
+// job code runs. testdata/inputprobe (an input of the derivation) tries chmod and a file write
+// on every store path it sees, also through /proc/1/root, and the store is checked afterwards.
+func TestBuilderInputsReadOnlyInNix(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	builder, err := s.Builder(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(t.TempDir(), "inputprobe")
+	gb := exec.Command("go", "build", "-trimpath", "-o", bin, "./testdata/inputprobe")
+	gb.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if b, err := gb.CombinedOutput(); err != nil {
+		t.Fatalf("go build inputprobe: %v\n%s", err, b)
+	}
+	code, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probeNAR := builderNAR(code)
+	probe, err := drv.MakeStorePath("source", sha256.Sum256(probeNAR), "bob-input-probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Import(ctx, []ExportItem{{Path: probe, NAR: probeNAR}}); err != nil {
+		t.Fatal(err)
+	}
+	inputs := []string{builder, probe}
+	before := map[string]os.FileMode{}
+	for _, p := range inputs {
+		fi, err := os.Stat(filepath.Join(s.Home(), p))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[p] = fi.Mode()
+	}
+	spec := map[string]any{"v": 1, "kind": "run", "label": "//t:inputs-ro", "outputs": []any{"out"}, "fixup": map[string]any{},
+		"args": map[string]any{"steps": []map[string]any{{"op": "exec", "args": map[string]any{"argv": []any{probe + "/bin/bob-builder", "/nix/store"}}}}}}
+	d, err := drv.Job{Name: fmt.Sprint("inputs-ro-", time.Now().UnixNano()), System: HostSystem(), Builder: builder, Spec: spec, InputSrcs: inputs}.Derivation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Finalize(modResolver{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ImportDrvs(ctx, []*drv.Derivation{d}); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := d.Path()
+	var log bytes.Buffer
+	c := s.Command(ctx, "nix-store", "--realise", p, "--option", "substituters", "")
+	c.Stderr = &log
+	if err := c.Run(); err != nil {
+		t.Errorf("the probe could change an input or failed: %v\n%s", err, log.String())
+	}
+	for _, p := range inputs {
+		host := filepath.Join(s.Home(), p)
+		if fi, err := os.Stat(host); err != nil || fi.Mode() != before[p] {
+			t.Errorf("input %s changed mode: %v -> %v (%v)", p, before[p], fi.Mode(), err)
+		}
+		if _, err := os.Lstat(filepath.Join(host, ".probe")); err == nil {
+			t.Errorf("the build wrote into input %s", p)
+		}
 	}
 }

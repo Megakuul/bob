@@ -71,9 +71,6 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	if err := c.MkdirAll(out); err != nil {
-		return err
-	}
 
 	// The duration covers the services' start too: it is what the unit costs (R-FW-025 bound).
 	start := time.Now()
@@ -91,9 +88,15 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 	maps.Copy(testEnv, a.Env)
 
 	c.Phase("test")
-	logPath := filepath.Join(out, "test.log")
-	logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+	// $out is created only after the test: while it runs, the store holds nothing but the
+	// read-only inputs, and the test cannot reach the log or the result (A371). The log goes
+	// to an unlinked file of the build directory meanwhile.
+	logFile, err := os.CreateTemp(c.BuildTop, ".test-log-*")
 	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+	if err := os.Remove(logFile.Name()); err != nil {
 		return err
 	}
 	env := c.baseEnv(a.Path, tmp)
@@ -119,10 +122,11 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 		timer.Stop()
 	}
 	took := time.Since(start)
-	if err := logFile.Close(); err != nil && runErr == nil {
-		runErr = err
-	}
 	svcs.stop()
+	logPath := filepath.Join(out, "test.log")
+	if err := c.saveLog(logFile, out, logPath); err != nil {
+		return err
+	}
 
 	res := bspec.TestResult{Version: 1, Label: c.Job.Label, Passed: runErr == nil, Duration: took.Seconds(), Cases: []bspec.TestCase{}}
 	switch a.Format {
@@ -161,6 +165,25 @@ func testRunKind(c *Ctx, raw json.RawMessage) error {
 		return fmt.Errorf("test %s: %w", a.Argv[0], runErr)
 	}
 	return writeFile(filepath.Join(out, "test-result.json"), 0o644, strings.NewReader(string(b)+"\n"), int64(len(b)+1))
+}
+
+// saveLog creates the output directory out and copies the test's log into logPath.
+func (c *Ctx) saveLog(log *os.File, out, logPath string) error {
+	if err := c.MkdirAll(out); err != nil {
+		return err
+	}
+	dst, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o644)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if _, err := log.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, log); err != nil {
+		return err
+	}
+	return dst.Close()
 }
 
 // checkTestRun validates the arguments before anything starts.

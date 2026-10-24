@@ -21,6 +21,10 @@ import (
 )
 
 func main() {
+	// The job runs only after its inputs are read-only (R-FLEET-008, A370).
+	if code, done := builder.LockInputs(os.Args, os.Stderr); done {
+		os.Exit(code)
+	}
 	os.Exit(builder.Main(os.Args[1:], kinds(), os.Stdout, os.Stderr))
 }
 
