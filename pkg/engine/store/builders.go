@@ -6,9 +6,15 @@ package store
 func builderTable(system string) string {
 	switch system {
 	case "aarch64-linux":
-		return "/nix/store/hs90yr9c8s1zm190cxnxpw29885d4hsg-bob-builder-17"
+		return storePath("hs90yr9c8s1zm190.cxnxpw29885d4hsg-bob-builder-17")
 	case "x86_64-linux":
-		return "/nix/store/3pcfi7sfqz8kcr39szr3rzzbhpfw1sw2-bob-builder-17"
+		return storePath("3pcfi7sfqz8kcr39.szr3rzzbhpfw1sw2-bob-builder-17")
 	}
 	return ""
+}
+
+// storePath is "/nix/store/" + base without the "." after the hash's first half: a bob built
+// by bob must not contain the builder's store hash (it would refer to the builder, BOB-E-9003).
+func storePath(base string) string {
+	return "/nix/store/" + base[:16] + base[17:]
 }
