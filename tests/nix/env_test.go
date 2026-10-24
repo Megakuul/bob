@@ -219,6 +219,31 @@ func (c parsedClosure) Modulo(p string) ([32]byte, error) {
 	return d.Modulo(c)
 }
 
+// memoClosure resolves each derivation's hashDerivationModulo once, as bob's own resolvers do
+// (pkg/engine/build resolver.memo). parsedClosure alone rehashes an input once per path that
+// leads to it, which is exponential in the depth of the stdenv bootstrap chain (the test ran
+// for more than 75 minutes, I-B27/I-B44); the hashes themselves are the same.
+type memoClosure struct {
+	c    parsedClosure
+	memo map[string][32]byte
+}
+
+func (m *memoClosure) Modulo(p string) ([32]byte, error) {
+	if h, ok := m.memo[p]; ok {
+		return h, nil
+	}
+	d, ok := m.c[p]
+	if !ok {
+		return [32]byte{}, fmt.Errorf("derivation %s is not in the closure", p)
+	}
+	h, err := d.Modulo(m)
+	if err != nil {
+		return h, err
+	}
+	m.memo[p] = h
+	return h, nil
+}
+
 func (p *pin) closure(t testing.TB, root string) parsedClosure {
 	t.Helper()
 	c := parsedClosure{}
@@ -262,6 +287,7 @@ func recomputeClosure(t testing.TB, p *pin, attr string) error {
 		return fmt.Errorf("closure of %s has only %d derivations: the parse is incomplete", attr, len(c))
 	}
 	var bad []string
+	r := &memoClosure{c: c, memo: map[string][32]byte{}}
 	for path, orig := range c {
 		cp := *orig
 		cp.Outputs = append([]drv.Output(nil), orig.Outputs...)
@@ -275,7 +301,7 @@ func recomputeClosure(t testing.TB, p *pin, attr string) error {
 				cp.Env[cp.Outputs[i].Name] = ""
 			}
 		}
-		if err := cp.Finalize(c); err != nil {
+		if err := cp.Finalize(r); err != nil {
 			return fmt.Errorf("finalize %s: %w", path, err)
 		}
 		for i, o := range cp.Outputs {

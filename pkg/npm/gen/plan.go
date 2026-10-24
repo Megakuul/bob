@@ -127,7 +127,7 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 		}
 	}
 	if len(errs) > 0 {
-		return pl.out, joinErrs(errs)
+		return pl.out, engine.JoinErrors(errs)
 	}
 	return pl.out, nil
 }
@@ -142,7 +142,7 @@ func (pl *planner) planNode(n *ir.Node) (engine.Resolved, error) {
 	case npmspec.KindLib, npmspec.KindApp, npmspec.KindSite:
 		im, ok := pl.byID[n.ID]
 		if !ok {
-			return rv, internal(n, "importer of a dependency repository: not supported")
+			return rv, engine.Internal(n, "importer of a dependency repository: not supported")
 		}
 		switch n.Kind {
 		case npmspec.KindLib:
@@ -155,7 +155,7 @@ func (pl *planner) planNode(n *ir.Node) (engine.Resolved, error) {
 	case npmspec.KindTest:
 		rv, err = pl.planTest(n)
 	default:
-		err = internal(n, "unknown npm kind %s", n.Kind)
+		err = engine.Internal(n, "unknown npm kind %s", n.Kind)
 	}
 	if err != nil {
 		return rv, err
@@ -166,37 +166,6 @@ func (pl *planner) planNode(n *ir.Node) (engine.Resolved, error) {
 }
 
 // ---- errors ----
-
-func internal(n *ir.Node, format string, a ...any) error {
-	return fmt.Errorf("%s: %s", n.Label, fmt.Sprintf(format, a...))
-}
-
-// invalid is BOB-E-1020 for node n.
-func invalid(n *ir.Node, option, reason string) error {
-	e := diag.New(1020, "label", n.Label, "option", option, "reason", reason)
-	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
-	return e
-}
-
-func joinErrs(errs []error) error {
-	if len(errs) == 1 {
-		return errs[0]
-	}
-	return errorList(errs)
-}
-
-// errorList joins errors so that the engine still sees each diagnostic (Unwrap []error).
-type errorList []error
-
-func (l errorList) Error() string {
-	s := make([]string, len(l))
-	for i, e := range l {
-		s[i] = e.Error()
-	}
-	return strings.Join(s, "\n")
-}
-
-func (l errorList) Unwrap() []error { return l }
 
 // ---- platforms ----
 
@@ -209,11 +178,11 @@ type platInfo struct {
 func (pl *planner) platformOf(n *ir.Node) (*platInfo, error) {
 	raw, ok := n.Proj["platform"]
 	if !ok {
-		return nil, internal(n, "no platform")
+		return nil, engine.Internal(n, "no platform")
 	}
 	var p string
 	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, internal(n, "platform: %v", err)
+		return nil, engine.Internal(n, "platform: %v", err)
 	}
 	if pi, ok := pl.plats[p]; ok {
 		return pi, nil
@@ -222,7 +191,7 @@ func (pl *planner) platformOf(n *ir.Node) (*platInfo, error) {
 	cpu := map[string]string{"amd64": "x64", "arm64": "arm64"}[goarch]
 	arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]
 	if cpu == "" || goos != "linux" {
-		return nil, invalid(n, "platform", fmt.Sprintf("npm packages cannot be built for %s", p))
+		return nil, engine.Invalid(n, "platform", fmt.Sprintf("npm packages cannot be built for %s", p))
 	}
 	pi := &platInfo{os: goos, cpu: cpu, libc: "glibc", system: arch + "-" + goos}
 	pi.sccs = pl.cycles(pi)
@@ -353,80 +322,11 @@ func (pl *planner) cycles(pi *platInfo) map[string]*scc {
 
 // ---- inputs and jobs ----
 
-// inputs collects a job's input derivations and sources.
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs map[string]bool
-}
-
-func (pl *planner) newInputs() *inputs {
-	return &inputs{drvs: map[string]map[string]bool{}, srcs: map[string]bool{pl.req.Builder: true}}
-}
-
-// add records output o of rv and returns its path.
-func (in *inputs) add(rv engine.Resolved, o string) string {
-	if c, ok := rv.Cutoff[o]; ok { // codegen early cutoff (§03.6.3): depend on the content
-		in.srcs[c] = true
-		return c
-	}
-	sp := rv.Outputs[o]
-	if rv.Drv == "" {
-		in.srcs[sp] = true
-		return sp
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	in.drvs[rv.Drv][o] = true
-	return sp
-}
-
-func (in *inputs) addDrv(p string) {
-	if in.drvs[p] == nil {
-		in.drvs[p] = map[string]bool{}
-	}
-	in.drvs[p]["out"] = true
-}
-
-func (in *inputs) list() ([]drv.InputDrv, []string) {
-	var ds []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		ds = append(ds, d)
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
-	srcs := make([]string, 0, len(in.srcs))
-	for s := range in.srcs {
-		srcs = append(srcs, s)
-	}
-	sort.Strings(srcs)
-	return ds, srcs
-}
-
-// noFixup: npm kinds skip the binary fixup; the contract still names it.
-func noFixup() map[string]any {
-	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
-		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
-}
-
-// job finalises one bob-builder job and records it; it returns its path and derivation.
-func (pl *planner) job(name, system, kind, label string, args any, in *inputs) (string, *drv.Derivation, error) {
-	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": noFixup()}
-	ds, ss := in.list()
-	j := drv.Job{Name: name, System: system, Builder: pl.req.Builder, Spec: spec, InputDrvs: ds, InputSrcs: ss,
-		ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	d, err := j.Derivation()
-	if err != nil {
-		return "", nil, err
-	}
-	if err := d.Finalize(pl); err != nil {
-		return "", nil, err
-	}
-	p, err := d.Path()
+// job finalises one bob-builder job and records it; it returns its path and derivation. npm
+// kinds skip the binary fixup; the contract still names it.
+func (pl *planner) job(name, system, kind, label string, args any, in *engine.Inputs) (string, *drv.Derivation, error) {
+	p, d, err := engine.BuilderJob{Name: name, System: system, Builder: pl.req.Builder, Kind: kind, Label: label,
+		Args: args, Inputs: in}.Finalize(pl)
 	if err != nil {
 		return "", nil, err
 	}
@@ -437,30 +337,21 @@ func (pl *planner) job(name, system, kind, label string, args any, in *inputs) (
 	return p, d, nil
 }
 
-func outPath(d *drv.Derivation) string {
-	for _, o := range d.Outputs {
-		if o.Name == "out" {
-			return o.Path
-		}
-	}
-	return ""
-}
-
 // tool returns output o (or the first of prefer that exists) of the node's dep i.
-func (pl *planner) tool(n *ir.Node, i int, in *inputs, prefer ...string) (string, error) {
+func (pl *planner) tool(n *ir.Node, i int, in *engine.Inputs, prefer ...string) (string, error) {
 	if i < 0 || i >= len(n.Deps) {
-		return "", internal(n, "tool index %d out of range", i)
+		return "", engine.Internal(n, "tool index %d out of range", i)
 	}
 	rv, ok := pl.req.Inputs[n.Deps[i]]
 	if !ok {
-		return "", internal(n, "tool %s is not planned", n.Deps[i])
+		return "", engine.Internal(n, "tool %s is not planned", n.Deps[i])
 	}
 	for _, o := range append(prefer, "out") {
 		if _, ok := rv.Outputs[o]; ok {
-			return in.add(rv, o), nil
+			return in.AddCutoff(rv, o), nil
 		}
 	}
-	return "", internal(n, "tool %s has no output %v", n.Deps[i], prefer)
+	return "", engine.Internal(n, "tool %s has no output %v", n.Deps[i], prefer)
 }
 
 // ---- tarballs and package instances ----
@@ -507,12 +398,12 @@ type scripts struct {
 	node  string          // nodejs root
 	bash  string          // bash binary
 	path  []string        // tool bin dirs
-	in    *inputs         // the tools' inputs, added to each script derivation
+	in    *engine.Inputs  // the tools' inputs, added to each script derivation
 }
 
 // scriptsOf collects the importer's allowlist and script tools.
 func (pl *planner) scriptsOf(n *ir.Node, im *importer) (*scripts, error) {
-	s := &scripts{allow: map[string]bool{}, in: pl.newInputs()}
+	s := &scripts{allow: map[string]bool{}, in: engine.NewInputs(pl.req.Builder)}
 	var relevant []string
 	for _, a := range im.spec.Options.AllowScripts {
 		s.allow[a] = true
@@ -566,7 +457,7 @@ func (pl *planner) instance(pi *platInfo, s *scripts, key string) (instRef, erro
 	if group != nil {
 		members = group.members
 	}
-	in := pl.newInputs()
+	in := engine.NewInputs(pl.req.Builder)
 	self := drv.Placeholder("out")
 	var ms []member
 	for i, m := range members {
@@ -575,7 +466,7 @@ func (pl *planner) instance(pi *platInfo, s *scripts, key string) (instRef, erro
 		if err != nil {
 			return instRef{}, err
 		}
-		in.srcs[tb] = true
+		in.AddSrc(tb)
 		dir := self
 		if group != nil {
 			dir = fmt.Sprintf("%s/%d", self, i)
@@ -598,7 +489,7 @@ func (pl *planner) instance(pi *platInfo, s *scripts, key string) (instRef, erro
 				if err != nil {
 					return instRef{}, err
 				}
-				in.addDrv(dr.drv)
+				in.AddDrv(dr.drv, "out")
 				tdir = dr.dir
 			}
 			mem.Links = append(mem.Links, link{Alias: alias, Target: tdir})
@@ -617,17 +508,7 @@ func (pl *planner) instance(pi *platInfo, s *scripts, key string) (instRef, erro
 				}
 			}
 			mem.Script = sc
-			for d, outs := range s.in.drvs {
-				for o := range outs {
-					if in.drvs[d] == nil {
-						in.drvs[d] = map[string]bool{}
-					}
-					in.drvs[d][o] = true
-				}
-			}
-			for src := range s.in.srcs {
-				in.srcs[src] = true
-			}
+			in.Merge(s.in)
 		}
 		ms = append(ms, mem)
 	}
@@ -643,7 +524,7 @@ func (pl *planner) instance(pi *platInfo, s *scripts, key string) (instRef, erro
 	if err != nil {
 		return instRef{}, err
 	}
-	out := outPath(d)
+	out := engine.OutPath(d)
 	var r instRef
 	for i, m := range members {
 		ref := instRef{drv: dp, d: d, dir: out + "/node_modules/" + pl.sec.Packages[m].Name}
@@ -692,13 +573,13 @@ func (pl *planner) direct(n *ir.Node, im *importer, pi *platInfo) (map[string]st
 		}
 		p, ok := pl.sec.Packages[k]
 		if !ok {
-			return nil, nil, internal(n, "bob.lock: importer %s depends on %s, which it does not list", im.dir, k)
+			return nil, nil, engine.Internal(n, "bob.lock: importer %s depends on %s, which it does not list", im.dir, k)
 		}
 		if !pi.installable(p) {
 			if p.Optional {
 				continue
 			}
-			return nil, nil, invalid(n, "dependency "+alias, fmt.Sprintf("%s@%s does not support %s-%s", p.Name, p.Version, pi.os, pi.cpu))
+			return nil, nil, engine.Invalid(n, "dependency "+alias, fmt.Sprintf("%s@%s does not support %s-%s", p.Name, p.Version, pi.os, pi.cpu))
 		}
 		out[alias] = k
 	}
@@ -721,10 +602,10 @@ func (pl *planner) libByDir(dir string) (*importer, error) {
 
 // libOutput plans the library in dir for the platform of n and returns the directory of the
 // built package (<out>/node_modules/<name>).
-func (pl *planner) libOutput(n *ir.Node, dir string, in *inputs) (string, error) {
+func (pl *planner) libOutput(n *ir.Node, dir string, in *engine.Inputs) (string, error) {
 	lib, err := pl.libByDir(dir)
 	if err != nil {
-		return "", internal(n, "%v", err)
+		return "", engine.Internal(n, "%v", err)
 	}
 	ln := lib.node
 	// The library's node of the same configuration (platform), when the graph has it.
@@ -737,12 +618,12 @@ func (pl *planner) libOutput(n *ir.Node, dir string, in *inputs) (string, error)
 	if err != nil {
 		return "", err
 	}
-	in.add(rv, "out")
+	in.AddCutoff(rv, "out")
 	return rv.Outputs["out"] + "/node_modules/" + lib.spec.Name, nil
 }
 
 // depDir returns the directory a direct dependency links to.
-func (pl *planner) depDir(n *ir.Node, pi *platInfo, s *scripts, target string, in *inputs) (string, error) {
+func (pl *planner) depDir(n *ir.Node, pi *platInfo, s *scripts, target string, in *engine.Inputs) (string, error) {
 	if dir, ok := strings.CutPrefix(target, "link:"); ok {
 		return pl.libOutput(n, dir, in)
 	}
@@ -750,7 +631,7 @@ func (pl *planner) depDir(n *ir.Node, pi *platInfo, s *scripts, target string, i
 	if err != nil {
 		return "", err
 	}
-	in.addDrv(r.drv)
+	in.AddDrv(r.drv, "out")
 	return r.dir, nil
 }
 
@@ -770,7 +651,7 @@ func (pl *planner) nodeModules(n *ir.Node, im *importer, pi *platInfo) (nmRef, e
 	if err != nil {
 		return nmRef{}, err
 	}
-	in := pl.newInputs()
+	in := engine.NewInputs(pl.req.Builder)
 	node, err := pl.tool(n, im.spec.Tools.Node, in)
 	if err != nil {
 		return nmRef{}, err
@@ -800,9 +681,9 @@ func (pl *planner) nodeModules(n *ir.Node, im *importer, pi *platInfo) (nmRef, e
 	}
 	dp, d, err := pl.job(name, pi.system, "npm-node-modules", n.Label+" node_modules", args, in)
 	if err != nil {
-		return nmRef{}, internal(n, "%v", err)
+		return nmRef{}, engine.Internal(n, "%v", err)
 	}
-	r := nmRef{drv: dp, d: d, out: outPath(d)}
+	r := nmRef{drv: dp, d: d, out: engine.OutPath(d)}
 	pl.nm[memo] = r
 	if pi.system == engine.HostSystem() {
 		// The working tree gets this node_modules (§03.4.3): editors, tsc and bob exec see the
@@ -838,7 +719,7 @@ func (pl *planner) binsOf(target, dir string) []bin {
 // from the direct dependencies, each package at the top level when its name is free there (or
 // the same instance is), else nested in the node_modules of the package that needs it.
 // Placing level by level keeps every earlier resolution valid.
-func (pl *planner) hoist(n *ir.Node, pi *platInfo, s *scripts, deps map[string]string, args *nodeModulesArgs, in *inputs) error {
+func (pl *planner) hoist(n *ir.Node, pi *platInfo, s *scripts, deps map[string]string, args *nodeModulesArgs, in *engine.Inputs) error {
 	type loc struct {
 		path string // relative to node_modules: "a", "a/node_modules/b"
 		key  string
@@ -860,7 +741,7 @@ func (pl *planner) hoist(n *ir.Node, pi *platInfo, s *scripts, deps map[string]s
 		if err != nil {
 			return err
 		}
-		in.srcs[tb] = true
+		in.AddSrc(tb)
 		args.Hoisted = append(args.Hoisted, hoistEntry{Path: p, Tarball: tb})
 		queue = append(queue, loc{p, key})
 		return nil
@@ -908,11 +789,14 @@ func (pl *planner) hoist(n *ir.Node, pi *platInfo, s *scripts, deps map[string]s
 			}
 		}
 		e.Script = sc
-		for d := range s.in.drvs {
-			in.addDrv(d)
+		// The tools' derivations are recorded with output "out" only (the members above merge
+		// their exact outputs); kept byte-identical by I-B47, see plan/progress/I-B47.md.
+		ds, ss := s.in.List()
+		for _, d := range ds {
+			in.AddDrv(d.Path, "out")
 		}
-		for src := range s.in.srcs {
-			in.srcs[src] = true
+		for _, src := range ss {
+			in.AddSrc(src)
 		}
 	}
 	return nil

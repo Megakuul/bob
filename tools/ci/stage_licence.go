@@ -17,7 +17,10 @@ var licenceModules = []string{".", "tools"}
 
 // attributedDirs hold bundled assets; every file in them needs an
 // ATTRIBUTION.md row (AGENTS.md §5.7).
-var attributedDirs = []string{"assets", "web/static"}
+var attributedDirs = []string{"assets", "web/static", "website/static"}
+
+// npmLocks are the npm lock files whose packages are checked.
+var npmLocks = []string{"web/package-lock.json", "website/package-lock.json"}
 
 func runLicence(ctx context.Context, env *Env) error {
 	policy, err := licence.LoadPolicy(filepath.Join(env.Root, "tools/ci/licences.allow"))
@@ -32,11 +35,13 @@ func runLicence(ctx context.Context, env *Env) error {
 		}
 		findings = append(findings, f...)
 	}
-	f, err := licence.CheckNPMLock(filepath.Join(env.Root, "web/package-lock.json"), policy)
-	if err != nil {
-		return err
+	for _, l := range npmLocks {
+		f, err := licence.CheckNPMLock(filepath.Join(env.Root, l), policy)
+		if err != nil {
+			return err
+		}
+		findings = append(findings, f...)
 	}
-	findings = append(findings, f...)
 
 	var bad []string
 	for _, f := range findings {

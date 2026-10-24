@@ -56,15 +56,15 @@ func newPackage(p *bob.P, kind, attr string, opts []Option) *Package {
 // CrossSet returns the same package (attribute, kind and options) taken from the cross package
 // set, as if declared with Cross(). C/C++ packages with Libs: cc.CrossLibs use it for their
 // nixpkgs libraries (R-FW-036).
-func (p *Package) CrossSet(bp *bob.P) *Package {
-	if p == nil || p.attr == "" || p.opts.cross {
-		return p
+func (pk *Package) CrossSet(p *bob.P) *Package {
+	if pk == nil || pk.attr == "" || pk.opts.cross {
+		return pk
 	}
-	o := p.opts
+	o := pk.opts
 	o.cross = true
 	o.outputs, o.modules, o.insecure = slices.Clone(o.outputs), slices.Clone(o.modules), slices.Clone(o.insecure)
-	c := &Package{outputs: o.outputs, kind: p.kind, attr: p.attr, opts: o}
-	c.Node = ext.New(bp, p.kind, p.attr, nil, nil, o.spec(p.attr, "cross"))
+	c := &Package{outputs: o.outputs, kind: pk.kind, attr: pk.attr, opts: o}
+	c.Node = ext.New(p, pk.kind, pk.attr, nil, nil, o.spec(pk.attr, "cross"))
 	return c
 }
 

@@ -23,7 +23,7 @@ func init() {
 
 func runWeb(ctx context.Context, env *Env) error {
 	dir := filepath.Join(env.Root, "web")
-	if err := checkWebDeps(dir); err != nil {
+	if err := checkWebDeps(dir, "web"); err != nil {
 		return err
 	}
 	node, err := nixTool(ctx, env.Root, "nodejs_22")
@@ -68,7 +68,8 @@ func nixTool(ctx context.Context, root, attr string) (string, error) {
 	return lines[len(lines)-1], nil
 }
 
-func checkWebDeps(dir string) error {
+// checkWebDeps fails when the package.json in dir (named name in messages) lists a banned dependency.
+func checkWebDeps(dir, name string) error {
 	b, err := os.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil {
 		return harnessErr(err)
@@ -78,18 +79,18 @@ func checkWebDeps(dir string) error {
 		DevDependencies map[string]string `json:"devDependencies"`
 	}
 	if err := json.Unmarshal(b, &pkg); err != nil {
-		return fmt.Errorf("web/package.json: %w", err)
+		return fmt.Errorf("%s/package.json: %w", name, err)
 	}
 	var bad []string
 	for _, deps := range []map[string]string{pkg.Dependencies, pkg.DevDependencies} {
-		for name := range deps {
-			if slices.Contains(bannedWebDeps, name) {
-				bad = append(bad, name)
+		for dep := range deps {
+			if slices.Contains(bannedWebDeps, dep) {
+				bad = append(bad, dep)
 			}
 		}
 	}
 	if len(bad) > 0 {
-		return fmt.Errorf("web: banned class-composition dependencies (AGENTS.md §8): %s", strings.Join(bad, ", "))
+		return fmt.Errorf("%s: banned class-composition dependencies (AGENTS.md §8): %s", name, strings.Join(bad, ", "))
 	}
 	return nil
 }

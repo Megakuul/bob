@@ -67,6 +67,18 @@ func (in *Inputs) AddDrv(path string, outputs ...string) {
 	}
 }
 
+// Merge records every input of o.
+func (in *Inputs) Merge(o *Inputs) {
+	for d, outs := range o.drvs {
+		for out := range outs {
+			in.AddDrv(d, out)
+		}
+	}
+	for s := range o.srcs {
+		in.srcs[s] = true
+	}
+}
+
 // AddSrc records a plain store path.
 func (in *Inputs) AddSrc(p string) { in.srcs[p] = true }
 
@@ -129,7 +141,8 @@ type BuilderJob struct {
 	Args    any    // the kind's Args
 	Fixup   *Fixup // nil: NoFixup
 	Inputs  *Inputs
-	Discard bool // unsafeDiscardReferences.out (R-OUT-011)
+	Discard bool           // unsafeDiscardReferences.out (R-OUT-011)
+	Attrs   map[string]any // further structured attributes (besides allowSubstitutes = false)
 }
 
 // Finalize turns the job into its finalised derivation and returns the derivation's path. The
@@ -148,6 +161,9 @@ func (j BuilderJob) Finalize(r drv.Resolver) (string, *drv.Derivation, error) {
 		// A71: bob checks its own caches in one batch before Nix runs; Nix must not ask a
 		// substituter about every bob output (≈ 0.12 s per derivation).
 		ExtraAttribute: map[string]any{"allowSubstitutes": false}}
+	for k, v := range j.Attrs {
+		job.ExtraAttribute[k] = v
+	}
 	if len(fx.Forbidden) > 0 {
 		job.Disallowed = map[string][]string{"out": fx.Forbidden}
 	}

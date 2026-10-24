@@ -19,7 +19,6 @@ import (
 	workerv1 "github.com/megakuul/bob/internal/gen/bob/worker/v1"
 )
 
-
 // AllRules is the rule table of every service the API serves (the permission catalogue's
 // source). It is the table New builds; New refuses to start when it is invalid.
 func AllRules() (Rules, error) {

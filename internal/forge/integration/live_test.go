@@ -18,6 +18,7 @@ import (
 
 	"github.com/megakuul/bob/internal/forge"
 	forgev1 "github.com/megakuul/bob/internal/gen/bob/forge/v1"
+	"github.com/megakuul/bob/internal/netguard"
 	"github.com/megakuul/bob/tests/serverenv/forgejo"
 	"github.com/megakuul/bob/tests/store/env"
 )
@@ -40,7 +41,12 @@ func TestLiveForgejoCheckoutPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	be := env.Start(t)
-	reg := &Registry{Control: be.Open(t, "control")}
+	// the instance runs on loopback, which the outgoing-address policy refuses unless allowed
+	loopback, err := netguard.New([]string{"127.0.0.0/8", "::1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := &Registry{Control: be.Open(t, "control"), Outbound: loopback}
 	svc := &Service{Registry: reg, BaseURL: "https://127.0.0.1:1"}
 	if _, err := svc.CreateForgeIntegration(ctx, connect.NewRequest(&forgev1.CreateForgeIntegrationRequest{Integration: &forgev1.ForgeIntegration{
 		Id: "forgejo-live", Kind: forgev1.ForgeKind_FORGE_KIND_FORGEJO, BaseUrl: fj.URL,

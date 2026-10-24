@@ -47,7 +47,7 @@ func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (prep en
 		if !ok {
 			return prep, fmt.Errorf("the OCaml toolchain (%s) of %s is not resolved", a, t0.n.Label)
 		}
-		o := pickOutput(rv.Outputs, "bin", "out")
+		o := engine.PickOutput(rv.Outputs, "bin", "out")
 		roots[a] = rv.Outputs[o]
 		prep.Packages = append(prep.Packages, engine.DevPackage{Name: a, Path: rv.Outputs[o], Drv: rv.Drv})
 	}
@@ -61,7 +61,7 @@ func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (prep en
 			if !ok || e.DrvPath == "" {
 				continue
 			}
-			p := e.Outputs[pickOutput(e.Outputs, "bin", "out")]
+			p := e.Outputs[engine.PickOutput(e.Outputs, "bin", "out")]
 			prep.Packages = append(prep.Packages, engine.DevPackage{Name: a, Version: e.Version, Path: p, Drv: e.DrvPath})
 		}
 	}

@@ -16,3 +16,13 @@ export async function copyText(text: string, button: HTMLElement): Promise<void>
 		button.textContent = label;
 	}, 1400);
 }
+
+/** Shell snippets with "$ " prompts copy only the commands, without prompts or output. */
+export function shellCommands(code: string): string {
+	const lines = code.split('\n');
+	if (!lines.some((l) => l.startsWith('$ '))) return code;
+	return lines
+		.filter((l) => l.startsWith('$ '))
+		.map((l) => l.slice(2))
+		.join('\n');
+}

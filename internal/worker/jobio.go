@@ -456,7 +456,8 @@ func readCapped(name string, max int64) ([]byte, error) {
 }
 
 // stagePaths stages the closure: a path cache.nixos.org serves is only listed as skipped
-// (R-REG-005); every other path gets its zstd NAR and its narinfo claim.
+// (R-REG-005), with the upstream's signed narinfo as proof; every other path gets its zstd NAR
+// and its narinfo claim.
 func (p *Process) stagePaths(ctx context.Context, staging, work string, paths []PathInfo, done *promote.Complete) error {
 	if len(paths) > maxStagedPaths {
 		return fmt.Errorf("closure of %d paths, the limit is %d", len(paths), maxStagedPaths)

@@ -5,6 +5,9 @@
  "fixture": "cpp-lib",
  "inject": {
   "kind": "env",
+  "env": [
+   "BOB_TEST_CLONE_ERRNO=EPERM"
+  ],
   "describe": "unprivileged user namespaces disabled (fault hook)"
  },
  "command": [
@@ -14,7 +17,7 @@
  "code": "BOB-E-7005",
  "position": "none",
  "excerpt": false,
- "hint": true,
+ "hint": false,
  "nixver": [],
  "exit": 7,
  "forbid": []

@@ -172,12 +172,16 @@ func TestRGO002bBuildListEqualsGoCommand(t *testing.T) {
 			for _, m := range e.mods {
 				modDir := filepath.Join(dir, m)
 				path := modulePath(t, modDir)
-				want := append([]string(nil), lists[path]...)
-				sort.Strings(want)
-				if len(want) == 0 {
+				bl, found := lists[path]
+				if !found {
 					t.Errorf("bob.lock has no build list for workspace module %s", path)
 					continue
 				}
+				// A module without third-party requirements (the fixture's example.com/lib) has an
+				// empty build list: go list -m all prints only the main module (and workspace
+				// modules) for it.
+				want := append([]string(nil), bl...)
+				sort.Strings(want)
 				r := goIn(t, modDir, env, "list", "-m", "all")
 				if !exitIs(t, r, 0) {
 					continue

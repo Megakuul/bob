@@ -43,6 +43,15 @@ func HTTPClient() *http.Client {
 	}}
 }
 
+// ClientOr returns c, or HTTPClient() when c is nil: the adapters' Config.HTTP lets the server
+// put its outgoing-address policy (internal/netguard) in front of every forge request.
+func ClientOr(c *http.Client) *http.Client {
+	if c != nil {
+		return c
+	}
+	return HTTPClient()
+}
+
 // ValidSHA reports a lowercase hex object id (SHA-1 or SHA-256 object format).
 func ValidSHA(s string) bool {
 	if len(s) != 40 && len(s) != 64 {

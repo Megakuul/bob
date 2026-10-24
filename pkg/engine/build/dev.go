@@ -196,7 +196,7 @@ func dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 				}
 				return nil, diag.NotImplemented("dev shell packages other than nixpkgs tools (" + label + ")")
 			}
-			out := rv.Outputs[pickOutput(rv.Outputs, "bin", "out")]
+			out := rv.Outputs[engine.PickOutput(rv.Outputs, "bin", "out")]
 			res.Packages = append(res.Packages, engine.DevPackage{Name: n.Nix.Attr, Version: entries[n.Nix.Attr].Version, Path: out, Drv: rv.Drv})
 		}
 		for k, v := range spec.Env {

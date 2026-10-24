@@ -18,6 +18,7 @@ import (
 	"github.com/megakuul/bob/internal/forge/github"
 	"github.com/megakuul/bob/internal/forge/gitlab"
 	forgev1 "github.com/megakuul/bob/internal/gen/bob/forge/v1"
+	"github.com/megakuul/bob/internal/netguard"
 	"github.com/megakuul/bob/internal/store"
 )
 
@@ -34,6 +35,9 @@ type Registry struct {
 	Control *store.Bucket
 	Now     func() time.Time
 	Log     *slog.Logger
+	// Outbound is the policy of the adapters' requests (server.outbound_allow, I-R2 F8); nil
+	// allows public addresses only.
+	Outbound *netguard.Policy
 
 	cache store.Cache[ForgeRecord]
 	mu    sync.Mutex
@@ -102,11 +106,13 @@ func (r *Registry) adapters(ctx context.Context, id string) (*ForgeRecord, built
 		return rec, b, nil
 	}
 	b := built{fingerprint: fp, prevUntil: rec.PrevUntil.Value()}
-	if b.cur, err = NewAdapter(ConfigOf(rec), rec.Secret.Value()); err != nil {
+	c := ConfigOf(rec)
+	c.HTTP = r.Outbound.Client(forge.HTTPClient())
+	if b.cur, err = NewAdapter(c, rec.Secret.Value()); err != nil {
 		return nil, built{}, err
 	}
 	if rec.PrevSecret.Value() != "" {
-		if b.prev, err = NewAdapter(ConfigOf(rec), rec.PrevSecret.Value()); err != nil {
+		if b.prev, err = NewAdapter(c, rec.PrevSecret.Value()); err != nil {
 			return nil, built{}, err
 		}
 	}
@@ -152,13 +158,13 @@ func NewAdapter(c Config, secret string) (forge.Adapter, error) {
 			base = GitHubAPI
 		}
 		return github.New(github.Config{BaseURL: base, AppID: c.AppID, InstallationID: c.InstallationID,
-			PrivateKeyPEM: forge.NewSecret(c.PrivateKeyPEM), WebhookSecret: forge.NewSecret(secret)})
+			PrivateKeyPEM: forge.NewSecret(c.PrivateKeyPEM), WebhookSecret: forge.NewSecret(secret), HTTP: c.HTTP})
 	case forge.Forgejo:
 		return forgejo.New(forgejo.Config{BaseURL: c.BaseURL, BotLogin: c.BotLogin,
-			BotPassword: forge.NewSecret(c.BotPassword), WebhookSecret: forge.NewSecret(secret)})
+			BotPassword: forge.NewSecret(c.BotPassword), WebhookSecret: forge.NewSecret(secret), HTTP: c.HTTP})
 	case forge.GitLab:
 		return gitlab.New(gitlab.Config{BaseURL: c.BaseURL, AccessToken: forge.NewSecret(c.AccessToken),
-			SigningToken: forge.NewSecret(secret), AllowPlaintextSecret: c.AllowPlaintext})
+			SigningToken: forge.NewSecret(secret), AllowPlaintextSecret: c.AllowPlaintext, HTTP: c.HTTP})
 	}
 	return nil, fmt.Errorf("forge: unknown kind %q", c.Kind)
 }
@@ -171,6 +177,9 @@ type Config struct {
 	AppID, InstallationID                             int64
 	PrivateKeyPEM, BotLogin, BotPassword, AccessToken string
 	AllowPlaintext                                    bool
+	// HTTP is the client of the adapter's requests (Registry: its Outbound policy); nil:
+	// forge.HTTPClient().
+	HTTP *http.Client
 }
 
 // ConfigOf reads the configuration of a fetched record.

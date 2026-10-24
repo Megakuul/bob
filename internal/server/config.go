@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/megakuul/bob/internal/netguard"
 	"github.com/megakuul/bob/internal/store"
 )
 
@@ -34,6 +35,10 @@ type Config struct {
 	// AdminToken (BOB_ADMIN_TOKEN) is the bootstrap API credential (admin@*) of the test
 	// stacks; only -tags bobtest builds accept it, release builds refuse to start (D-IB3-3).
 	AdminToken string
+	// OutboundAllow (server.outbound_allow: BOB_SERVER_OUTBOUND_ALLOW, comma-separated) names the
+	// hosts, addresses and CIDR ranges outgoing forge and webhook requests may reach although
+	// they are loopback, private or link-local (internal/netguard; refused by default).
+	OutboundAllow []string
 
 	// Worker.
 	OrchestratorAddrs []string // BOB_ORCHESTRATOR_ADDRS: comma-separated http(s) URLs
@@ -93,6 +98,14 @@ func ConfigFromEnv(mode string, getenv func(string) string) (Config, error) {
 		}
 		if c.AdminToken != "" && len(c.AdminToken) < minAdminToken {
 			return c, configErr("BOB_ADMIN_TOKEN must have at least %d characters", minAdminToken)
+		}
+		for _, a := range strings.Split(getenv("BOB_SERVER_OUTBOUND_ALLOW"), ",") {
+			if a = strings.TrimSpace(a); a != "" {
+				c.OutboundAllow = append(c.OutboundAllow, a)
+			}
+		}
+		if _, err := netguard.New(c.OutboundAllow); err != nil {
+			return c, configErr("server.outbound_allow (BOB_SERVER_OUTBOUND_ALLOW): %v", err)
 		}
 	case ModeWorker:
 		for _, a := range strings.Split(getenv("BOB_ORCHESTRATOR_ADDRS"), ",") {

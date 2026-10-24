@@ -18,14 +18,14 @@ const work = buildTop + "/w"
 // workspace returns the steps that lay the importer out in the build directory: its sources,
 // node_modules as a writable directory of symlinks (Vite writes below it, S4-5) and the
 // generated package.json and tsconfig.json.
-func (pl *planner) workspace(n *ir.Node, im *importer, pi *platInfo, srcIDs []string, in *inputs) ([]step, string, error) {
+func (pl *planner) workspace(n *ir.Node, im *importer, pi *platInfo, srcIDs []string, in *engine.Inputs) ([]step, string, error) {
 	var steps []step
 	for _, id := range srcIDs {
 		src, ok := pl.req.Sources[id]
 		if !ok {
-			return nil, "", internal(n, "the sources of %s are not imported", id)
+			return nil, "", engine.Internal(n, "the sources of %s are not imported", id)
 		}
-		in.srcs[src] = true
+		in.AddSrc(src)
 		from := src
 		if im.dir != "." {
 			from = src + "/" + im.dir
@@ -36,23 +36,23 @@ func (pl *planner) workspace(n *ir.Node, im *importer, pi *platInfo, srcIDs []st
 	// .gitignore excludes them), the generated files come from the codegen packages.
 	for _, g := range im.spec.Generated {
 		if g.Dep < 0 || g.Dep >= len(im.node.Deps) {
-			return nil, "", internal(n, "generated output %s names no dependency", g.Dir)
+			return nil, "", engine.Internal(n, "generated output %s names no dependency", g.Dir)
 		}
 		rv, ok := pl.req.Inputs[im.node.Deps[g.Dep]]
 		if !ok || (rv.Outputs["out"] == "" && rv.Cutoff["out"] == "") {
-			return nil, "", internal(n, "generated output %s is not planned", g.Dir)
+			return nil, "", engine.Internal(n, "generated output %s is not planned", g.Dir)
 		}
-		steps = append(steps, step{Op: "copy", From: in.add(rv, "out"), Path: work + "/" + g.Dir})
+		steps = append(steps, step{Op: "copy", From: in.AddCutoff(rv, "out"), Path: work + "/" + g.Dir})
 	}
 	nm, err := pl.nodeModules(n, im, pi)
 	if err != nil {
 		return nil, "", err
 	}
-	in.addDrv(nm.drv)
+	in.AddDrv(nm.drv, "out")
 	steps = append(steps, step{Op: "copy", From: nm.out, Path: work + "/node_modules"})
 	md, err := importerDeps(im, pl.byID, pl.sec)
 	if err != nil {
-		return nil, "", internal(n, "%v", err)
+		return nil, "", engine.Internal(n, "%v", err)
 	}
 	pj, err := packageJSON(im, md)
 	if err != nil {
@@ -73,17 +73,17 @@ func (pl *planner) binScript(n *ir.Node, im *importer, alias, cmd, purpose strin
 	rec := pl.sec.Importers[im.dir]
 	key, ok := rec.Deps[alias]
 	if !ok {
-		return "", invalid(n, "dependencies", fmt.Sprintf("%s needs %s: add npm.Dep(%q, \"<version>\", npm.Dev())", purpose, alias, alias))
+		return "", engine.Invalid(n, "dependencies", fmt.Sprintf("%s needs %s: add npm.Dep(%q, \"<version>\", npm.Dev())", purpose, alias, alias))
 	}
 	rel, ok := pl.sec.Packages[key].Bin[cmd]
 	if !ok {
-		return "", internal(n, "%s has no command %s", key, cmd)
+		return "", engine.Internal(n, "%s has no command %s", key, cmd)
 	}
 	return work + "/node_modules/" + alias + "/" + rel, nil
 }
 
 // buildEnv is the PATH of build commands: node, bash and the importer's .bin.
-func (pl *planner) buildEnv(n *ir.Node, im *importer, in *inputs) (node string, dirs []string, err error) {
+func (pl *planner) buildEnv(n *ir.Node, im *importer, in *engine.Inputs) (node string, dirs []string, err error) {
 	nodeOut, err := pl.tool(n, im.spec.Tools.Node, in)
 	if err != nil {
 		return "", nil, err
@@ -105,7 +105,7 @@ func libEntry(entry string) (js, dts string) {
 
 // runtimeLinks are the symlinks a package output needs for its runtime dependencies (Dev()
 // dependencies excluded; a library's peers are included, resolved for its own build).
-func (pl *planner) runtimeLinks(n *ir.Node, im *importer, pi *platInfo, nmDir string, in *inputs) ([]step, error) {
+func (pl *planner) runtimeLinks(n *ir.Node, im *importer, pi *platInfo, nmDir string, in *engine.Inputs) ([]step, error) {
 	deps, dev, err := pl.direct(n, im, pi)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (pl *planner) planLib(n *ir.Node, im *importer) (engine.Resolved, error) {
 	if err != nil {
 		return engine.Resolved{}, err
 	}
-	in := pl.newInputs()
+	in := engine.NewInputs(pl.req.Builder)
 	steps, _, err := pl.workspace(n, im, pi, []string{n.ID}, in)
 	if err != nil {
 		return engine.Resolved{}, err
@@ -156,7 +156,7 @@ func (pl *planner) planLib(n *ir.Node, im *importer) (engine.Resolved, error) {
 	pkgDir := out + "/node_modules/" + im.spec.Name
 	md, err := importerDeps(im, pl.byID, pl.sec)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
 	pj, err := packageJSON(im, md)
 	if err != nil {
@@ -173,9 +173,9 @@ func (pl *planner) planLib(n *ir.Node, im *importer) (engine.Resolved, error) {
 	steps = append(steps, links...)
 	dp, d, err := pl.job(drv.Name("npm-lib", im.spec.Name), pi.system, "npm-build", n.Label, buildArgs{Steps: steps}, in)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
-	return engine.Resolved{Drv: dp, Outputs: map[string]string{"out": outPath(d)}}, nil
+	return engine.Resolved{Drv: dp, Outputs: map[string]string{"out": engine.OutPath(d)}}, nil
 }
 
 // planSite runs `vite build` (after `svelte-kit sync` for SvelteKit); the output is the static
@@ -185,7 +185,7 @@ func (pl *planner) planSite(n *ir.Node, im *importer) (engine.Resolved, error) {
 	if err != nil {
 		return engine.Resolved{}, err
 	}
-	in := pl.newInputs()
+	in := engine.NewInputs(pl.req.Builder)
 	steps, _, err := pl.workspace(n, im, pi, []string{n.ID}, in)
 	if err != nil {
 		return engine.Resolved{}, err
@@ -218,9 +218,9 @@ func (pl *planner) planSite(n *ir.Node, im *importer) (engine.Resolved, error) {
 		step{Op: "scrub", Path: out})
 	dp, d, err := pl.job(drv.Name(siteName(n)), pi.system, "npm-build", n.Label, buildArgs{Steps: steps}, in)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
-	return engine.Resolved{Drv: dp, Outputs: map[string]string{"out": outPath(d)}}, nil
+	return engine.Resolved{Drv: dp, Outputs: map[string]string{"out": engine.OutPath(d)}}, nil
 }
 
 // siteName is the store name of a node's own output: its label name.
@@ -237,7 +237,7 @@ func (pl *planner) planApp(n *ir.Node, im *importer) (engine.Resolved, error) {
 	if err != nil {
 		return engine.Resolved{}, err
 	}
-	in := pl.newInputs()
+	in := engine.NewInputs(pl.req.Builder)
 	steps, _, err := pl.workspace(n, im, pi, []string{n.ID}, in)
 	if err != nil {
 		return engine.Resolved{}, err
@@ -295,9 +295,9 @@ func (pl *planner) planApp(n *ir.Node, im *importer) (engine.Resolved, error) {
 	steps = append(steps, step{Op: "write", Path: out + "/bin/" + name, Content: launcher, Mode: 0o755})
 	dp, d, err := pl.job(drv.Name(name), pi.system, "npm-build", n.Label, buildArgs{Steps: steps}, in)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
-	return engine.Resolved{Drv: dp, Outputs: map[string]string{"out": outPath(d)}, MainProgram: "bin/" + name}, nil
+	return engine.Resolved{Drv: dp, Outputs: map[string]string{"out": engine.OutPath(d)}, MainProgram: "bin/" + name}, nil
 }
 
 // planTest lays out the tested importer with its test files (a workspace derivation) and runs
@@ -305,21 +305,21 @@ func (pl *planner) planApp(n *ir.Node, im *importer) (engine.Resolved, error) {
 func (pl *planner) planTest(n *ir.Node) (engine.Resolved, error) {
 	var s npmspec.Test
 	if err := json.Unmarshal(n.Spec, &s); err != nil {
-		return engine.Resolved{}, internal(n, "test spec: %v", err)
+		return engine.Resolved{}, engine.Internal(n, "test spec: %v", err)
 	}
 	if s.Of < 0 || s.Of >= len(n.Deps) {
-		return engine.Resolved{}, internal(n, "test of: index out of range")
+		return engine.Resolved{}, engine.Internal(n, "test of: index out of range")
 	}
 	of, ok := pl.nodes[n.Deps[s.Of]]
 	im, ok2 := pl.byID[n.Deps[s.Of]]
 	if !ok || !ok2 {
-		return engine.Resolved{}, internal(n, "the tested importer %s is not an npm importer of this repository", n.Deps[s.Of])
+		return engine.Resolved{}, engine.Internal(n, "the tested importer %s is not an npm importer of this repository", n.Deps[s.Of])
 	}
 	pi, err := pl.platformOf(n)
 	if err != nil {
 		return engine.Resolved{}, err
 	}
-	in := pl.newInputs()
+	in := engine.NewInputs(pl.req.Builder)
 	srcIDs := []string{of.ID}
 	if _, ok := pl.req.Sources[n.ID]; ok {
 		srcIDs = append(srcIDs, n.ID)
@@ -344,17 +344,17 @@ func (pl *planner) planTest(n *ir.Node) (engine.Resolved, error) {
 	wsP, wsD, err := pl.job(drv.Name("npm-test-ws", siteName(n), im.dir), pi.system, "npm-build", n.Label+" workspace",
 		buildArgs{Steps: steps}, in)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
 
-	run := pl.newInputs()
-	run.addDrv(wsP)
+	run := engine.NewInputs(pl.req.Builder)
+	run.AddDrv(wsP, "out")
 	nodeOut, err := pl.tool(n, s.Node, run)
 	if err != nil {
 		return engine.Resolved{}, err
 	}
 	a := testRunArgs{Path: []string{work + "/node_modules/.bin", nodeOut + "/bin"}, Cwd: work,
-		Copy: []copyArgs{{From: outPath(wsD) + "/w", To: work}}, TimeoutS: 600,
+		Copy: []copyArgs{{From: engine.OutPath(wsD) + "/w", To: work}}, TimeoutS: 600,
 		Env: map[string]string{"CI": "1", "NO_COLOR": "1"}}
 	switch s.Runner {
 	case npmspec.RunnerNodeTest:
@@ -401,7 +401,7 @@ func (pl *planner) planTest(n *ir.Node) (engine.Resolved, error) {
 	}
 	p, d, err := pl.job(drv.Name("npm-test", siteName(n), im.dir), pi.system, "test-run", n.Label, a, run)
 	if err != nil {
-		return engine.Resolved{}, internal(n, "%v", err)
+		return engine.Resolved{}, engine.Internal(n, "%v", err)
 	}
-	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": outPath(d)}}, nil
+	return engine.Resolved{Drv: p, Outputs: map[string]string{"out": engine.OutPath(d)}}, nil
 }

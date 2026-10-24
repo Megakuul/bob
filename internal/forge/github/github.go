@@ -33,6 +33,7 @@ type Config struct {
 	BaseURL                      string
 	AppID, InstallationID        int64
 	PrivateKeyPEM, WebhookSecret forge.Secret
+	HTTP                         *http.Client // nil: forge.HTTPClient()
 }
 
 // tokenLifetime is GitHub's fixed lifetime of installation tokens.
@@ -67,7 +68,7 @@ func New(cfg Config) (forge.Adapter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &adapter{cfg: cfg, base: base + "/", key: key, http: forge.HTTPClient(),
+	return &adapter{cfg: cfg, base: base + "/", key: key, http: forge.ClientOr(cfg.HTTP),
 		status: map[int64]cachedToken{}, checkout: map[string]cachedToken{}}, nil
 }
 

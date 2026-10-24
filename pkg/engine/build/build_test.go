@@ -615,3 +615,9 @@ var S = bob.Define(func(p *bob.P) *bob.Step {
 		t.Errorf("a source edit did not move the source path")
 	}
 }
+
+// emptyFixup is the fixup contract of the demo jobs: no binary fixup.
+func emptyFixup() map[string]any {
+	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
+		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
+}

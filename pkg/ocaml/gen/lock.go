@@ -101,7 +101,7 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	for _, r := range reqs {
 		if _, err := resolve.ParseConstraint(r.Req); err != nil {
 			n := first[r]
-			return nil, invalid(n, "Deps", fmt.Sprintf("opam %s: %q is not an opam version formula (for example \">= 5.7\")", r.Name, r.Req))
+			return nil, engine.Invalid(n, "Deps", fmt.Sprintf("opam %s: %q is not an opam version formula (for example \">= 5.7\")", r.Name, r.Req))
 		}
 		rs = append(rs, resolve.Request{Name: r.Name, Constraint: r.Req})
 	}
@@ -210,11 +210,4 @@ func (Ecosystem) Stale(_ context.Context, req engine.LockRequest) (string, ir.Po
 		}
 	}
 	return "", ir.Pos{}, nil
-}
-
-// invalid is BOB-E-1020 for a node.
-func invalid(n *ir.Node, option, reason string) error {
-	e := diag.New(1020, "label", n.Label, "option", option, "reason", reason)
-	e.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line}
-	return e
 }

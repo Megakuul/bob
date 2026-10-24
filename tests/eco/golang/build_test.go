@@ -48,11 +48,11 @@ func TestRGO001aBuildTestCrossAndReproducible(t *testing.T) {
 			if len(api) == 0 || len(stamp) == 0 {
 				t.Fatalf("no output path for //api/cmd/api:api or //tools/cmd/stamp:stamp: %v", paths)
 			}
-			r := runGuest(t, plat, homeA, filepath.Join(api[0], "bin", "api"))
+			r := runGuest(t, plat, dir, homeA, filepath.Join(api[0], "bin", "api"))
 			if r.Exit != 0 || !strings.Contains(r.Stdout, "version=1.0.0") || !strings.Contains(r.Stdout, "numhex=") {
 				t.Errorf("api under env -i exited %d and printed %q; want exit 0 and the version=1.0.0 line (cgo into the C and Rust libraries)", r.Exit, r.Stdout+r.Stderr)
 			}
-			r = runGuest(t, plat, homeA, filepath.Join(stamp[0], "bin", "stamp"))
+			r = runGuest(t, plat, dir, homeA, filepath.Join(stamp[0], "bin", "stamp"))
 			if r.Exit != 0 || !strings.Contains(r.Stdout, "(42)") {
 				t.Errorf("stamp under env -i exited %d and printed %q; want exit 0 and the assembly sum (42)", r.Exit, r.Stdout+r.Stderr)
 			}

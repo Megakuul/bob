@@ -476,7 +476,8 @@
   ],
   "exit": 7,
   "messages": [
-   "fix (run once as an administrator): "
+   "\n  cause: ",
+   "\n  fix (run once as an administrator):\n    bob runs only where unprivileged user namespaces are allowed; inside containers, allow them (e.g. podman --security-opt seccomp=unconfined, or docker --security-opt seccomp=unconfined)\n"
   ]
  },
  "72-s3-no-conditional-writes": {

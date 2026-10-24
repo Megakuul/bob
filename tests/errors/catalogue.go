@@ -20,9 +20,12 @@ const FaultsDir = "tests/faults"
 // Inject describes how a fault is put into a fixture (HARNESS.md §5.1).
 type Inject struct {
 	// Kind is patch, env, cache-fault, limit, signal, disk, ir-script or none.
-	Kind     string `json:"kind"`
-	File     string `json:"file,omitempty"`
-	Describe string `json:"describe"`
+	Kind string `json:"kind"`
+	File string `json:"file,omitempty"`
+	// Env is the K=V list a live run of kind env adds to bob's environment (the bobtest fault
+	// hooks, e.g. BOB_TEST_CLONE_ERRNO=EPERM for blocked user namespaces).
+	Env      []string `json:"env,omitempty"`
+	Describe string   `json:"describe"`
 }
 
 // Position is the expected position of a recorded fault (replay mode), taken from the capture.

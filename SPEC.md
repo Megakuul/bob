@@ -6074,7 +6074,18 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
      refused within 10 s;
   2. rotate the shared worker S3 credential in the deployment.
 
-  bob documents this in `docs/operations/worker-compromise.md`.
+  bob documents this in `docs/operations/worker-compromise.md`, including what a compromised
+  worker can still do until then (I-R2 F6, A395): it reads every source snapshot and cached
+  output in the artifacts bucket; it may claim queued jobs of any project and so obtain their
+  checkout credentials and download tokens, and stage wrong outputs for exactly those jobs
+  (served to their projects); it may publish, under the project of a job it holds, other bytes
+  for a path another project has not published yet, which that project then never sees (it
+  builds the path itself, and its releases containing the path fail) until an operator removes
+  the entries. It cannot take over a job another live worker holds (R-FLEET-006), replace a
+  published path, give a project visibility of bytes it did not stage identically, pass off an
+  unsigned path as upstream, or put another project's path into a release (§06 §6.6.4, §6.8).
+  The audit relies on records only orchestrators write (build records, the promotion log
+  `promo/`, orchestrator logs), not on the analytics bucket, which the worker can rewrite.
 - **Acceptance (manual):** the runbook exists and its commands work in the harness's local
   deployment.
 - **Source:** D57, OD-S11-1 a.
@@ -6454,7 +6465,7 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 | `sa/<saID>`, `saidx/all` | `ServiceAccountRecord` (incl. `ro` role bindings as in `UserRecord`, `tk` token ids); index (≤ 1,000) | AccessService (CAS) | auth, UI (GC) | yes |
 | `tok/<hash64(token)>` | `TokenRecord`: owner, kind, scopes, exp, created | AccessService (C, D) | every API call (G, cache 10 s) | yes |
 | `forge/<forgeID>`, `forges/all` | `ForgeRecord` (forge integration; secrets sealed with the orchestrator data key); index | ForgeService (CAS) | pipeline controller (GC) | yes |
-| `ftok/<sh2(jobID)>` | `CheckoutRecord`s: outstanding per-job forge tokens {jobID → epoch, forge, handle (token id), expiresAt, forgeExpires}; never the token value (D62) | `GetCheckoutCredential`, revoke at job end, sweeper (CAS) | same + sweeper (GC) | yes |
+| `ftok/<sh2(jobID)>` | `CheckoutRecord`s: outstanding per-job forge tokens {jobID → epoch, forge, handle (token id), expiresAt, forgeExpires}; never the token value (D62); and the accepted lease per job {jobID → wid, epoch, at} (§06 §6.9.6, A390) | `GetCheckoutCredential`, revoke at job end, sweeper (CAS) | same + sweeper (GC) | yes |
 | `set/<name>` | `SettingRecord`: setting value | SettingsService (CAS) | all (GC 30 s) | yes |
 | `bkey/<hash64(delivery key)>` | `BuildKey`: `b` build id, `at` created: the build one forge delivery created (idempotent build creation from a webhook event; delivery key = the `fdel` key value) | webhook intake through build creation (C) | same, when the create conflicts (G) | no |
 | `plock/<jobID>` | promotion lock, a `Lease` (§05.3.4: `o`, `ep`, `ex`, `cu`; TTL 1 min); deleted after the job's promotion; correctness does not depend on it, it makes concurrent promotions of one job deterministic | promoting orchestrator (C, CAS, D) | same (G) | yes |
@@ -7073,8 +7084,11 @@ Orchestrator signing keys: the seeds are in control `okey/<kid>`, the public key
 
 #### R-FLEET-006 Checkout credentials only for the held job (kept)
 - **Statement:** Workers get a checkout credential only for the job they hold (owner + epoch on
-  `job/<id>`, state claimed or running), for one repository, revoked at job end. The flow and the
-  forge-side token handling are §06 §6.9.6; the record is a `CheckoutRecord` in `ftok/<sh2>`.
+  `job/<id>`, state claimed or running, a spec signed by an orchestrator for that job, and the
+  lease the orchestrators accepted in the control bucket: a lease moves to another worker only
+  when its holder's lease is over by the reconciler's rule; I-R2 F2, A390), for one repository,
+  revoked at job end. The flow and the forge-side token handling are §06 §6.9.6; the record is a
+  `CheckoutRecord` in `ftok/<sh2>`.
 - **Acceptance:**
   - `GetCheckoutCredential` with a job the caller does not own, or a stale epoch →
     `permission_denied: worker holds no lease on job <id>`.
@@ -7336,6 +7350,7 @@ func Follow(ctx context.Context, src *Sources, buildID string, cur map[string]Cu
 | `live_log.chunk_interval` | `250ms` | worker chunk cadence while subscribed |
 | `retention.logs`, `.analytics`, `.builds`, `.cache` | `30d`, `400d`, `365d`, `90d` | |
 | `server.listen`, `server.admin_listen`, `server.trusted_proxies`, `server_name`, `max_parallel_downloads` | `:8443`, `127.0.0.1:9090`, —, —, `256` | HTTP listeners and proxy settings, §06 §6.2/§6.6.3 |
+| `server.outbound_allow` (`BOB_SERVER_OUTBOUND_ALLOW`) | — | host names, addresses and CIDR ranges that outgoing forge API calls and notification webhooks may reach although they are loopback, private, link-local, shared or reserved; every other such address is refused at connect time, after name resolution (I-R2 F8, A396) |
 
 Config changes that workers need (`fleet.*`, `log.*`) are published in `fleet/cfg.pr` by the
 orchestrators. The highest `fleet/cfg.g` wins. Workers read only `fleet/cfg`.
@@ -8955,12 +8970,19 @@ release ids (beyond that the release publish fails with `too many releases share
 
 Trigger: the promotion controller sees a `JobRecord` in `succeeded` (the worker wrote
 `<staging>/COMPLETE.json` and its signed result) with `pm` = "" (not yet promoted); all transitions are CAS on the
-`JobRecord` (§05). Workers stage only paths that neither cache.nixos.org (HEAD narinfo) nor bob's
+`JobRecord` (§05). Workers stage only paths that neither cache.nixos.org (GET narinfo) nor bob's
 cache (HEAD own narinfo via the orchestrator with its download token) already has (R-REG-005).
+A path skipped because cache.nixos.org has it goes with the narinfo cache.nixos.org answered
+(`<staging>upstream/<hash>.narinfo`); the orchestrator counts a skipped path as upstream only
+when that narinfo names it and carries a signature by a trusted upstream key (default
+`cache.nixos.org-1`), never on the worker's word (I-R2 F3, A393). The orchestrator itself never
+contacts cache.nixos.org (R-REG-005).
 
 Staging layout (worker writes; `<staging>` = `staging/<buildID>/<jobID>/<attempt>/`, §05.2.4):
 `<staging>nar/<hash>.nar.zst`, `<staging>narinfo/<hash>.narinfo` (unsigned claim),
-`<staging>oci/blobs/sha256/<hex>`, `<staging>assets/<file>`, `<staging>COMPLETE.json` last:
+`<staging>oci/blobs/sha256/<hex>`, `<staging>assets/<file>`, `<staging>upstream/<hash>.narinfo`
+(skipped paths), `<staging>eval.json` (the evaluation report, bound by `JobResult.EvalSHA`),
+`<staging>COMPLETE.json` last:
 ```json
 {"v":1,"job":"01j…","build":"01j…","project":"api",
  "paths":["/nix/store/…-api-1.4.2"],
@@ -8978,16 +9000,31 @@ Steps (orchestrator, idempotent, re-run until done):
 1. GET `COMPLETE.json` (≤ 4 MiB, schema-validated). Missing → job promotion `blocked: staging
    incomplete`, job requeued per §05.
 2. Parse every claim (≤ 4 MiB each; ≤ 100,000 paths). Topologically order paths (references in the set first).
+   **Job binding** (I-R2 F1, A391): every staged path must be an output of a package in the
+   job's evaluation report (`<staging>eval.json`, whose SHA-256 is the signed
+   `JobResult.EvalSHA`) or lie in the closure of those outputs through the claimed references of
+   staged paths; a job without its report, or with a path outside that set, fails
+   `failed: artifact verification`. The spec (`JobRecord.sp`) must be signed by an orchestrator
+   and name this job id. The report comes from the worker that built the job (evalbuild), so
+   the binding limits a worker to what its own evaluation names; it does not prove that
+   evaluation (residual risk: R-SEC-101, `docs/operations/worker-compromise.md` §1).
 3. Per level, 4 in parallel, for each path:
-   a. narinfo already served → compare NarHash; differ → add to `non_reproducible` (keep the
-      published one); add the project to the visibility document; done.
+   a. narinfo already served → compare NarHash. Same bytes (re-verified from the staged NAR when
+      the project is not yet in the visibility document) → add the project; done. Different
+      bytes: the published bytes always stay. If the job's project is in the visibility
+      document, its own build did not reproduce the path → add to `non_reproducible`; done. If it
+      is not, the path belongs to other projects (A392): the project gets no visibility, the path
+      is **not** recorded as non-reproducible, the orchestrator logs `security: path conflict`
+      (path, project, publishing projects, worker), and the job's other paths continue.
    b. GET the staged NAR, remember its ETag; stream: zstd decode → NAR structure check (magic,
       sorted unique names, no `/`, `.`, `..`, NUL, zero padding, nothing after the root; caps:
       NAR ≤ 64 GiB, ≤ 5,000,000 entries, names ≤ 255 B, symlink targets ≤ 4,095 B, depth ≤ 256)
       → NarHash, NarSize, FileHash, FileSize recomputed → **reference scan**: every 32-char
       substring matching a store hash of a path in this job's closure or in an already-served
       narinfo that the claim does not list → `failed: artifact verification` (refs are no longer
-      blind worker claims). Outputs that discard references by design (A149: a path listed in
+      blind worker claims). A NAR with more than 256 distinct unknown hashes after `/nix/store/`
+      fails `failed: artifact verification` (the scan does not check them all, I-R2 F4). Outputs
+      that discard references by design (A149: a path listed in
       `kinds`; image config `PATH`/`Entrypoint`, R-OUT-012, and an AppImage's interpreter path
       inside its zstd squashfs, R-OUT-015, hold store paths as data) are checked first against
       what the orchestrator sees itself: the store name must be the one bob gives that kind's
@@ -8996,8 +9033,9 @@ Steps (orchestrator, idempotent, re-run until done):
       `*.AppImage`; one `*.tar.gz`), else `failed: artifact verification`. For such a path, hashes
       found in the content are **not** registered as references (the narinfo keeps the claimed
       references, so clients never download the closure an image or AppImage carries) and are
-      accepted only when they belong to the job's own closure (`paths` and `skipped` of this
-      COMPLETE.json); a hash outside it (e.g. a served path of another job) fails with "the
+      accepted only when they belong to the job's own closure (`paths` of this COMPLETE.json and
+      the `skipped` paths verified as upstream, step "Trigger"); a hash outside it (e.g. a served
+      path of another job, or a skipped path without a valid upstream signature) fails with "the
       <kind> output contains the store hash <h>, which is not in this job's closure". Every
       other path keeps the strict scan.
    c. `CopyObject` to `nix/nar/<hash>.nar.zst` with `x-amz-copy-source-if-match: <ETag>`.
@@ -9126,7 +9164,12 @@ or a release.
   2. Moves the record to `publishing` and copies assets `<staging>assets/<file>` →
      `rel/<projectID>/<num10>/<file>` (sha256 verified, ETag guard).
   3. If visibility is public: adds the release id to `public` of every visibility document of the
-     closure paths and image objects (bob-served part only).
+     closure paths and image objects (bob-served part only). A release publishes only the
+     project's own objects (I-R2 F1/F5, A394): already at step 1, a bob-served closure path or
+     image object whose visibility document does not list the release's project fails the
+     release with `release closure path <p> is not a path of project <id> …` (`release image
+     object … is not an object of project <id>`), and so does a closure path listed in the
+     build's `non_reproducible` (`… did not reproduce in this build (non_reproducible) …`).
   4. Writes image tags `<version>` and moves `latest` (CAS on the repo index).
   5. Updates `rpage`/`ridx` (CAS), sets `published`, sends `release.published` notifications.
      Release id = `<projectID>.<num10>` (§05.2.4).
@@ -9437,11 +9480,17 @@ pipeline are never superseded.
 ```
 worker holds lease (job J, epoch E) → WorkerControlService/GetCheckoutCredential(J, E)  (§05.9.1)
 orchestrator: GET JobRecord; owner = caller wid and epoch = E, state CLAIMED|RUNNING, else PermissionDenied `permission_denied: worker holds no lease on job <id>`
+  JobRecord.sp signed by an orchestrator key (fleet/cfg.k) and naming job J, else the same PermissionDenied (workers can write job records, ADR 0013 T10)
+  lease binding (I-R2 F2, A390): ftok/<sh2(J)>.l[J] = {wid, epoch, at} in the control bucket, which workers cannot write; first call binds;
+    another wid or an older epoch than the binding → the same PermissionDenied, unless the bound worker's lease is over by the reconciler's
+    rule (worker revoked/gone/absent, heartbeat absent, unsigned or older than lease_ttl + skew, or a heartbeat newer than the binding
+    that no longer lists J); removed by the forge-sweeper once job/J is finalised
   CheckoutRecord(J) in ftok/<sh2(J)> exists (repeat call, e.g. worker restart of the fetch) → RevokeCheckout(old handle) first; token values are never stored
   adapter.IssueCheckout({Repo, JobID: J, TTL: min(1h, job deadline − now)})
   CAS-add CheckoutRecord{J, epoch E, handle, expiresAt, forgeExpires} to ftok/<sh2(J)> (no token value)
   return sealed checkout (HPKE to the worker key) + download token
-worker: git init; git -c "http.extraHeader=Authorization: Basic <b64(user:token)>" fetch --depth=1 <cloneURL> <sha|fetchRef>
+worker: git init; GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader GIT_CONFIG_VALUE_0="Authorization: Basic <b64(user:token)>" \
+          git fetch --depth=1 <cloneURL> <sha|fetchRef>   (the token is in git's environment, never on a command line, I-R2 F7)
         verify HEAD = expected SHA; credential never written to .git/config; discarded after fetch
 job terminal or lease lost/requeued → orchestrator RevokeCheckout(handle) (idempotent), remove CheckoutRecord
 forge-sweeper every 60 s (§05.11 controller) → revoke CheckoutRecords of terminal/missing jobs;

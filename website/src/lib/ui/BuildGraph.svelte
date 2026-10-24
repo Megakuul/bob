@@ -70,7 +70,7 @@
 	// Two layouts: left-to-right for wide screens, top-to-bottom (short labels) for phones.
 	type Box = { x: number; y: number; w: number; h: number };
 	const wide = { W: 1000, H: 352, w: 162, h: 44 };
-	const narrow = { W: 400, H: 470, w: 70, h: 40 };
+	const narrow = { W: 400, H: 500, w: 72, h: 40 };
 	function boxWide(n: Node): Box {
 		const col = cols[n.col];
 		const gap = 66;
@@ -79,7 +79,7 @@
 	}
 	function boxNarrow(n: Node): Box {
 		const row = cols[n.col];
-		const gap = 78;
+		const gap = 76;
 		const left = (narrow.W - (row.length - 1) * gap - narrow.w) / 2;
 		return { x: left + row.indexOf(n) * gap, y: 6 + n.col * 112, w: narrow.w, h: narrow.h };
 	}
@@ -119,10 +119,10 @@
 					class={filled ? 'fill-accent stroke-accent' : st === 'idle' ? 'fill-bg stroke-line' : 'fill-surface stroke-accent'}
 				/>
 				{#if st === 'done' && !filled}
-					<rect x={short ? 5 : 10} y={short ? b.h / 2 - 3 : 11} width="6" height="6" class="fill-accent" />
+					<rect x={short ? 4 : 10} y={short ? 4 : 11} width={short ? 5 : 6} height={short ? 5 : 6} class="fill-accent" />
 				{/if}
 				{#if short}
-					<text x={b.w / 2 + (st === 'done' && !filled ? 4 : 0)} y={b.h / 2 + 4.5} text-anchor="middle" font-size="13" class="font-mono {filled ? 'fill-on-accent' : st === 'idle' ? 'fill-muted' : 'fill-fg'}">{n.short}</text>
+					<text x={b.w / 2} y={b.h / 2 + 4.5} text-anchor="middle" font-size="13" class="font-mono {filled ? 'fill-on-accent' : st === 'idle' ? 'fill-muted' : 'fill-fg'}">{n.short}</text>
 				{:else}
 					<text x={st === 'done' && !filled ? 22 : 10} y="18" font-size="13" font-weight="600" class="font-mono {filled ? 'fill-on-accent' : st === 'idle' ? 'fill-muted' : 'fill-fg'}">{n.label}</text>
 					<text x="10" y="35" font-size="11" class="font-mono {filled ? 'fill-on-accent' : 'fill-muted'}">{status(n, st)}</text>

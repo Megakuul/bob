@@ -7,6 +7,7 @@ import (
 
 	"github.com/megakuul/bob/internal/fleetsrv"
 	"github.com/megakuul/bob/internal/forge/integration"
+	"github.com/megakuul/bob/internal/netguard"
 	"github.com/megakuul/bob/internal/notify"
 	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/server"
@@ -30,9 +31,17 @@ func forgeParts(env *server.Env, parts *server.OrchestratorParts) *forgeWiring {
 		env.Log.Error("forge integrations not available: the control or fleet bucket is missing")
 		return nil
 	}
-	reg := &integration.Registry{Control: env.Storage.Control, Now: env.Now, Log: env.Log}
+	// Forge API calls and webhook deliveries go to admin-configured URLs: only public addresses
+	// unless server.outbound_allow names more (I-R2 F8; ConfigFromEnv validated the list).
+	outbound, err := netguard.New(env.Config.OutboundAllow)
+	if err != nil {
+		env.Log.Error("forge integrations not available: server.outbound_allow", "err", err)
+		return nil
+	}
+	reg := &integration.Registry{Control: env.Storage.Control, Now: env.Now, Log: env.Log, Outbound: outbound}
 	w := &forgeWiring{Registry: reg, Intake: &integration.Intake{Registry: reg},
 		Notifier: notify.New(env.Storage.Control, env.Now, env.Log)}
+	w.Notifier.Outbound(outbound)
 	// Webhook URLs need an absolute base: server.base_url, else the listen address (as workers).
 	parts.Services.Forge = &integration.Service{Registry: reg, BaseURL: endpoint(env.Config)}
 	parts.Services.Notify = notify.Service{N: w.Notifier}

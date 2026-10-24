@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/megakuul/bob/internal/netguard"
 	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -133,7 +134,8 @@ type Notifier struct {
 	Control *store.Bucket
 	Now     func() time.Time
 	Log     *slog.Logger
-	// HTTP sends the deliveries (nil: a client with Timeout that follows no redirects).
+	// HTTP sends the deliveries: a client with Timeout that follows no redirects and reaches
+	// public addresses only (Outbound sets the server's policy).
 	HTTP *http.Client
 
 	outbox *store.ShardSet[Pending]
@@ -157,8 +159,18 @@ func New(control *store.Bucket, now func() time.Time, log *slog.Logger) *Notifie
 		return o
 	}, func(o *outboxShard) map[string]Pending { return o.Pending.Value() }),
 		wake: make(chan struct{}, 1),
-		HTTP: &http.Client{Timeout: Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+		HTTP: (*netguard.Policy)(nil).Client(deliveryClient())}
 }
+
+// deliveryClient is the base client of the deliveries: bounded, follows no redirects.
+func deliveryClient() *http.Client {
+	return &http.Client{Timeout: Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// Outbound puts the server's outgoing-address policy in front of the deliveries (I-R2 F8):
+// receivers on loopback, private or link-local addresses are refused unless it allows them.
+// New starts with the policy that allows public addresses only.
+func (n *Notifier) Outbound(p *netguard.Policy) { n.HTTP = p.Client(deliveryClient()) }
 
 // BuildFinished publishes build.finished: {event, build (proto JSON), project}.
 func (n *Notifier) BuildFinished(ctx context.Context, project string, build proto.Message) error {

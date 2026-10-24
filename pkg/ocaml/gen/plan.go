@@ -95,123 +95,15 @@ func (pl *planner) plan() (engine.PlanResult, error) {
 			errs = append(errs, err)
 		}
 	}
-	if len(errs) == 1 {
-		return pl.out, errs[0]
-	}
-	if len(errs) > 1 {
-		return pl.out, errorList(errs)
-	}
-	return pl.out, nil
+	return pl.out, engine.JoinErrors(errs)
 }
-
-// errorList joins errors so that the engine still sees each diagnostic (Unwrap []error).
-type errorList []error
-
-func (l errorList) Error() string {
-	s := make([]string, len(l))
-	for i, e := range l {
-		s[i] = e.Error()
-	}
-	return strings.Join(s, "\n")
-}
-
-func (l errorList) Unwrap() []error { return l }
 
 // ---- inputs and jobs ----
 
-// inputs collects a job's input derivations and sources.
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs map[string]bool
-}
-
-func newInputs(builder string) *inputs {
-	return &inputs{drvs: map[string]map[string]bool{}, srcs: map[string]bool{builder: true}}
-}
-
-// add records output o of rv and returns its path.
-func (in *inputs) add(rv engine.Resolved, o string) string {
-	sp := rv.Outputs[o]
-	if sp == "" {
-		return ""
-	}
-	if rv.Drv == "" {
-		in.srcs[sp] = true
-		return sp
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	in.drvs[rv.Drv][o] = true
-	return sp
-}
-
-// addAll records every output of rv.
-func (in *inputs) addAll(rv engine.Resolved) {
-	for o := range rv.Outputs {
-		in.add(rv, o)
-	}
-}
-
-func (in *inputs) list() ([]drv.InputDrv, []string) {
-	var ds []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		ds = append(ds, d)
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
-	ss := make([]string, 0, len(in.srcs))
-	for s := range in.srcs {
-		ss = append(ss, s)
-	}
-	sort.Strings(ss)
-	return ds, ss
-}
-
-// fixup is the fixup contract of an OCaml job (R-NIX-019).
-type fixup struct {
-	Strip       bool       `json:"strip"`
-	DebugOut    bool       `json:"debugOut"`
-	ShrinkRPath bool       `json:"shrinkRpath"`
-	Forbidden   []string   `json:"forbidden"`
-	Tools       fixupTools `json:"tools"`
-}
-
-type fixupTools struct {
-	Strip    string `json:"strip"`
-	Objcopy  string `json:"objcopy"`
-	Patchelf string `json:"patchelf"`
-}
-
-func noFixup() *fixup { return &fixup{Forbidden: []string{}} }
-
 // job finalises one bob-builder job and records it; it returns its path and output path.
-func (pl *planner) job(name, system, kind, label string, args any, fx *fixup, in *inputs) (string, string, error) {
-	if fx == nil {
-		fx = noFixup()
-	}
-	slices.Sort(fx.Forbidden)
-	fx.Forbidden = slices.Compact(fx.Forbidden)
-	var disallowed map[string][]string
-	if len(fx.Forbidden) > 0 {
-		disallowed = map[string][]string{"out": fx.Forbidden}
-	}
-	spec := map[string]any{"v": 1, "kind": kind, "label": label, "outputs": []any{"out"}, "args": args, "fixup": fx}
-	ds, ss := in.list()
-	j := drv.Job{Name: name, System: system, Builder: pl.req.Builder, Spec: spec, InputDrvs: ds, InputSrcs: ss,
-		Disallowed: disallowed, ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	d, err := j.Derivation()
-	if err != nil {
-		return "", "", err
-	}
-	if err := d.Finalize(pl); err != nil {
-		return "", "", err
-	}
-	p, err := d.Path()
+func (pl *planner) job(name, system, kind, label string, args any, fx *engine.Fixup, in *engine.Inputs) (string, string, error) {
+	p, d, err := engine.BuilderJob{Name: name, System: system, Builder: pl.req.Builder, Kind: kind, Label: label,
+		Args: args, Fixup: fx, Inputs: in}.Finalize(pl)
 	if err != nil {
 		return "", "", err
 	}
@@ -219,13 +111,7 @@ func (pl *planner) job(name, system, kind, label string, args any, fx *fixup, in
 		pl.own[p] = d
 		pl.out.Drvs = append(pl.out.Drvs, d)
 	}
-	out := ""
-	for _, o := range d.Outputs {
-		if o.Name == "out" {
-			out = o.Path
-		}
-	}
-	return p, out, nil
+	return p, engine.OutPath(d), nil
 }
 
 // ---- toolchain ----
@@ -250,12 +136,12 @@ func (pl *planner) toolchainOf(t *target) (*toolchain, error) {
 		if !ok {
 			return nil, fmt.Errorf("%s: tool %s is not planned", t.n.Label, a)
 		}
-		o := pickOutput(rv.Outputs, "bin", "out")
+		o := engine.PickOutput(rv.Outputs, "bin", "out")
 		tc.path = append(tc.path, rv.Outputs[o]+"/bin")
 		tc.roots[a] = rv.Outputs[o]
 		tc.in = append(tc.in, engine.Resolved{Drv: rv.Drv, Outputs: map[string]string{o: rv.Outputs[o]}})
 		if a == mlspec.AttrOCaml && !strings.HasSuffix(rv.Outputs[o], "-ocaml-"+OCamlVersion) {
-			return nil, invalid(t.n, "toolchain", fmt.Sprintf("the pinned nixpkgs has %s, but bob's opam resolution fixes OCaml %s (other OCaml versions are not supported in v1)",
+			return nil, engine.Invalid(t.n, "toolchain", fmt.Sprintf("the pinned nixpkgs has %s, but bob's opam resolution fixes OCaml %s (other OCaml versions are not supported in v1)",
 				path.Base(rv.Outputs[o]), OCamlVersion))
 		}
 	}
@@ -264,27 +150,10 @@ func (pl *planner) toolchainOf(t *target) (*toolchain, error) {
 	return tc, nil
 }
 
-func (tc *toolchain) addTo(in *inputs) {
+func (tc *toolchain) addTo(in *engine.Inputs) {
 	for _, rv := range tc.in {
-		in.addAll(rv)
+		in.AddAll(rv)
 	}
-}
-
-func pickOutput(outs map[string]string, prefer ...string) string {
-	for _, o := range prefer {
-		if _, ok := outs[o]; ok {
-			return o
-		}
-	}
-	names := make([]string, 0, len(outs))
-	for o := range outs {
-		names = append(names, o)
-	}
-	sort.Strings(names)
-	if len(names) > 0 {
-		return names[0]
-	}
-	return ""
 }
 
 // hostSystem is the Nix system bob runs on; OCaml builds only natively in v1.
@@ -393,7 +262,7 @@ func (pl *planner) opamPackage(t *target, tc *toolchain, system, name string) (*
 	pl.walking[name] = true
 	defer delete(pl.walking, name)
 	label := "opam:" + name + "." + p.Version
-	in := newInputs(pl.req.Builder)
+	in := engine.NewInputs(pl.req.Builder)
 	tc.addTo(in)
 	closure := map[string]bool{}
 	deps := map[string]string{}
@@ -411,7 +280,7 @@ func (pl *planner) opamPackage(t *target, tc *toolchain, system, name string) (*
 	var libs, stubs, bins []string
 	for _, c := range names {
 		do := pl.opam[c]
-		in.add(engine.Resolved{Drv: do.drv, Outputs: map[string]string{"out": do.out}}, "out")
+		in.Add(engine.Resolved{Drv: do.drv, Outputs: map[string]string{"out": do.out}}, "out")
 		deps[c] = do.out
 		libs = append(libs, do.out+"/lib")
 		stubs = append(stubs, do.out+"/lib/stublibs")
@@ -428,7 +297,7 @@ func (pl *planner) opamPackage(t *target, tc *toolchain, system, name string) (*
 				"reason", fmt.Sprintf("no nixpkgs mapping for this system package (add ocaml.Conf(%q, nixpkgs.Lib(p, \"<attr>\")) or extend bob's table)", c))
 		}
 		for _, rv := range m.rvs {
-			in.addAll(rv)
+			in.AddAll(rv)
 		}
 		ce.bin, ce.pc = append(ce.bin, m.bin...), append(ce.pc, m.pc...)
 		ce.inc, ce.lib = append(ce.inc, m.inc...), append(ce.lib, m.lib...)
@@ -474,7 +343,7 @@ func (pl *planner) opamPackage(t *target, tc *toolchain, system, name string) (*
 			if err != nil {
 				return nil, err
 			}
-			in.srcs[src] = true
+			in.AddSrc(src)
 			args["src"] = src
 		}
 		e := map[string]string{
@@ -639,14 +508,14 @@ func split(dir string, files []string) (modules, stubs []string) {
 
 // nativeArgs are the C flags and link arguments of the Native libraries (bob.LinkInfo; nixpkgs
 // libraries by their include and library directories).
-func (pl *planner) nativeArgs(t *target, in *inputs) (cflags, clibs []string, err error) {
+func (pl *planner) nativeArgs(t *target, in *engine.Inputs) (cflags, clibs []string, err error) {
 	for _, i := range t.spec.Native {
 		id := t.n.Deps[i]
 		rv, ok := pl.req.Inputs[id]
 		if !ok {
 			return nil, nil, fmt.Errorf("%s: Native library %s is not planned", t.n.Label, id)
 		}
-		in.addAll(rv)
+		in.AddAll(rv)
 		if li := rv.LinkInfo; li != nil {
 			for _, d := range li.IncludeDirs {
 				cflags = append(cflags, "-I"+d)
@@ -654,8 +523,8 @@ func (pl *planner) nativeArgs(t *target, in *inputs) (cflags, clibs []string, er
 			clibs = append(clibs, linkArgs(li)...)
 			continue
 		}
-		inc := rv.Outputs[pickOutput(rv.Outputs, "dev", "out")] + "/include"
-		lib := rv.Outputs[pickOutput(rv.Outputs, "lib", "out")] + "/lib"
+		inc := rv.Outputs[engine.PickOutput(rv.Outputs, "dev", "out")] + "/include"
+		lib := rv.Outputs[engine.PickOutput(rv.Outputs, "lib", "out")] + "/lib"
 		cflags = append(cflags, "-I"+inc)
 		clibs = append(clibs, "-L"+lib, "-Wl,-rpath,"+lib)
 	}
@@ -686,7 +555,7 @@ func (pl *planner) planTarget(t *target) error {
 		return err
 	}
 	if system != hostSystem() {
-		return invalid(n, "platform", "OCaml cross-compilation is not supported in v1")
+		return engine.Invalid(n, "platform", "OCaml cross-compilation is not supported in v1")
 	}
 	tc, err := pl.toolchainOf(t)
 	if err != nil {
@@ -703,17 +572,17 @@ func (pl *planner) planTarget(t *target) error {
 	dir := labelDir(n.Label)
 	modules, stubs := split(dir, files)
 	if len(modules) == 0 {
-		return invalid(n, "Srcs", "no .ml or .mli file matches")
+		return engine.Invalid(n, "Srcs", "no .ml or .mli file matches")
 	}
 	if t.spec.Type != mlspec.TypeLibrary && len(stubs) > 0 {
-		return invalid(n, "Srcs", "C files belong to a library's Stubs")
+		return engine.Invalid(n, "Srcs", "C files belong to a library's Stubs")
 	}
 	lc, err := pl.localOf(t)
 	if err != nil {
 		return err
 	}
-	in := newInputs(pl.req.Builder)
-	in.srcs[src] = true
+	in := engine.NewInputs(pl.req.Builder)
+	in.AddSrc(src)
 	tc.addTo(in)
 	var ocamlpath []string
 	opamClosure := map[string]bool{}
@@ -730,12 +599,12 @@ func (pl *planner) planTarget(t *target) error {
 	var confLibs []string
 	for _, name := range sortedKeys(opamClosure) {
 		o := pl.opam[name]
-		in.add(engine.Resolved{Drv: o.drv, Outputs: map[string]string{"out": o.out}}, "out")
+		in.Add(engine.Resolved{Drv: o.drv, Outputs: map[string]string{"out": o.out}}, "out")
 		ocamlpath = append(ocamlpath, o.out+"/lib")
 		if strings.HasPrefix(name, "conf-") {
 			if m, ok := pl.confOf(t, name); ok {
 				for _, rv := range m.rvs {
-					in.addAll(rv)
+					in.AddAll(rv)
 				}
 				confLibs = append(confLibs, m.lib...)
 			}
@@ -746,7 +615,7 @@ func (pl *planner) planTarget(t *target) error {
 		if !ok {
 			return fmt.Errorf("%s: local library %s is not planned", n.Label, l.n.Label)
 		}
-		ocamlpath = append(ocamlpath, in.add(rv, "out")+"/lib")
+		ocamlpath = append(ocamlpath, in.Add(rv, "out")+"/lib")
 	}
 	cflags, clibs, err := pl.nativeArgs(t, in)
 	if err != nil {
@@ -781,7 +650,7 @@ func (pl *planner) planTarget(t *target) error {
 	common["clibs"] = nonNil(clibs)
 	common["main"] = t.spec.Main
 	common["scrub"] = scrubPatterns
-	fx := &fixup{ShrinkRPath: true, Tools: fixupTools{Patchelf: tc.roots[mlspec.AttrPatchelf] + "/bin/patchelf"},
+	fx := &engine.Fixup{ShrinkRPath: true, Tools: engine.FixupTools{Patchelf: tc.roots[mlspec.AttrPatchelf] + "/bin/patchelf"},
 		Forbidden: []string{tc.roots[mlspec.AttrOCaml], tc.roots[mlspec.AttrCC], tc.roots[mlspec.AttrBinutils], src, pl.req.Builder}}
 	dp, op, err := pl.job(drv.Name("ml", t.spec.Name), system, "ml-link", n.Label, common, fx, in)
 	if err != nil {
@@ -789,8 +658,8 @@ func (pl *planner) planTarget(t *target) error {
 	}
 	rv = engine.Resolved{Drv: dp, Outputs: map[string]string{"out": op}, MainProgram: "bin/" + t.spec.Name}
 	if t.spec.Type == mlspec.TypeTest {
-		rin := newInputs(pl.req.Builder)
-		rin.add(rv, "out")
+		rin := engine.NewInputs(pl.req.Builder)
+		rin.Add(rv, "out")
 		args := map[string]any{"argv": append([]string{op + "/bin/" + t.spec.Name}, pl.req.TestArgs...), "format": "tap",
 			"timeoutSeconds": defaultTestTimeoutS}
 		tp, top, err := pl.job(drv.Name("mlrun", t.spec.Name), system, "test-run", n.Label, args, nil, rin)

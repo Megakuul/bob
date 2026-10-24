@@ -23,22 +23,56 @@ Source: SPEC §05.2.1 bucket table, §05.2.3 policy table, `deploy/policies/work
 |---|---|
 | `bob-control` | **Nothing.** The worker policy has an explicit Deny `s3:*` on the bucket and `/*`, and the bucket policy denies everyone except `orchestrator-bob`. It cannot read users, password hashes, sessions, tokens, role bindings, projects, forge integrations, build and release records, sealed secrets, the orchestrator signing seeds (`okey/<kid>`) or the OCI HMAC keys. It cannot change admin data. |
 | `bob-fleet` read | Everything (`s3:GetObject` on `/*`): fleet config, worker records, queue slots, job records, heartbeats. These hold ids only (R-SEC-003), no user data. It can read the sealed token blobs of other workers (`worker/<wid>.ct`), which are encrypted to each worker's own key and useless without that key. |
-| `bob-fleet` write | `PutObject` only on `wreg/*`, `wrs/*`, `wrt/*`, `whb/*`, `job/*`, `qs/*`, `qh/*`. It can: register new worker ids, write heartbeats (including forged ones for other wids, which the reconciler rejects by signature), claim or tamper with job and queue records. It cannot write `worker/`, `fleet/`, `orch/`, `ctl/`, `qt/`, `jact/`, `widx/` (so it cannot approve a worker, change fleet config, add itself as an orchestrator or edit the active-job index). It cannot delete anything (`s3:DeleteObject` is not granted). |
+| `bob-fleet` write | `PutObject` only on `wreg/*`, `wrs/*`, `wrt/*`, `whb/*`, `job/*`, `qs/*`, `qh/*`. It can: register new worker ids, write heartbeats (including forged ones for other wids, which the reconciler rejects by signature), claim or tamper with job and queue records. In particular it can **claim any queued job of a class it serves, of any project**: the fleet is shared, so the jobs it takes are not limited to one project. It cannot write `worker/`, `fleet/`, `orch/`, `ctl/`, `qt/`, `jact/`, `widx/` (so it cannot approve a worker, change fleet config, add itself as an orchestrator or edit the active-job index). It cannot delete anything (`s3:DeleteObject` is not granted). |
 | `bob-analytics` | Read, write and delete (D38). It can read all build logs and run tables, and corrupt or delete logs and history. |
-| `bob-artifacts` read | Everything (`s3:GetObject` on `/*`): cached Nix outputs, OCI blobs, release assets, source snapshots (`src/`). Source snapshots and unreleased outputs are therefore readable. |
-| `bob-artifacts` write | `staging/*` only. Nothing under `nix/`, `oci/`, `rel/`, `src/` (written by orchestrators), so it cannot publish a poisoned cache path directly. Promotion from staging is done by the orchestrator, which verifies the job result against the job record. A worker that owns a job can still stage wrong outputs for that job; see the audit section. |
-| Worker token (`bwt1`) and PoP key of that worker id | Yes, for that wid only: `Attach` and `GetCheckoutCredential`. TTL 1 h, rotated at half life. A checkout credential is issued only for a job the worker holds (R-FLEET-006), for one repository, `contents: read`, revoked at job end. A token used with another worker's key fails (`proof of possession invalid`). |
+| `bob-artifacts` read | Everything (`s3:GetObject` on `/*`): cached Nix outputs of **every project, private ones included**, OCI blobs, release assets, source snapshots (`src/`) of every project. Source snapshots and unreleased outputs are therefore readable. |
+| `bob-artifacts` write | `staging/*` only. Nothing under `nix/`, `oci/`, `rel/`, `src/` (written by orchestrators), so it cannot publish a cache path directly. Promotion from staging is done by the orchestrator. What promotion does and does not stop is in "Poisoning" below. |
+| Worker token (`bwt1`) and PoP key of that worker id | Yes, for that wid only: `Attach` and `GetCheckoutCredential`. TTL 1 h, rotated at half life. A checkout credential and the job's cache download token are issued only for a job whose record names the worker as owner, whose spec is signed by an orchestrator for that job id, and whose lease the orchestrators accepted in the control bucket; a worker that rewrites the record of a job another live worker holds gets `permission_denied` (R-FLEET-006, A390). Because any worker may claim a queued job (row above), a compromised worker can still obtain the credential of every job it claims: one repository, `contents: read`, and a download token for that job's project, revoked at job end. A token used with another worker's key fails (`proof of possession invalid`). |
 | Other workers' jobs | It can read their job records but cannot subscribe to or cancel their jobs over Attach (R-FLEET-002). |
 | Orchestrator API, RBAC, users | No principal: workers are not part of RBAC and only reach `bob.worker.v1.WorkerControlService`. |
 
 Not covered by the bucket split (read this as the residual risk):
 
-- Source code of repositories whose jobs ran on the host, the checkout credentials of jobs
-  running at the time, the contents of the host's persistent Nix store, and any secret that was
-  placed into a build by a user.
-- Everything in `bob-analytics` and the readable parts of `bob-artifacts`.
+- Source code of every repository whose job the host claimed in the window (it can claim queued
+  jobs of any project), the checkout credentials and download tokens of those jobs, every source
+  snapshot and every cached output in `bob-artifacts` (private projects included), the contents
+  of the host's persistent Nix store, and any secret that was placed into a build by a user.
+- Everything in `bob-analytics`.
 - The S3 credential itself: it is a shared credential (all workers use the same worker
   identity), so it is valid from anywhere until rotated.
+
+Poisoning (what promotion guarantees, SPEC §6.6.4 and §6.8; I-R2 F1/F3-F5):
+
+- A job's staged paths are promoted only when they are outputs named by that job's evaluation
+  report, or in their closure (A391); every NAR is re-hashed and scanned for references, and a
+  scan that cannot finish fails. The report is written by the same worker (evaluation and build
+  run in one job), so this binds paths to the worker's own claim about the job, **not** to an
+  independent evaluation.
+- A path that is already published is never replaced, and a project gains visibility of it only
+  by staging the identical bytes. Different bytes from another project are refused visibility
+  and logged as `security: path conflict` (A392); they are never recorded as that project's
+  `non_reproducible`.
+- A skipped (upstream) path counts only with a narinfo signed by cache.nixos.org (A393).
+- A release publishes only paths and image objects whose visibility lists the release's
+  project, and fails on a closure path its build did not reproduce (A394).
+
+What remains possible for a compromised worker:
+
+1. **Wrong outputs for the jobs it held**, of any project whose queued job it claimed: those
+   bytes are served to that project (and published by that project's next public release that
+   contains them). This is the main risk; audit every promotion of those jobs (§5).
+2. **Squatting a path of another project that is not published yet**: while holding a job of
+   project A it can publish, under A, other bytes for a path that project B will build (input
+   addressed paths are predictable from B's source, which it can read). B never receives those
+   bytes, but B's builds then find the path published by A with different bytes: B gets no
+   visibility of it (B's clients build it locally), the orchestrator logs `security: path
+   conflict`, and B's releases that contain the path fail with `release closure path … is not a
+   path of project B`. Removing the squatted entries (§5.5) restores B. Closing this completely
+   needs an evaluation the building worker cannot forge (owner decision pending, I-B46).
+3. **Making another project's private bytes visible to a project whose job it held**, by
+   staging the identical bytes (it can read them from `bob-artifacts`); a public release of that
+   project then makes them public. Treat every private output as disclosed anyway (row
+   `bob-artifacts` read).
 
 Build isolation (R-FLEET-008: job container without worker credentials, builds as non-root,
 no access to IMDS or loopback) is the primary boundary; the bucket split is the emergency
@@ -152,24 +186,34 @@ Use an orchestrator credential or the UI. All times are UTC.
 1. **Time window.** Start = the last point the host was known good (for example the last
    deployment); end = the revoke time. The fleet record gives the wid history:
    `wreg/<wid>` (registration time), `whb/<wid>` (last heartbeat), `worker/<wid>` (state).
-2. **Jobs the worker ran.** The lake `job-<yyyymm>` partition, table `job_run` has one row per
-   finalised job with `Worker` (wid), `BuildID`, `JobID`, class, duration. Query it for the wid
-   and window. Jobs still in `job/<jobID>` with `o=<wid>` were running at revocation.
-3. **Packages it built.** `run-<yyyymm>`, table `package_run`: one row per finished package build
-   (BuildID, Project, Package, Drv, Worker, Status, start and end). These are the outputs the worker produced.
+   Everything the worker credential can write (`bob-analytics`: `job_run`, `package_run`,
+   `log_line`; `bob-fleet`: job and queue records) may be forged by the attacker for *any*
+   build (D38). Use it only as a hint; the steps below rely on what orchestrators wrote.
+2. **Jobs the worker ran.** The build records in the control bucket (`build/<buildID>`, the UI's
+   build pages): each job row names the worker (`Worker`), copied by the orchestrator at
+   finalise from a result that the owner's key signed. List the builds of the window and keep
+   the jobs of the wid(s). Jobs still in `job/<jobID>` with `o=<wid>` were running at
+   revocation. The orchestrator logs name the worker of every promotion (`worker=<wid>` on the
+   promotion lines) and every refused checkout (`security: checkout refused`).
+3. **What was published.** The promotion log in the control bucket, `promo/<yyyymmdd>/s/<seq>`
+   (one entry per newly published store path: store hash, project, build, time), written only
+   by orchestrators: take the entries of the builds from step 2. These are the paths whose bytes
+   came from the compromised worker. Paths the worker staged that were already published kept
+   their earlier bytes. Also search the orchestrator logs of the window for `security: path
+   conflict` (a project's honest build met bytes another project published first: see
+   "Poisoning", case 2) and `artifact verification`.
 4. **Logs.** `log-<yyyymmdd>-<k>`, table `log_line`, `k = fnv32a(buildID) mod 4`, for each build id
-   found above. Look for lines the build tooling could not have produced. Also look for log
-   lines of builds the wid never owned: workers can write to the whole analytics bucket (D38),
-   so log lines and run rows of *any* build in the window are untrusted if written under the
-   compromised credential. Cross-check against the S3 provider access log (key id and
+   found above. Look for lines the build tooling could not have produced. Remember that log
+   lines and run rows of *any* build in the window are untrusted if written under the
+   compromised credential (step 1). Cross-check against the S3 provider access log (key id and
    source address) where available.
-5. **Poisoned outputs.** The orchestrator promotes staged outputs after verifying the job result
-   against the job record, so the risk is limited to outputs of jobs the worker owned. For
-   each package build in step 3, rebuild on a clean worker and compare store paths. A
-   different store path for a deterministic package means the output is tampered:
-   remove the cache entries (`nix/narinfo/<hash>.narinfo`, `nix/nar/<hash>.nar.zst`,
-   `nix/ls/<hash>.ls`, and `nix/vis/<hash>.json` using an orchestrator credential), and
-   re-run or retract any release that references them. Releases are immutable and never
+5. **Poisoned outputs.** Every path from step 3, and every path named in a `path conflict` line,
+   is suspect, whatever project it belongs to. Rebuild each on a clean worker and compare the
+   NAR hash with the served narinfo. A different hash for a deterministic package means the
+   output is tampered: remove the cache entries (`nix/narinfo/<hash>.narinfo`,
+   `nix/nar/<hash>.nar.zst`, `nix/ls/<hash>.ls`, and `nix/vis/<hash>.json` using an
+   orchestrator credential), then re-run the affected builds so the honest bytes are published,
+   and re-run or retract any release that references them. Releases are immutable and never
    collected, so a poisoned release must be superseded by a new version and announced.
 6. **Forged state.** `bob_fleet_forged_results_total` and the orchestrator log list rejected
    results and registrations. Check `fleet/cfg`, `orch/*`, `ctl/*` for unexpected content (the
@@ -204,7 +248,7 @@ Use an orchestrator credential or the UI. All times are UTC.
 [ ] new worker S3 credential created, rolled out, old credential deleted
 [ ] worker_probe_credential updated; orchestrators restarted one by one
 [ ] control-bucket policy still attached
-[ ] audit: job_run, package_run, log_line; poisoned cache entries removed
+[ ] audit: build records + promotion log (control bucket), orchestrator logs; poisoned and squatted cache entries removed
 [ ] secrets of affected repositories rotated
 [ ] clean host registered, test build compared
 ```
@@ -219,7 +263,8 @@ RustFS, users `worker-bob` and `orchestrator-bob` with the shipped policies, HAR
    by the other worker.
 3. Step 4: create a second key for `worker-bob`, restart the workers with it, delete the old
    key. Expect the old key to get 403 on every operation, including the `bob-fleet` reads.
-4. Step 5: run the lake queries for the revoked wid.
+4. Step 5: list the revoked wid's jobs from the build records and their paths from the
+   promotion log; run the lake queries as a cross-check.
 5. Step 6: start a new worker; expect `active` within 5 s.
 
 Sign the check in the parity manual ledger (HARNESS §11) with the date and the commit.

@@ -88,48 +88,6 @@ func arch(p bob.Platform) (string, error) {
 	return "", fmt.Errorf("no AppImage runtime for platform %q", p)
 }
 
-// inputs collects a derivation's input derivations and sources.
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs map[string]bool
-}
-
-// add records output o of rv and returns its store path.
-func (in *inputs) add(rv engine.Resolved, o string) (string, error) {
-	sp := rv.Outputs[o]
-	if sp == "" {
-		return "", fmt.Errorf("input has no output %q", o)
-	}
-	if rv.Drv == "" {
-		in.srcs[sp] = true
-		return sp, nil
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	in.drvs[rv.Drv][o] = true
-	return sp, nil
-}
-
-func (in *inputs) list() ([]drv.InputDrv, []string) {
-	var ds []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		ds = append(ds, d)
-	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i].Path < ds[j].Path })
-	srcs := make([]string, 0, len(in.srcs))
-	for s := range in.srcs {
-		srcs = append(srcs, s)
-	}
-	sort.Strings(srcs)
-	return ds, srcs
-}
-
 // args mirrors bop.Args (pkg/output/appimage/bop; generators cannot import the builder layer).
 type args struct {
 	Name         string                 `json:"name"`
@@ -187,7 +145,7 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 	if err != nil {
 		return nil, err
 	}
-	in := &inputs{drvs: map[string]map[string]bool{}, srcs: map[string]bool{req.Builder: true}}
+	in := engine.NewInputs(req.Builder)
 	x := args{Name: s.Name, Arch: a, Entries: map[string]string{}, Closure: closureAttr, Env: s.Env,
 		NoIconv: s.NoIconv, Locales: s.Locales, HostGraphics: s.HostGraphics, Mode: s.Mode, Prune: s.Prune,
 		Desktop:  desktop{Name: s.Desktop.Name, Categories: s.Desktop.Categories, Terminal: s.Desktop.Terminal},
@@ -203,7 +161,7 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 		if _, ok := rv.Outputs["bin"]; ok {
 			o = "bin"
 		}
-		out, err := in.add(rv, o)
+		out, err := addOutput(in, rv, o)
 		if err != nil {
 			return nil, fmt.Errorf("entry %q: %w", e.Name, err)
 		}
@@ -221,7 +179,7 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 	if err != nil {
 		return nil, err
 	}
-	sq, err := in.add(rv, "out")
+	sq, err := addOutput(in, rv, "out")
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +189,7 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 		if err != nil {
 			return nil, err
 		}
-		if x.CACert, err = in.add(rv, "out"); err != nil {
+		if x.CACert, err = addOutput(in, rv, "out"); err != nil {
 			return nil, err
 		}
 		roots = append(roots, x.CACert)
@@ -241,11 +199,11 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 		if err != nil {
 			return nil, err
 		}
-		bin, err := in.add(rv, "bin")
+		bin, err := addOutput(in, rv, "bin")
 		if err != nil {
 			return nil, err
 		}
-		out, err := in.add(rv, "out")
+		out, err := addOutput(in, rv, "out")
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +218,7 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 		if err != nil {
 			return nil, err
 		}
-		in.srcs[src] = true
+		in.AddSrc(src)
 		x.Desktop.Icon = src + "/" + icon
 	}
 	rt, ok := runtimes[a]
@@ -270,31 +228,20 @@ func planBundle(ctx context.Context, req engine.PlanRequest, n *ir.Node, runtime
 		}
 		runtimes[a] = rt
 	}
-	in.srcs[rt] = true
+	in.AddSrc(rt)
 	x.Runtime = rt + "/bin/bobrun"
 	for p, l := range licences {
 		x.Licences[p] = l
 	}
 	sort.Strings(roots)
-	ds, ss := in.list()
-	spec := map[string]any{"v": 1, "kind": "appimage", "label": n.Label, "outputs": []any{"out"}, "args": x,
-		"fixup": map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
-			"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}}
 	name := []string{"appimage", s.Name}
 	if bob.Platform(s.Platform) != engine.HostPlatform() {
 		name = append(name, s.Platform)
 	}
-	j := drv.Job{Name: drv.Name(name...), System: engine.HostSystem(), Builder: req.Builder, Spec: spec,
-		InputDrvs: ds, InputSrcs: ss, DiscardRefs: map[string]bool{"out": true},
-		ExtraAttribute: map[string]any{
-			"allowSubstitutes":      false,
-			"exportReferencesGraph": map[string]any{closureAttr: roots},
-		}}
-	d, err := j.Derivation()
+	_, d, err := engine.BuilderJob{Name: drv.Name(name...), System: engine.HostSystem(), Builder: req.Builder,
+		Kind: "appimage", Label: n.Label, Args: x, Inputs: in, Discard: true,
+		Attrs: map[string]any{"exportReferencesGraph": map[string]any{closureAttr: roots}}}.Finalize(req.Resolver)
 	if err != nil {
-		return nil, err
-	}
-	if err := d.Finalize(req.Resolver); err != nil {
 		return nil, err
 	}
 	return d, nil
@@ -400,4 +347,12 @@ func (l licences) table(n *ir.Node) map[string]licenceInfo {
 		}
 	}
 	return out
+}
+
+// addOutput records output o of rv as an input; an input without that output is an error.
+func addOutput(in *engine.Inputs, rv engine.Resolved, o string) (string, error) {
+	if p := in.Add(rv, o); p != "" {
+		return p, nil
+	}
+	return "", fmt.Errorf("input has no output %q", o)
 }

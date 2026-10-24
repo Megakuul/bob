@@ -28,6 +28,7 @@ type Config struct {
 	BaseURL                   string
 	AccessToken, SigningToken forge.Secret
 	AllowPlaintextSecret      bool
+	HTTP                      *http.Client // nil: forge.HTTPClient()
 }
 
 // tolerance is the replay window of the webhook-timestamp header (SPEC §6.9.2).
@@ -53,7 +54,7 @@ func New(cfg Config) (forge.Adapter, error) {
 		}
 		a.key = k
 	}
-	c, err := gl.NewClient(cfg.AccessToken.Reveal(), gl.WithBaseURL(base+"/api/v4"), gl.WithHTTPClient(forge.HTTPClient()),
+	c, err := gl.NewClient(cfg.AccessToken.Reveal(), gl.WithBaseURL(base+"/api/v4"), gl.WithHTTPClient(forge.ClientOr(cfg.HTTP)),
 		gl.WithCustomRetryMax(2), gl.WithUserAgent("bob"))
 	if err != nil {
 		return nil, fmt.Errorf("gitlab: %w", err)

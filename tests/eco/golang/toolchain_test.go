@@ -27,6 +27,10 @@ func TestRGO004aToolchainPerModule(t *testing.T) {
 	home := t.TempDir()
 	dir := harness.Fixture(t, "go")
 	replaceIn(t, filepath.Join(dir, "lib", "bob.go"), `Go: "1.26"`, `Go: "1.25"`)
+	// The committed lib/go.mod records the Go of the unedited bob.go. A fresh copy has no record
+	// that bob wrote it, so the stale go line is drift (R-FW-061); the commit that lowers Go in
+	// lib/bob.go carries the regenerated go.mod with it.
+	replaceIn(t, filepath.Join(dir, "lib", "go.mod"), "\ngo 1.26.0\n", "\ngo 1.25.0\n")
 	if r := bobEnv(t, dir, registryEnv(home), "lock"); !ok(t, r) {
 		return
 	}
@@ -37,7 +41,8 @@ func TestRGO004aToolchainPerModule(t *testing.T) {
 	if !parsed {
 		return
 	}
-	// The compile job of a package names its import path after -p; classify by it.
+	// The compile job of a package names its import path after -p (main packages: -p main and
+	// importPath); classify by it.
 	want := map[string]string{
 		"example.com/lib/strutil":      "1.25",
 		"example.com/lib/fastadd":      "1.25",
@@ -57,7 +62,9 @@ func TestRGO004aToolchainPerModule(t *testing.T) {
 	for _, d := range bobDrvs(all) {
 		spec := jobSpec(d)
 		for pkg, goVer := range want {
-			if !regexp.MustCompile(`-p["',\s:]+` + regexp.QuoteMeta(pkg) + `["',\s\]}]`).MatchString(spec) {
+			// A main package is compiled with -p main (as by the go command); its job names the
+			// import path in importPath.
+			if !regexp.MustCompile(`(-p|importPath)["',\s:]+` + regexp.QuoteMeta(pkg) + `["',\s\]}]`).MatchString(spec) {
 				continue
 			}
 			m := goToolchainRe.FindAllStringSubmatch(spec, -1)

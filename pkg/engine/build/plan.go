@@ -353,15 +353,15 @@ func (p *planner) planRun(n *ir.Node) error {
 	if err != nil {
 		return err
 	}
-	in := newInputs(p.builder)
+	in := engine.NewInputs(p.builder)
 	var bins []string
 	for _, id := range n.Deps[:s.Tools] {
 		rv := p.nodes[id]
-		out := pickOutput(rv.Outputs, "bin", "out")
+		out := engine.PickOutput(rv.Outputs, "bin", "out")
 		if out == "" {
 			return internalf(n.Label, "tool %s has no output", id)
 		}
-		bins = append(bins, in.add(rv, out)+"/bin")
+		bins = append(bins, in.Add(rv, out)+"/bin")
 	}
 	out := drv.Placeholder("out")
 	env := map[string]string{}
@@ -374,11 +374,11 @@ func (p *planner) planRun(n *ir.Node) error {
 			return internalf(n.Label, "input %s does not name a dependency", name)
 		}
 		rv := p.nodes[n.Deps[i]]
-		o := pickOutput(rv.Outputs, "out")
+		o := engine.PickOutput(rv.Outputs, "out")
 		if o == "" {
 			return internalf(n.Label, "input %s has no output", name)
 		}
-		env["BOB_IN_"+name] = in.add(rv, o)
+		env["BOB_IN_"+name] = in.Add(rv, o)
 	}
 	// ${VAR} expands from the step's environment only (plus the fixed builder variables).
 	fixed := map[string]string{"HOME": "/homeless-shelter", "TMPDIR": "/build/tmp", "SOURCE_DATE_EPOCH": "1", "TZ": "UTC", "LC_ALL": "C"}
@@ -394,7 +394,7 @@ func (p *planner) planRun(n *ir.Node) error {
 	}
 	steps := []any{step("mkdir", map[string]any{"path": out})}
 	if src, ok := p.srcs[n.ID]; ok {
-		in.srcs = append(in.srcs, src)
+		in.AddSrc(src)
 		steps = append(steps, step("copy", map[string]any{"from": src, "to": buildSrc}))
 	} else {
 		steps = append(steps, step("mkdir", map[string]any{"path": buildSrc}))
@@ -414,37 +414,18 @@ func (p *planner) planRun(n *ir.Node) error {
 		}
 		steps = append(steps, step("check-files", map[string]any{"root": out, "paths": paths}))
 	}
-	spec := map[string]any{"v": 1, "kind": "run", "label": n.Label, "outputs": []any{"out"},
-		"args": map[string]any{"steps": steps}, "fixup": emptyFixup()}
-	return p.addJob(n, system, spec, in)
+	return p.addJob(n, system, map[string]any{"steps": steps}, in)
 }
 
 func step(op string, args map[string]any) map[string]any {
 	return map[string]any{"op": op, "args": args}
 }
 
-// emptyFixup is the fixup contract of a job whose outputs are not ELF trees bob controls:
-// no stripping, no RUNPATH change, only the reference check against nothing.
-func emptyFixup() map[string]any {
-	return map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
-		"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}
-}
-
-// addJob finalises the bob-builder job of node n and records it.
-func (p *planner) addJob(n *ir.Node, system string, spec map[string]any, in *inputs) error {
-	j := drv.Job{Name: storeName(n), System: system, Builder: p.builder, Spec: spec,
-		InputDrvs: in.drvList(), InputSrcs: in.srcList(),
-		// A71: bob checks its own caches in one batch before Nix runs; Nix must not ask a
-		// substituter about every bob output (≈ 0.12 s per derivation).
-		ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	d, err := j.Derivation()
-	if err != nil {
-		return internalf(n.Label, "%v", err)
-	}
-	if err := d.Finalize(p.res); err != nil {
-		return internalf(n.Label, "%v", err)
-	}
-	dp, err := d.Path()
+// addJob finalises the "run" bob-builder job of node n (no binary fixup: its outputs are not
+// ELF trees bob controls) and records it.
+func (p *planner) addJob(n *ir.Node, system string, args any, in *engine.Inputs) error {
+	dp, d, err := engine.BuilderJob{Name: storeName(n), System: system, Builder: p.builder, Kind: "run", Label: n.Label,
+		Args: args, Inputs: in}.Finalize(p.res)
 	if err != nil {
 		return internalf(n.Label, "%v", err)
 	}
@@ -482,76 +463,6 @@ func storeName(n *ir.Node) string {
 		parts = append(parts, tag)
 	}
 	return drv.Name(parts...)
-}
-
-// pickOutput returns the first of prefer that outs has, else its first output by name.
-func pickOutput(outs map[string]string, prefer ...string) string {
-	for _, o := range prefer {
-		if _, ok := outs[o]; ok {
-			return o
-		}
-	}
-	names := make([]string, 0, len(outs))
-	for o := range outs {
-		names = append(names, o)
-	}
-	sort.Strings(names)
-	if len(names) > 0 {
-		return names[0]
-	}
-	return ""
-}
-
-// inputs collects the input derivations and sources of one job.
-type inputs struct {
-	drvs map[string]map[string]bool
-	srcs []string
-}
-
-func newInputs(builder string) *inputs {
-	return &inputs{drvs: map[string]map[string]bool{}, srcs: []string{builder}}
-}
-
-// add records the dependency rv's output o and returns its path.
-func (in *inputs) add(rv engine.Resolved, o string) string {
-	sp := rv.Outputs[o]
-	if rv.Drv == "" {
-		in.srcs = append(in.srcs, sp)
-		return sp
-	}
-	if in.drvs[rv.Drv] == nil {
-		in.drvs[rv.Drv] = map[string]bool{}
-	}
-	// bob.file outputs are paths inside their step's "out".
-	in.drvs[rv.Drv][o] = true
-	return sp
-}
-
-func (in *inputs) drvList() []drv.InputDrv {
-	var out []drv.InputDrv
-	for p, outs := range in.drvs {
-		d := drv.InputDrv{Path: p}
-		for o := range outs {
-			d.Outputs = append(d.Outputs, o)
-		}
-		sort.Strings(d.Outputs)
-		out = append(out, d)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out
-}
-
-func (in *inputs) srcList() []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range in.srcs {
-		if !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-	sort.Strings(out)
-	return out
 }
 
 // resolver returns hashDerivationModulo of input derivations: bob's own from memory, nixpkgs'

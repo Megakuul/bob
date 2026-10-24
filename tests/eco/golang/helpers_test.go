@@ -325,15 +325,6 @@ func runCmd(t *testing.T, cmd *exec.Cmd, args []string) harness.Result {
 	return r
 }
 
-// runEnvI runs binary with an empty environment (env -i) and returns the result.
-func runEnvI(t *testing.T, binary string, args ...string) harness.Result {
-	t.Helper()
-	cmd := exec.Command(binary, args...)
-	cmd.Env = []string{}
-	cmd.Dir = t.TempDir()
-	return runCmd(t, cmd, append([]string{binary}, args...))
-}
-
 func platforms(t *testing.T) (host, other bob.Platform, ok bool) {
 	t.Helper()
 	switch runtime.GOARCH {
@@ -357,13 +348,23 @@ func pinnedTool(t *testing.T, name string) string {
 	return p
 }
 
-// runGuest runs the binary of platform plat: directly for the host platform, under qemu-user
-// (store of home as the guest root) for the other one, always with an empty environment.
-func runGuest(t *testing.T, plat bob.Platform, home, binary string, args ...string) harness.Result {
+// runGuest runs the binary of platform plat (a host path <home>/nix/store/… from --print-paths),
+// always with an empty environment: for the host platform through `bob exec -- env -i` in the
+// fixture dir, where /nix/store is bob's store (SPEC §02.6: host paths run only through bob
+// run/bob exec; bob exec needs .bob/env.json, R-DEV-008, so `bob env` runs first), under
+// qemu-user (store of home as the guest root) for the other one.
+func runGuest(t *testing.T, plat bob.Platform, dir, home, binary string, args ...string) harness.Result {
 	t.Helper()
 	host, _, _ := platforms(t)
 	if plat == host {
-		return runEnvI(t, binary, args...)
+		rel, err := filepath.Rel(home, binary)
+		if err != nil || !strings.HasPrefix(rel, "nix/store/") {
+			t.Fatalf("harness: %s is not below %s/nix/store", binary, home)
+		}
+		if r := bobIn(t, dir, home, "env", "--format", "json"); r.Exit != 0 {
+			return r
+		}
+		return bobIn(t, dir, home, append([]string{"exec", "--", "env", "-i", "/" + rel}, args...)...)
 	}
 	arch := map[bob.Platform]string{bob.LinuxAMD64: "x86_64", bob.LinuxARM64: "aarch64"}[plat]
 	qemu := filepath.Join(pinnedTool(t, "qemu-user"), "bin", "qemu-"+arch)

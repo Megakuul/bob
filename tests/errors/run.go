@@ -127,6 +127,8 @@ func (r *Runner) runMode(ctx context.Context, e Entry, mode, replay string, res 
 	env := append(os.Environ(), "HOME="+home, "TERM=dumb", "NO_COLOR=1")
 	if replay != "" {
 		env = append(env, EnvReplay+"="+replay)
+	} else if e.Inject.Kind == "env" {
+		env = append(env, e.Inject.Env...)
 	}
 	run := func(flag string) (Output, bool) {
 		o, err := r.exec(ctx, e.Fault, repo, env, flag)
@@ -180,6 +182,10 @@ func (r *Runner) prepareLive(ctx context.Context, e Entry, repo string, res *Res
 	}
 	switch e.Inject.Kind {
 	case "none":
+	case "env":
+		if len(e.Inject.Env) == 0 {
+			res.Notes = append(res.Notes, "inject kind env lists no variables (fault.json inject.env)")
+		}
 	case "patch":
 		patch := filepath.Join(e.Dir, "patch.diff")
 		if _, err := os.Stat(patch); err != nil {
@@ -267,8 +273,15 @@ func (r *Runner) check(e Entry, mode, replay, repo string, fixture bool, plain, 
 	// 1. Code and exit.
 	var why []string
 	matched := false
+	count := func(code string) int {
+		n := strings.Count(out, "error["+code+"]")
+		if head, ok := markLines[code]; ok && n == 0 && strings.Contains("\n"+out, "\n✗ "+head) && jsonReports(jsonOut.Stdout, code) {
+			n = 1
+		}
+		return n
+	}
 	for _, oc := range e.Expect.Outcomes() {
-		if msg := outcomeMismatch(oc, out, plain.Exit); msg == "" {
+		if msg := outcomeMismatch(oc, count, plain.Exit); msg == "" {
 			matched = true
 			break
 		} else {
@@ -343,16 +356,44 @@ func (r *Runner) check(e Entry, mode, replay, repo string, fixture bool, plain, 
 	}
 }
 
-// outcomeMismatch returns "" when out has every code of oc (as often as listed) and the exit
-// matches.
-func outcomeMismatch(oc Outcome, out string, exit int) string {
+// markLines are the codes whose human output SPEC writes as a `✗ <message>` line without an
+// `error[CODE]:` header: BOB-E-7005 (R-NIX-022, the block tests/rootless checks line by line),
+// BOB-E-2013 and BOB-E-2014 (§03.4.4 runtime translations) and BOB-E-2015 (R-OUT-007). Such a
+// code counts once when a line of the default output starts with "✗ " followed by the head
+// given here and the --json stream of the same run reports the code in an error event.
+var markLines = map[string]string{
+	"BOB-E-7005": "bob cannot create its private /nix: unprivileged user namespaces are blocked on this system\n",
+	"BOB-E-2013": "",
+	"BOB-E-2014": "",
+	"BOB-E-2015": "",
+}
+
+// jsonReports reports whether an error event of the --json stream carries code.
+func jsonReports(stdout []byte, code string) bool {
+	for _, l := range bytes.Split(stdout, []byte("\n")) {
+		var ev struct {
+			Event string `json:"event"`
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(l, &ev) == nil && ev.Event == "error" && ev.Error.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+// outcomeMismatch returns "" when every code of oc is found (count, as often as listed) and the
+// exit matches.
+func outcomeMismatch(oc Outcome, count func(code string) int, exit int) string {
 	var miss []string
 	need := map[string]int{}
 	for _, c := range oc.Codes {
 		need[c]++
 	}
 	for c, n := range need {
-		if got := strings.Count(out, "error["+c+"]"); got < n {
+		if got := count(c); got < n {
 			miss = append(miss, fmt.Sprintf("error[%s] ×%d (got %d)", c, n, got))
 		}
 	}

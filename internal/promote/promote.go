@@ -696,6 +696,39 @@ func (p *Promoter) promotePaths(ctx context.Context, j *Job, paths []*stagedPath
 		inJob[sp.hash] = true
 	}
 	r := &refs{p: p, j: j, inJob: inJob, skipped: skipped, known: known, servedCache: map[string]bool{}, upstream: map[string]bool{}}
+	// Verify the upstream narinfos of the skipped paths the claims reference up front, claimParallel
+	// at a time: one sequential GET each inside step 3 would put the backend's latency into
+	// every path that references them (store hashes found inside kinds outputs are looked up
+	// when met).
+	var referenced []string
+	seenRef := map[string]bool{}
+	for _, sp := range paths {
+		for _, ref := range sp.claim.References {
+			if h := cache.HashOf(ref); !inJob[h] && skipped[h] != "" && !seenRef[h] {
+				seenRef[h] = true
+				referenced = append(referenced, h)
+			}
+		}
+	}
+	sem := make(chan struct{}, claimParallel)
+	var checks []<-chan error
+	for _, h := range referenced {
+		sem <- struct{}{}
+		checks = append(checks, safe.Go(func() error {
+			defer func() { <-sem }()
+			_, err := r.isUpstream(ctx, h)
+			return err
+		}))
+	}
+	var errs []error
+	for _, c := range checks {
+		if err := <-c; err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	for start := 0; start < len(paths); {
 		end := start
 		for end < len(paths) && paths[end].level == paths[start].level {
@@ -1003,7 +1036,7 @@ func (p *Promoter) alreadyServed(ctx context.Context, j *Job, sp *stagedPath, sr
 // it: non_reproducible (R-REG-152 (3), R-NFR-006). When it does not, the path belongs to other
 // projects (I-R2 F1, decision A392): the job neither gains visibility of those bytes nor marks
 // another project's path non_reproducible; the conflict is a security event for the operator
-// (a compromised worker may have published first, docs/operations/worker-compromise.md §5.5).
+// (a compromised worker may have published first, docs/operations/worker-compromise.md §1).
 // The job's other paths are promoted; a release of the project that contains this path fails
 // (internal/release), so the other project's bytes never ship under this project's name.
 func (p *Promoter) differs(ctx context.Context, j *Job, sp *stagedPath, staged string, out *outcome, log *slog.Logger) error {

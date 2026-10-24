@@ -5,7 +5,7 @@
 	const id = $props.id();
 </script>
 
-<svg class="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+<svg class="pointer-events-none absolute inset-0 h-full w-full {kind === 'grid' ? 'opacity-50' : ''}" aria-hidden="true">
 	<defs>
 		{#if kind === 'grid'}
 			<pattern id="bd-{id}" width={size} height={size} patternUnits="userSpaceOnUse">

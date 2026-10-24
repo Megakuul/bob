@@ -32,6 +32,7 @@ import (
 type Config struct {
 	BaseURL, BotLogin          string
 	BotPassword, WebhookSecret forge.Secret
+	HTTP                       *http.Client // nil: forge.HTTPClient()
 }
 
 // serverVersion is what the SDK is told the server runs, so that it does not probe the version
@@ -68,7 +69,7 @@ func New(cfg Config) (forge.Adapter, error) {
 		return nil, errors.New("forge: forgejo needs the bot login")
 	}
 	cfg.BaseURL = base
-	return &adapter{cfg: cfg, http: forge.HTTPClient(), status: map[int64]statusToken{}}, nil
+	return &adapter{cfg: cfg, http: forge.ClientOr(cfg.HTTP), status: map[int64]statusToken{}}, nil
 }
 
 func (a *adapter) Kind() forge.Kind { return forge.Forgejo }

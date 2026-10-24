@@ -3,7 +3,7 @@
 bob is licensed under AGPL-3.0 (see `LICENSE`). This file lists third-party material that bob
 ships or embeds, and code taken under the cleanroom exception (AGENTS.md §5.7, D42).
 
-Every file under `assets/` and `web/static/`, and every embedded binary, needs a row here. The
+Every file under `assets/`, `web/static/` and `website/static/`, and every embedded binary, needs a row here. The
 `licence` CI stage fails when a file under those directories has none (a row names the file or a
 parent directory in backticks). Go and npm dependency licences are checked separately against
 `tools/ci/licences.allow`; they are listed here only when they carry an obligation or an owner
@@ -54,7 +54,7 @@ The AppImage runtime is bob's own static Go code, so no libfuse is shipped (A15)
 
 ## Assets
 
-None yet. Fonts, icons and images under `assets/` or `web/static/` get a row here when added.
+None yet. Fonts, icons and images under `assets/`, `web/static/` or `website/static/` get a row here when added. The website (`website/`) uses system font stacks and inline SVG only, so it bundles no font or image files (A412).
 
 | Path | Source | Licence | Notes |
 |---|---|---|---|

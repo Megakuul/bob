@@ -110,7 +110,7 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 		Requested: requested, Limits: r.o.Limits}
 	c.Limits.LocalBuilds = true
 	pkgOf := func(n *ir.Node, role string) translate.Pkg {
-		pk := translate.Pkg{Label: n.Label, DefinedAt: n.DefinedAt.String(), Kind: n.Kind, Role: role,
+		pk := translate.Pkg{Label: n.Label, DefinedAt: definedAt(n.DefinedAt), Kind: n.Kind, Role: role,
 			Codegen: engine.IsCodegenKind(n.Kind)}
 		if len(n.Srcs) > 0 {
 			pk.SrcDir = n.Srcs[0].Dir
@@ -561,4 +561,13 @@ func chainOf(home string, direct []string, target string) []string {
 		}
 	}
 	return nil
+}
+
+// definedAt is the "package defined at" position of a node for the translator: <file>:<line>:<col>
+// (SPEC §02.5, R-NIX-012), <file>:<line> when the evaluator recorded no column.
+func definedAt(p ir.Pos) string {
+	if p.Col > 0 {
+		return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Col)
+	}
+	return p.String()
 }

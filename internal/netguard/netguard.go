@@ -76,6 +76,10 @@ var refusedNets = func() []netip.Prefix {
 
 var nat64 = netip.MustParsePrefix("64:ff9b::/96")
 
+// LoopbackAllowed reports the test-build gate: true only in -tags bobtest builds, which may
+// reach loopback addresses without configuration (loopback_bobtest.go).
+func LoopbackAllowed() bool { return testLoopback() }
+
 // canonical is the IPv4 address an IPv4-mapped or NAT64 (64:ff9b::/96) address reaches, else ip.
 func canonical(ip netip.Addr) netip.Addr {
 	ip = ip.Unmap()

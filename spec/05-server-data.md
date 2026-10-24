@@ -184,7 +184,18 @@ Evidence: spikes S9, S10, S11, S13, S14, S17 and the §05 verification runs in
      refused within 10 s;
   2. rotate the shared worker S3 credential in the deployment.
 
-  bob documents this in `docs/operations/worker-compromise.md`.
+  bob documents this in `docs/operations/worker-compromise.md`, including what a compromised
+  worker can still do until then (I-R2 F6, A395): it reads every source snapshot and cached
+  output in the artifacts bucket; it may claim queued jobs of any project and so obtain their
+  checkout credentials and download tokens, and stage wrong outputs for exactly those jobs
+  (served to their projects); it may publish, under the project of a job it holds, other bytes
+  for a path another project has not published yet, which that project then never sees (it
+  builds the path itself, and its releases containing the path fail) until an operator removes
+  the entries. It cannot take over a job another live worker holds (R-FLEET-006), replace a
+  published path, give a project visibility of bytes it did not stage identically, pass off an
+  unsigned path as upstream, or put another project's path into a release (§06 §6.6.4, §6.8).
+  The audit relies on records only orchestrators write (build records, the promotion log
+  `promo/`, orchestrator logs), not on the analytics bucket, which the worker can rewrite.
 - **Acceptance (manual):** the runbook exists and its commands work in the harness's local
   deployment.
 - **Source:** D57, OD-S11-1 a.
@@ -564,7 +575,7 @@ Class id = `<platform>.<first 10 base32 chars of SHA-256(canonical caps ‖ labe
 | `sa/<saID>`, `saidx/all` | `ServiceAccountRecord` (incl. `ro` role bindings as in `UserRecord`, `tk` token ids); index (≤ 1,000) | AccessService (CAS) | auth, UI (GC) | yes |
 | `tok/<hash64(token)>` | `TokenRecord`: owner, kind, scopes, exp, created | AccessService (C, D) | every API call (G, cache 10 s) | yes |
 | `forge/<forgeID>`, `forges/all` | `ForgeRecord` (forge integration; secrets sealed with the orchestrator data key); index | ForgeService (CAS) | pipeline controller (GC) | yes |
-| `ftok/<sh2(jobID)>` | `CheckoutRecord`s: outstanding per-job forge tokens {jobID → epoch, forge, handle (token id), expiresAt, forgeExpires}; never the token value (D62) | `GetCheckoutCredential`, revoke at job end, sweeper (CAS) | same + sweeper (GC) | yes |
+| `ftok/<sh2(jobID)>` | `CheckoutRecord`s: outstanding per-job forge tokens {jobID → epoch, forge, handle (token id), expiresAt, forgeExpires}; never the token value (D62); and the accepted lease per job {jobID → wid, epoch, at} (§06 §6.9.6, A390) | `GetCheckoutCredential`, revoke at job end, sweeper (CAS) | same + sweeper (GC) | yes |
 | `set/<name>` | `SettingRecord`: setting value | SettingsService (CAS) | all (GC 30 s) | yes |
 | `bkey/<hash64(delivery key)>` | `BuildKey`: `b` build id, `at` created: the build one forge delivery created (idempotent build creation from a webhook event; delivery key = the `fdel` key value) | webhook intake through build creation (C) | same, when the create conflicts (G) | no |
 | `plock/<jobID>` | promotion lock, a `Lease` (§05.3.4: `o`, `ep`, `ex`, `cu`; TTL 1 min); deleted after the job's promotion; correctness does not depend on it, it makes concurrent promotions of one job deterministic | promoting orchestrator (C, CAS, D) | same (G) | yes |
@@ -1183,8 +1194,11 @@ Orchestrator signing keys: the seeds are in control `okey/<kid>`, the public key
 
 #### R-FLEET-006 Checkout credentials only for the held job (kept)
 - **Statement:** Workers get a checkout credential only for the job they hold (owner + epoch on
-  `job/<id>`, state claimed or running), for one repository, revoked at job end. The flow and the
-  forge-side token handling are §06 §6.9.6; the record is a `CheckoutRecord` in `ftok/<sh2>`.
+  `job/<id>`, state claimed or running, a spec signed by an orchestrator for that job, and the
+  lease the orchestrators accepted in the control bucket: a lease moves to another worker only
+  when its holder's lease is over by the reconciler's rule; I-R2 F2, A390), for one repository,
+  revoked at job end. The flow and the forge-side token handling are §06 §6.9.6; the record is a
+  `CheckoutRecord` in `ftok/<sh2>`.
 - **Acceptance:**
   - `GetCheckoutCredential` with a job the caller does not own, or a stale epoch →
     `permission_denied: worker holds no lease on job <id>`.
@@ -1446,6 +1460,7 @@ func Follow(ctx context.Context, src *Sources, buildID string, cur map[string]Cu
 | `live_log.chunk_interval` | `250ms` | worker chunk cadence while subscribed |
 | `retention.logs`, `.analytics`, `.builds`, `.cache` | `30d`, `400d`, `365d`, `90d` | |
 | `server.listen`, `server.admin_listen`, `server.trusted_proxies`, `server_name`, `max_parallel_downloads` | `:8443`, `127.0.0.1:9090`, —, —, `256` | HTTP listeners and proxy settings, §06 §6.2/§6.6.3 |
+| `server.outbound_allow` (`BOB_SERVER_OUTBOUND_ALLOW`) | — | host names, addresses and CIDR ranges that outgoing forge API calls and notification webhooks may reach although they are loopback, private, link-local, shared or reserved; every other such address is refused at connect time, after name resolution (I-R2 F8, A396) |
 
 Config changes that workers need (`fleet.*`, `log.*`) are published in `fleet/cfg.pr` by the
 orchestrators. The highest `fleet/cfg.g` wins. Workers read only `fleet/cfg`.

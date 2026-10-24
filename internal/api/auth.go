@@ -80,7 +80,7 @@ type WorkerAuthenticator interface {
 // "permission_denied: worker holds no lease on job j1"); the API boundary maps them with
 // errors.Is, so a wrapping prefix added on the way does not turn them into Internal.
 var (
-	ErrWorkerUnauthenticated   = errors.New("unauthenticated")
+	ErrWorkerUnauthenticated  = errors.New("unauthenticated")
 	ErrWorkerPermissionDenied = errors.New("permission_denied")
 )
 

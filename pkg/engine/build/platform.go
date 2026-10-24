@@ -284,7 +284,7 @@ func (r *runner) noteUncached(ctx context.Context, ix *indexes, g *ir.Graph, ent
 		if err != nil {
 			continue
 		}
-		out := e.Outputs[pickOutput(e.Outputs, "out")]
+		out := e.Outputs[engine.PickOutput(e.Outputs, "out")]
 		if _, err := os.Stat(hostPath(ix.st, out)); err == nil {
 			continue // already in bob's store: nothing to download or build
 		}

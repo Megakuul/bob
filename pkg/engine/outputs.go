@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -504,33 +503,15 @@ type Job struct {
 
 // Add finalises jb and records it; it returns the derivation's path and its "out" path.
 func (j *Jobs) Add(jb Job) (drvPath, out string, err error) {
-	spec := map[string]any{"v": 1, "kind": jb.Kind, "label": jb.Label, "outputs": []any{"out"}, "args": jb.Args,
-		"fixup": map[string]any{"strip": false, "debugOut": false, "shrinkRpath": false, "forbidden": []any{},
-			"tools": map[string]any{"strip": "", "objcopy": "", "patchelf": ""}}}
-	srcs := map[string]bool{j.req.Builder: true}
+	in := NewInputs(j.req.Builder)
 	for _, s := range jb.Srcs {
-		srcs[s] = true
+		in.AddSrc(s)
 	}
-	var ins []drv.InputDrv
 	for p, outs := range jb.Drvs {
-		o := slices.Clone(outs)
-		sort.Strings(o)
-		ins = append(ins, drv.InputDrv{Path: p, Outputs: slices.Compact(o)})
+		in.AddDrv(p, outs...)
 	}
-	sort.Slice(ins, func(a, b int) bool { return ins[a].Path < ins[b].Path })
-	job := drv.Job{Name: jb.Name, System: HostSystem(), Builder: j.req.Builder, Spec: spec, InputDrvs: ins,
-		InputSrcs: slices.Sorted(maps.Keys(srcs)), ExtraAttribute: map[string]any{"allowSubstitutes": false}}
-	if jb.Discard {
-		job.DiscardRefs = map[string]bool{"out": true}
-	}
-	d, err := job.Derivation()
-	if err != nil {
-		return "", "", err
-	}
-	if err := d.Finalize(j); err != nil {
-		return "", "", err
-	}
-	p, err := d.Path()
+	p, d, err := BuilderJob{Name: jb.Name, System: HostSystem(), Builder: j.req.Builder, Kind: jb.Kind, Label: jb.Label,
+		Args: jb.Args, Inputs: in, Discard: jb.Discard}.Finalize(j)
 	if err != nil {
 		return "", "", err
 	}
@@ -538,10 +519,5 @@ func (j *Jobs) Add(jb Job) (drvPath, out string, err error) {
 		j.own[p] = d
 		j.Drvs = append(j.Drvs, d)
 	}
-	for _, o := range d.Outputs {
-		if o.Name == "out" {
-			out = o.Path
-		}
-	}
-	return p, out, nil
+	return p, OutPath(d), nil
 }
