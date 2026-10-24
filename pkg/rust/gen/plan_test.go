@@ -356,7 +356,7 @@ func TestStale(t *testing.T) {
 		}
 	}
 	what, at, err := Ecosystem{}.Stale(context.Background(), engine.LockRequest{Graph: g, Prev: req.Lock})
-	if err != nil || !strings.Contains(what, "//core:core requires hex ^0.4") && !strings.Contains(what, "requires hex 0.4") {
+	if err != nil || what != "//core:core needs rust hex 0.4 (not pinned)" {
 		t.Fatalf("stale = %q (%v) at %v", what, err, at)
 	}
 }

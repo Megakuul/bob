@@ -52,6 +52,10 @@ type planner struct {
 	planBuilt int
 	// builtWhilePlanning are those derivations' paths: their packages are reported built.
 	builtWhilePlanning map[string]bool
+	// closures remembers Closure answers of this run by their sorted paths: the closure of a
+	// valid path never changes, and output generators ask for the same programs repeatedly.
+	closureMu sync.Mutex
+	closures  map[string]map[string][]string
 
 	nodes   map[string]engine.Resolved // node id → planned outputs
 	drvs    []*drv.Derivation          // every bob derivation, in planning order
@@ -659,11 +663,15 @@ func (s planStore) RealiseNow(ctx context.Context, drvs map[string]*drv.Derivati
 		add(p, d)
 	}
 	sort.Strings(paths)
-	list := make([]*drv.Derivation, 0, len(all))
-	for _, p := range sortedKeys(all) {
-		list = append(list, all[p])
+	if s.p != nil && s.f != nil {
+		// The derivations reference fetched inputs of earlier waves (module trees, crates,
+		// external sources) that the fetch stage after planning would make valid; a fresh
+		// store does not hold them yet, and importing a derivation needs them.
+		if err := ensureAll(ctx, s.f, s.p.fetches); err != nil {
+			return nil, err
+		}
 	}
-	if _, err := s.st.ImportDrvs(ctx, list); err != nil {
+	if _, err := s.st.ImportDrvsAt(ctx, all); err != nil {
 		return nil, err
 	}
 	var outs []string

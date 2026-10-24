@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
@@ -28,6 +29,37 @@ func (s planStore) Closure(ctx context.Context, outs []engine.PlanOutput) (map[s
 		byPath[o.Path] = o
 	}
 	sort.Strings(paths)
+	key := strings.Join(paths, "\x00")
+	if s.p != nil {
+		s.p.closureMu.Lock()
+		c, ok := s.p.closures[key]
+		s.p.closureMu.Unlock()
+		if ok {
+			return copyClosure(c), nil
+		}
+	}
+	res, err := s.closure(ctx, paths, byPath)
+	if err == nil && s.p != nil {
+		s.p.closureMu.Lock()
+		if s.p.closures == nil {
+			s.p.closures = map[string]map[string][]string{}
+		}
+		s.p.closures[key] = copyClosure(res)
+		s.p.closureMu.Unlock()
+	}
+	return res, err
+}
+
+func copyClosure(c map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(c))
+	for p, refs := range c {
+		out[p] = append([]string(nil), refs...)
+	}
+	return out
+}
+
+// closure is Closure without the memo.
+func (s planStore) closure(ctx context.Context, paths []string, byPath map[string]engine.PlanOutput) (map[string][]string, error) {
 	invalid, err := s.st.Invalid(ctx, paths)
 	if err != nil {
 		return nil, err

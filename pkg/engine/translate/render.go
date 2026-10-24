@@ -163,7 +163,8 @@ func Block(w io.Writer, e *diag.Error, hint string, s Style) {
 // R-CC-002a, §04 R-PLAT-006, §03.4.4): a package's invalid option (BOB-E-1020), a package that
 // does not support the requested platform (BOB-E-0006), the platform usage errors (0008, 0010, 0011, §04 R-PLAT-001/005), the nixpkgs mismatch (1026) and the npm runtime translations
 // (BOB-E-2013, BOB-E-2014). A definition error without a code of its
-// own (option "build definition") shows its reason, since `-->` gives the position. Every other
+// own (option "build definition") shows its reason, prefixed with its position when it names
+// no package (a package's error names the label in the reason). Every other
 // error keeps the `error[CODE]:` head of the S15 goldens.
 func definitionLine(e *diag.Error) (string, bool) {
 	if e.Severity == diag.SeverityWarning {
@@ -174,6 +175,12 @@ func definitionLine(e *diag.Error) (string, bool) {
 		return e.Error(), true
 	case 1020:
 		if e.Args["option"] == "build definition" && e.Location != nil && e.Args["reason"] != "" {
+			if e.Label == "" && e.Location.Line > 0 {
+				// A position in a bob.go and no package (compiler and type errors, misuse of
+				// the API): `<file>:<line>[:<col>]: <message>` as SPEC writes them (R-FW-043
+				// (c), R-FW-032, R-FW-011, R-FW-015) and as Go itself prints them.
+				return PosString(*e.Location) + ": " + e.Args["reason"], true
+			}
 			return e.Args["reason"], true
 		}
 		return e.Error(), true

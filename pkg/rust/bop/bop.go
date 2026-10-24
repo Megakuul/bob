@@ -18,7 +18,7 @@ import (
 )
 
 // Kinds returns the Rust job kinds (SPEC §03.0.4); cmd/bob-builder adds them to builder.Core().
-// rustc writes deterministic, stripped outputs (-C strip=debuginfo, remapped paths), so the
+// rustc writes deterministic outputs (remapped paths; release strips debuginfo), so the
 // fixup is skipped and rlib bytes stay exactly what the compiler wrote.
 func Kinds() map[string]builder.Kind {
 	return map[string]builder.Kind{
@@ -109,8 +109,14 @@ func rustcArgv(a *RustcArgs, o string) ([]string, map[string]string, error) {
 	} else {
 		argv = append(argv, "--crate-type", a.CrateType)
 	}
-	argv = append(argv, filepath.Join(a.Src, a.Root), "--emit=link", "-C", "opt-level="+a.OptLevel,
-		"-C", "metadata="+a.Metadata, "-C", "strip=debuginfo", "--remap-path-prefix", a.Src+"="+a.Remap)
+	argv = append(argv, filepath.Join(a.Src, a.Root), "--emit=link", "-C", "opt-level="+a.OptLevel, "-C", "metadata="+a.Metadata)
+	if a.Debug {
+		// The debug profile (R-FW-038): debuginfo (paths remapped below) and debug assertions.
+		argv = append(argv, "-C", "debuginfo=2", "-C", "debug-assertions=on")
+	} else {
+		argv = append(argv, "-C", "strip=debuginfo")
+	}
+	argv = append(argv, "--remap-path-prefix", a.Src+"="+a.Remap)
 	if a.OutName != "" {
 		argv = append(argv, "-o", filepath.Join(dir, a.OutName))
 	} else {

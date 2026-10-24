@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -39,17 +40,26 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return res, err
 	}
+	if !r.hinted {
+		defer startHint(ctx, st, o)()
+	}
 
 	f := fetch.New(st, fetch.Policy{})
 	// scan + eval: eval.Evaluate scans and evaluates in one call and reports the scan's share.
 	t := time.Now()
-	goRoot, err := r.evalGoRoot(ctx, st, f)
-	if err != nil {
-		r.emit(Event{Event: StageScan})
-		r.emit(Event{Event: StageEval, DurationMs: time.Since(t).Milliseconds()})
-		return res, err
+	var ev *eval.Result
+	if pe := r.evaluated; pe != nil && slices.Equal(pe.req.Patterns, targets(o)) && pe.req.Root == o.Root &&
+		pe.req.Untrusted == o.Untrusted && pe.req.Strict == o.Strict {
+		ev = pe.res // the command's earlier phase evaluated exactly this (runAfter)
+	} else {
+		goRoot, gerr := r.evalGoRoot(ctx, st, f)
+		if gerr != nil {
+			r.emit(Event{Event: StageScan})
+			r.emit(Event{Event: StageEval, DurationMs: time.Since(t).Milliseconds()})
+			return res, gerr
+		}
+		ev, err = eval.Evaluate(ctx, evalRequest(o, goRoot))
 	}
-	ev, err := eval.Evaluate(ctx, evalRequest(o, goRoot))
 	total := time.Since(t)
 	scanE, evalE := Event{Event: StageScan}, Event{Event: StageEval, DurationMs: total.Milliseconds()}
 	if ev != nil {
@@ -136,13 +146,16 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 
 	var imported int
 	if err := r.stage(StageDrv, func() (err error) {
-		drvs := p.drvs
+		drvs := make(map[string]*drv.Derivation, len(p.byPath)+len(units))
+		for dp, d := range p.byPath {
+			drvs[dp] = d
+		}
 		for _, u := range units {
 			if p.byPath[u.DrvPath] == nil {
-				drvs = append(drvs, u.Drv)
+				drvs[u.DrvPath] = u.Drv
 			}
 		}
-		imported, err = st.ImportDrvs(ctx, drvs)
+		imported, err = st.ImportDrvsAt(ctx, drvs)
 		recordDrvCache(st, g, p)
 		return err
 	}); err != nil {
@@ -272,7 +285,7 @@ func (r *runner) indexStage(ctx context.Context, st *store.Store, f fetch.Fetche
 	if err != nil {
 		return nil, nil, err
 	}
-	idx, err := nixidx.Open(ctx, st, nixidx.Config{Source: src, Rev: lf.Nixpkgs.Rev, System: store.HostSystem()})
+	idx, err := r.hostIndex(ctx, st, src, lf.Nixpkgs.Rev)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -290,6 +303,7 @@ func (r *runner) indexStage(ctx context.Context, st *store.Store, f fetch.Fetche
 
 // ensureAll makes every fetched input valid, at most 8 downloads at a time (R-FW-049).
 func ensureAll(ctx context.Context, f fetch.Fetcher, reqs []fetch.Request) error {
+	_ = fetch.CheckValid(ctx, f, reqs) // one validity batch; Ensure reports any real failure
 	var (
 		mu   sync.Mutex
 		errs []error
@@ -430,6 +444,76 @@ func (r *runner) collect(ctx context.Context, st *store.Store, g *ir.Graph, p *p
 		}
 		res.Packages = append(res.Packages, pkg)
 	}
+	r.depsCached = r.cachedDeps(ctx, st, g, p, res, targets, status)
+}
+
+// cachedDeps returns the bob packages a successful run needed below the requested ones that
+// Nix had nothing to do for (already in the store), sorted: they still get a package.finish
+// event with status cached (and their paths with --print-paths, §02.4) like a dependency Nix
+// downloaded. Only packages whose outputs are all valid count; requested packages and those
+// the translator reported are left out (they have their own event). Counts are unchanged.
+func (r *runner) cachedDeps(ctx context.Context, st *store.Store, g *ir.Graph, p *planner, res *Result, targets []string, status map[string]string) []string {
+	if res.Report.ExitCode != 0 {
+		return nil
+	}
+	requested := map[string]bool{}
+	reported := map[string]bool{}
+	for _, l := range targets {
+		requested[l], reported[l] = true, true
+	}
+	for l := range status {
+		reported[l] = true
+	}
+	byID := nodesByID(g)
+	seen := map[string]bool{}
+	var queue []string
+	for _, n := range g.Nodes {
+		if requested[n.Label] {
+			queue = append(queue, n.ID)
+		}
+	}
+	outs := map[string][]string{} // label → output store paths
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		n := byID[id]
+		if n == nil || seen[id] {
+			continue
+		}
+		seen[id] = true
+		queue = append(queue, n.Deps...)
+		rv := p.nodes[id]
+		if reported[n.Label] || n.Nix != nil || p.byPath[rv.Drv] == nil {
+			continue
+		}
+		for _, o := range rv.Outputs {
+			outs[n.Label] = append(outs[n.Label], o)
+		}
+	}
+	var all []string
+	for _, paths := range outs {
+		all = append(all, paths...)
+	}
+	missing, err := st.Invalid(ctx, all) // one batch for every label
+	if err != nil {
+		return nil
+	}
+	bad := map[string]bool{}
+	for _, sp := range missing {
+		bad[sp] = true
+	}
+	var labels []string
+	for l, paths := range outs {
+		ok := true
+		for _, sp := range paths {
+			ok = ok && !bad[sp]
+		}
+		if ok {
+			labels = append(labels, l)
+		}
+	}
+	sort.Strings(labels)
+	return labels
 }
 
 // untouchedInvalid reports, for a run that exited non-zero, the requested labels Nix reported

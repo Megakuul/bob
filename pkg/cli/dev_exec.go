@@ -116,7 +116,8 @@ func runIn(e *env, home string, cmd *exec.Cmd, tool string) int {
 }
 
 // ensureClosure realises the dev shell's packages when a path is missing (a garbage-collected
-// or never realised store): the shim works on the first use after a fresh clone.
+// or never realised store): the shim works on the first use after a fresh clone, also with a
+// store that does not hold the derivations (their outputs are then substituted).
 func ensureClosure(e *env, root string, f *devenv.File, read func(string) string) error {
 	var drvs []string
 	for _, p := range f.Closure {
@@ -126,6 +127,11 @@ func ensureClosure(e *env, root string, f *devenv.File, read func(string) string
 		d, ok := f.Drvs[p]
 		if !ok {
 			return diag.New(7006, "shim", devenv.ShimDir(root), "root", root)
+		}
+		if _, err := os.Lstat(read(d)); err != nil {
+			// Another store than the one bob env wrote the derivations to (a new bob home):
+			// realising the output path substitutes it from the binary caches.
+			d = p
 		}
 		drvs = append(drvs, d)
 	}

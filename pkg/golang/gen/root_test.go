@@ -66,17 +66,54 @@ func TestRootGoMod(t *testing.T) {
 // requires (I-M5b NEEDS 2); nothing for a graph without a module or a framework version.
 func TestRootGoSum(t *testing.T) {
 	sum := "github.com/megakuul/bob v0.0.0-dev h1:AAA=\ngithub.com/megakuul/bob v0.0.0-dev/go.mod h1:BBB=\n"
-	f, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v0.0.0-dev"}, sum)
+	f, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v0.0.0-dev"}, "", sum)
 	if !ok || f.Path != "go.sum" || !f.Committed || string(f.Content) != sum {
 		t.Fatalf("RootGoSum = %+v, %v", f, ok)
 	}
 	if d := f.Explain([]byte(sum)); len(d) != 0 {
 		t.Errorf("unchanged go.sum is drift: %v", d)
 	}
-	if _, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v1.0.0"}, sum); ok {
+	if _, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v1.0.0"}, "", sum); ok {
 		t.Error("lines of another framework version were used")
 	}
-	if _, ok := RootGoSum(&ir.Graph{BobVersion: "v0.0.0-dev"}, sum); ok {
+	if _, ok := RootGoSum(&ir.Graph{BobVersion: "v0.0.0-dev"}, "", sum); ok {
 		t.Error("a graph without a module got a go.sum")
+	}
+}
+
+// TestRootGoSumImports: a bob.Import module the Go module cache holds gets its go.sum lines
+// from the cache's download records (R-FW-022); one not downloaded gets none.
+func TestRootGoSumImports(t *testing.T) {
+	root, cache := t.TempDir(), t.TempDir()
+	t.Setenv("GOMODCACHE", cache)
+	writeTree(t, root, map[string]string{
+		"go.mod": "module example.com/app\n\ngo 1.26.0\n",
+		"bob.go": "//go:build bob\n\npackage app\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Import(\"example.com/Dep\", \"v1.0.0\")\n\nvar _ = bob.Import(\"example.com/missing\", \"v1.0.0\")\n",
+	})
+	gomod := []byte("module example.com/Dep\n")
+	writeTree(t, cache, map[string]string{
+		"cache/download/example.com/!dep/@v/v1.0.0.ziphash": "h1:ZZZ=\n",
+		"cache/download/example.com/!dep/@v/v1.0.0.mod":     string(gomod),
+	})
+	f, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v1.0.0"}, root, "")
+	want := "example.com/Dep v1.0.0 h1:ZZZ=\nexample.com/Dep v1.0.0/go.mod " + resolve.ModH1(gomod) + "\n"
+	if !ok || string(f.Content) != want {
+		t.Fatalf("RootGoSum = %q, %v; want %q", f.Content, ok, want)
+	}
+}
+
+// TestRootGoSumKeepsImportLines: a bob.Import module the module cache does not hold keeps the
+// lines the root go.sum already has (the file does not depend on one machine's cache).
+func TestRootGoSumKeepsImportLines(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GOMODCACHE", t.TempDir())
+	writeTree(t, root, map[string]string{
+		"go.mod": "module example.com/app\n\ngo 1.26.0\n",
+		"go.sum": "example.com/dep v1.0.0 h1:AAA=\nexample.com/dep v1.0.0/go.mod h1:BBB=\nexample.com/old v1.0.0 h1:CCC=\n",
+		"bob.go": "//go:build bob\n\npackage app\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Import(\"example.com/dep\", \"v1.0.0\")\n",
+	})
+	f, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v1.0.0"}, root, "")
+	if want := "example.com/dep v1.0.0 h1:AAA=\nexample.com/dep v1.0.0/go.mod h1:BBB=\n"; !ok || string(f.Content) != want {
+		t.Fatalf("RootGoSum = %q, %v; want %q", f.Content, ok, want)
 	}
 }

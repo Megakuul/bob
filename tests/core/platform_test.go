@@ -474,8 +474,12 @@ func TestRFW034RustTargetStd(t *testing.T) {
 	if !ok {
 		return
 	}
+	// nixpkgs' own rustc-src and bootstrap fetches from static.rust-lang.org are in the closure
+	// of legacyPackages.<sys>.rustc.unwrapped, which R-FW-034 prescribes; what must never
+	// appear is a bob derivation fetching from there or any upstream rust-std tarball (T10).
+	ours := bobDrvs(all)
 	for name, d := range all {
-		if strings.Contains(fmt.Sprint(d.Env, d.Args, d.Structured), "static.rust-lang.org") {
+		if s := fmt.Sprint(d.Env, d.Args, d.Structured); strings.Contains(s, "static.rust-lang.org") && (ours[name] != nil || strings.Contains(s, "rust-std")) {
 			t.Errorf("derivation %s fetches from static.rust-lang.org", name)
 		}
 	}
@@ -882,13 +886,15 @@ func TestRFW038DerivationNames(t *testing.T) {
 		return
 	}
 	names := drvNamesWith(all, "cc-foo")
-	re := regexp.MustCompile(`^[0-9a-z]{32}-cc-foo-` + regexp.QuoteMeta(other) + `-address\.drv$`)
+	// polyglot's named variant asan is ASan + UBSan + Debug (fixture bob.go), so the tag is
+	// dbg-address-undefined in R-FW-038's canonical order (T11).
+	re := regexp.MustCompile(`^[0-9a-z]{32}-cc-foo-` + regexp.QuoteMeta(other) + `-dbg-address-undefined\.drv$`)
 	found := false
 	for _, n := range names {
 		found = found || re.MatchString(n)
 	}
 	if !found {
-		t.Errorf("no derivation named cc-foo-%s-address among %v", other, names)
+		t.Errorf("no derivation named cc-foo-%s-dbg-address-undefined among %v", other, names)
 	}
 	for n, d := range bobDrvs(all) {
 		if len(d.Name) > 200 {

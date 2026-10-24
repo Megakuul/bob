@@ -243,10 +243,26 @@ func (r *runner) realise(ctx context.Context, st *store.Store, g *ir.Graph, p *p
 	}
 
 	installables := r.installables(g, p, units, cached)
+	var outs []string // every planned output: the validity stage checks them all
+	for _, d := range p.byPath {
+		for _, o := range d.Outputs {
+			outs = append(outs, o.Path)
+		}
+	}
+	for _, u := range units {
+		outs = append(outs, u.Out)
+	}
 	var outcome translate.Outcome
 	outcome.NixVersion = nixVersion
 	err := r.stage(StageNix, func() error {
 		if len(installables) == 0 {
+			return nil
+		}
+		if done, err := allValid(ctx, st, p, units, installables, outs); err != nil {
+			return err
+		} else if done {
+			// Nix would have nothing to do (A311): skip its start; the validity stage below
+			// still decides success (R-NIX-018).
 			return nil
 		}
 		args := []string{"build", "--no-link", "--print-out-paths", "--log-format", "internal-json", "-L"}
@@ -277,15 +293,6 @@ func (r *runner) realise(ctx context.Context, st *store.Store, g *ir.Graph, p *p
 		return nil, err
 	}
 	err = r.stage(StageValidity, func() error {
-		var outs []string
-		for _, d := range p.byPath {
-			for _, o := range d.Outputs {
-				outs = append(outs, o.Path)
-			}
-		}
-		for _, u := range units {
-			outs = append(outs, u.Out)
-		}
 		invalid, err := st.Invalid(ctx, outs)
 		if err != nil {
 			return err
@@ -308,6 +315,54 @@ func (r *runner) realise(ctx context.Context, st *store.Store, g *ir.Graph, p *p
 	var rep *translate.Report
 	_ = r.stage(StageTranslate, func() error { rep = tr.Finish(outcome); return nil })
 	return rep, nil
+}
+
+// allValid reports whether every output the installables name is valid already, so that
+// `nix build` would build and substitute nothing. It asks about all of outs in the same
+// batch (the validity stage then needs no new Nix call for the valid ones). An installable
+// whose outputs are not known here counts as not valid.
+func allValid(ctx context.Context, st *store.Store, p *planner, units []testrun.Unit, installables, outs []string) (bool, error) {
+	unitOut := map[string]string{}
+	for _, u := range units {
+		unitOut[u.DrvPath] = u.Out
+	}
+	var want []string
+	for _, in := range installables {
+		dp, names, ok := strings.Cut(in, "^")
+		if !ok {
+			return false, nil
+		}
+		for _, name := range strings.Split(names, ",") {
+			sp := ""
+			if d := p.byPath[dp]; d != nil {
+				for _, o := range d.Outputs {
+					if o.Name == name {
+						sp = o.Path
+					}
+				}
+			} else if name == "out" {
+				sp = unitOut[dp]
+			}
+			if sp == "" {
+				return false, nil
+			}
+			want = append(want, sp)
+		}
+	}
+	invalid, err := st.Invalid(ctx, append(want, outs...))
+	if err != nil {
+		return false, err
+	}
+	bad := map[string]bool{}
+	for _, o := range invalid {
+		bad[o] = true
+	}
+	for _, sp := range want {
+		if bad[sp] {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // testDrvOf is the planned test-run derivation of label (for a --rerun unit).

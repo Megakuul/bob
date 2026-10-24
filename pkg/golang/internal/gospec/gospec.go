@@ -54,10 +54,11 @@ const (
 
 // Build is what binaries and test units share: where the C toolchain and the cgo packages are.
 type Build struct {
-	Module int      `json:"module"` // dep index of the go.module node
-	CC     int      `json:"cc"`     // dep index of the C compiler tool, -1 = none (cgo off)
-	Cgo    []int    `json:"cgo"`    // dep indices of the module's go.package nodes known at evaluation
-	Tags   []string `json:"tags"`   // added to the module's tags
+	Module int      `json:"module"`          // dep index of the go.module node
+	CC     int      `json:"cc"`              // dep index of the C compiler tool, -1 = none (cgo off)
+	CCLib  int      `json:"ccLib,omitempty"` // dep index of the cross compiler's lib output (sanitised cross builds); 0 = none (0 is the module)
+	Cgo    []int    `json:"cgo"`             // dep indices of the module's go.package nodes known at evaluation
+	Tags   []string `json:"tags"`            // added to the module's tags
 	CGo    string   `json:"cgoMode"`
 }
 

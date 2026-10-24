@@ -12,6 +12,7 @@ import (
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/cli/remote"
+	"github.com/megakuul/bob/pkg/engine/store"
 )
 
 // refreshBefore: a token that expires within this window is refreshed before a server call
@@ -214,6 +215,39 @@ func (e *env) preCheck(ctx context.Context) (skip map[string]bool, warns []*diag
 		}
 	}
 	return skip, warns, nil
+}
+
+// envTokenCache is the cache of the command's server (--server, BOB_SERVER or the default)
+// when bob authenticates with BOB_TOKEN alone and that server has no stored login (CI,
+// scripts): without it a remote build could not substitute its outputs (R-DEV-005, A295).
+// WhoAmI is its credential pre-check (R-NIX-029, same outcomes as preCheck) and returns the
+// cache configuration; nothing is written to the credentials file.
+func (e *env) envTokenCache(ctx context.Context, c *credFile) (*store.Substituter, *diag.Error, error) {
+	tok := strings.TrimSpace(e.getenv("BOB_TOKEN"))
+	if tok == "" || strings.ContainsAny(tok, " \t\r\n#") {
+		return nil, nil, nil
+	}
+	server, err := e.serverURL("")
+	if err != nil || server == "" {
+		return nil, nil, nil // commands without a server do not need its cache
+	}
+	if c != nil && c.Servers[server] != nil {
+		return nil, nil, nil // a stored login: preCheck and substituters cover it
+	}
+	who, err := e.api(server, tok).WhoAmI(ctx)
+	if err != nil {
+		d := apiDiag(server, remote.WhoAmIMethod, "", err)
+		if d.Code == 4009 {
+			return nil, warning(d), nil
+		}
+		return nil, nil, d
+	}
+	n := cleanNix(server, who.Nix)
+	if n == nil {
+		return nil, nil, nil
+	}
+	return &store.Substituter{URL: n.Substituter, PublicKey: strings.Join(n.PublicKeys, " "),
+		NetrcMachine: netrcHost(n.Substituter), NetrcPassword: tok}, nil, nil
 }
 
 // warning turns an error diagnostic into a warning.

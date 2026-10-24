@@ -21,6 +21,9 @@ func TestDefinitionLine(t *testing.T) {
 	opam := diag.New(1015, "ecosystem", "opam", "root", "//app:app", "reason", `ocaml-lsp-server.1.26.0 needs dune-rpc >= "3.22.0": no available version matches`)
 	golang := diag.New(1015, "ecosystem", "Go", "root", "this repository", "reason", "boom")
 	cycle := diag.New(1006, "cycle", "//a:a → //a:a")
+	typeErr := diag.New(1020, "label", "cmd/api/bob.go:31:13", "option", "build definition",
+		"reason", `cannot use "x" (untyped string constant) as int value in variable declaration`)
+	typeErr.Label, typeErr.Location = "", &diag.Pos{File: "cmd/api/bob.go", Line: 31, Col: 13}
 
 	cases := []struct {
 		e    *diag.Error
@@ -39,6 +42,10 @@ func TestDefinitionLine(t *testing.T) {
 		{opam, []string{`✗ cannot resolve opam packages: ocaml-lsp-server.1.26.0 needs dune-rpc >= "3.22.0": no available version matches`}},
 		{golang, []string{"error[BOB-E-1015]: cannot resolve Go dependencies for this repository: boom"}},
 		{cycle, []string{"error[BOB-E-1006]: dependency cycle: //a:a → //a:a"}},
+		{typeErr, []string{ // R-FW-043 (c): a compiler message keeps Go's position prefix
+			`✗ cmd/api/bob.go:31:13: cannot use "x" (untyped string constant) as int value in variable declaration`,
+			"  --> cmd/api/bob.go:31:13",
+		}},
 	}
 	for _, c := range cases {
 		var b strings.Builder

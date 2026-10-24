@@ -91,6 +91,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	if under.cgo() {
 		tca.CFlags = cl.ctx.v.cflags()
 	}
+	tca.CFlags = append(tca.CFlags, t.sanitiserRunpath(cl.ctx, in)...)
 	tca.GCFlags = cl.ctx.v.gcflags()
 	in.addDrv(res.stdD, res.stdDrv)
 	if under.ref.kind == refWorkspace {

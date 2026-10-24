@@ -27,6 +27,7 @@ type RustcArgs struct {
 	Features   []string          `json:"features"`
 	Metadata   string            `json:"metadata"` // -C metadata (and the file suffix of libs)
 	OptLevel   string            `json:"optLevel"`
+	Debug      bool              `json:"debug,omitempty"` // debug profile: -C debuginfo=2 -C debug-assertions=on, no strip
 	CapLints   bool              `json:"capLints"`
 	CheckCfg   bool              `json:"checkCfg"`   // --check-cfg for the features (local crates)
 	FeatureSet []string          `json:"featureSet"` // every feature of the crate (check-cfg values)

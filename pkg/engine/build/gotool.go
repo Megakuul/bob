@@ -2,9 +2,17 @@ package build
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/lock"
@@ -38,21 +46,41 @@ func (r *runner) evalGoRoot(ctx context.Context, st *store.Store, f fetch.Fetche
 	}
 	pin := lf.Nixpkgs
 	if pin.Rev == "" {
-		if pin, err = lock.PinNixpkgs(ctx, f, decl, lock.NixpkgsPin{}, false, nil); err != nil {
+		// The channel's current revision is asked every time (update = true); the
+		// remembered pin only spares the download that records the narHash when the
+		// revision did not move (A292).
+		known := readPinMemo(st.Home(), decl)
+		if pin, err = lock.PinNixpkgs(ctx, f, decl, known, known.Rev != "", nil); err != nil {
 			return "", err
 		}
+		writePinMemo(st.Home(), decl, pin)
 		r.transientPin = pin
 	}
-	return nixpkgsGo(ctx, st, f, pin)
+	return r.nixpkgsGo(ctx, st, f, pin)
 }
 
 // nixpkgsGo realises nixpkgs' go at pin and returns its GOROOT as the host sees it.
-func nixpkgsGo(ctx context.Context, st *store.Store, f fetch.Fetcher, pin lock.NixpkgsPin) (string, error) {
-	src, err := f.Ensure(ctx, lock.NixpkgsRequest(pin))
+//
+// An earlier run's answer is remembered per revision (the go memo, A313): when its output is
+// valid (checked with Nix, in one batch with the nixpkgs source for the stages after), the
+// evaluator's Go costs one Nix call and no index. Otherwise the index resolves go, the source
+// is made valid when the index needs it, and go is realised.
+func (r *runner) nixpkgsGo(ctx context.Context, st *store.Store, f fetch.Fetcher, pin lock.NixpkgsPin) (string, error) {
+	req := lock.NixpkgsRequest(pin)
+	src, err := fetch.StorePath(req)
 	if err != nil {
 		return "", err
 	}
-	idx, err := nixidx.Open(ctx, st, nixidx.Config{Source: src, Rev: pin.Rev, System: store.HostSystem()})
+	memo := goMemoPath(st.Home(), pin.Rev)
+	if out := readGoMemo(memo); out != "" {
+		if missing, err := st.Invalid(ctx, []string{src, out}); err == nil && !slices.Contains(missing, out) {
+			return path.Join(hostPath(st, out), "share", "go"), nil
+		}
+	}
+	if _, err := f.Ensure(ctx, req); err != nil {
+		return "", err
+	}
+	idx, err := r.hostIndex(ctx, st, src, pin.Rev)
 	if err != nil {
 		return "", err
 	}
@@ -73,5 +101,102 @@ func nixpkgsGo(ctx context.Context, st *store.Store, f fetch.Fetcher, pin lock.N
 			return "", internalf("nixpkgs:go", "realising go: %v", err)
 		}
 	}
+	writeGoMemo(memo, out)
 	return path.Join(hostPath(st, out), "share", "go"), nil
+}
+
+// goMemoPath is the go memo of nixpkgs revision rev on this system: the output path of go,
+// written by bob from its nixpkgs index (the same trust as the index's cache file). A wrong or
+// stale memo only costs the batch: the output is used only when Nix reports it valid, and a
+// valid store path holds what its name says.
+func goMemoPath(home, rev string) string {
+	h := sha256.Sum256([]byte(rev + "\x00" + store.HostSystem()))
+	return filepath.Join(home, "cache", "nixpkgs", "go-"+hex.EncodeToString(h[:8]))
+}
+
+// readGoMemo returns the remembered go output ("" when there is none or it is malformed).
+func readGoMemo(file string) string {
+	b, err := os.ReadFile(file)
+	if err != nil || len(b) > 512 {
+		return ""
+	}
+	out := strings.TrimSpace(string(b))
+	if !storePathRe().MatchString(out) {
+		return ""
+	}
+	return out
+}
+
+// writeGoMemo is best effort (without it the next run asks the index) and skipped when the
+// memo is current.
+func writeGoMemo(file, out string) {
+	if readGoMemo(file) == out {
+		return
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(file), ".go-")
+	if err != nil {
+		return
+	}
+	_, werr := tmp.WriteString(out + "\n")
+	cerr := tmp.Close()
+	if werr != nil || cerr != nil || os.Rename(tmp.Name(), file) != nil {
+		_ = os.Remove(tmp.Name())
+	}
+}
+
+// storePathRe is the shape of a store path (the go memo's content).
+var storePathRe = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^/nix/store/[0-9a-df-np-sv-z]{32}-[A-Za-z0-9+._?=-]+$`)
+})
+
+// hostIndex opens the host system's nixpkgs index of rev (source src) once per run: the
+// evaluator's Go and the index stage share it (its cache file is read once).
+func (r *runner) hostIndex(ctx context.Context, st *store.Store, src, rev string) (*nixidx.Index, error) {
+	if r.idx != nil && r.idxSrc == src && r.idxRev == rev {
+		return r.idx, nil
+	}
+	idx, err := nixidx.Open(ctx, st, nixidx.Config{Source: src, Rev: rev, System: store.HostSystem()})
+	if err != nil {
+		return nil, err
+	}
+	r.idx, r.idxSrc, r.idxRev = idx, src, rev
+	return idx, nil
+}
+
+// The nixpkgs pin memo (A292): a build without a pinned bob.lock (a remote job's fresh source
+// snapshot, every time) pins the channel's current revision, which downloads and unpacks the
+// whole nixpkgs tree only to record its narHash (lock.PinNixpkgs), about 30 s per build. The
+// last pin per declaration is kept below the store's state home; it is used only for the same
+// revision; the source is still fetched by that narHash, so a wrong memo can only fail the
+// fetch (narHash mismatch), never bring other content.
+func pinMemoPath(home, decl string) string {
+	h := sha256.Sum256([]byte(decl))
+	return filepath.Join(home, "cache", "nixpkgs", "pin-"+hex.EncodeToString(h[:8])+".json")
+}
+
+func readPinMemo(home, decl string) lock.NixpkgsPin {
+	var p lock.NixpkgsPin
+	b, err := os.ReadFile(pinMemoPath(home, decl))
+	if err != nil || len(b) > 64<<10 || json.Unmarshal(b, &p) != nil {
+		return lock.NixpkgsPin{}
+	}
+	return p
+}
+
+// writePinMemo is best effort: without it the next build downloads again.
+func writePinMemo(home, decl string, p lock.NixpkgsPin) {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return
+	}
+	dst := pinMemoPath(home, decl)
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".pin-")
+	if err != nil {
+		return
+	}
+	_, werr := tmp.Write(b)
+	cerr := tmp.Close()
+	if werr != nil || cerr != nil || os.Rename(tmp.Name(), dst) != nil {
+		_ = os.Remove(tmp.Name())
+	}
 }

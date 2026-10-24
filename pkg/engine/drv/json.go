@@ -11,8 +11,103 @@ import (
 )
 
 // normalise turns v into the generic JSON value tree (map[string]any, []any, string, bool,
-// json.Number, nil) by a JSON round trip, so struct tags and json.RawMessage apply.
+// json.Number, nil) as a JSON round trip does, so struct tags and json.RawMessage apply.
+// Values that already are such a tree (with Go integers) are converted directly, which is
+// what derivations mostly hold (A315: the round trip was a fifth of a no-op's CPU); every
+// other value takes the round trip, with the same result.
 func normalise(v any) (any, error) {
+	switch x := v.(type) {
+	case nil:
+		return nil, nil
+	case bool:
+		return x, nil
+	case string:
+		if utf8.ValidString(x) {
+			return x, nil
+		}
+	case int:
+		return json.Number(strconv.FormatInt(int64(x), 10)), nil
+	case int64:
+		return json.Number(strconv.FormatInt(x, 10)), nil
+	case int32:
+		return json.Number(strconv.FormatInt(int64(x), 10)), nil
+	case uint:
+		return json.Number(strconv.FormatUint(uint64(x), 10)), nil
+	case uint64:
+		return json.Number(strconv.FormatUint(x, 10)), nil
+	case uint32:
+		return json.Number(strconv.FormatUint(uint64(x), 10)), nil
+	case []any:
+		if x == nil {
+			return nil, nil
+		}
+		out := make([]any, len(x))
+		for i, e := range x {
+			n, err := normalise(e)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = n
+		}
+		return out, nil
+	case []string:
+		if x == nil {
+			return nil, nil
+		}
+		out := make([]any, len(x))
+		for i, e := range x {
+			n, err := normalise(e)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = n
+		}
+		return out, nil
+	case map[string]any:
+		if x == nil {
+			return nil, nil
+		}
+		if validKeys(x) {
+			out := make(map[string]any, len(x))
+			for k, e := range x {
+				n, err := normalise(e)
+				if err != nil {
+					return nil, err
+				}
+				out[k] = n
+			}
+			return out, nil
+		}
+	case map[string]string:
+		if x == nil {
+			return nil, nil
+		}
+		if validKeys(x) {
+			out := make(map[string]any, len(x))
+			for k, e := range x {
+				n, err := normalise(e)
+				if err != nil {
+					return nil, err
+				}
+				out[k] = n
+			}
+			return out, nil
+		}
+	}
+	return roundTrip(v)
+}
+
+func validKeys[V any](m map[string]V) bool {
+	for k := range m {
+		if !utf8.ValidString(k) {
+			return false
+		}
+	}
+	return true
+}
+
+// roundTrip is normalise by encoding/json.
+func roundTrip(v any) (any, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err

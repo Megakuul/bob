@@ -164,7 +164,17 @@ func (p *Projects) Project(ctx context.Context, id string) (*buildctl.Project, e
 // creates the project without a repository (decision D-IB13-1). The caller is authorized for
 // CreateBuild on that id; the record grants nothing, bindings are by id.
 func (p *Projects) ForUpload(ctx context.Context, id string) (*buildctl.Project, error) {
-	if _, err := p.Create(ctx, Spec{ID: id, Description: "created by a remote build"}); err != nil && !errors.Is(err, ErrExists) {
+	for round := 1; ; round++ {
+		_, err := p.Create(ctx, Spec{ID: id, Description: "created by a remote build"})
+		if err == nil || errors.Is(err, ErrExists) {
+			break
+		}
+		// Concurrent first builds of one project (a CI fan-out) all find no project and all
+		// create it; the losers' slot or index CAS can run out of rounds. Create reads the
+		// record first, so a repeat ends with ErrExists once the winner wrote it (A297).
+		if errors.Is(err, store.ErrConflict) && round < uploadCreateRounds && ctx.Err() == nil {
+			continue
+		}
 		var inv *InvalidError
 		if errors.As(err, &inv) {
 			return nil, buildctl.ErrNoProject
@@ -173,6 +183,9 @@ func (p *Projects) ForUpload(ctx context.Context, id string) (*buildctl.Project,
 	}
 	return p.Project(ctx, id)
 }
+
+// uploadCreateRounds bounds the implicit project creation of ForUpload under contention.
+const uploadCreateRounds = 8
 
 // Health is the link health of a project; it reads the integration's health (one
 // conditional GET) when the project has a link.

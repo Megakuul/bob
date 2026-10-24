@@ -457,13 +457,17 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 		return nil, fmt.Errorf("%w: %d running builds (the limit of bidx/running)", ErrLimit, MaxRunningBuilds)
 	}
 	now := b.now()
-	ctr, err := store.CAS(ctx, b.cfg.Control, &store.ProjectCounters{Project: store.ID(r.Project)}, func(cur *store.ProjectCounters) (*store.ProjectCounters, error) {
-		next, builds := store.ProjectCounters{Project: store.ID(r.Project)}, uint64(0)
-		if cur != nil {
-			next, builds = *cur, cur.Builds.Value()
-		}
-		next.Builds = store.Set(builds + 1)
-		return &next, nil
+	var ctr *store.ProjectCounters
+	err = retryConflict(ctx, func() (err error) {
+		ctr, err = store.CAS(ctx, b.cfg.Control, &store.ProjectCounters{Project: store.ID(r.Project)}, func(cur *store.ProjectCounters) (*store.ProjectCounters, error) {
+			next, builds := store.ProjectCounters{Project: store.ID(r.Project)}, uint64(0)
+			if cur != nil {
+				next, builds = *cur, cur.Builds.Value()
+			}
+			next.Builds = store.Set(builds + 1)
+			return &next, nil
+		})
+		return err
 	})
 	if err != nil {
 		return nil, fmt.Errorf("pctr/%s: %w", r.Project, err)
@@ -497,16 +501,20 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 		entry.Commit = entry.Commit[:12]
 	}
 	writes := []<-chan error{
-		safe.Go(func() error { return b.setRunning(ctx, id, store.RunningBuild{Project: r.Project, N: n}) }),
 		safe.Go(func() error {
-			if err := b.buildPages(r.Project).Set(ctx, n-1, entry); err != nil {
+			return retryConflict(ctx, func() error { return b.setRunning(ctx, id, store.RunningBuild{Project: r.Project, N: n}) })
+		}),
+		safe.Go(func() error {
+			if err := retryConflict(ctx, func() error { return b.buildPages(r.Project).Set(ctx, n-1, entry) }); err != nil {
 				return fmt.Errorf("bpage: %w", err)
 			}
 			return nil
 		}),
 	}
 	if ref := refOf(r.Trigger, r.Source, r.Branch); ref != "" {
-		writes = append(writes, safe.Go(func() error { return b.addBranchEntry(ctx, r.Project, ref, n) }))
+		writes = append(writes, safe.Go(func() error {
+			return retryConflict(ctx, func() error { return b.addBranchEntry(ctx, r.Project, ref, n) })
+		}))
 	}
 	var werr error
 	for _, w := range writes {
@@ -530,6 +538,23 @@ func (b *Builds) Create(ctx context.Context, r Request) (*store.BuildRecord, err
 	b.cfg.Log.Info("build created", "build", id, "project", r.Project, "number", n, "trigger", r.Trigger.Kind)
 	b.Wake()
 	return rec, nil
+}
+
+// conflictRounds bounds how often Create repeats a CAS that lost every one of its rounds
+// (store.ErrConflict). pctr/<project>, bidx/running and the build page are shared by all
+// builds created at the same moment; with tens of concurrent CreateBuild calls (a push to many
+// pipelines, a fleet of CI jobs) the eight rounds of one CAS are not enough for the last
+// writer (A297: 30 concurrent remote builds of one project, a third failed with "build changed
+// concurrently"). Every round re-reads, so a repeat never writes a stale value.
+const conflictRounds = 8
+
+func retryConflict(ctx context.Context, fn func() error) error {
+	for i := 1; ; i++ {
+		err := fn()
+		if !errors.Is(err, store.ErrConflict) || i == conflictRounds || ctx.Err() != nil {
+			return err
+		}
+	}
 }
 
 // checkUpload requires the snapshot src/<project>/<sha>.tar.zst to exist (PUT /upload first).

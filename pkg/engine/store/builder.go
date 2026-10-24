@@ -48,13 +48,15 @@ func (s *Store) Builder(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	item, err := embeddedBuilder(want)
-	if err != nil {
-		return "", err
-	}
+	// A valid path holds exactly the content its name was computed from, so the embedded
+	// binary (a 40 ms gunzip) is read and checked against the table only when it is imported.
 	invalid, err := s.Invalid(ctx, []string{want})
 	if err != nil || len(invalid) == 0 {
 		return want, err
+	}
+	item, err := embeddedBuilder(want)
+	if err != nil {
+		return "", err
 	}
 	if err := s.Import(ctx, []ExportItem{item}); err != nil {
 		return "", fmt.Errorf("store: import bob-builder: %w", err)

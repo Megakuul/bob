@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
@@ -31,6 +33,21 @@ const (
 	slotPoll    = 250 * time.Millisecond
 	attachRenew = 5 * time.Minute
 )
+
+// Dead-connection detection (A291). A connection whose peer vanished without a FIN or RST (a
+// killed host, a cut path, a proxy that lost its backend) otherwise looks open until TCP gives
+// up after many minutes, and the worker never reconnects. HTTP/2 health checks: after
+// attachPingIdle without a received frame the transport sends a PING and closes the connection
+// when no answer comes within attachPingTimeout. Above that, a stream that receives no message
+// for attachSilence (the orchestrator pings every 30 s) is ended by the worker and reopened.
+const (
+	attachPingIdle    = 10 * time.Second
+	attachPingTimeout = 5 * time.Second
+	attachSilence     = 75 * time.Second
+)
+
+// errAttachSilent ends a stream on which nothing arrived for attachSilence.
+var errAttachSilent = errors.New("attach stream silent")
 
 // token returns the current worker token.
 func (p *Process) token() *Token {
@@ -137,6 +154,7 @@ func attachClient(base string) *http.Client {
 		pr.SetUnencryptedHTTP2(true)
 	}
 	tr.Protocols = pr
+	tr.HTTP2 = &http.HTTP2Config{SendPingTimeout: attachPingIdle, PingTimeout: attachPingTimeout}
 	return &http.Client{Transport: tr}
 }
 
@@ -187,18 +205,22 @@ func (p *Process) attachLoop(ctx context.Context, base string) error {
 		// One client per stream, and every connection it dialed is closed when the stream
 		// ends: a refused server must not keep a (pooled) connection of this worker (R-SRV-102).
 		hc, conns := attachStreamClient(base)
-		err := p.attachOnce(ctx, workerv1connect.NewWorkerControlServiceClient(hc, base+"/api"), pin)
+		attached := false
+		err := p.attachOnce(ctx, workerv1connect.NewWorkerControlServiceClient(hc, base+"/api"), pin, &attached)
 		conns.closeAll()
 		if ctx.Err() != nil {
 			return nil
 		}
-		if time.Since(start) > time.Minute {
+		// A stream the server accepted (Welcome with a valid pin proof) restarts the backoff:
+		// the next stream after it died is opened within a second, not after the backoff
+		// that earlier failures had built up (A291).
+		if attached || time.Since(start) > time.Minute {
 			backoff = time.Second
 		}
 		if err != nil {
-			p.cfg.Log.Debug("worker: attach stream ended", "orchestrator", base, "err", err.Error())
+			p.cfg.Log.Info("worker: attach stream ended; reconnecting", "orchestrator", base, "err", err.Error())
 		}
-		if !sleep(ctx, backoff) {
+		if !sleep(ctx, attachJitter(backoff)) {
 			return nil
 		}
 		backoff = min(2*backoff, 30*time.Second)
@@ -206,9 +228,16 @@ func (p *Process) attachLoop(ctx context.Context, base string) error {
 	return nil
 }
 
+// attachJitter is a random duration in [d/2, d]: workers that lost their streams at the same
+// moment (an orchestrator died) do not all retry in step.
+func attachJitter(d time.Duration) time.Duration {
+	return d/2 + rand.N(d/2+1)
+}
+
 // attachOnce runs one Attach stream: Hello, then wake-ups and live log subscriptions in,
 // slot states and live chunks out, until the token is due for renewal or the stream fails.
-func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerControlServiceClient, pin *attachPin) error {
+// *attached is set once the server's Welcome proved the pinned key.
+func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerControlServiceClient, pin *attachPin, attached *bool) error {
 	tok := p.token()
 	if tok == nil {
 		return errors.New("no token")
@@ -234,6 +263,9 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 		return bs.Send(m)
 	}
 	defer func() {
+		// Cancel first: CloseResponse drains the response body, which on a dead or refused
+		// connection would wait for the server; a cancelled stream returns at once.
+		cancel()
 		sendMu.Lock()
 		_ = bs.CloseRequest()
 		sendMu.Unlock()
@@ -265,6 +297,7 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 		p.cfg.Log.Warn("worker: orchestrator refused: it does not prove its pinned key", "orchestrator", pin.base, "err", err.Error())
 		return err
 	}
+	*attached = true
 	var bg []<-chan error
 	defer func() {
 		cancel()
@@ -307,14 +340,23 @@ func (p *Process) attachOnce(ctx context.Context, cl workerv1connect.WorkerContr
 			sent, last = time.Now(), free
 		}
 	}))
+	// Silence watchdog: every received message re-arms it; when it fires the stream is
+	// cancelled, Receive fails and attachLoop reconnects.
+	var silent atomic.Bool
+	quiet := time.AfterFunc(attachSilence, func() { silent.Store(true); cancel() })
+	defer quiet.Stop()
 	for {
 		m, err := bs.Receive()
 		if err != nil {
+			if silent.Load() {
+				return fmt.Errorf("no message from the orchestrator for %v: %w", attachSilence, errAttachSilent)
+			}
 			if sctx.Err() != nil || connect.CodeOf(err) == connect.CodeCanceled {
 				return nil
 			}
 			return err
 		}
+		quiet.Reset(attachSilence)
 		if ls != nil && ls.Handle(m) {
 			continue
 		}

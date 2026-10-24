@@ -287,7 +287,9 @@ func TestRFW063NoNixBuildActivityForSources(t *testing.T) {
 			}
 			hosts := []string{"proxy.golang.org", "crates.io", "registry.npmjs.org", "opam.ocaml.org", "github.com/ocaml/opam-repository"}
 			for _, m := range regexp.MustCompile(`"url":\s*"https?://([^/"]+)`).FindAllStringSubmatch(readFile(t, filepath.Join(dir, "bob.lock")), -1) {
-				hosts = append(hosts, m[1])
+				// As a URL host: Go module paths (github.com/…) are names in every Go derivation,
+				// while a fetch names the URL; the nixpkgs pin's url is on github.com (T8b).
+				hosts = append(hosts, "://"+m[1])
 			}
 			building := regexp.MustCompile(`@nix \{[^\n]*"text":"building '/nix/store/([0-9a-z]{32}-[^']+\.drv)'`)
 			lines := building.FindAllStringSubmatch(r.Stderr, -1)

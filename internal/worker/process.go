@@ -424,9 +424,8 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 			{Host: home, Path: JobHome, Writable: true},
 		},
 		Args: []string{"/bin/bob", "job-run"},
-		Env: []string{"PATH=/bin", "HOME=/root", "TMPDIR=/tmp", "NIX_CONF_DIR=/etc/nix",
-			"NIX_SSL_CERT_FILE=" + isolation.CABundle, "SSL_CERT_FILE=" + isolation.CABundle},
-		Dir: "/work", Limits: p.limits,
+		Env:  jobEnv(),
+		Dir:  "/work", Limits: p.limits,
 		Stdin: bytes.NewReader(in), Stdout: pw, Stderr: errTail,
 	})
 	_ = pw.Close()
@@ -453,6 +452,15 @@ func (p *Process) exec(ctx context.Context, c Claim) Outcome {
 	}
 	p.stage(ctx, c, spec, filepath.Join(dir, "work"), &o)
 	return o
+}
+
+// jobEnv is the environment of `bob job-run` in a job container. HOME is the container's own
+// (gone with the job); XDG_CACHE_HOME is the slot's state home, so the engine's user caches
+// (the evaluator's trusted seed GOCACHE, os.UserCacheDir) outlive the job like the store and
+// the drv cache do. Without it every job compiled the standard library again (A290).
+func jobEnv() []string {
+	return []string{"PATH=/bin", "HOME=/root", "XDG_CACHE_HOME=" + JobHome + "/xdg/cache", "TMPDIR=/tmp", "NIX_CONF_DIR=/etc/nix",
+		"NIX_SSL_CERT_FILE=" + isolation.CABundle, "SSL_CERT_FILE=" + isolation.CABundle}
 }
 
 // jobNixConfig writes the job's netrc (0600, the download token) into the job directory and

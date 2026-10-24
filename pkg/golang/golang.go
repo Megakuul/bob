@@ -304,6 +304,12 @@ func (m *Module) build(tags []string, cgo CGo) (gospec.Build, []bob.Package) {
 	}
 	b.CC = len(deps)
 	deps = append(deps, m.ccTool())
+	if tc := m.p.Toolchain(); tc.CCLib != "" && len(m.p.Variant().Sanitize) > 0 {
+		// A sanitised cross link puts the cross compiler's lib directory (the sanitiser
+		// runtimes and libstdc++) into the RUNPATH (R-FW-037), as cc does.
+		b.CCLib = len(deps)
+		deps = append(deps, nixpkgs.Tool(m.p, tc.CCLib, nixpkgs.Outputs("lib")))
+	}
 	for _, c := range m.cgo {
 		b.Cgo = append(b.Cgo, len(deps))
 		deps = append(deps, c)

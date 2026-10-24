@@ -235,6 +235,38 @@ func (f *fetcher) Resolve(ctx context.Context, r Request) (string, string, error
 	return got.hash.String(), got.narHash, nil
 }
 
+// StorePath is the store path Ensure makes valid for r (r must be pinned).
+func StorePath(r Request) (string, error) {
+	p, err := prepare(r)
+	if err != nil {
+		return "", err
+	}
+	return p.path()
+}
+
+// CheckValid asks f's store about the store paths of all pinned requests in one batched
+// validity query. With a store that remembers valid paths (store.WithValidityMemo), the
+// following Ensure of an input that is valid already then runs no Nix command (A312). It only
+// saves work: requests without a pinned hash are left to Ensure, and an error changes nothing
+// Ensure would do.
+func CheckValid(ctx context.Context, f Fetcher, reqs []Request) error {
+	ff, ok := f.(*fetcher)
+	if !ok || ff.st == nil {
+		return nil
+	}
+	var paths []string
+	for _, r := range reqs {
+		if sp, err := StorePath(r); err == nil {
+			paths = append(paths, sp)
+		}
+	}
+	if len(paths) < 2 {
+		return nil // Ensure asks about a single path itself
+	}
+	_, err := ff.st.Invalid(ctx, paths)
+	return err
+}
+
 func (f *fetcher) valid(ctx context.Context, sp string) (bool, error) {
 	inv, err := f.st.Invalid(ctx, []string{sp})
 	if err != nil {

@@ -231,10 +231,14 @@ func treeHash(z *resolve.ModuleZip) (string, error) {
 }
 
 // Stale reports the first workspace module of the graph whose declarations the section does
-// not reflect (R-FW-062): a module without a build list, another Go version, or a declared
+// not reflect (R-FW-062): a module without a build list, another Go version, a declared
 // requirement its build list does not select at the declared version or higher (bob lock
-// --update may have moved it up). Only modules of the graph are compared, so a build of
-// part of the repository sees the same answer as one of all of it.
+// --update may have moved it up), or, when the graph holds exactly the section's modules and
+// their `inputs` hash differs, a requirement declared below its selected version. Partial graphs
+// compare only their own modules, so a build of part of the repository sees no stale section
+// the whole repository would not. The message follows SPEC §02.5 ("<label> needs go <module>
+// <version> (not pinned)"), the position is the golang.Require call of the changed requirement
+// when the bob.go can be read (req.Root), else the module's definition.
 func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.Pos, error) {
 	decls, nodes, err := declarations(req.Graph)
 	if err != nil {
@@ -258,18 +262,19 @@ func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.
 			// requirement of a generator's runtime is reported stale, so the caller asks again
 			// with the index (build.staleSections), which decides.
 			if r, ok := pinnedRuntime(nodes[d.Path]); ok {
-				return fmt.Sprintf("Go module %s requires %s, a code generator's runtime", d.Path, r), nodes[d.Path].DefinedAt, nil
+				n := nodes[d.Path]
+				return fmt.Sprintf("%s needs go %s, a code generator's runtime", n.Label, r), requirePos(req.Root, n, r), nil
 			}
 		}
 	}
 	for _, d := range decls {
-		at := nodes[d.Path].DefinedAt
+		n := nodes[d.Path]
 		bl, ok := sec.Workspaces[d.Path]
 		switch {
 		case !ok:
-			return fmt.Sprintf("Go module %s is not locked", d.Path), at, nil
+			return fmt.Sprintf("%s needs go module %s (not pinned)", n.Label, d.Path), n.DefinedAt, nil
 		case bl.Go != goDirective(d.Go):
-			return fmt.Sprintf("Go module %s declares Go %s but is locked for %s", d.Path, d.Go, bl.Go), at, nil
+			return fmt.Sprintf("%s needs go %s (locked for go %s)", n.Label, d.Go, bl.Go), n.DefinedAt, nil
 		}
 		sel := selected(bl)
 		for _, r := range d.Require {
@@ -277,7 +282,32 @@ func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.
 				continue // a generator's runtime: its version comes from the nixpkgs pin
 			}
 			if resolve.Compare(sel[r.Path], r.Version) < 0 {
-				return fmt.Sprintf("Go module %s requires %s %s, which is not locked", d.Path, r.Path, r.Version), at, nil
+				return fmt.Sprintf("%s needs go %s %s (not pinned)", n.Label, r.Path, r.Version), requirePos(req.Root, n, r.Path), nil
+			}
+		}
+	}
+	if len(decls) == 0 || len(decls) != len(sec.Workspaces) || sec.Inputs == "" {
+		return "", ir.Pos{}, nil // a partial graph (or an old section): only its modules count
+	}
+	inputs, err := lock.Inputs(decls)
+	if err != nil {
+		return "", ir.Pos{}, err
+	}
+	if inputs == sec.Inputs {
+		return "", ir.Pos{}, nil
+	}
+	// Every module is locked and every requirement selected at its version or higher, yet the
+	// declarations changed. A requirement declared below its selected version may have been
+	// lowered (the lock does not keep the declared versions, so one that MVS or --update raised
+	// looks the same and costs one bob lock): the build would not use the declared version, so
+	// the section is stale. A removed requirement or codegen recipe leaves the section usable;
+	// bob lock drops the entries no declaration needs (R-FW-005).
+	for _, d := range decls {
+		n := nodes[d.Path]
+		sel := selected(sec.Workspaces[d.Path])
+		for _, r := range d.Require {
+			if !strings.HasPrefix(r.Version, generatorPrefix) && resolve.Compare(sel[r.Path], r.Version) > 0 {
+				return fmt.Sprintf("%s needs go %s %s (pinned %s)", n.Label, r.Path, r.Version, sel[r.Path]), requirePos(req.Root, n, r.Path), nil
 			}
 		}
 	}

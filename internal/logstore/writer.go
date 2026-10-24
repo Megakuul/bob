@@ -81,7 +81,8 @@ type partition struct {
 	lines  []LogLine // queued: not yet given to the ingestor
 	runs   []PackageRun
 	jobs   []JobRun
-	bytes  int       // queued bytes
+	bytes  int       // queued bytes (rows with their overhead: the memory bound)
+	text   int       // queued line text bytes: the 2 MiB commit trigger counts lines (A293)
 	since  time.Time // when the oldest uncommitted row arrived
 	due    time.Time // next commit attempt after a failure
 	fails  int
@@ -195,9 +196,10 @@ func (w *Writer) Add(buildID, drv string, lines ...Line) error {
 			Seq: lake.NewInt(l.Seq), Drv: drv, Attempt: int64(l.Attempt), Stream: int64(l.Stream), TS: l.TS, Line: l.Text})
 		n := len(l.Text) + len(l.Package) + rowOverhead
 		p.bytes += n
+		p.text += len(l.Text)
 		w.pending += n
 	}
-	if len(p.lines) >= w.cfg.CommitLines || p.bytes >= w.cfg.CommitBytes {
+	if len(p.lines) >= w.cfg.CommitLines || p.text >= w.cfg.CommitBytes {
 		p.urgent = true
 		w.signal()
 	}
@@ -260,6 +262,7 @@ func (w *Writer) bound() {
 		for _, l := range big.lines[:n] {
 			b := len(l.Line) + len(l.Package.Data) + rowOverhead
 			big.bytes -= b
+			big.text -= len(l.Line)
 			w.pending -= b
 		}
 		big.lines = slices.Delete(big.lines, 0, n)
@@ -447,7 +450,7 @@ func (w *Writer) commitPartition(ctx context.Context, p *partition, force bool) 
 	lines, runs, jobs := p.lines, p.runs, p.jobs
 	p.lines, p.runs, p.jobs = nil, nil, nil
 	p.held += p.bytes
-	p.bytes = 0
+	p.bytes, p.text = 0, 0
 	p.heldLines += len(lines)
 	for _, l := range lines {
 		if p.heldLast == nil {

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/golang/internal/gospec"
 	"github.com/megakuul/bob/pkg/golang/resolve"
 )
 
@@ -69,20 +71,40 @@ func RootGoMod(g *ir.Graph, root string) (f engine.GeneratedFile, ok bool, err e
 		Committed: true, Explain: explainRoot(g.Module, reqs)}, true, nil
 }
 
-// RootGoSum returns the root go.sum for graph g: the go.sum lines of the framework module
-// (frameworkSum, as the evaluator writes them for bob's own version) when the root go.mod
-// requires the framework at that version. ok is false when there is nothing to write.
-// Dependency bob repositories (bob.Import) get their lines from the go command until bob.lock
-// records their hashes.
-func RootGoSum(g *ir.Graph, frameworkSum string) (f engine.GeneratedFile, ok bool) {
-	if g == nil || g.Module == "" || !resolve.ValidVersion(g.BobVersion) {
+// RootModule reports whether a Go module of the repository of g has its root at the repository
+// root (a go.module node labelled "//:<name>"): its go.mod is then the root go.mod.
+func RootModule(g *ir.Graph) bool {
+	if g == nil {
+		return false
+	}
+	for _, n := range g.Nodes {
+		if n.Kind == gospec.KindModule && strings.HasPrefix(n.Label, "//:") {
+			return true
+		}
+	}
+	return false
+}
+
+// RootGoSum returns the root go.sum for graph g of the repository at root: the go.sum lines
+// of the framework module (frameworkSum, as the evaluator writes them for bob's own version)
+// when the root go.mod requires the framework at that version, and the lines of every
+// bob.Import module the Go module cache holds (the evaluator downloads them there with the
+// user's Go settings, which verified them; a module not downloaded yet gets its lines from the
+// go command). ok is false when there is nothing to write.
+func RootGoSum(g *ir.Graph, root, frameworkSum string) (f engine.GeneratedFile, ok bool) {
+	if g == nil || g.Module == "" {
 		return f, false
 	}
 	var lines []string
-	for _, l := range strings.Split(frameworkSum, "\n") {
-		if fs := strings.Fields(l); len(fs) == 3 && fs[0] == frameworkModule && strings.TrimSuffix(fs[1], "/go.mod") == g.BobVersion {
-			lines = append(lines, strings.Join(fs, " "))
+	if resolve.ValidVersion(g.BobVersion) {
+		for _, l := range strings.Split(frameworkSum, "\n") {
+			if fs := strings.Fields(l); len(fs) == 3 && fs[0] == frameworkModule && strings.TrimSuffix(fs[1], "/go.mod") == g.BobVersion {
+				lines = append(lines, strings.Join(fs, " "))
+			}
 		}
+	}
+	if imports, err := BobImports(root); err == nil {
+		lines = append(lines, importSumLines(root, imports)...)
 	}
 	if len(lines) == 0 {
 		return f, false
@@ -91,6 +113,53 @@ func RootGoSum(g *ir.Graph, frameworkSum string) (f engine.GeneratedFile, ok boo
 	sum := []byte(strings.Join(lines, "\n") + "\n")
 	return engine.GeneratedFile{Path: "go.sum", Content: sum, Mode: 0o444, Owner: "//:bob.go", Committed: true,
 		Explain: explainGoSum(sum)}, true
+}
+
+// importSumLines are the go.sum lines of mods: from the Go module cache's download records
+// (<v>.ziphash and <v>.mod) for the modules it holds, else the lines the root go.sum at root
+// already has for them (another machine or bob home downloaded them), so the file does not
+// change with the state of one module cache.
+func importSumLines(root string, mods []resolve.Module) []string {
+	dir := goModCache()
+	have := map[string][]string{} // "<path> <version>" → its lines in the current go.sum
+	if b, err := os.ReadFile(filepath.Join(root, "go.sum")); err == nil && len(b) <= maxBobGoBytes {
+		for _, l := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(l); len(f) == 3 && strings.HasPrefix(f[2], "h1:") {
+				k := f[0] + " " + strings.TrimSuffix(f[1], "/go.mod")
+				have[k] = append(have[k], strings.Join(f, " "))
+			}
+		}
+	}
+	var out []string
+	for _, m := range mods {
+		if dir != "" {
+			base := filepath.Join(dir, "cache", "download", filepath.FromSlash(resolve.EscapePath(m.Path)), "@v", m.Version)
+			zh, err1 := os.ReadFile(base + ".ziphash")
+			mod, err2 := os.ReadFile(base + ".mod")
+			h1 := strings.TrimSpace(string(zh))
+			if err1 == nil && err2 == nil && strings.HasPrefix(h1, "h1:") && !strings.ContainsAny(h1, " \t\n") {
+				out = append(out, m.Path+" "+m.Version+" "+h1, m.Path+" "+m.Version+"/go.mod "+resolve.ModH1(mod))
+				continue
+			}
+		}
+		out = append(out, have[m.Path+" "+m.Version]...)
+	}
+	return out
+}
+
+// goModCache is the go command's module cache directory: GOMODCACHE, else the first GOPATH
+// entry's pkg/mod, else $HOME/go/pkg/mod (cmd/go's defaults).
+func goModCache() string {
+	if d := os.Getenv("GOMODCACHE"); d != "" {
+		return d
+	}
+	if gp := filepath.SplitList(os.Getenv("GOPATH")); len(gp) > 0 && gp[0] != "" {
+		return filepath.Join(gp[0], "pkg", "mod")
+	}
+	if h, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(h, "go", "pkg", "mod")
+	}
+	return ""
 }
 
 // explainRoot maps an edited root go.mod to bob.go terms. Only what a user changed counts:
@@ -241,4 +310,60 @@ func importError(pos token.Position, reason string) error {
 	e := diag.New(1020, "label", fmt.Sprintf("%s:%d", pos.Filename, pos.Line), "option", "bob.Import", "reason", reason)
 	e.DefinedAt = diag.Pos{File: pos.Filename, Line: pos.Line, Col: pos.Column}
 	return e
+}
+
+// ServeImports copies the bob.Import modules of the repository at root that the Go module
+// cache holds (the evaluator downloads them there) into the GOPROXY directory proxy, so the dev
+// shell's go and gopls, which read modules only from bob's proxy (§03.2.5), resolve the
+// dependency bob repositories the bob.go files import (R-FW-022). Modules the cache does not
+// hold are skipped (the go command reports them).
+func ServeImports(root, proxy string) error {
+	mods, err := BobImports(root)
+	if err != nil || len(mods) == 0 {
+		return err
+	}
+	cache := goModCache()
+	if cache == "" {
+		return nil
+	}
+	for _, m := range mods {
+		esc := filepath.FromSlash(resolve.EscapePath(m.Path))
+		from := filepath.Join(cache, "cache", "download", esc, "@v")
+		to := filepath.Join(proxy, esc, "@v")
+		var files [][2]string
+		for _, ext := range []string{".info", ".mod", ".zip"} {
+			b, err := os.ReadFile(filepath.Join(from, m.Version+ext))
+			if err != nil {
+				files = nil
+				break
+			}
+			files = append(files, [2]string{m.Version + ext, string(b)})
+		}
+		if files == nil {
+			continue
+		}
+		if err := os.MkdirAll(to, 0o755); err != nil {
+			return err
+		}
+		old, _ := os.ReadFile(filepath.Join(to, "list"))
+		versions := strings.Fields(string(old))
+		if !slices.Contains(versions, m.Version) {
+			versions = append(versions, m.Version)
+		}
+		sort.Strings(versions)
+		files = append(files, [2]string{"list", strings.Join(versions, "\n") + "\n"})
+		for _, f := range files {
+			p := filepath.Join(to, f[0])
+			if cur, err := os.ReadFile(p); err == nil && string(cur) == f[1] {
+				continue
+			}
+			if err := os.WriteFile(p+".tmp", []byte(f[1]), 0o644); err != nil {
+				return err
+			}
+			if err := os.Rename(p+".tmp", p); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

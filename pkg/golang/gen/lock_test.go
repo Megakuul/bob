@@ -141,6 +141,29 @@ func TestLockNativeStale(t *testing.T) {
 	if err != nil || !strings.Contains(what, "golang.org/x/net v0.2.0") || at.File != "tools/bob.go" {
 		t.Errorf("changed requirement: stale %q at %v (%v)", what, at, err)
 	}
+
+	// SPEC §02.5 wording, and the position of the golang.Require call when bob.go is readable.
+	writeTree(t, root, map[string]string{"tools/bob.go": "package tools\n\n" + strings.Repeat("\n", 5) +
+		"var M = bob.Define(func(p *bob.P) *golang.Module {\n" + // line 8
+		"\treturn golang.NewModule(p, golang.ModuleOpts{\n" + // line 9
+		"\t\tPath: \"example.com/tools\",\n" +
+		"\t\tRequire: []golang.Requirement{\n" + // line 11
+		"\t\t\tgolang.Require(\"golang.org/x/net\", \"v0.0.9\"),\n" + // line 12
+		"\t\t},\n\t})\n})\n"})
+	what, at, err = Ecosystem{}.Stale(context.Background(), engine.LockRequest{Graph: g2, Prev: raw, Root: root})
+	if err != nil || what != "//tools:module needs go golang.org/x/net v0.2.0 (not pinned)" || at.Line != 12 {
+		t.Errorf("changed requirement with root: stale %q at %v (%v)", what, at, err)
+	}
+	// A lowered requirement is stale too (inputs differ), although the lock selects more.
+	g3 := moduleGraph(t, gospec.Requirement{Path: "golang.org/x/net", Version: "v0.0.9"})
+	what, at, err = Ecosystem{}.Stale(context.Background(), engine.LockRequest{Graph: g3, Prev: raw, Root: root})
+	if err != nil || what != "//tools:module needs go golang.org/x/net v0.0.9 (pinned v0.1.0)" || at.Line != 12 {
+		t.Errorf("lowered requirement: stale %q at %v (%v)", what, at, err)
+	}
+	// A removed requirement leaves the section usable (bob lock drops the entry later).
+	if what, _, err := (Ecosystem{}).Stale(context.Background(), engine.LockRequest{Graph: moduleGraph(t), Prev: raw, Root: root}); err != nil || what != "" {
+		t.Errorf("removed requirement: stale %q (%v)", what, err)
+	}
 }
 
 // TestLockErrors: a missing module is BOB-E-1015 at the module's bob.go, a module needing a

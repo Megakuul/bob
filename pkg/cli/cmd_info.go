@@ -64,6 +64,18 @@ func (e *env) openStore(check bool) (st *store.Store, caches []store.Substituter
 	}
 	creds, _ := e.loadCreds()
 	caches = e.substituters(creds, skip)
+	if check {
+		sub, warn, err := e.envTokenCache(e.ctx, creds)
+		if err != nil {
+			return nil, nil, nil, e.out.fail(err), true
+		}
+		if warn != nil {
+			warns = append(warns, warn)
+		}
+		if sub != nil {
+			caches = append(caches, *sub)
+		}
+	}
 	st, err = store.Open(e.ctx, store.Config{Substituters: caches})
 	if err != nil {
 		return nil, nil, nil, e.out.fail(err), true

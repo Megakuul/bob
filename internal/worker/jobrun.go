@@ -321,14 +321,14 @@ func (e *events) handle(ev build.Event) {
 	defer e.mu.Unlock()
 	switch ev.Event {
 	case "package.start":
+		// No line of bob's own here: a package's log is what its build printed; the start is
+		// in the package_run row and the build events (A296), errors are in the job's report.
 		e.start[ev.Label] = time.Now()
-		e.out.Line(ev.Label, 3, ev.Action+" "+ev.Label)
 	case "log":
-		e.out.Line(ev.Label, 1, ev.Line)
-	case "error":
-		if ev.Error != nil {
-			e.out.Line(ev.Label, 3, "✗ "+ev.Error.Code.ID()+" "+ev.Error.Error())
+		if builderLine(ev.Line) {
+			return // bob-builder's own diagnostics: the error report carries them (A299)
 		}
+		e.out.Line(ev.Label, 1, ev.Line)
 	case "package.finish":
 		status := ev.Status
 		if status == "built" {
@@ -340,6 +340,14 @@ func (e *events) handle(ev build.Event) {
 		}
 		e.out.EndPackage(ev.Label, PackageEnd{Status: status, Start: start, End: time.Now()})
 	}
+}
+
+// builderLine reports a line that bob-builder writes about the build (step failures,
+// warnings, "bob::" diagnostics) rather than the build's own output. The engine leaves the same
+// lines out of error excerpts (translate.plainLog); a package's server log holds only what the
+// build printed (R-LOG-003, R-CLI-008: its last lines match the excerpt).
+func builderLine(l string) bool {
+	return strings.HasPrefix(l, "bob-builder: ") || strings.HasPrefix(l, "bob:: ")
 }
 
 // openJobStore opens the engine store inside a job container on the worker's persistent

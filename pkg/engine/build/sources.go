@@ -42,12 +42,12 @@ func Evaluate(ctx context.Context, o Options) (*ir.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := time.Now()
-	g, res, err := evaluate(ctx, st, o)
+	r := &runner{o: o}
+	g, res, err := r.evaluate(ctx, st)
 	if o.Events != nil && res != nil {
-		total := time.Since(t)
+		// The eval stage ends where IR validation starts, as in Run (R-FW-049: scan, eval, ir).
 		o.Events(Event{Event: StageScan, DurationMs: res.Scan.Milliseconds()})
-		o.Events(Event{Event: StageEval, DurationMs: (total - res.Scan).Milliseconds(), Cached: res.Cached})
+		o.Events(Event{Event: StageEval, DurationMs: (r.evalTook - res.Scan).Milliseconds(), Cached: res.Cached})
 	}
 	return g, err
 }
@@ -74,14 +74,18 @@ func evaluate(ctx context.Context, st *store.Store, o Options) (*ir.Graph, *eval
 
 func (r *runner) evaluate(ctx context.Context, st *store.Store) (*ir.Graph, *eval.Result, error) {
 	o := r.o
+	t := time.Now()
 	goRoot, err := r.evalGoRoot(ctx, st, fetch.New(st, fetch.Policy{}))
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := eval.Evaluate(ctx, evalRequest(o, goRoot))
+	req := evalRequest(o, goRoot)
+	res, err := eval.Evaluate(ctx, req)
 	if err != nil {
 		return nil, nil, err
 	}
+	r.evaluated = &evaluation{goRoot: goRoot, req: req, res: res}
+	r.evalTook = time.Since(t)
 	g, err := ir.Parse(res.IR, eval.BobVersion())
 	return g, res, err
 }

@@ -27,8 +27,9 @@ func TestRCLI002JSONStream(t *testing.T) {
 		cmd  string
 	}
 	runs := []run{
-		{acme, []string{"build", "//...", "--json"}, 0, nil, ""},
+		// --json-log first: it needs derivations that are built in this home, not cached (T13).
 		{acme, []string{"build", "//...", "--json", "--json-log"}, 0, nil, ""},
+		{acme, []string{"build", "//...", "--json"}, 0, nil, ""},
 		{acme, []string{"build", "//...", "--json", "--print-paths"}, 0, nil, ""},
 		{acme, []string{"test", "//...", "--json"}, 0, nil, ""},
 		{acme, []string{"graph", "--json"}, 0, []string{"nodes", "edges", "why"}, "graph"},

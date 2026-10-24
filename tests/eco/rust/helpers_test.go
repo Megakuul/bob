@@ -257,10 +257,21 @@ func noNetwork(t *testing.T, dir, home string, args ...string) harness.Result {
 		t.Fatalf("harness: %v", err)
 	}
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + h, "BOB_HOME=" + home, "TZ=UTC", "LC_ALL=C"}
+	// As root also map the unprivileged id 65534 (as bob's own namespace does for host root,
+	// store.Enter): the evaluation sandbox refuses to run as root without it (evalbox rootIDs)
+	// and runs as 65534 with it, as in a run as host root. The network namespace is unchanged.
+	uids := []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}}
+	gids := []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}}
+	root := os.Getuid() == 0
+	if root {
+		uids = append(uids, syscall.SysProcIDMap{ContainerID: 65534, HostID: 65534, Size: 1})
+		gids = append(gids, syscall.SysProcIDMap{ContainerID: 65534, HostID: 65534, Size: 1})
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
-		UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
-		GidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}},
+		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
+		UidMappings:                uids,
+		GidMappings:                gids,
+		GidMappingsEnableSetgroups: root,
 	}
 	r := runCmd(t, cmd, args)
 	noLeak(t, r, args)

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -102,11 +103,42 @@ func bobRun(t *testing.T, dir string, args ...string) harness.Result {
 
 func bobRunEnv(t *testing.T, dir string, env []string, args ...string) harness.Result {
 	t.Helper()
+	// One HOME and bob home per test (T12): harness.Run gives every call a fresh HOME, so
+	// without this each bob call of a test would start with an empty store and caches. A test
+	// that passes its own BOB_HOME (or HOME) keeps it: later entries win.
+	env = append(testHomeEnv(t), env...)
 	r := harness.Run(t, "bob", harness.Spec{Dir: dir, Env: env, Timeout: 5 * time.Minute}, args...)
-	if !hasArg(args, "-v") {
+	switch {
+	case hasArg(args, "-v") || hasArg(args, "-vv"): // raw Nix text is allowed from -v on (T8)
+	case hasArg(args, "--print-paths") && hasArg(args, "--json"):
+		// package.finish paths[] hold host store paths by SPEC §02.6 (58b, as correction 58).
+		noLeak(t, withoutPaths(r))
+	default:
 		noLeak(t, r)
 	}
 	return r
+}
+
+// testHomes maps each running test to its home directory (testHomeEnv).
+var testHomes sync.Map
+
+// testHomeEnv returns HOME and BOB_HOME of t's home: one directory per test, created on first
+// use and removed with t's temp dir, so all bob calls of a test share one store and one set of
+// caches (as a developer's repeated calls do).
+func testHomeEnv(t *testing.T) []string {
+	t.Helper()
+	h, ok := testHomes.Load(t)
+	if !ok {
+		dir := filepath.Join(t.TempDir(), "testhome")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("harness: %v", err)
+		}
+		h = dir
+		testHomes.Store(t, dir)
+		t.Cleanup(func() { testHomes.Delete(t) })
+	}
+	home := h.(string)
+	return []string{"HOME=" + home, "BOB_HOME=" + filepath.Join(home, "bob")}
 }
 
 func hasArg(args []string, a string) bool {
@@ -401,16 +433,35 @@ func bobNoNetworkHome(t *testing.T, dir, bobHome string, args ...string) harness
 	}
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + home, "TZ=UTC", "LC_ALL=C"}
 	if bobHome != "" {
-		cmd.Env = append(cmd.Env, "BOB_HOME="+bobHome)
+		// Warm caches also live under HOME (Go proxy dir $HOME/.cache/bob/goproxy, SPEC
+		// §03.2.5): use the test's HOME, which the earlier bobRunEnv calls warmed (T12).
+		cmd.Env = append(cmd.Env, testHomeEnv(t)[0], "BOB_HOME="+bobHome)
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
-		UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
-		GidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}},
-	}
+	cmd.SysProcAttr = noNetworkAttr()
 	r := runCmd(t, cmd, args)
 	noLeak(t, r)
 	return r
+}
+
+// noNetworkAttr is a new user and network namespace that maps the caller's ids. When the tests
+// run as root it also maps the unprivileged id 65534 (as bob's own namespace does for host
+// root, store.Enter): the evaluation sandbox refuses to run as root without it (evalbox
+// rootIDs) and runs as 65534 with it, as in a run as host root. The network namespace is the
+// same either way.
+func noNetworkAttr() *syscall.SysProcAttr {
+	uids := []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}}
+	gids := []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}}
+	root := os.Getuid() == 0
+	if root {
+		uids = append(uids, syscall.SysProcIDMap{ContainerID: 65534, HostID: 65534, Size: 1})
+		gids = append(gids, syscall.SysProcIDMap{ContainerID: 65534, HostID: 65534, Size: 1})
+	}
+	return &syscall.SysProcAttr{
+		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
+		UidMappings:                uids,
+		GidMappings:                gids,
+		GidMappingsEnableSetgroups: root,
+	}
 }
 
 // unprivileged returns the uid/gid of the harness test user (bobtest) when the tests run as

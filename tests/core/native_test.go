@@ -298,7 +298,8 @@ func TestRFW066ConflictAndForce(t *testing.T) {
 	gen := firstFile(t, protoRoot)
 	original := readFile(t, gen)
 	writeFile(t, gen, original+"\n// edited by hand\n")
-	foreign := filepath.Join(protoRoot, "foreign.txt")
+	// The same root as the edited file: each proto dir is its own owned dir (SPEC §03.6.1, T3).
+	foreign := filepath.Join(filepath.Dir(gen), "foreign.txt")
 	writeFile(t, foreign, "mine\n")
 	protoBefore := treeHash(t, protoRoot)
 	r := bobRun(t, dir, "gen", "--json")
@@ -323,7 +324,14 @@ func TestRFW066ConflictAndForce(t *testing.T) {
 	if _, err := os.Stat(foreign); err == nil {
 		t.Errorf("--force left the foreign file in the root")
 	}
-	backups, _ := filepath.Glob(filepath.Join(dir, ".bob", "gen", "backup", "*", "svc", "gen", "proto", "*"))
+	// The backup keeps repo-relative paths below .bob/gen/backup/<t>/; list its files (T3).
+	var backups []string
+	_ = filepath.WalkDir(filepath.Join(dir, ".bob", "gen", "backup"), func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() && strings.Contains(filepath.ToSlash(p), "/svc/gen/proto/") {
+			backups = append(backups, p)
+		}
+		return nil
+	})
 	if len(backups) < 2 {
 		t.Errorf("--force did not move both the edited and the foreign file to the backup dir: %v", backups)
 	}
@@ -343,7 +351,8 @@ func TestRFW066OtherRootsProceed(t *testing.T) {
 		return
 	}
 	protoRoot, restRoot := genRoots(dir)
-	writeFile(t, filepath.Join(protoRoot, "foreign.txt"), "mine\n")
+	// A foreign file in one owned dir under svc/gen/proto (SPEC §03.6.1: one per proto dir, T3).
+	writeFile(t, filepath.Join(filepath.Dir(firstFile(t, protoRoot)), "foreign.txt"), "mine\n")
 	restBefore := treeHash(t, restRoot)
 	items := filepath.Join(dir, "schema", "items.yaml")
 	src := readFile(t, items)
@@ -367,7 +376,8 @@ func TestRFW066TrackedFileIsNeverOverwritten(t *testing.T) {
 		return
 	}
 	protoRoot, _ := genRoots(dir)
-	tracked := filepath.Join(protoRoot, "tracked.txt")
+	// In one owned dir under svc/gen/proto (SPEC §03.6.1: one per proto dir, T3).
+	tracked := filepath.Join(filepath.Dir(firstFile(t, protoRoot)), "tracked.txt")
 	writeFile(t, tracked, "tracked\n")
 	git(t, dir, "add", "-f", tracked)
 	git(t, dir, "-c", "user.name=t", "-c", "user.email=t@t.invalid", "commit", "-q", "-m", "track")
@@ -400,6 +410,8 @@ func TestRFW066RemovedRecipeRemovesRoot(t *testing.T) {
 	}
 	replaceIn(t, filepath.Join(dir, "svc", "bob.go"),
 		"\t\t\topenapi.Go(schema.Items(p), openapi.GoOpts{Package: \"rest\", Server: openapi.StdHTTP}),\n", "")
+	// The import has no other use in svc/bob.go; Go rejects an unused import (T4).
+	replaceIn(t, filepath.Join(dir, "svc", "bob.go"), "\t\"github.com/megakuul/bob/pkg/openapi\"\n", "")
 	if r := bobRun(t, dir, "gen"); !exitIs(t, r, 0) {
 		return
 	}
@@ -467,7 +479,7 @@ func TestRFW066KillDuringWrite(t *testing.T) {
 		dir := harness.Fixture(t, "codegen")
 		cmd := exec.Command(harness.Bin(t, "bob"), "gen")
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "TZ=UTC", "LC_ALL=C")
+		cmd.Env = append(append(os.Environ(), testHomeEnv(t)...), "TZ=UTC", "LC_ALL=C") // the test's home (T12)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("harness: %v", err)
@@ -515,7 +527,7 @@ func TestRFW067GoplsResolvesGeneratedCode(t *testing.T) {
 	if r := bobRun(t, dir, "env", "--format", "json"); !exitIs(t, r, 0) {
 		return
 	}
-	cmd := execShim(t, filepath.Join(dir, "svc"), nil)
+	cmd := execShim(t, dir, nil)
 	cmd.Dir = filepath.Join(dir, "svc")
 	c, err := startLSP(cmd, filepath.Join(dir, "svc"), map[string]any{"build.buildFlags": []string{"-tags=bob"}})
 	if err != nil {
@@ -548,10 +560,18 @@ func TestRFW067TypeScriptResolvesGeneratedCode(t *testing.T) {
 	if !ok {
 		return
 	}
-	if _, err := os.Stat(filepath.Join(dir, "web", "gen", "proto", "greet", "v1", "greet_pb.js")); err != nil {
-		if _, err2 := os.Stat(filepath.Join(dir, "web", "src", "gen", "proto", "greet", "v1", "greet_pb.js")); err2 != nil {
-			t.Fatalf("greet_pb.js was not generated under web/gen or web/src/gen: %v", err)
+	// connect.TS generates TypeScript (protoc-gen-es target=ts, import_extension=js, SPEC
+	// §03.6.1): the file is greet_pb.ts and imports spell ./…/greet_pb.js, which tsserver
+	// resolves to it (T6).
+	if _, err := os.Stat(filepath.Join(dir, "web", "gen", "proto", "greet", "v1", "greet_pb.ts")); err != nil {
+		if _, err2 := os.Stat(filepath.Join(dir, "web", "src", "gen", "proto", "greet", "v1", "greet_pb.ts")); err2 != nil {
+			t.Fatalf("greet_pb.ts was not generated under web/gen or web/src/gen: %v", err)
 		}
+	}
+	// bob exec needs .bob/env.json (BOB-E-7006 otherwise, R-DEV-008): bob env first, as the
+	// gopls test above and RCC005a do (A333, correction 86).
+	if r := bobRun(t, dir, "env", "--format", "json"); !exitIs(t, r, 0) {
+		return
 	}
 	r := bobRun(t, dir, "exec", "--", "tsc", "--noEmit", "-p", "web")
 	if !exitIs(t, r, 0) {
@@ -572,7 +592,7 @@ func TestRFW067DevProtoEditReachesTree(t *testing.T) {
 	}
 	cmd := exec.Command(harness.Bin(t, "bob"), "dev", "--servers-only", "--no-servers")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "TZ=UTC", "LC_ALL=C")
+	cmd.Env = append(append(os.Environ(), testHomeEnv(t)...), "TZ=UTC", "LC_ALL=C") // the home bob gen used (T12)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("harness: %v", err)

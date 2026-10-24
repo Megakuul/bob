@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,6 +32,183 @@ type Store struct {
 	home   string
 	bin    string // <home>/bin/nix-<h>/bin
 	inside bool   // this process already runs in bob's namespace (Enter); else every command enters it
+	valid  *validMemo
+}
+
+// validMemo holds the paths Nix reported valid (or imported) during one run (WithValidityMemo).
+// Only positive answers are kept: a path becomes valid during a run (a build, an import, a
+// substitution), but nothing in a run makes a valid path invalid again (bob never deletes store
+// paths; a concurrent garbage collection can remove an unrooted path after any check, with or
+// without the memo, as it can after `nix build --no-link` exits).
+//
+// A negative answer is kept only until this store starts its next command that is not a
+// validity check (gen counts them): a build, import or substitution may make the path valid.
+// Another process can make a path valid at any time; an answer from before that is as good as
+// a check made a moment earlier.
+type validMemo struct {
+	mu      sync.Mutex
+	paths   map[string]struct{}
+	invalid map[string]uint64 // path → gen when Nix reported it invalid
+	gen     uint64
+	wait    chan struct{} // closed when the Prefetch batch has been answered; nil without one
+}
+
+// WithValidityMemo returns a store for one run that remembers which paths are valid, so that
+// the many validity checks of one build (fetched inputs, sources, derivations, outputs) ask
+// Nix only once per path (I-B39, A310). The memo starts empty.
+//
+// A store that has a memo already is returned as it is: a command made of several runs (bob
+// gen: native files, then the working-tree outputs) shares one memo.
+func (s *Store) WithValidityMemo() *Store {
+	if s.valid != nil {
+		return s
+	}
+	c := *s
+	c.valid = &validMemo{paths: map[string]struct{}{}, invalid: map[string]uint64{}}
+	return &c
+}
+
+// Prefetch asks Nix about paths in one batch in the background (A314): the paths an earlier
+// run of the same command asked about. Only Nix's answers enter the memo, so a hint that is
+// out of date costs nothing but its share of the batch. Invalid calls made meanwhile wait for
+// the answer first. Paths that are not store paths are ignored; without a memo it does
+// nothing. Call it at most once, before the run's first Invalid.
+func (s *Store) Prefetch(ctx context.Context, paths []string) {
+	if s.valid == nil {
+		return
+	}
+	var ask []string
+	for _, p := range paths {
+		if isStorePath(p) {
+			ask = append(ask, p)
+		}
+	}
+	if len(ask) == 0 {
+		return
+	}
+	done := make(chan struct{})
+	s.valid.mu.Lock()
+	if s.valid.wait != nil {
+		s.valid.mu.Unlock()
+		return
+	}
+	s.valid.wait = done
+	s.valid.mu.Unlock()
+	go func() {
+		defer close(done)
+		defer func() { _ = recover() }() // a failed prefetch only costs the batching
+		_, _ = s.invalid(ctx, ask)
+	}()
+}
+
+// AskedPaths returns the paths the memo has an answer for (valid, or invalid at some point of
+// the run), sorted (nil without a memo), after a running Prefetch has finished (so no prefetch
+// outlives the run that reads this).
+func (s *Store) AskedPaths() []string {
+	if s.valid == nil {
+		return nil
+	}
+	s.valid.mu.Lock()
+	w := s.valid.wait
+	s.valid.mu.Unlock()
+	if w != nil {
+		<-w // the batch's nix-store runs under the run's context
+	}
+	s.valid.mu.Lock()
+	defer s.valid.mu.Unlock()
+	out := make([]string, 0, len(s.valid.paths)+len(s.valid.invalid))
+	for p := range s.valid.paths {
+		out = append(out, p)
+	}
+	for p := range s.valid.invalid {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// awaitPrefetch waits for a running Prefetch batch.
+func (s *Store) awaitPrefetch(ctx context.Context) error {
+	if s.valid == nil {
+		return nil
+	}
+	s.valid.mu.Lock()
+	w := s.valid.wait
+	s.valid.mu.Unlock()
+	if w == nil {
+		return nil
+	}
+	select {
+	case <-w:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// remember records paths as valid in the memo (no-op without one).
+func (s *Store) remember(paths []string) {
+	if s.valid == nil || len(paths) == 0 {
+		return
+	}
+	s.valid.mu.Lock()
+	defer s.valid.mu.Unlock()
+	for _, p := range paths {
+		s.valid.paths[p] = struct{}{}
+		delete(s.valid.invalid, p)
+	}
+}
+
+// rememberInvalid records paths Nix reported invalid at generation gen.
+func (s *Store) rememberInvalid(paths []string, gen uint64) {
+	if s.valid == nil || len(paths) == 0 {
+		return
+	}
+	s.valid.mu.Lock()
+	defer s.valid.mu.Unlock()
+	for _, p := range paths {
+		if _, ok := s.valid.paths[p]; !ok {
+			s.valid.invalid[p] = gen
+		}
+	}
+}
+
+// known looks p up in the memo: answered reports whether it has a current answer, valid
+// which one.
+func (s *Store) known(p string) (answered, valid bool) {
+	if s.valid == nil {
+		return false, false
+	}
+	s.valid.mu.Lock()
+	defer s.valid.mu.Unlock()
+	if _, ok := s.valid.paths[p]; ok {
+		return true, true
+	}
+	if g, ok := s.valid.invalid[p]; ok && g == s.valid.gen {
+		return true, false
+	}
+	return false, false
+}
+
+// generation returns the memo's command generation.
+func (s *Store) generation() uint64 {
+	if s.valid == nil {
+		return 0
+	}
+	s.valid.mu.Lock()
+	defer s.valid.mu.Unlock()
+	return s.valid.gen
+}
+
+// changing is called before every command that may change the store (everything but a
+// validity check): negative answers from before are no longer current.
+func (s *Store) changing() {
+	if s.valid == nil {
+		return
+	}
+	s.valid.mu.Lock()
+	s.valid.gen++
+	s.valid.mu.Unlock()
 }
 
 // Open extracts the embedded Nix on first use, enters the namespace and returns the store.
@@ -175,6 +354,9 @@ func (c *Cmd) Start() error {
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = 10 * time.Second
 	c.cmd = cmd
+	if !readOnly(c.name, c.Args) {
+		c.s.changing()
+	}
 	if c.s.inside {
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("store: start %s: %w", argv0, err)
@@ -206,6 +388,15 @@ func (c *Cmd) Run() error {
 		return err
 	}
 	return c.Wait()
+}
+
+// readOnly reports the commands that never make a store path valid: validity checks and path
+// information queries. Every other command ends the validity memo's negative answers.
+func readOnly(name string, args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	return name == "nix-store" && args[0] == "--check-validity" || name == "nix" && args[0] == "path-info"
 }
 
 // dedupEnv keeps the last value of each variable, in first-appearance order.
@@ -290,28 +481,83 @@ func rawLines(s string) []string {
 // validityBatch bounds the arguments of one nix-store --check-validity (the kernel limits argv).
 const validityBatch = 2000
 
-// Invalid returns those of paths that are not valid in the store, in one batched
-// `nix-store --check-validity --print-invalid`.
+// Invalid returns those of paths that are not valid in the store (each once, in order of
+// first appearance), in one batched `nix-store --check-validity --print-invalid` per
+// validityBatch paths. Paths the run's memo knows to be valid are not asked again; a call
+// whose paths are all known runs no Nix command.
 func (s *Store) Invalid(ctx context.Context, paths []string) ([]string, error) {
-	var out []string
-	for i := 0; i < len(paths); i += validityBatch {
-		batch := paths[i:min(i+validityBatch, len(paths))]
-		for _, p := range batch {
-			if !isStorePath(p) {
-				return nil, fmt.Errorf("store: %q is not a store path", p)
-			}
+	if err := s.awaitPrefetch(ctx); err != nil {
+		return nil, err
+	}
+	return s.invalid(ctx, paths)
+}
+
+func (s *Store) invalid(ctx context.Context, paths []string) ([]string, error) {
+	seen := make(map[string]bool, len(paths))
+	var ask []string
+	known := map[string]bool{} // memo answers: path → invalid
+	for _, p := range paths {
+		if !isStorePath(p) {
+			return nil, fmt.Errorf("store: %q is not a store path", p)
 		}
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		if answered, valid := s.known(p); !answered {
+			ask = append(ask, p)
+		} else if !valid {
+			known[p] = true
+		}
+	}
+	// Nix's answers go into out in the order of paths, as the memo's do.
+	asked := map[string]bool{}
+	gen := s.generation() // before asking: a command started meanwhile makes the answer old
+	for i := 0; i < len(ask); i += validityBatch {
+		batch := ask[i:min(i+validityBatch, len(ask))]
 		so, err := s.runStore(ctx, nil, "nix-store", append([]string{"--check-validity", "--print-invalid"}, batch...)...)
 		if err != nil {
 			return nil, err
 		}
+		bad := map[string]bool{}
 		for l := range strings.SplitSeq(string(so), "\n") {
 			if l = strings.TrimSpace(l); l != "" {
-				out = append(out, l)
+				bad[l] = true
 			}
+		}
+		var good, nogood []string
+		for _, p := range batch {
+			if bad[p] {
+				asked[p] = true
+				nogood = append(nogood, p)
+				delete(bad, p)
+			} else {
+				good = append(good, p)
+			}
+		}
+		if len(bad) > 0 {
+			return nil, fmt.Errorf("store: nix-store reported paths it was not asked about: %v", sortedKeys(bad))
+		}
+		s.remember(good)
+		s.rememberInvalid(nogood, gen)
+	}
+	var out []string
+	for _, p := range paths {
+		if (known[p] || asked[p]) && seen[p] {
+			out = append(out, p)
+			seen[p] = false
 		}
 	}
 	return out, nil
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // isStorePath checks the shape /nix/store/<32 base-32 chars>-<name>.
@@ -364,6 +610,14 @@ func (s *Store) Import(ctx context.Context, items []ExportItem) error {
 		// The stream failed on bob's side (a tree changed or became unreadable): that is the
 		// cause, not nix-store's complaint about the truncated input.
 		return werr
+	}
+	if err == nil {
+		// nix-store --import exits 0 only after registering every item as valid.
+		paths := make([]string, len(items))
+		for i, it := range items {
+			paths[i] = it.Path
+		}
+		s.remember(paths)
 	}
 	return err
 }

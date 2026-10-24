@@ -237,9 +237,14 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 	if err != nil {
 		return nil, err
 	}
-	if !bytes.Equal(before, after) {
+	raw, rerr := os.ReadFile(lockPath(r.o.Root))
+	if !bytes.Equal(before, after) || rerr == nil && !bytes.Equal(raw, after) {
 		if err := lf.Write(lockPath(r.o.Root)); err != nil {
 			return nil, err
+		}
+		if rerr == nil && bytes.Equal(before, after) {
+			// Same content, other bytes: formatted by hand (R-FW-004 (b)).
+			r.emit(Event{Event: "note", Note: &Note{Code: "lock-reformatted", Text: "bob.lock was reformatted"}})
 		}
 	}
 	return lf, nil
@@ -278,7 +283,7 @@ func lazyIndex(st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) fun
 	return func(ctx context.Context) (*nixidx.Index, error) {
 		if !opened {
 			opened = true
-			idx, err = nativeIndex(ctx, st, f, g, lf)
+			idx, err = nativeIndex(ctx, nil, st, f, g, lf)
 		}
 		return idx, err
 	}
@@ -498,6 +503,9 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		}
 		res.Written = true
 		res.Reformatted = len(changes) == 0 && rerr == nil && !lo.Rebuild
+	}
+	if err := writeRootGoMod(o.Root, g); err != nil {
+		return nil, err
 	}
 	return res, nil
 }

@@ -439,7 +439,8 @@ func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.
 	} else if ctx.Err() != nil {
 		return "", ir.Pos{}, err
 	}
-	// Name the first crate whose own requirement bob.lock does not hold, else the first crate.
+	// Name the first crate whose own requirement bob.lock does not hold, else the first crate;
+	// the wording is SPEC §02.5's ("//web:app needs npm zod (not pinned)").
 	byName := map[string][]*resolve.Crate{}
 	for i := range records {
 		byName[records[i].Name] = append(byName[records[i].Name], &records[i])
@@ -448,12 +449,12 @@ func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.
 		for _, d := range m.Deps {
 			if !d.Local && resolve.MatchLocked(byName[d.Package], d.Req) == nil {
 				n := st.ws.members[m.Name].node
-				return fmt.Sprintf("Rust crate %s requires %s %s, which is not locked", n.Label, d.Package, d.Req), n.DefinedAt, nil
+				return fmt.Sprintf("%s needs rust %s %s (not pinned)", n.Label, d.Package, d.Req), n.DefinedAt, nil
 			}
 		}
 	}
 	n := st.ws.members[st.ws.names[0]].node
-	return "the Rust crate declarations need crates or features bob.lock does not hold", n.DefinedAt, nil
+	return "the rust crate declarations need crates or features bob.lock does not hold", n.DefinedAt, nil
 }
 
 // lockedRegistry is a registry of exactly the locked crates: every dependency requires the

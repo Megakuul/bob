@@ -19,6 +19,7 @@ import (
 	analyticsv1 "github.com/megakuul/bob/internal/gen/bob/analytics/v1"
 	"github.com/megakuul/bob/internal/gen/bob/analytics/v1/analyticsv1connect"
 	buildv1 "github.com/megakuul/bob/internal/gen/bob/build/v1"
+	"github.com/megakuul/bob/internal/logstore"
 	"github.com/megakuul/bob/internal/project"
 	"github.com/megakuul/bob/internal/store"
 )
@@ -44,10 +45,12 @@ const (
 
 // Analytics is AnalyticsService.
 type Analytics struct {
-	Builds       *buildctl.Builds
-	Control      *store.Bucket
-	Fleet        *store.Bucket
-	Scope        project.Scoper
+	Builds  *buildctl.Builds
+	Control *store.Bucket
+	Fleet   *store.Bucket
+	Scope   project.Scoper
+	// Runs reads the package_run rows of PackageDurations; nil: no rows.
+	Runs         PackageRuns
 	WorkerShards int           // fleet.worker_shards (widx)
 	GoneAfter    time.Duration // fleet.gone_after: older heartbeats are stale
 	Now          func() time.Time
@@ -61,6 +64,11 @@ type Analytics struct {
 	queues  map[string]*store.SeqLog[store.QueueSlot]
 	heads   map[string]cachedHead
 	workers *workerSnapshot
+}
+
+// PackageRuns is the part of logstore.Reader that PackageDurations reads.
+type PackageRuns interface {
+	PackageRuns(ctx context.Context, project, label string, since, until time.Time) ([]logstore.PackageRun, error)
 }
 
 type cachedHead struct {
@@ -294,14 +302,61 @@ func (a *Analytics) depth(ctx context.Context, class string) (int32, error) {
 
 // PackageDurations implements AnalyticsService. No per-package timing data is recorded yet
 // (the analytics tables of the lake have no writer): the answer is valid and empty.
-func (a *Analytics) PackageDurations(_ context.Context, req *connect.Request[analyticsv1.PackageDurationsRequest]) (*connect.Response[analyticsv1.PackageDurationsResponse], error) {
+func (a *Analytics) PackageDurations(ctx context.Context, req *connect.Request[analyticsv1.PackageDurationsRequest]) (*connect.Response[analyticsv1.PackageDurationsResponse], error) {
 	if _, err := days(req.Msg.GetDays()); err != nil {
 		return nil, err
 	}
 	if l := req.Msg.GetLabel(); len(l) > 1024 || strings.ContainsAny(l, "\x00\n") {
 		return nil, api.InvalidArgument("label", "invalid label")
 	}
-	return connect.NewResponse(&analyticsv1.PackageDurationsResponse{}), nil
+	n, _ := days(req.Msg.GetDays())
+	if !project.ValidID(req.Msg.GetProjectId()) {
+		return nil, api.NotFound("project")
+	}
+	if a.Runs == nil { // the analytics bucket is not reachable: no rows, like a new project
+		return connect.NewResponse(&analyticsv1.PackageDurationsResponse{}), nil
+	}
+	now := a.now()
+	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -(n - 1))
+	runs, err := a.Runs.PackageRuns(ctx, req.Msg.GetProjectId(), req.Msg.GetLabel(), cutoff, now.Add(time.Minute))
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&analyticsv1.PackageDurationsResponse{Rows: durationRows(runs)}), nil
+}
+
+// durationRows aggregates package runs per (label, UTC day of the start): the number of builds
+// and their mean duration. Only runs that built count (status ok or failed): a cached or
+// cancelled package has no build duration (A298).
+func durationRows(runs []logstore.PackageRun) []*analyticsv1.PackageDuration {
+	type key struct{ label, day string }
+	type agg struct {
+		count int64
+		sumMs int64
+	}
+	m := map[key]*agg{}
+	for _, r := range runs {
+		if st := r.Status.Data; st != "ok" && st != "failed" {
+			continue
+		}
+		k := key{r.Package.Data, time.Unix(0, r.Start.Data).UTC().Format(time.DateOnly)}
+		g := m[k]
+		if g == nil {
+			g = &agg{}
+			m[k] = g
+		}
+		g.count++
+		g.sumMs += r.DurationMs.Data
+	}
+	out := make([]*analyticsv1.PackageDuration, 0, len(m))
+	for k, g := range m {
+		out = append(out, &analyticsv1.PackageDuration{Label: k.label, Day: k.day, Count: g.count,
+			AvgMs: float64(g.sumMs) / float64(g.count)})
+	}
+	slices.SortFunc(out, func(x, y *analyticsv1.PackageDuration) int {
+		return cmp.Or(cmp.Compare(x.Day, y.Day), cmp.Compare(x.Label, y.Label))
+	})
+	return out
 }
 
 // RecentFailures implements AnalyticsService: the bidx/failed ring, newest first, filtered to

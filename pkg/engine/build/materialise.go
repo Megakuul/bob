@@ -41,12 +41,18 @@ func (r *runner) materialise(ctx context.Context, st *store.Store, p *planner, r
 		missing[o] = true
 	}
 	var roots []materialise.Root
+	digests := newDigester(r.o.Root, p.g, p.lockf, func(n *ir.Node) (string, error) { return p.srcs[n.ID], nil })
 	for _, m := range set {
 		if missing[m.Output] {
 			continue
 		}
+		inputs, err := digests.of(m.Label)
+		if err != nil {
+			inputs = "" // shown as stale by bob status; the output itself is fine
+		}
 		roots = append(roots, materialise.Root{Dir: m.Dir, Label: m.Label, Source: m.Output,
-			Tree: hostPath(st, m.Output), LinkStore: filepath.Join(st.Home(), "nix", "store"), Keep: m.Keep, Record: m.Record})
+			Tree: hostPath(st, m.Output), LinkStore: filepath.Join(st.Home(), "nix", "store"), Keep: m.Keep, Record: m.Record,
+			Inputs: inputs})
 	}
 	// Pruning needs the complete set: a root whose output failed to build is not stale.
 	prune := r.o.Command == CmdGen && len(r.o.Patterns) == 0 && len(invalid) == 0
@@ -165,7 +171,7 @@ func materialises(g *ir.Graph) (bool, error) {
 
 // genMaterialise is bob gen's second half: build and materialise the working-tree outputs, or,
 // when the repository has none, only prune what an earlier bob gen left.
-func genMaterialise(ctx context.Context, o Options, g *ir.Graph, force bool) error {
+func genMaterialise(ctx context.Context, o Options, g *ir.Graph, force bool, prev *runner) error {
 	has, err := materialises(g)
 	if err != nil {
 		return err
@@ -181,7 +187,7 @@ func genMaterialise(ctx context.Context, o Options, g *ir.Graph, force bool) err
 		return joinDiags(res.Conflicts)
 	}
 	o.Command, o.Force = CmdGen, force
-	res, err := Run(ctx, o)
+	res, err := runAfter(ctx, o, prev)
 	if err != nil {
 		return err
 	}

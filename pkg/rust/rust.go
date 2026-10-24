@@ -21,10 +21,12 @@ import (
 )
 
 // Kinds of the Rust ecosystem (SPEC §03.3). Every crate unit depends on the target platform;
-// a variant's Features of a crate are added on top of its Enable list (§04).
+// target crates and build-script runs also on the profile (R-FW-038; host units never, the
+// planner keeps them profile-free, R-FW-035); a variant's Features of a crate are added on top
+// of its Enable list (§04).
 func init() {
-	ext.Register(ext.Kind{Name: rsspec.KindCrate, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisFeatures}})
-	ext.Register(ext.Kind{Name: rsspec.KindTest, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisFeatures}})
+	ext.Register(ext.Kind{Name: rsspec.KindCrate, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisFeatures}})
+	ext.Register(ext.Kind{Name: rsspec.KindTest, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisFeatures}})
 	ext.Register(ext.Kind{Name: rsspec.KindTests, Axes: []ext.Axis{ext.AxisPlatform}})
 }
 

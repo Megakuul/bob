@@ -349,7 +349,12 @@ func TestRFLEET008BuildsAreIsolated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v := exec.Command(nix, "--extra-experimental-features", "nix-command", "store", "verify", "--check-contents", "--all", "--store", "local?root="+store)
+	// NixTool returns the package's store path, the binary is bin/nix; the worker's store
+	// directory is mounted at /nix in its job containers, so the store root (the directory that
+	// holds nix/store) is its parent; `nix store verify` checks contents by default and has no
+	// --check-contents flag in the pinned Nix; --no-trust: the check is "contents unchanged"
+	// (SPEC), not signatures of bob's imported sources and derivations (test correction 73).
+	v := exec.Command(filepath.Join(nix, "bin", "nix"), "--extra-experimental-features", "nix-command", "store", "verify", "--all", "--no-trust", "--store", "local?root="+filepath.Dir(store))
 	if b, err := v.CombinedOutput(); err != nil {
 		t.Errorf("nix store verify --check-contents on the worker store: %v\n%s", err, b)
 	}

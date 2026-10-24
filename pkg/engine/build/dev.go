@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -16,7 +17,10 @@ import (
 	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/engine/lock"
+	"github.com/megakuul/bob/pkg/engine/nixidx"
 	"github.com/megakuul/bob/pkg/engine/store"
+	gogen "github.com/megakuul/bob/pkg/golang/gen"
 )
 
 // Developer environments (SPEC §02.7, R-DEV-001, R-DEV-002): what bob dev, bob env, the shell
@@ -113,6 +117,28 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if idx == nil && lf.Nixpkgs.Rev != "" {
+		// Every dev shell has the Go share (go and gopls for the bob.go files, R-FW-001),
+		// which takes its toolchain from nixpkgs even when the graph itself needs none.
+		src, err := f.Ensure(ctx, lock.NixpkgsRequest(lf.Nixpkgs))
+		if err != nil {
+			return nil, err
+		}
+		if idx, err = nixidx.Open(ctx, st, nixidx.Config{Source: src, Rev: lf.Nixpkgs.Rev, System: store.HostSystem()}); err != nil {
+			return nil, err
+		}
+	}
+	// The bob.Import modules in the Go module cache (also when the evaluation was cached):
+	// the root go.sum records them and the shell's go and gopls are served them (R-FW-022).
+	// Best effort: offline, a module that cannot be downloaded is reported by go and gopls in
+	// the shell, which must still start.
+	if imports, err := gogen.BobImports(o.Root); err == nil && len(imports) > 0 {
+		mods := map[string]string{}
+		for _, m := range imports {
+			mods[m.Path] = m.Version
+		}
+		_ = eval.DownloadModules(ctx, goRoot, mods)
+	}
 	gen, err := generate(ctx, o.Root, g, lf, idx, false, time.Now())
 	if err != nil {
 		return nil, err
@@ -175,6 +201,10 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, eco := range ecos {
+		res.Ecosystem = append(res.Ecosystem, eco.Name())
+	}
+	ecos = withGoEcosystem(ecos)
 	var servers map[string]bool
 	if sh != nil {
 		servers = map[string]bool{}
@@ -183,7 +213,6 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 		}
 	}
 	for _, eco := range ecos {
-		res.Ecosystem = append(res.Ecosystem, eco.Name())
 		dp, ok := eco.(engine.DevPreparer)
 		if !ok {
 			continue
@@ -215,10 +244,39 @@ func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 			return nil, err
 		}
 	}
+	if proxy, ok := strings.CutPrefix(res.InsideEnv["GOPROXY"], "file://"); ok && proxy != "" {
+		// The shell's go and gopls resolve the framework and the dependency bob repositories the
+		// bob.go files import from there.
+		if err := eval.InstallFrameworkProxy(proxy); err != nil {
+			return nil, err
+		}
+		if err := gogen.ServeImports(o.Root, proxy); err != nil {
+			return nil, err
+		}
+	}
 	for k, v := range res.ShellEnv {
 		res.Env[k] = v
 	}
 	return res, nil
+}
+
+// withGoEcosystem adds the Go ecosystem to the ecosystems of a dev shell: the bob.go files are
+// Go, so every repository's shell gets go and gopls (R-FW-001, R-FW-022, §02.7.2 "The Go
+// package always gets gopls"), also one without Go nodes of its own. ecos stays sorted by name.
+func withGoEcosystem(ecos []engine.Ecosystem) []engine.Ecosystem {
+	name := gogen.Ecosystem{}.Name()
+	for _, e := range ecos {
+		if e.Name() == name {
+			return ecos
+		}
+	}
+	e, ok := engine.Lookup(name)
+	if !ok {
+		return ecos
+	}
+	out := append(slices.Clone(ecos), e)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
+	return out
 }
 
 // prepareDev calls one ecosystem's PrepareDev; a panic is a bob bug, not a crash.

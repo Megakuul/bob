@@ -445,6 +445,7 @@ type rootCtx struct {
 	units map[resolve.UnitKey]*resolve.Unit
 	done  map[resolve.UnitKey]*unitOut
 	nodes map[string]string // crate name → node id of the local crate in this configuration
+	debug bool              // the root's profile is debug (R-FW-038: target units and build-script runs)
 }
 
 // localNodes maps the local crates reachable from n to their node ids in n's configuration.
@@ -521,11 +522,22 @@ func (pl *planner) newRoot(n *ir.Node, s rsspec.Crate, dev bool) (*rootCtx, erro
 		}
 		return nil, invalid(n, "Deps", err.Error())
 	}
-	rc := &rootCtx{node: n, tc: tc, units: map[resolve.UnitKey]*resolve.Unit{}, done: map[resolve.UnitKey]*unitOut{}, nodes: nodes}
+	rc := &rootCtx{node: n, tc: tc, units: map[resolve.UnitKey]*resolve.Unit{}, done: map[resolve.UnitKey]*unitOut{}, nodes: nodes,
+		debug: debugProfile(n)}
 	for i := range units {
 		rc.units[units[i].Key] = &units[i]
 	}
 	return rc, nil
+}
+
+// debugProfile reports whether crate node n is configured with the debug profile (its
+// projected "profile", R-FW-038).
+func debugProfile(n *ir.Node) bool {
+	var p string
+	if raw, ok := n.Proj["profile"]; ok && json.Unmarshal(raw, &p) == nil {
+		return p == string(bob.Debug)
+	}
+	return false
 }
 
 // variantFeatures are the features the configuration's variant enables on crate node n
@@ -686,7 +698,7 @@ func (pl *planner) unitPlan(rc *rootCtx, k resolve.UnitKey) (*unitOut, error) {
 		role = "host"
 	}
 	u.sum = sum
-	u.meta = metadata(append([]string{name, version, sum, role, u.typ, strings.Join(un.Features, ","), rc.tc.out, rc.tc.roleTriple(k.Host)}, depMetas...)...)
+	u.meta = metadata(append([]string{name, version, sum, role, u.typ, strings.Join(un.Features, ","), rc.tc.out, rc.tc.roleTriple(k.Host)}, append(rc.tags(k.Host), depMetas...)...)...)
 	if u.typ == rsspec.TypeProcMacro {
 		u.libFile = "lib" + u.codeName + "-" + u.meta + ".so"
 	} else {
@@ -704,10 +716,10 @@ func (pl *planner) unitPlan(rc *rootCtx, k resolve.UnitKey) (*unitOut, error) {
 			return nil, err
 		}
 	}
-	a := pl.rustcArgs(u, edition, root)
+	a := pl.rustcArgs(rc, u, edition, root)
 	in := newInputs(pl.req.Builder)
 	pl.commonInputs(rc, u, in, &a)
-	cr, err := pl.job(base, rc.tc.system, "rustc", pl.label(u), a, in)
+	cr, err := pl.job(drv.Name(append([]string{base}, rc.tags(k.Host)...)...), rc.tc.system, "rustc", pl.label(u), a, in)
 	if err != nil {
 		return nil, err
 	}
@@ -765,6 +777,7 @@ type rustcArgsJSON struct {
 	Features   []string          `json:"features"`
 	Metadata   string            `json:"metadata"`
 	OptLevel   string            `json:"optLevel"`
+	Debug      bool              `json:"debug,omitempty"`
 	CapLints   bool              `json:"capLints"`
 	CheckCfg   bool              `json:"checkCfg"`
 	FeatureSet []string          `json:"featureSet"`
@@ -799,11 +812,27 @@ type depLinksJSON struct {
 	Run   string `json:"run"`
 }
 
-func optLevel(host bool) string {
-	if host {
-		return "0" // Cargo's release build-override: build scripts, proc-macros and their deps
+// optLevel is -C opt-level of a unit (R-FW-038): host units 0 (Cargo's release build-override:
+// build scripts, proc-macros and their deps; never profile-dependent, R-FW-035), target units
+// 2 in release and 0 in debug.
+func (rc *rootCtx) optLevel(host bool) string {
+	if host || rc.debug {
+		return "0"
 	}
-	return "3"
+	return "2"
+}
+
+// debugUnit reports whether a unit of rc is compiled with the debug profile (debuginfo and
+// debug assertions): target units of a debug root, never host units.
+func (rc *rootCtx) debugUnit(host bool) bool { return rc.debug && !host }
+
+// tags is the projection tag of a unit's derivation name and -C metadata (§03.3.3): "dbg"
+// for a debug target unit, nothing otherwise.
+func (rc *rootCtx) tags(host bool) []string {
+	if rc.debugUnit(host) {
+		return []string{"dbg"}
+	}
+	return nil
 }
 
 // remap is what a unit's source directory is called in diagnostics: the repository directory
@@ -833,9 +862,10 @@ func pkgEnv(u *unitOut) map[string]string {
 }
 
 // rustcArgs is the compile of unit u as a library (or proc-macro); roots adjust it.
-func (pl *planner) rustcArgs(u *unitOut, edition, root string) rustcArgsJSON {
+func (pl *planner) rustcArgs(rc *rootCtx, u *unitOut, edition, root string) rustcArgsJSON {
+	host := u.unit.Key.Host
 	a := rustcArgsJSON{Src: u.src, Remap: remap(u), CrateName: u.codeName, CrateType: u.typ, Edition: edition, Root: root,
-		Features: nonNil(u.features), Metadata: u.meta, OptLevel: optLevel(u.unit.Key.Host), CapLints: u.local == nil,
+		Features: nonNil(u.features), Metadata: u.meta, OptLevel: rc.optLevel(host), Debug: rc.debugUnit(host), CapLints: u.local == nil,
 		Env: pkgEnv(u), Externs: []externJSON{}, DepDirs: []string{}, LinkFrom: []string{}, LinkArgs: []string{},
 		Libs: []string{}, Search: []string{}, FeatureSet: []string{}}
 	if u.typ != rsspec.TypeLib && u.typ != rsspec.TypeProcMacro {
@@ -958,8 +988,12 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 	host := u.unit.Key.Host
 	triple := rc.tc.roleTriple(host)
 	env := pkgEnv(u)
-	for k, v := range map[string]string{"TARGET": triple, "HOST": rc.tc.hostTriple, "PROFILE": "release", "OPT_LEVEL": optLevel(host),
-		"DEBUG": "false"} {
+	profile := "release"
+	if rc.debugUnit(host) {
+		profile = "debug"
+	}
+	for k, v := range map[string]string{"TARGET": triple, "HOST": rc.tc.hostTriple, "PROFILE": profile, "OPT_LEVEL": rc.optLevel(host),
+		"DEBUG": strconv.FormatBool(rc.debugUnit(host))} {
 		env[k] = v
 	}
 	if x := rc.tc.cross; x != nil && !host {
@@ -982,7 +1016,9 @@ func (pl *planner) buildScript(rc *rootCtx, u *unitOut, base, edition, script st
 		k, v, ok := strings.Cut(l, "=")
 		switch {
 		case k == "debug_assertions":
-			// release profile
+			if rc.debugUnit(host) { // Cargo's debug profile has debug assertions on
+				env["CARGO_CFG_DEBUG_ASSERTIONS"] = ""
+			}
 		case !ok:
 			env["CARGO_CFG_"+envName(k)] = ""
 		default:
@@ -1127,7 +1163,7 @@ func (pl *planner) planCrate(n *ir.Node) error {
 			return err
 		}
 	}
-	a := pl.rustcArgs(u, edition, root)
+	a := pl.rustcArgs(rc, u, edition, root)
 	a.CrateType = s.Type
 	in := newInputs(pl.req.Builder)
 	pl.commonInputs(rc, u, in, &a)
@@ -1142,7 +1178,7 @@ func (pl *planner) planCrate(n *ir.Node) error {
 	case rsspec.TypeStaticLib, rsspec.TypeCDylib:
 		a.Headers = s.Headers
 	}
-	cr, err := pl.job(drv.Name(s.Name), rc.tc.system, "rustc", n.Label, a, in)
+	cr, err := pl.job(drv.Name(append([]string{s.Name}, rc.tags(ru.Key.Host)...)...), rc.tc.system, "rustc", n.Label, a, in)
 	if err != nil {
 		return err
 	}
@@ -1173,7 +1209,7 @@ func (pl *planner) depsOf(rc *rootCtx, ru *resolve.Unit) (*unitOut, error) {
 		metas = append(metas, d.Name+"="+du.meta)
 	}
 	sort.Strings(metas)
-	u.meta = metadata(append([]string{name, version, "local", "root", m.spec.Type, strings.Join(ru.Features, ","), rc.tc.out, rc.tc.roleTriple(ru.Key.Host)}, metas...)...)
+	u.meta = metadata(append([]string{name, version, "local", "root", m.spec.Type, strings.Join(ru.Features, ","), rc.tc.out, rc.tc.roleTriple(ru.Key.Host)}, append(rc.tags(ru.Key.Host), metas...)...)...)
 	id := rc.nodes[name]
 	src, ok := pl.req.Sources[id]
 	if !ok {
@@ -1306,7 +1342,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 		root = t.File
 		crateName = codeName(strings.TrimSuffix(path.Base(t.File), ".rs"))
 	}
-	a := pl.rustcArgs(u, s.Edition, root)
+	a := pl.rustcArgs(rc, u, s.Edition, root)
 	a.CrateName, a.Test, a.OutName, a.CrateType = crateName, true, name, rsspec.TypeBin
 	a.Metadata = metadata(u.meta, "test", t.File)
 	in := newInputs(pl.req.Builder)
@@ -1323,7 +1359,7 @@ func (pl *planner) planTest(n *ir.Node) error {
 	if err := pl.native(cn, s, in, &a); err != nil {
 		return err
 	}
-	tb, err := pl.job(drv.Name(s.Name, "test", strings.TrimSuffix(path.Base(t.File), ".rs")), rc.tc.system, "rustc", n.Label, a, in)
+	tb, err := pl.job(drv.Name(append([]string{s.Name, "test", strings.TrimSuffix(path.Base(t.File), ".rs")}, rc.tags(ru.Key.Host)...)...), rc.tc.system, "rustc", n.Label, a, in)
 	if err != nil {
 		return err
 	}

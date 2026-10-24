@@ -141,6 +141,37 @@ func (s *Store) ImportDrvs(ctx context.Context, drvs []*drv.Derivation) (int, er
 	return len(ordered), nil
 }
 
+// ImportDrvsAt is ImportDrvs for derivations whose paths the caller computed already (path →
+// derivation): the validity check needs no serialisation, so only the derivations that are not
+// valid yet are serialised (A315). Each of them must serialise to its given path.
+func (s *Store) ImportDrvsAt(ctx context.Context, drvs map[string]*drv.Derivation) (int, error) {
+	paths := make([]string, 0, len(drvs))
+	for p := range drvs {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	invalid, err := s.Invalid(ctx, paths)
+	if err != nil || len(invalid) == 0 {
+		return 0, err
+	}
+	missing := make([]*drv.Derivation, 0, len(invalid))
+	for _, p := range invalid {
+		d := drvs[p]
+		if d == nil {
+			return 0, fmt.Errorf("store: the store reported an unknown path %s", p)
+		}
+		it, err := DrvExport(d)
+		if err != nil {
+			return 0, err
+		}
+		if it.Path != p {
+			return 0, fmt.Errorf("store: derivation %s serialises to %s", p, it.Path)
+		}
+		missing = append(missing, d)
+	}
+	return s.ImportDrvs(ctx, missing)
+}
+
 // topoOrder orders items so that every item comes after the items it references; ties are
 // broken by path, so the stream is deterministic.
 func topoOrder(items map[string]ExportItem) ([]ExportItem, error) {

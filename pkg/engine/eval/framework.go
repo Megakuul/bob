@@ -311,3 +311,54 @@ func langVersion(v string) string {
 	}
 	return parts[0] + "." + parts[1]
 }
+
+// InstallFrameworkProxy makes the GOPROXY directory dir (file:// layout) serve the framework
+// module at BobVersion(): <dir>/github.com/megakuul/bob/@v/{list,<v>.info,<v>.mod,<v>.zip}.
+// The go command and gopls of a dev shell (§03.2.5 point 3) read modules only from there, and
+// every bob.go and the generated root go.mod require the framework (R-FW-001, R-FW-043.4).
+// Files that already hold the same bytes are left alone.
+func InstallFrameworkProxy(dir string) error {
+	fw, err := loadFramework()
+	if err != nil {
+		return err
+	}
+	prefix := frameworkModule + "@" + fw.version + "/"
+	files := make(map[string][]byte, len(fw.files))
+	for n, c := range fw.files {
+		files[prefix+n] = c
+	}
+	zb, err := zipFramework(files)
+	if err != nil {
+		return err
+	}
+	vdir := filepath.Join(dir, filepath.FromSlash(frameworkModule), "@v")
+	if err := os.MkdirAll(vdir, 0o755); err != nil {
+		return err
+	}
+	list := filepath.Join(vdir, "list")
+	old, _ := os.ReadFile(list)
+	versions := strings.Fields(string(old))
+	if !slices.Contains(versions, fw.version) {
+		versions = append(versions, fw.version)
+	}
+	slices.Sort(versions)
+	for name, c := range map[string][]byte{
+		fw.version + ".info": []byte(`{"Version":"` + fw.version + `","Time":"1980-01-01T00:00:00Z"}` + "\n"),
+		fw.version + ".mod":  fw.files["go.mod"],
+		fw.version + ".zip":  zb,
+		"list":               []byte(strings.Join(versions, "\n") + "\n"),
+	} {
+		p := filepath.Join(vdir, name)
+		if cur, err := os.ReadFile(p); err == nil && bytes.Equal(cur, c) {
+			continue
+		}
+		tmp := p + ".tmp"
+		if err := os.WriteFile(tmp, c, 0o644); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}

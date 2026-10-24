@@ -11,6 +11,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/lock"
+	"github.com/megakuul/bob/pkg/engine/nixidx"
 	"github.com/megakuul/bob/pkg/engine/store"
 	"github.com/megakuul/bob/pkg/engine/translate"
 )
@@ -165,8 +166,18 @@ type TestResult struct {
 // anything else (for example an *evalbox.Error, a damaged store or a cancelled context), and
 // Result is still returned with the errors known so far.
 func Run(ctx context.Context, o Options) (*Result, error) {
+	return runAfter(ctx, o, nil)
+}
+
+// runAfter is Run as a later phase of the command of prev (nil: none): the pipeline takes over
+// prev's evaluation, nixpkgs index and validity hint.
+func runAfter(ctx context.Context, o Options, prev *runner) (*Result, error) {
 	start := time.Now()
 	r := &runner{o: o, start: start}
+	if prev != nil {
+		r.idx, r.idxSrc, r.idxRev = prev.idx, prev.idxSrc, prev.idxRev
+		r.evaluated, r.hinted = prev.evaluated, prev.hinted
+	}
 	res, err := r.run(ctx)
 	if res == nil {
 		res = &Result{}
@@ -208,6 +219,13 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 		}
 		r.emit(e)
 	}
+	for _, l := range r.depsCached {
+		e := Event{Event: "package.finish", Label: l, Status: string(translate.StCached)}
+		if o.PrintPaths {
+			e.Paths = r.hostPaths[l]
+		}
+		r.emit(e)
+	}
 	r.emit(Event{Event: "run.finish", ExitCode: res.ExitCode, Counts: res.Report.Counts,
 		Drift: res.Report.Drift, DurationMs: time.Since(start).Milliseconds()})
 	return res, err
@@ -219,13 +237,31 @@ type runner struct {
 	start     time.Time
 	started   bool                // run.start was emitted
 	hostPaths map[string][]string // label → host paths of its outputs (sorted by output name)
-	skipped   []TestResult        // test units that cannot run on this machine (R-FW-039)
+	// depsCached are the needed dependencies Nix had nothing to do for (package.finish cached).
+	depsCached []string
+	skipped    []TestResult // test units that cannot run on this machine (R-FW-039)
 	// transientPin is the nixpkgs pin resolved for the evaluator's Go before bob.lock had one;
 	// the lock stage records it when bob.go declares the same channel.
 	transientPin lock.NixpkgsPin
 	// salvageLock is bob lock --rebuild: an unreadable bob.lock is not an error, only its
 	// nixpkgs revision is kept (R-FW-048).
 	salvageLock bool
+	// idx is the host nixpkgs index of revision idxRev (source idxSrc), opened once per run.
+	idx            *nixidx.Index
+	idxSrc, idxRev string
+	// evaluated is the evaluation an earlier phase of the same command made (bob gen evaluates
+	// for the native files, then runs the pipeline for the working-tree outputs): the pipeline
+	// reuses it when it asks for the same evaluation.
+	evaluated *evaluation
+	hinted    bool          // the command started the validity hint already (startHint)
+	evalTook  time.Duration // evaluate: scan and eval (evaluator's Go and evaluator), without IR parsing
+}
+
+// evaluation is one evaluator run of a command.
+type evaluation struct {
+	goRoot string
+	req    eval.Request
+	res    *eval.Result
 }
 
 func (r *runner) emit(e Event) {
@@ -245,12 +281,17 @@ func (r *runner) stage(name string, f func() error) error {
 	return err
 }
 
-// openStore returns the caller's store or opens one.
+// openStore returns the caller's store or opens one, with a validity memo for this call only
+// (A310): every entry point (one build, lock, status, …) asks Nix about a path at most once
+// while it is valid, and a long-lived caller's store never carries answers between runs.
 func openStore(ctx context.Context, st *store.Store, home string, caches []store.Substituter) (*store.Store, error) {
-	if st != nil {
-		return st, nil
+	if st == nil {
+		var err error
+		if st, err = store.Open(ctx, store.Config{Home: home, Substituters: caches}); err != nil {
+			return nil, err
+		}
 	}
-	return store.Open(ctx, store.Config{Home: home, Substituters: caches})
+	return st.WithValidityMemo(), nil
 }
 
 // targets are the evaluator's targets: the patterns with the platform/variant suffix.

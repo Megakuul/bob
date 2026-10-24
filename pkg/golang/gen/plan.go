@@ -248,6 +248,7 @@ type target struct {
 	system string           // Nix system of the derivations: the host's (R-PLAT-004)
 	plat   bob.Platform     // the platform the binary or test is for
 	cc     *engine.Resolved // C compiler (nil: cgo off)
+	ccLib  *engine.Resolved // the cross compiler's lib output of a sanitised cross build (R-FW-037), else nil
 	cgoOK  bool
 }
 
@@ -287,6 +288,13 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 		t.cc = &rv
 		t.cgoOK = true
 	}
+	if b.CCLib > 0 && b.CCLib < len(n.Deps) {
+		rv, ok := pl.req.Inputs[n.Deps[b.CCLib]]
+		if !ok {
+			return nil, internal(n, "the cross compiler's lib output is not planned")
+		}
+		t.ccLib = &rv
+	}
 	tags := append(slices.Clone(mod.spec.Tags), b.Tags...)
 	t.ctx = buildCtx{main: mod.spec.Path, goos: gt.GOOS, goarch: gt.GOARCH, tags: sortedUnique(tags), cgo: t.cgoOK, tc: tc,
 		target: gt, v: v}
@@ -298,6 +306,16 @@ func (pl *planner) newTarget(n *ir.Node, b gospec.Build) (*target, error) {
 		return nil, pl.invalid("variant", "race and asan cannot be combined in one Go build")
 	}
 	return t, nil
+}
+
+// sanitiserRunpath is the external-link flag of R-FW-037: a sanitised cross program finds the
+// sanitiser runtimes (and libstdc++) of the cross compiler's lib output through its RUNPATH,
+// `-Wl,-rpath,<gcc-lib>/lib`; nothing for other builds.
+func (t *target) sanitiserRunpath(c buildCtx, in *inputs) []string {
+	if t.ccLib == nil || !c.cgo || len(c.v.csan) == 0 {
+		return nil
+	}
+	return []string{"-Wl,-rpath," + in.add(*t.ccLib, pickOutput(t.ccLib.Outputs, "lib", "out")) + "/lib"}
 }
 
 // loadTarget loads the closure of roots for t, deciding cgo: on iff a non-std package of the
@@ -549,6 +567,13 @@ func pickOutput(outs map[string]string, prefer ...string) string {
 func (pl *planner) std(c buildCtx, cc *engine.Resolved, system string) (string, *drv.Derivation, error) {
 	in := newInputs(pl.req.Builder)
 	tca := pl.toolchainArgs(c, cc, in)
+	if c.v.asan {
+		// Go cannot link an -asan program whose standard library is compiled with -N: the
+		// unoptimised nosplit frames of runtime.asanwrite and reflect.methodValueCall overflow
+		// the nosplit stack limit (`go build -asan -gcflags=all=-N` fails the same way, Go
+		// 1.26.9). Debug -asan builds keep -l there and -N -l in the program's own packages.
+		tca.GCFlags = slices.DeleteFunc(slices.Clone(tca.GCFlags), func(f string) bool { return f == "-N" })
+	}
 	parts := []string{"go-std", c.tc.version, c.goos, c.goarch}
 	if c.cgo {
 		parts = append(parts, "cgo")
@@ -1193,6 +1218,7 @@ func (pl *planner) planBinary(n *ir.Node) error {
 	}
 	in := newInputs(pl.req.Builder)
 	tca := pl.toolchainArgsFor(cl.ctx, t.cc, in, jobLink)
+	tca.CFlags = append(tca.CFlags, t.sanitiserRunpath(cl.ctx, in)...)
 	in.addDrv(res.stdD, res.stdDrv)
 	link := map[string]string{}
 	for _, dep := range cl.transitive(ip) {

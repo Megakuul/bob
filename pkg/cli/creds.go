@@ -249,15 +249,19 @@ func (e *env) substituters(c *credFile, skip map[string]bool) []store.Substitute
 		if sub == "" {
 			sub = u + "/nix"
 		}
-		host := remote.Host(sub)
-		if pu, err := url.Parse(sub); err == nil && pu.Hostname() != "" {
-			host = pu.Hostname()
-		}
 		if strings.ContainsAny(ent.AccessToken, " \t\r\n#") {
 			continue // cannot be written to netrc
 		}
 		out = append(out, store.Substituter{URL: strings.TrimRight(sub, "/"), PublicKey: strings.Join(ent.Nix.PublicKeys, " "),
-			NetrcMachine: host, NetrcPassword: ent.AccessToken})
+			NetrcMachine: netrcHost(sub), NetrcPassword: ent.AccessToken})
 	}
 	return out
+}
+
+// netrcHost is the netrc machine of a substituter URL.
+func netrcHost(sub string) string {
+	if pu, err := url.Parse(sub); err == nil && pu.Hostname() != "" {
+		return pu.Hostname()
+	}
+	return remote.Host(sub)
 }

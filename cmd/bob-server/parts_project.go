@@ -9,6 +9,7 @@ import (
 	"github.com/megakuul/bob/internal/cache"
 	"github.com/megakuul/bob/internal/fleetsrv"
 	"github.com/megakuul/bob/internal/gen/bob/settings/v1/settingsv1connect"
+	"github.com/megakuul/bob/internal/logstore"
 	"github.com/megakuul/bob/internal/orchestrator"
 	"github.com/megakuul/bob/internal/overview"
 	"github.com/megakuul/bob/internal/project"
@@ -116,6 +117,14 @@ func (w *projectWiring) withBuilds(env *server.Env, parts *server.OrchestratorPa
 		WorkerShards: params.WorkerShards, GoneAfter: params.GoneAfter, Now: env.Now}
 	if w != nil {
 		a.Scope = w.scope
+	}
+	if env.Storage != nil {
+		st := env.Storage.Config
+		if c, err := s3client.New(context.Background(), s3client.Options{Endpoint: st.Endpoint, Region: st.Region}); err == nil {
+			a.Runs = logstore.NewReader(c, st.Analytics) // PackageDurations (package_run rows)
+		} else {
+			env.Log.Warn("analytics: package durations not available", "err", err.Error())
+		}
 	}
 	parts.Services.Analytics = a
 }

@@ -11,12 +11,14 @@ import (
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/lock"
+	"github.com/megakuul/bob/pkg/engine/nixidx"
 	"github.com/megakuul/bob/pkg/golang/internal/gospec"
 	"github.com/megakuul/bob/pkg/golang/resolve"
 )
 
 // PrepareDev is the Go share of a dev shell (SPEC §02.7.2, engine.DevPreparer): the toolchain
-// of the repository's modules and gopls on PATH, gopls with GOFLAGS=-tags=bob (S1-7), GOROOT
+// of the repository's modules (without a Go module: the pinned nixpkgs go, for the bob.go
+// files; the engine asks the Go ecosystem for every shell) and gopls on PATH, gopls with GOFLAGS=-tags=bob (S1-7), GOROOT
 // and GOTOOLCHAIN=local inside, and CGO_ENABLED=0: cgo packages take their C libraries from
 // bob builds (Module.Cgo), which the shell's go cannot link, so go and gopls in the shell work
 // on the pure-Go view and cgo builds go through bob build/test. go.mod and go.sum are the
@@ -53,36 +55,45 @@ func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (prep en
 			tc    engine.Resolved
 		}{n.Label, s, rv})
 	}
-	if len(mods) == 0 {
-		return prep, nil
+	var tc engine.Resolved
+	if len(mods) > 0 {
+		// The root module's toolchain is the shell's go (the shortest label sorts first: "//:x").
+		sort.Slice(mods, func(i, j int) bool {
+			di, dj := labelDir(mods[i].label), labelDir(mods[j].label)
+			if len(di) != len(dj) {
+				return len(di) < len(dj)
+			}
+			return di < dj
+		})
+		tc = mods[0].tc
 	}
-	// The root module's toolchain is the shell's go (the shortest label sorts first: "//:x").
-	sort.Slice(mods, func(i, j int) bool {
-		di, dj := labelDir(mods[i].label), labelDir(mods[j].label)
-		if len(di) != len(dj) {
-			return len(di) < len(dj)
+	var entries map[string]nixidx.Entry
+	if req.Nixpkgs != nil {
+		if entries, err = req.Nixpkgs.Lookup(ctx, []string{"go", "gopls"}); err != nil {
+			return prep, err
 		}
-		return di < dj
-	})
-	tc := mods[0].tc
+	}
+	if len(mods) == 0 {
+		// No Go module: the bob.go files are still Go, so the shell gets the pinned nixpkgs
+		// go (the one the evaluator compiles bob.go with) and gopls (R-FW-001, R-FW-022).
+		e, ok := entries["go"]
+		if !ok || e.DrvPath == "" || e.Outputs["out"] == "" {
+			return prep, nil
+		}
+		tc = engine.Resolved{Drv: e.DrvPath, Outputs: map[string]string{"out": e.Outputs["out"]}}
+	}
 	out := tc.Outputs["out"]
 	version := ""
 	if m := goStoreName().FindStringSubmatch(out); m != nil {
 		version = m[1]
 	}
 	prep.Packages = append(prep.Packages, engine.DevPackage{Name: "go", Version: version, Path: out, Drv: tc.Drv})
-	if req.Nixpkgs != nil {
-		entries, err := req.Nixpkgs.Lookup(ctx, []string{"gopls"})
-		if err != nil {
-			return prep, err
+	if e, ok := entries["gopls"]; ok && e.DrvPath != "" {
+		p := e.Outputs["out"]
+		if b, ok := e.Outputs["bin"]; ok {
+			p = b
 		}
-		if e, ok := entries["gopls"]; ok && e.DrvPath != "" {
-			p := e.Outputs["out"]
-			if b, ok := e.Outputs["bin"]; ok {
-				p = b
-			}
-			prep.Packages = append(prep.Packages, engine.DevPackage{Name: "gopls", Version: e.Version, Path: p, Drv: e.DrvPath})
-		}
+		prep.Packages = append(prep.Packages, engine.DevPackage{Name: "gopls", Version: e.Version, Path: p, Drv: e.DrvPath})
 	}
 	prep.Env = map[string]string{"CGO_ENABLED": "0"}
 	prep.InsideEnv = map[string]string{"GOROOT": out + "/share/go", "GOTOOLCHAIN": "local"}

@@ -77,6 +77,11 @@ func runGen(e *env) int {
 		return exit
 	}
 	o := build.Options{Root: root, Patterns: e.patterns(root, e.a.pos), Store: st, Offline: e.a.bool("offline")}
+	if len(o.Patterns) == 1 && o.Patterns[0] == "//..." {
+		// The whole repository is no patterns (build.Options): only then does bob gen prune
+		// owned directories whose recipe was removed (R-FW-066 (d)).
+		o.Patterns = nil
+	}
 	paths, err := build.Gen(e.ctx, o, e.a.bool("force"))
 	if err != nil {
 		return e.out.fail(err)

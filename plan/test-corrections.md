@@ -671,14 +671,16 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
 ## I-B35 (2026-10-23, evidence-based test correction)
 
 69. APPLIED 2026-10-23 I-B35 (A276). tests/core/label_test.go TestRFW016FailingBuildShowsDefinedAt:
-   `want := "(defined at libs/foo/bob.go:<line>)"` -> `"package defined at libs/foo/bob.go:<line>:"`.
+   `want := "(defined at libs/foo/bob.go:<line>)"` (Contains) -> the line
+   `package defined at libs/foo/bob.go:<line>[:<col>]` (regexp, whole line).
    SPEC conflicts with itself: R-FW-016's acceptance sentence writes `(defined at
    libs/foo/bob.go:13)`, while §02.5 rule 2 fixes the block line `package defined at
    <file>:<line>:<col>` and R-CLI-007 requires the S15 goldens byte for byte (tests/faults/*/golden.txt,
    e.g. 06-cxx-compile: `package defined at fixture/libfoo/bob.go:8:11`, 58 occurrences). bob
-   prints the §02.5 line (`package defined at libs/foo/bob.go:13:11`, I-B31 table). The
+   prints the §02.5 line (`package defined at libs/foo/bob.go:13`; this definedAt has no column). The
    position asserted (the constructor line, the R-FW-016 point) is unchanged; only the wrapper text
-   follows the format rule with goldens. NEEDS: owner/coordinator to amend the R-FW-016 sentence.
+   follows the format rule with goldens. Result: PASS (I-B35 run 4). NEEDS: owner/coordinator to amend
+   the R-FW-016 sentence.
 
 ## I-B36 (2026-10-23, evidence-based test correction)
 70. APPLIED 2026-10-23 I-B36 (A285). tests/core/native_test.go TestRFW067GoplsResolvesGeneratedCode:
@@ -729,3 +731,113 @@ RE-APPLIED 2026-10-23 (coordinator, A147): item 24/A126 (tests/core/platform_tes
    (>= 10,000 / >= 2,000 lines readable within 60 s with a 10 min flush interval; gap-free attempt
    1 prefix, no committed line lost, attempt 2 continues at the next seq) are unchanged. Result
    (shared tree, with A290-A293): both PASS (rlog5: kill test; rlog6: size test).
+73. APPLIED 2026-10-24 I-B37 (A300). tests/store/fleet/e2e_test.go TestRFLEET008BuildsAreIsolated, the
+   final "persistent store is unchanged" check: `exec.Command(nix, …, "store", "verify",
+   "--check-contents", "--all", "--store", "local?root="+store)` -> `exec.Command(filepath.Join(nix,
+   "bin", "nix"), …, "store", "verify", "--all", "--no-trust", "--store",
+   "local?root="+filepath.Dir(store))`. Three defects, each shown by a run (I-B37 fl2/fl3/fl4):
+   (1) serverenv.NixTool returns the package's store path (its doc: "returns its store path"; every
+   other caller joins bin/<tool>, e.g. tests/auth/api_test.go:192, tests/platforms/helpers_test.go:198),
+   so the test exec'ed a directory: `fork/exec /nix/store/…-nix-2.34.9: permission denied` (I-B27
+   row and I-B37 triage). (2) The pinned Nix 2.34.9 has no `--check-contents` for `nix store
+   verify` (`error: unrecognised flag '--check-contents'`); its help: contents are verified by
+   default, `--no-contents` disables it. (3) `local?root=R` opens R/nix/store; the worker's store
+   directory <state>/worker/nix is what job containers mount at /nix (internal/worker process.go
+   bind {Host: p.store, Path: "/nix"}), so R is its parent; with the old root the verify opened an
+   empty store below the worker's store. With (1)-(3) the verify exits 2 with 13 "is untrusted"
+   lines and no corrupted path: bob's own imported sources and derivations carry no signature.
+   SPEC §05.8 R-FLEET-008 asks for "persistent store is unchanged (`nix store verify
+   --check-contents` = 0 errors)", i.e. contents, hence `--no-trust`. The hostile-package part of the
+   test is unchanged (still red: `bob test //lib:tests` runs no test, engine NEEDS in I-B37.md).
+
+## I-B40 (2026-10-24, evidence-based test corrections T1-T13 of I-B31, 58b, RCC005a; ruling A310)
+Evidence for each defect: plan/progress/I-B31.md "TEST PROBLEM" (T-numbers), I-B35.md (RCC005a);
+results: plan/progress/I-B40.md. Assertions are unchanged unless stated.
+74. APPLIED 2026-10-24 I-B40 (A320, T12). tests/core/helpers_test.go: new `testHomeEnv(t)` = one
+   HOME and BOB_HOME (`<t.TempDir>/testhome`, `…/bob`) per test (per *testing.T, created on first
+   use); `bobRunEnv` prepends it to the caller's env, so a test's own `BOB_HOME=`/`HOME=` still wins
+   (later entries win in os/exec). harness.Run gives every call a fresh HOME, so before this each bob
+   call of a test started with an empty store and caches (I-B31: the second `bob test` rebuilt 13
+   drvs and downloaded 569 MB; the chain's warm-up ran in another store). Also tests/core/native_test.go
+   TestRFW066KillDuringWrite and TestRFW067DevProtoEditReachesTree (exec.Command with os.Environ(),
+   i.e. the host user's HOME) now add testHomeEnv(t), the home their `bob gen` used; and
+   bobNoNetworkHome uses the test's HOME when a warm BOB_HOME is given (its doc says "caches warmed
+   by an earlier run"; the Go proxy cache is $HOME/.cache/bob/goproxy, SPEC §03.2.5; evidence: the
+   warm no-network `bob lock` of TestRFW005LockOnDemand failed BOB-E-1015 "lookup proxy.golang.org …
+   network is unreachable" with a fresh HOME, passes with the test's HOME). Result:
+   TestRFW024PassingTestsAreCached PASS, TestRFW020ChainOf100Steps PASS (release+debug),
+   TestRFW066ManifestLossAdoptsFiles PASS, TestRFW066KillDuringWrite PASS (40 kill points; before it
+   needed ~25 GB of temp space for 80 fresh stores).
+75. APPLIED 2026-10-24 I-B40 (A321, T1). tests/core/helpers_test.go bobNoNetworkHome (new
+   `noNetworkAttr`) and tests/eco/rust/helpers_test.go noNetwork: when the test process is root, the
+   new user namespace maps 65534->65534 (uid and gid) next to 0->0, with setgroups allowed (root
+   writes the maps of its child). evalbox (rootIDs/asNobody) refuses root in a namespace without
+   65534 and runs the sandbox as 65534 with it, exactly as for a run as host root (store.Enter maps
+   65534 next to 0 the same way). CLONE_NEWNET is unchanged, so "no network" is proved as before.
+   Result: no more BOB-E-9005 "refusing to evaluate as root"; TestRFW062StaleSectionPerEcosystem/npm
+   PASS; RFW005LockOnDemand and RFW062/go,rust now reach bob's 1012 and fail on implementation
+   wording/detection (I-B40 table).
+76. APPLIED 2026-10-24 I-B40 (A322, T2). tests/core/lock_test.go TestRFW005RemovalAndPins: with the
+   uuid Require removed, also remove cmd/api/main.go's `"github.com/google/uuid"` import and its
+   `_ = uuid.NewString()` (restored before the `build --lock` step). Before, bob lock correctly
+   failed BOB-E-1015 (cmd/api still imports uuid). Result: PASS.
+77. APPLIED 2026-10-24 I-B40 (A323, T3). tests/core/native_test.go TestRFW066ConflictAndForce,
+   OtherRootsProceed, TrackedFileIsNeverOverwritten: the foreign/tracked file goes into an owned dir
+   (the edited file's dir / the dir of the first generated file), not svc/gen/proto itself; SPEC
+   §03.6.1 GoOpts.Dir default "gen/proto/<proto dir relative to Root>" = one owned dir per proto dir
+   (svc/gen/proto/common/v1, svc/gen/proto/greet/v1). The --force backup check lists files below
+   .bob/gen/backup recursively (the old glob matched the directory "common"). The BOB-E-1016 message
+   check (`svc/gen/proto`), exit codes and the untouched-root check are unchanged. Result:
+   OtherRootsProceed PASS, TrackedFileIsNeverOverwritten PASS; ConflictAndForce passes every
+   assertion except the missing golden tests/goldens/native/codegen/conflict.txt (owner).
+78. APPLIED 2026-10-24 I-B40 (A324, T4). tests/core/native_test.go TestRFW066RemovedRecipeRemovesRoot
+   also removes the then unused `"github.com/megakuul/bob/pkg/openapi"` import from svc/bob.go (before:
+   `bob gen` exit 3 "imported and not used"). Result: gen exits 0; the test still fails on a real
+   finding: svc/gen/rest remains after its recipe is removed (materialise, FEAT).
+79. APPLIED 2026-10-24 I-B40 (A325, T6). tests/core/native_test.go
+   TestRFW067TypeScriptResolvesGeneratedCode stats greet_pb.ts instead of greet_pb.js (SPEC §03.6.1
+   connect.TS = protoc-gen-es target=ts, import_extension=js; R-FW-067's `./gen/proto/greet/v1/greet_pb.js`
+   is the import spelling, which tsserver resolves to the .ts file). The tsc --noEmit check is
+   unchanged. Result: the stat passes; the test then fails at `bob exec -- tsc` with BOB-E-7006 (no
+   .bob/env.json after `bob gen`), open (needs a ruling, I-B40 table).
+80. APPLIED 2026-10-24 I-B40 (A326, T8 + T8b). tests/core/helpers_test.go bobRunEnv skips the leak
+   check for `-vv` as for `-v` (as tests/eco/* noLeak; raw Nix text is allowed from -v on).
+   T8b, found after T8 in the same test: tests/core/pipeline_test.go TestRFW063NoNixBuildActivityForSources
+   adds the hosts of bob.lock urls as `://<host>`: the nixpkgs pin's url is
+   https://github.com/NixOS/nixpkgs/archive/… (pkg/engine/lock/nixpkgs.go), so plain "github.com"
+   matched the Go module path in every Go module derivation (`Nix ran a build of
+   …-go-github.com-google-uuid-v1.6.0.drv that fetches from github.com`). A fetch names the URL. The
+   built-in host list is unchanged. Result: PASS (go, rust, npm, ocaml, cc).
+81. APPLIED 2026-10-24 I-B40 (A327, T10). tests/core/platform_test.go TestRFW034RustTargetStd: a
+   derivation that names static.rust-lang.org fails the test when it is a bob derivation or names
+   rust-std; nixpkgs' own rustc-src and bootstrap fetches (closure of
+   legacyPackages.<sys>.rustc.unwrapped, which R-FW-034 prescribes) no longer do. Result: PASS.
+82. APPLIED 2026-10-24 I-B40 (A328, T11). tests/core/platform_test.go TestRFW038DerivationNames expects
+   `cc-foo-<other>-dbg-address-undefined`: polyglot's named variant asan is
+   WithSanitize(ASan, UBSan)+WithProfile(Debug) (fixture bob.go:18), and R-FW-038 orders the tags
+   `dbg`, `address`, `undefined`. Result: PASS.
+83. APPLIED 2026-10-24 I-B40 (A329, T13). tests/cli/output_test.go TestRCLI002JSONStream: the
+   `build //... --json --json-log` run comes first (the plain `--json` build ran first with the same
+   home, so everything was cached and no `log` event could appear). Result: PASS (12/12 subtests).
+84. APPLIED 2026-10-24 I-B40 (A330, 58b). tests/core/helpers_test.go bobRunEnv: for runs with
+   `--print-paths --json` the leak check reads withoutPaths(r) (package.finish paths[] are host
+   store paths by SPEC §02.6; same as correction 58 and ir_test.go). Covers printPaths (platform) and
+   outputPaths (steps). Result: TestRFW030CrossBuildKeepsHostSystem, TestRFW023StepEnvironment,
+   DeclaredOutputs, SameOutputOnTwoMachines, TestRFW037CrossSanitiserRunpath PASS.
+85. APPLIED 2026-10-24 I-B40 (A331, I-B35 T-RCC005a). tests/eco/cc/external_test.go
+   TestRCC005aExternalPinnedAndVerified (c): after `bob env --format json` (bob exec needs
+   .bob/env.json, else BOB-E-7006, R-DEV-008; first attempt without it failed so), the app runs
+   through `bob exec -- env -i /nix/store/<out>/bin/app` (same bob home) instead of executing the host path
+   `<home>/nix/store/<out>/bin/app` directly. SPEC §02.6: --print-paths host paths "run only through
+   bob run/bob exec"; on the host /nix/store is the system store, where libpack.so does not exist.
+   env -i keeps the empty environment, so the External's library is still found by RUNPATH only.
+   Result: PASS. Also T1 in tests/eco/rust (75): TestRRS005LockCarriesCrateGraphFacts PASS.
+86. APPLIED 2026-10-24 I-B41 (A333 coordinator ruling, A340). tests/core/native_test.go
+   TestRFW067TypeScriptResolvesGeneratedCode: `bob env --format json` runs before
+   `bob exec -- tsc --noEmit -p web` (bob exec stays strict: BOB-E-7006 without .bob/env.json,
+   R-DEV-008), as TestRFW067GoplsResolvesGeneratedCode and RCC005a (85) do. Before: exit 7
+   BOB-E-7006 right after `bob gen` (I-B40 table, correction 79). The stat of greet_pb.ts and the
+   tsc checks are unchanged. Result: PASS (I-B41 run, 198 s).
+Not applied (evidence not clear, need a decision): T7 (RFW063 flat-hash check: the Go part is not
+explained), T9 (polyglot has no nixpkgs.Tool("protobuf"): fixture decision), RFW038ProjectionTable
+"fetch / unpack" row (needs a store-path check design). RFW010 stays as is (A279).

@@ -187,7 +187,15 @@ func TestRCC005aExternalPinnedAndVerified(t *testing.T) {
 		if len(app) == 0 {
 			t.Fatalf("no output path for //app:app: %v", paths)
 		}
-		run := runEnvI(t, filepath.Join(app[0], "bin", "app"))
+		// --print-paths gives the host path <home>/nix/store/…; store binaries run only through
+		// bob run/bob exec (SPEC §02.6), where /nix/store is bob's store. env -i keeps the empty
+		// environment, so the External's library is found through the RUNPATH alone.
+		// bob exec needs the project's .bob/env.json (BOB-E-7006 otherwise, R-DEV-008): bob env first.
+		inNS := filepath.Join("/nix/store", filepath.Base(app[0]), "bin", "app")
+		run := bobIn(t, dir, home, "env", "--format", "json")
+		if run.Exit == 0 {
+			run = bobIn(t, dir, home, "exec", "--", "env", "-i", inNS)
+		}
 		if run.Exit != 0 || !strings.HasPrefix(run.Stdout, "gcd=12 ") || !strings.Contains(run.Stdout, "zstd=12->12") {
 			t.Errorf("app under env -i exited %d and printed %q; want the gcd=12 line linking the External", run.Exit, run.Stdout+run.Stderr)
 		}

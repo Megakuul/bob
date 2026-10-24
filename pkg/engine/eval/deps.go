@@ -350,3 +350,39 @@ func relImport(module, dir string) string {
 	}
 	return path.Join(module, dir)
 }
+
+// DownloadModules makes the user's Go module cache hold every module of mods (path → version)
+// that it lacks, downloading with the user's Go settings (GOPROXY, GOPRIVATE, …) as the
+// evaluator does for dependency bob repositories; goroot is the evaluator's Go ("" = go on
+// PATH). bob dev and bob env use it so the shell's go and gopls find the bob.Import modules
+// also when the evaluation itself was cached (R-FW-022).
+func DownloadModules(ctx context.Context, goroot string, mods map[string]string) error {
+	if len(mods) == 0 {
+		return nil
+	}
+	tc, err := findToolchain(ctx, goroot)
+	if err != nil {
+		return err
+	}
+	modcache, err := hostModCache(ctx, tc)
+	if err != nil {
+		return err
+	}
+	paths := make([]string, 0, len(mods))
+	for p := range mods {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		if err := checkModulePath(p, false); err != nil {
+			return goModError(err)
+		}
+		if err := checkVersion(p, mods[p]); err != nil {
+			return goModError(err)
+		}
+		if _, err := moduleSource(ctx, tc, modcache, p, mods[p]); err != nil {
+			return err
+		}
+	}
+	return nil
+}

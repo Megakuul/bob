@@ -77,7 +77,7 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	if err != nil {
 		return nil, err
 	}
-	idx, err := nativeIndex(ctx, st, f, g, lf)
+	idx, err := nativeIndex(ctx, nil, st, f, g, lf)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +129,10 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	patterns := o.Patterns
 	o.Patterns, o.Platform, o.Variants = nil, "", nil
 	r := &runner{o: o}
+	hint := o
+	hint.Command = CmdGen
+	defer startHint(ctx, st, hint)()
+	r.hinted = true
 	g, _, err := r.evaluate(ctx, st)
 	if err != nil {
 		return nil, err
@@ -143,7 +147,7 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	idx, err := nativeIndex(ctx, st, f, g, lf)
+	idx, err := nativeIndex(ctx, r, st, f, g, lf)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +157,7 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	}
 	// Then the working-tree outputs (§03.6.6): built and materialised for patterns.
 	o.Store, o.Patterns = st, patterns
-	return paths, genMaterialise(ctx, o, g, force)
+	return paths, genMaterialise(ctx, o, g, force, r)
 }
 
 // generate is Gen after evaluation (also the drift check of bob build/test, with force false).
@@ -274,11 +278,46 @@ func withRootGoMod(files []engine.GeneratedFile, g *ir.Graph, root string) ([]en
 	if err != nil {
 		return nil, err
 	}
-	if f, ok := gogen.RootGoSum(g, sum); ok {
+	if f, ok := gogen.RootGoSum(g, root, sum); ok {
 		files = append(files, f)
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
+}
+
+// writeRootGoMod writes the root go.mod and go.sum of the bob.go module (bob lock: they record
+// the framework and the bob.Import modules, R-FW-022, R-FW-043.4, whatever patterns later
+// builds name) when no Go module of the repository generates the root go.mod itself (that one
+// is written with the other native files by bob gen and whole-repository builds). g is the
+// whole repository's graph. A copy edited by hand is BOB-E-1011 and nothing is written.
+func writeRootGoMod(root string, g *ir.Graph) error {
+	if gogen.RootModule(g) {
+		return nil
+	}
+	files, err := withRootGoMod(nil, g, root)
+	if err != nil || len(files) == 0 {
+		return err
+	}
+	state := readNativeState(root)
+	drift, err := compareNative(root, files, state)
+	if err != nil {
+		return err
+	}
+	if len(drift) > 0 {
+		errs := make([]error, len(drift))
+		for i, d := range drift {
+			errs[i] = d.finding()
+		}
+		return errors.Join(errs...)
+	}
+	for _, f := range files {
+		if err := writeNative(root, f); err != nil {
+			return err
+		}
+		sum := sha256.Sum256(f.Content)
+		state.Files[f.Path] = nativeEntry{SHA256: hex.EncodeToString(sum[:]), Owner: f.Owner}
+	}
+	return writeNativeState(root, state)
 }
 
 func nativePathOK(p string) bool {
@@ -489,7 +528,8 @@ func writeNativeState(root string, next nativeState) error {
 // nativeIndex opens the nixpkgs index the ecosystems' Native calls see: only when bob.lock has
 // a pin and the graph has nixpkgs or ecosystem nodes, and (with the offline fetcher) only when
 // the nixpkgs source is already in the store.
-func nativeIndex(ctx context.Context, st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) (*nixidx.Index, error) {
+// r (nil: none) shares its run's index.
+func nativeIndex(ctx context.Context, r *runner, st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) (*nixidx.Index, error) {
 	if lf.Nixpkgs.Rev == "" || !usesNixpkgs(g) && !hasEcoNodes(g) {
 		return nil, nil
 	}
@@ -499,6 +539,9 @@ func nativeIndex(ctx context.Context, st *store.Store, f fetch.Fetcher, g *ir.Gr
 	}
 	if err != nil {
 		return nil, err
+	}
+	if r != nil {
+		return r.hostIndex(ctx, st, src, lf.Nixpkgs.Rev)
 	}
 	return nixidx.Open(ctx, st, nixidx.Config{Source: src, Rev: lf.Nixpkgs.Rev, System: store.HostSystem()})
 }

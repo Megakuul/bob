@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -15,14 +17,17 @@ import (
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/cli/devenv"
+	"github.com/megakuul/bob/pkg/engine/build"
 	"github.com/megakuul/bob/pkg/engine/store"
 )
 
 // runDev is `bob dev [--shell <name>] [--no-servers] [--servers-only] [-- cmd args]` (SPEC
 // §02.7.7, R-DEV-001, R-DEV-002).
 func runDev(e *env) int {
-	if e.a.bool("servers-only") && (e.a.bool("no-servers") || e.a.dash) {
-		return e.out.fail(diag.New(4, "flag", "--servers-only", "what", "no --no-servers and no command"))
+	// --servers-only --no-servers is the session without shell and servers: the tree is
+	// prepared and kept up to date until bob is stopped (editors and tools outside the shell).
+	if e.a.bool("servers-only") && e.a.dash {
+		return e.out.fail(diag.New(4, "flag", "--servers-only", "what", "no command"))
 	}
 	root, err := e.root(false)
 	if err != nil {
@@ -33,6 +38,11 @@ func runDev(e *env) int {
 	if done {
 		return exit
 	}
+	// Codegen is brought up to date from the start, while the environment is prepared (§03.6.6:
+	// on entry and on every change of a codegen input).
+	s := &session{e: e, root: root}
+	stopGen := s.watchCodegen(st)
+	defer stopGen()
 	shell := e.a.str("shell")
 	f, _, err := e.loadDev(st, root, shell)
 	if err != nil {
@@ -62,7 +72,7 @@ func runDev(e *env) int {
 		}
 	}
 
-	s := &session{e: e, root: root, env: env, f: f}
+	s.env, s.f = env, f
 	defer s.stopAll()
 	if !e.a.bool("no-servers") {
 		var fg io.Writer
@@ -242,7 +252,12 @@ func (s *session) run(argv []string) int {
 }
 
 // serve is --servers-only: the servers in the foreground until a signal or until all ended.
+// With --no-servers it only keeps the tree up to date until a signal.
 func (s *session) serve() int {
+	if s.e.a.bool("no-servers") {
+		<-s.e.ctx.Done()
+		return 130
+	}
 	if len(s.f.Servers) == 0 {
 		fmt.Fprintf(s.e.out.errw, "bob: dev shell %s has no dev servers\n", s.f.Shell)
 		return 0
@@ -298,6 +313,100 @@ func (s *session) watch(st *store.Store, shell string) (stop func()) {
 		}
 	}()
 	return func() { close(quit); <-finished }
+}
+
+// codegenPoll is how often bob dev stats the codegen inputs it knows (§03.6.6: on every change
+// of a codegen input; the budget from a .proto save to the tree is 2.5 s, §03.8); codegenFull is
+// how often it evaluates again anyway (new files, bob.go changes).
+const (
+	codegenPoll = 250 * time.Millisecond
+	codegenFull = 2 * time.Second
+)
+
+// watchCodegen regenerates codegen whose inputs changed while the session runs (§03.6.6, R-FW-067):
+// the owned directories that bob status would show as stale or missing are generated again
+// with bob gen's protocol. Conflicts and failures are printed and watching continues; the same
+// inputs are not tried twice, so a broken .proto is reported once per save.
+func (s *session) watchCodegen(st *store.Store) (stop func()) {
+	quit := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		defer func() { _ = recover() }()
+		tried := map[string]string{} // label → inputs digest last generated (or attempted)
+		var watch []string
+		snap, last := "", time.Time{}
+		t := time.NewTicker(codegenPoll)
+		defer t.Stop()
+		for {
+			if snap == "" || statSnapshot(s.root, watch) != snap || time.Since(last) >= codegenFull {
+				last = time.Now()
+				if cs, err := build.StaleCodegen(s.e.ctx, build.Options{Root: s.root, Store: st}); err == nil {
+					watch = cs.Watch
+					snap = statSnapshot(s.root, watch)
+					var labels []string
+					for l, d := range cs.Stale {
+						if tried[l] != d {
+							tried[l] = d
+							labels = append(labels, l)
+						}
+					}
+					if len(labels) > 0 {
+						s.regenerate(st, labels)
+					}
+				}
+			}
+			select {
+			case <-quit:
+				return
+			case <-s.e.ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
+	return func() { close(quit); <-finished }
+}
+
+// statSnapshot is the size and mtime of each repo-relative file ("-" when missing), so that a
+// save shows up without reading or hashing anything.
+func statSnapshot(root string, files []string) string {
+	var b strings.Builder
+	b.WriteString("v1")
+	for _, f := range files {
+		if fi, err := os.Stat(filepath.Join(root, f)); err == nil {
+			fmt.Fprintf(&b, "\x00%s %d %d", f, fi.Size(), fi.ModTime().UnixNano())
+		} else {
+			fmt.Fprintf(&b, "\x00%s -", f)
+		}
+	}
+	return b.String()
+}
+
+// regenerate runs bob gen for labels inside the session.
+func (s *session) regenerate(st *store.Store, labels []string) {
+	sort.Strings(labels)
+	// Only the working-tree outputs: native files do not depend on codegen inputs (bob.go
+	// changes reach them through the dev environment watch).
+	res, err := build.Run(s.e.ctx, build.Options{Command: build.CmdGen, Root: s.root, Store: st, Patterns: labels})
+	errs := diagErrors(err)
+	if err == nil && res.ExitCode != 0 {
+		errs = res.Report.Errors
+	}
+	if len(errs) > 0 {
+		if s.e.ctx.Err() != nil {
+			return
+		}
+		for _, d := range errs {
+			w := *d
+			w.Severity = diag.SeverityWarning
+			s.e.out.diagnose(&w, "")
+		}
+		return
+	}
+	if !s.e.out.quiet {
+		fmt.Fprintf(s.e.out.errw, "bob: generated %s\n", strings.Join(labels, ", "))
+	}
 }
 
 // apply takes a recomputed environment: changed servers restart, a changed inside

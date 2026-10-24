@@ -319,6 +319,11 @@ func TestRFW005RemovalAndPins(t *testing.T) {
 		t.Fatalf("bob.lock lacks github.com/google/uuid after bob lock:\n%s", withUUID)
 	}
 	replaceIn(t, filepath.Join(dir, "bob.go"), `Require: []golang.Requirement{golang.Require("github.com/google/uuid", "v1.6.0")},`, `Require: []golang.Requirement{},`)
+	// cmd/api imports uuid; drop that use too, so no declaration and no code uses it (T2).
+	mainGo := filepath.Join(dir, "cmd", "api", "main.go")
+	mainSrc := readFile(t, mainGo)
+	replaceIn(t, mainGo, "\t\"github.com/google/uuid\"\n", "")
+	replaceIn(t, mainGo, "\t_ = uuid.NewString()\n", "")
 	if r := bobRun(t, dir, "lock"); !exitIs(t, r, 0) {
 		return
 	}
@@ -327,6 +332,7 @@ func TestRFW005RemovalAndPins(t *testing.T) {
 	}
 	// bob build --lock re-resolves a stale section instead of failing.
 	replaceIn(t, filepath.Join(dir, "bob.go"), `Require: []golang.Requirement{},`, `Require: []golang.Requirement{golang.Require("github.com/google/uuid", "v1.6.0")},`)
+	writeFile(t, mainGo, mainSrc)
 	if r := bobRun(t, dir, "build", "//internal/greet/...", "--lock"); !exitIs(t, r, 0) {
 		return
 	}

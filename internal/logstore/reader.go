@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/megakuul/lake"
@@ -181,6 +182,51 @@ func (r *Reader) scan(ctx context.Context, part, buildID, pkg string, afterSeq i
 			f.Seq = lake.FilterInt(lake.Gt(afterSeq))
 		}
 		rows, err := lake.Query[LogLine]().Where(f).Scan(ctx, b)
+		if noTable(err) {
+			return nil, nil
+		}
+		return rows, err
+	})
+}
+
+// PackageRuns returns the package_run rows of project whose package started in [since, until),
+// only those of package label when label is not "" (AnalyticsService/PackageDurations). It
+// queries the run-<yyyymm> partition of every month in the range, each with a fresh
+// lake.Bucket (R-LOG-100); a month without rows costs one catalog GET.
+func (r *Reader) PackageRuns(ctx context.Context, project, label string, since, until time.Time) ([]PackageRun, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	if err := checkPackage(label); err != nil {
+		return nil, err
+	}
+	if project == "" || len(project) > MaxPackageBytes {
+		return nil, fmt.Errorf("%w: project", ErrBadRequest)
+	}
+	since, until = since.UTC(), until.UTC()
+	var out []PackageRun
+	for m := time.Date(since.Year(), since.Month(), 1, 0, 0, 0, 0, time.UTC); m.Before(until); m = m.AddDate(0, 1, 0) {
+		part := "run-" + m.Format("200601")
+		rows, err := r.scanRuns(ctx, part, project, label, since.UnixNano(), until.UnixNano())
+		if err != nil {
+			return nil, fmt.Errorf("logstore: read %s: %w", part, err)
+		}
+		out = append(out, rows...)
+	}
+	return out, nil
+}
+
+func (r *Reader) scanRuns(ctx context.Context, part, project, label string, from, to int64) ([]PackageRun, error) {
+	b, err := openPartition(ctx, r.client, part)
+	if err != nil {
+		return nil, err
+	}
+	return guard(func() ([]PackageRun, error) {
+		f := PackageRun{Project: lake.FilterString(lake.Eq(project)), Start: lake.FilterInt(lake.Gte(from), lake.Lt(to))}
+		if label != "" {
+			f.Package = lake.FilterString(lake.Eq(label))
+		}
+		rows, err := lake.Query[PackageRun]().Where(f).Scan(ctx, b)
 		if noTable(err) {
 			return nil, nil
 		}

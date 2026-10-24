@@ -282,8 +282,10 @@ func TestRFW016FailingBuildShowsDefinedAt(t *testing.T) {
 			line = i + 1
 		}
 	}
-	want := fmt.Sprintf("(defined at libs/foo/bob.go:%d)", line)
-	if line == 0 || !strings.Contains(r.Stderr, want) {
+	// §02.5 rule 2 block line (S15 goldens): "package defined at <file>:<line>[:<col>]"
+	// (correction 69; the R-FW-016 text "(defined at libs/foo/bob.go:13)" names the same position).
+	want := fmt.Sprintf("package defined at libs/foo/bob.go:%d", line)
+	if line == 0 || !regexp.MustCompile(`(?m)^\s*`+regexp.QuoteMeta(want)+`(:\d+)?$`).MatchString(r.Stderr) {
 		t.Errorf("stderr lacks %q:\n%s", want, r.Stderr)
 	}
 }

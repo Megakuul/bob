@@ -35,6 +35,22 @@ func logCount(ctx context.Context, e *srvtest.Env, build, pkg string) int {
 	return len(ls)
 }
 
+// warmWorker runs one trivial build on the fresh stack and waits for it, so that the measured
+// part starts on a worker whose store and state home hold nixpkgs and the evaluator seed. The
+// first job of a fresh worker needs about 80-95 s before its first output line (nixpkgs download
+// and import, the evaluator's standard-library seed), which is not what R-LOG-001 measures
+// (test correction 72).
+func warmWorker(t *testing.T, e *srvtest.Env) {
+	t.Helper()
+	id, err := e.Submit(srvtest.Repo(t, []srvtest.Pkg{{Name: "warm", Cmd: "true"}}), "//warm:t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state, err := e.WaitBuild(id, 5*time.Minute); err != nil || state != "BUILD_STATE_SUCCEEDED" {
+		t.Fatalf("warm-up build: state %q err %v", state, err)
+	}
+}
+
 // TestRLOG001SizeTriggeredCommit: a worker commits its buffer at 10,000 lines or 2 MiB without
 // waiting for log.flush_interval (set to 10 min here, so only the size triggers can commit).
 func TestRLOG001SizeTriggeredCommit(t *testing.T) {
@@ -44,6 +60,7 @@ func TestRLOG001SizeTriggeredCommit(t *testing.T) {
 	if e == nil {
 		return
 	}
+	warmWorker(t, e)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	repo := srvtest.Repo(t, []srvtest.Pkg{
@@ -85,6 +102,7 @@ func TestRLOG001KillLosesOnlyUncommitted(t *testing.T) {
 	if e == nil {
 		return
 	}
+	warmWorker(t, e)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	repo := srvtest.Repo(t, []srvtest.Pkg{{Name: "k", Cmd: `for i in $(seq 1 1500); do echo "$i"; sleep 0.02; done`}})
