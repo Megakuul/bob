@@ -179,6 +179,7 @@ func runAfter(ctx context.Context, o Options, prev *runner) (*Result, error) {
 		r.evaluated, r.hinted = prev.evaluated, prev.hinted
 	}
 	res, err := r.run(ctx)
+	err = interrupted(ctx, err)
 	if res == nil {
 		res = &Result{}
 	}
@@ -332,6 +333,16 @@ func diagErrors(err error) ([]*diag.Error, bool) {
 		return []*diag.Error{d}, true
 	}
 	return nil, false
+}
+
+// interrupted returns err, or context.Canceled when ctx was cancelled: a step stopped by the
+// interrupt (a killed Nix command, a planner's cancelled fetch) fails with whatever it saw, and
+// that is the cancelled run (BOB-E-8001), not a bob bug (BOB-E-9004) or a build failure.
+func interrupted(ctx context.Context, err error) error {
+	if err != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return context.Canceled
+	}
+	return err
 }
 
 // internalf is BOB-E-9004 for label: bob produced something invalid on its own.

@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine"
@@ -20,6 +22,36 @@ import (
 	"github.com/megakuul/bob/pkg/golang/internal/gospec"
 	"github.com/megakuul/bob/pkg/golang/resolve"
 )
+
+// goSectionMemo remembers the last go section decoded read-only (R-FW-011 memoisation): one
+// bob command decodes the same bytes in the lock stage, in every Go plan and in every code
+// generator that needs the Go build list. Only successful decodes are kept; callers must not
+// modify the returned section.
+var goSectionMemo struct {
+	mu  sync.Mutex
+	raw []byte
+	sec *lock.GoSection
+}
+
+// readGoSection decodes and validates a go section (lock.DecodeSection) for reading.
+func readGoSection(raw []byte) (*lock.GoSection, error) {
+	goSectionMemo.mu.Lock()
+	if goSectionMemo.sec != nil && bytes.Equal(goSectionMemo.raw, raw) {
+		sec := goSectionMemo.sec
+		goSectionMemo.mu.Unlock()
+		return sec, nil
+	}
+	goSectionMemo.mu.Unlock()
+	v, err := lock.DecodeSection(lock.SectionGo, raw)
+	if err != nil {
+		return nil, err
+	}
+	sec := v.(*lock.GoSection)
+	goSectionMemo.mu.Lock()
+	goSectionMemo.raw, goSectionMemo.sec = bytes.Clone(raw), sec
+	goSectionMemo.mu.Unlock()
+	return sec, nil
+}
 
 // proxyEnv overrides the Go module proxy bob reads (a mirror, an internal proxy, or a
 // file:// directory in tests). bob.lock records it when it is an http(s) URL; a file://
@@ -244,11 +276,10 @@ func (Ecosystem) Stale(ctx context.Context, req engine.LockRequest) (string, ir.
 	if err != nil {
 		return "", ir.Pos{}, err
 	}
-	v, err := lock.DecodeSection(lock.SectionGo, req.Prev)
+	sec, err := readGoSection(req.Prev)
 	if err != nil {
 		return "the go section cannot be read: " + err.Error(), ir.Pos{}, nil
 	}
-	sec := v.(*lock.GoSection)
 	rt := runtimes{ctx: ctx, req: req}
 	for _, d := range decls {
 		// A runtime pin that contradicts its generator is the R-GEN-006 error, not a stale lock.

@@ -55,7 +55,7 @@ func (r *runner) materialise(ctx context.Context, st *store.Store, p *planner, r
 			Inputs: inputs})
 	}
 	// Pruning needs the complete set: a root whose output failed to build is not stale.
-	prune := r.o.Command == CmdGen && len(r.o.Patterns) == 0 && len(invalid) == 0
+	prune := r.o.Command == CmdGen && wholeRepo(r.o.Patterns) && len(invalid) == 0
 	if len(roots) == 0 && !prune {
 		return nil
 	}
@@ -89,7 +89,7 @@ func flatten(err error) []*diag.Error {
 // them for the whole repository).
 func (r *runner) genSet(g *ir.Graph, p *planner) []engine.Materialisation {
 	all := uniqueMaterialisations(p.materialise)
-	if len(r.o.Patterns) == 0 {
+	if wholeRepo(r.o.Patterns) {
 		return all
 	}
 	want := map[string]bool{}

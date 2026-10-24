@@ -61,7 +61,7 @@ func GeneratorModuleOf(ctx context.Context, req engine.PlanRequest, modPath stri
 		if err != nil {
 			return gm, err
 		}
-		pkgs, err := modulePackages(host, t.Path)
+		pkgs, err := treePackages(pl.storeOf[host], host, t.Path)
 		if err != nil {
 			return gm, fmt.Errorf("module %s@%s: %w", t.Path, t.Version, err)
 		}
@@ -128,8 +128,8 @@ func compactStrings(s []string) []string {
 func ModuleGoVersion(req engine.PlanRequest, modPath string) (string, error) {
 	sec := req.Locks[lock.SectionGo]
 	if len(sec) > 0 {
-		if v, err := lock.DecodeSection(lock.SectionGo, sec); err == nil {
-			if bl, ok := v.(*lock.GoSection).Workspaces[modPath]; ok && bl.Go != "" {
+		if gs, err := readGoSection(sec); err == nil {
+			if bl, ok := gs.Workspaces[modPath]; ok && bl.Go != "" {
 				return bl.Go, nil
 			}
 		}

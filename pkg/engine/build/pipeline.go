@@ -130,7 +130,12 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 	}
 
 	// Test units: the requested test-run derivations (bob test); bob build leaves them out.
-	units, err := r.selectUnits(p, res.Requested)
+	// A requested test set (//lib:tests) stands for its units.
+	wanted := res.Requested
+	if o.Command == CmdTest {
+		wanted = withSetUnits(g, p, res.Requested)
+	}
+	units, err := r.selectUnits(p, wanted)
 	if err != nil {
 		return res, err
 	}
@@ -178,7 +183,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 		}
 	}
 
-	targets := r.withoutSkipped(r.targetLabels(g, p, res.Requested))
+	targets := r.withoutSkipped(r.targetLabels(g, p, wanted))
 	rep, err := r.realise(ctx, st, g, p, srcPaths, targets, units, cached)
 	if err != nil {
 		return res, err
@@ -384,6 +389,36 @@ func (r *runner) selectUnits(p *planner, requested []string) ([]testrun.Unit, er
 		out = append(out, u)
 	}
 	return out, nil
+}
+
+// withSetUnits returns requested plus the test units that a requested node groups (its direct
+// dependencies that are test units): `bob test //lib:tests` runs the set's units, as
+// `bob test //lib/...` does. Sorted, without duplicates.
+func withSetUnits(g *ir.Graph, p *planner, requested []string) []string {
+	byID := nodesByID(g)
+	isUnit := func(n *ir.Node) bool {
+		d := p.byPath[p.nodes[n.ID].Drv]
+		return d != nil && isTestDrv(d) && n.Kind != "bob.file"
+	}
+	want := map[string]bool{}
+	for _, l := range requested {
+		want[l] = true
+	}
+	out := slices.Clone(requested)
+	for _, id := range g.Roots {
+		n := byID[id]
+		if n == nil || !want[n.Label] || isUnit(n) {
+			continue
+		}
+		for _, dep := range n.Deps {
+			if u := byID[dep]; u != nil && !want[u.Label] && isUnit(u) {
+				want[u.Label] = true
+				out = append(out, u.Label)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // isTestDrv reports whether d is a test unit.

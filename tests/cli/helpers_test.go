@@ -129,11 +129,20 @@ func tree(t testing.TB, dir string) string {
 			}
 			return nil
 		}
+		rel, _ := filepath.Rel(dir, p)
+		if d.Type()&fs.ModeSymlink != 0 {
+			// A link (e.g. to a directory in node_modules) is hashed by its target (correction 88).
+			target, err := os.Readlink(p)
+			if err != nil {
+				return err
+			}
+			b.WriteString(rel + "\x00link:" + target + "\x00")
+			return nil
+		}
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel(dir, p)
 		b.WriteString(rel + "\x00")
 		b.Write(data)
 		b.WriteString("\x00")

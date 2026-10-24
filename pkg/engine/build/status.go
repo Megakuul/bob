@@ -46,7 +46,7 @@ func Status(ctx context.Context, o Options) (*StatusResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	findings, err := lockFindings(ctx, g, lf, offlineFetcher{st: st})
+	findings, err := lockFindings(ctx, o.Root, g, lf, offlineFetcher{st: st})
 	if err != nil {
 		return nil, err
 	}

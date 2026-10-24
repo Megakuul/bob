@@ -43,8 +43,11 @@ type planner struct {
 	// third-party modules that provide packages, by path
 	third    map[string]*thirdParty       // "path@version" → module that provides packages
 	selected map[string]map[string]string // workspace module → path → selected version
-	trees    map[string]string            // module path → host path of its tree
-	storeOf  map[string]string            // host path → store path (trees and generated outputs)
+	// thirdSel is, per workspace module, its selected modules that provide packages by path
+	// (built from third and selected on first use, reset by lockModules).
+	thirdSel map[string]map[string]*thirdParty
+	trees    map[string]string // module path → host path of its tree
+	storeOf  map[string]string // host path → store path (trees and generated outputs)
 
 	own     map[string]*drv.Derivation // drv path → derivation planned here
 	byName  map[string]string          // cache key → drv path (std, tools, groups)

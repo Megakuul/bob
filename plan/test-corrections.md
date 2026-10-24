@@ -841,3 +841,22 @@ results: plan/progress/I-B40.md. Assertions are unchanged unless stated.
 Not applied (evidence not clear, need a decision): T7 (RFW063 flat-hash check: the Go part is not
 explained), T9 (polyglot has no nixpkgs.Tool("protobuf"): fixture decision), RFW038ProjectionTable
 "fetch / unpack" row (needs a store-path check design). RFW010 stays as is (A279).
+
+## I-B42 (2026-10-24, evidence-based test corrections; evidence plan/progress/I-B41.md TEST PROBLEM 1/2, I-B42.md)
+87. APPLIED 2026-10-24 I-B42 (A353). tests/core/native_test.go TestRFW067DevProtoEditReachesTree:
+   `bob dev --servers-only --no-servers` starts with the environment its `bob gen` (bobRun ->
+   harness.Run) used: `PATH=/usr/bin:/bin`, `TZ=UTC`, `LC_ALL=C` plus testHomeEnv(t), instead of
+   os.Environ() + testHomeEnv. Evidence (I-B41, A343): with the host PATH (/root/.nix-profile/bin/go,
+   go1.26.9) bob dev's evaluator key differs from bob gen's (no go on the minimal PATH -> nixpkgs go
+   1.26.8; R-FW-043.5: go on PATH wins and is part of the key), so bob dev evaluated cold and the
+   first codegen pass took 15-34 s; with one environment 0.23 s. A developer runs both with one
+   PATH. The 2.5 s / 10 s assertions are unchanged. Result: PASS (I-B42 run, 163 s incl. bob gen).
+88. APPLIED 2026-10-24 I-B42 (A354). tests/cli/helpers_test.go tree (the tree hash of
+   TestRCLI009Check, called at commands_test.go:60): a symbolic link is hashed by its path and
+   target (os.Readlink) instead of os.ReadFile, which follows the link and failed with `read
+   …/web/node_modules/@sveltejs/vite-plugin-svelte: is a directory` (I-B41 table; the materialised
+   node_modules holds links to directories). WalkDir does not follow links, so before a link to a
+   directory could not be hashed at all; a changed target still changes the hash. Assertions are
+   unchanged. Result: the hash works; TestRCLI009Check now reaches its assertions and fails on
+   commands_test.go:85 (bob check rewrites .bob/eval after a go.mod edit; TEST PROBLEM 1 in
+   plan/progress/I-B42.md, needs a ruling, not applied).

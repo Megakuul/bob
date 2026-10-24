@@ -73,7 +73,7 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 		return nil, err
 	}
 	f := offlineFetcher{st: st}
-	findings, err := lockFindings(ctx, g, lf, f)
+	findings, err := lockFindings(ctx, o.Root, g, lf, f)
 	if err != nil {
 		return nil, err
 	}
@@ -213,8 +213,13 @@ func generate(ctx context.Context, root string, g *ir.Graph, lf *lock.File, idx 
 // whole repository in the host configuration. Runs of a part of the repository (or for another
 // platform or variant) see only part of each module and leave native files alone.
 func nativeScope(o Options) bool {
-	whole := len(o.Patterns) == 0 || len(o.Patterns) == 1 && o.Patterns[0] == "//..."
-	return whole && o.Platform == "" && len(o.Variants) == 0
+	return wholeRepo(o.Patterns) && o.Platform == "" && len(o.Variants) == 0
+}
+
+// wholeRepo reports whether patterns select the whole repository: none (Options.Patterns' default)
+// or exactly "//...".
+func wholeRepo(patterns []string) bool {
+	return len(patterns) == 0 || len(patterns) == 1 && patterns[0] == "//..."
 }
 
 // nativeFiles is nativeFilesAt without a repository root (ecosystems that need the working
@@ -548,7 +553,7 @@ func nativeIndex(ctx context.Context, r *runner, st *store.Store, f fetch.Fetche
 
 // lockFindings is the lock half of bob check: every bob.lock entry that is missing, extra or
 // stale, as BOB-E-1012, without network.
-func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetcher) ([]*diag.Error, error) {
+func lockFindings(ctx context.Context, root string, g *ir.Graph, lf *lock.File, f fetch.Fetcher) ([]*diag.Error, error) {
 	var out []*diag.Error
 	stale := func(what string) { out = append(out, diag.New(1012, "what", what)) }
 
@@ -606,7 +611,7 @@ func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetch
 			stale("the " + name + " section is no longer used")
 		}
 	}
-	ecoStale, err := staleSections(ctx, g, lf, f, ecos, nil)
+	ecoStale, err := staleSections(ctx, root, g, lf, f, ecos, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -614,12 +619,13 @@ func lockFindings(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetch
 }
 
 // staleSections asks every ecosystem that records its declarations (engine.LockFreshness)
-// whether its section still matches them (R-FW-062).
+// whether its section still matches them (R-FW-062). root is the repository root: an ecosystem
+// reads the declaring bob.go below it to point at the stale declaration itself.
 //
 // index (optional) opens the nixpkgs index: a section found stale is asked again with it, so an
 // ecosystem can explain the staleness by a pinned tool (a codegen runtime that contradicts its
 // generator, R-GEN-006) without every fresh build opening the index.
-func staleSections(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetcher, ecos []engine.Ecosystem,
+func staleSections(ctx context.Context, root string, g *ir.Graph, lf *lock.File, f fetch.Fetcher, ecos []engine.Ecosystem,
 	index func(context.Context) (*nixidx.Index, error)) ([]*diag.Error, error) {
 	var out []*diag.Error
 	for _, e := range ecos {
@@ -627,7 +633,7 @@ func staleSections(ctx context.Context, g *ir.Graph, lf *lock.File, f fetch.Fetc
 		if !ok || lf.Sections[e.Name()] == nil {
 			continue // a missing section is locked on demand (bob build) or reported as missing
 		}
-		req := engine.LockRequest{Graph: g, Prev: lf.Sections[e.Name()], Fetch: f}
+		req := engine.LockRequest{Graph: g, Prev: lf.Sections[e.Name()], Fetch: f, Root: root}
 		what, at, err := lfr.Stale(ctx, req)
 		if err == nil && what != "" && index != nil {
 			if idx, ierr := index(ctx); ierr == nil && idx != nil {

@@ -215,7 +215,7 @@ func TestLockFindings(t *testing.T) {
 	lf := &lock.File{LockVersion: lock.Version,
 		Sections: map[string]json.RawMessage{"nat": json.RawMessage(`{"inputs":"old"}`), "go": json.RawMessage(`{}`)},
 		Sources:  map[string]lock.Source{"//x:dl": {URL: "https://example.invalid/x"}}}
-	got, err := lockFindings(ctx, g, lf, offlineFetcher{})
+	got, err := lockFindings(ctx, "", g, lf, offlineFetcher{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestLockFindings(t *testing.T) {
 
 	lf = &lock.File{LockVersion: lock.Version, Sections: map[string]json.RawMessage{"nat": json.RawMessage(`{"inputs":"one"}`)}}
 	lf.Nixpkgs = lock.NixpkgsPin{Channel: lock.DefaultChannel, Rev: "0123456789abcdef0123456789abcdef01234567"}
-	if got, err := lockFindings(ctx, g, lf, offlineFetcher{}); err != nil || len(got) != 0 {
+	if got, err := lockFindings(ctx, "", g, lf, offlineFetcher{}); err != nil || len(got) != 0 {
 		t.Errorf("fresh lock: %v %v", got, err)
 	}
 }

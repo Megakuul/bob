@@ -153,14 +153,14 @@ func modulePathOf(p string) string {
 func (pl *planner) lockModules() error {
 	pl.third = map[string]*thirdParty{}
 	pl.selected = map[string]map[string]string{}
+	pl.thirdSel = nil
 	if len(pl.req.Lock) == 0 {
 		return nil
 	}
-	v, err := lock.DecodeSection(lock.SectionGo, pl.req.Lock)
+	sec, err := readGoSection(pl.req.Lock)
 	if err != nil {
 		return diag.New(1019, "reason", "go section: "+err.Error(), "line", "0")
 	}
-	sec := v.(*lock.GoSection)
 	pl.lock = sec
 	for _, m := range sec.Modules {
 		if m.Packages {
@@ -197,9 +197,9 @@ const (
 func (pl *planner) resolve(main, importPath string) (pkgRef, error) {
 	var best *wsModule
 	for mp, m := range pl.mods {
-		if importPath == mp || strings.HasPrefix(importPath, mp+"/") {
+		if within(importPath, mp) {
 			for base, gi := range m.gens { // a generated tree may hold several packages
-				if importPath == base || strings.HasPrefix(importPath, base+"/") {
+				if within(importPath, base) {
 					return pkgRef{kind: refGen, ws: m, gen: gi, rel: strings.TrimPrefix(strings.TrimPrefix(importPath, base), "/")}, nil
 				}
 			}
@@ -208,12 +208,7 @@ func (pl *planner) resolve(main, importPath string) (pkgRef, error) {
 			}
 		}
 	}
-	var bestThird *thirdParty
-	for mp, v := range pl.selected[main] {
-		if t := pl.third[mp+"@"+v]; t != nil && (importPath == mp || strings.HasPrefix(importPath, mp+"/")) && (bestThird == nil || len(mp) > len(bestThird.Path)) {
-			bestThird = t
-		}
-	}
+	bestThird := pl.thirdOf(main, importPath)
 	if bestThird != nil && (best == nil || len(bestThird.Path) > len(best.spec.Path)) {
 		root, err := pl.moduleTree(bestThird)
 		if err != nil {
@@ -242,6 +237,42 @@ func (pl *planner) resolve(main, importPath string) (pkgRef, error) {
 }
 
 var errNoModule = fmt.Errorf("no module provides it")
+
+// within reports whether importPath is mp or below it (mp + "/" + ...), without building
+// mp + "/" (resolve runs for every import of every package).
+func within(importPath, mp string) bool {
+	return strings.HasPrefix(importPath, mp) && (len(importPath) == len(mp) || importPath[len(mp)] == '/')
+}
+
+// thirdOf returns the third-party module of main's build list with the longest path that
+// importPath is within, or nil. The longest candidate is importPath itself, then each prefix
+// that ends before a "/", so the first selected module found is the longest one.
+func (pl *planner) thirdOf(main, importPath string) *thirdParty {
+	byPath, ok := pl.thirdSel[main]
+	if !ok {
+		byPath = map[string]*thirdParty{}
+		for mp, v := range pl.selected[main] {
+			if t := pl.third[mp+"@"+v]; t != nil {
+				byPath[mp] = t
+			}
+		}
+		if pl.thirdSel == nil {
+			pl.thirdSel = map[string]map[string]*thirdParty{}
+		}
+		pl.thirdSel[main] = byPath
+	}
+	for p := importPath; p != ""; {
+		if t := byPath[p]; t != nil {
+			return t
+		}
+		i := strings.LastIndexByte(p, '/')
+		if i < 0 {
+			break
+		}
+		p = p[:i]
+	}
+	return nil
+}
 
 // moduleTree realises a third-party module's unpacked tree (bob's fetcher, the lock's tree
 // hash, S2-2) and returns where bob reads it. When the fetcher cannot get it (a file:// proxy,
@@ -425,7 +456,7 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 		if err != nil {
 			return err
 		}
-		bp, err := pl.importDir(c, &bc, dir)
+		bp, err := pl.importDir(c, &bc, dir, ref.kind == refThird || ref.kind == refGen)
 		if err != nil {
 			return pl.loadError(ip, from, err)
 		}
@@ -476,17 +507,36 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 	return cl, nil
 }
 
-// importDir reads a package directory in configuration c, once per planner.
-func (pl *planner) importDir(c buildCtx, bc *build.Context, dir string) (*build.Package, error) {
+// importDir reads a package directory in configuration c, once per planner. A directory in a
+// store path (inStore: a module tree or generated code) never changes, so its result is also
+// cached across runs (treecache.go); such packages carry only the fields slimPackage keeps.
+func (pl *planner) importDir(c buildCtx, bc *build.Context, dir string, inStore bool) (*build.Package, error) {
 	key := strings.Join([]string{c.goos, c.goarch, strings.Join(c.tags, ","), fmt.Sprint(c.cgo, c.tc.minor), c.v.mode(), dir}, "|")
 	if bp, ok := pl.bp[key]; ok {
 		return bp, nil
+	}
+	var ckey, file string
+	if inStore {
+		ckey = buildKey(bc, dir)
+		file = buildCacheFile(ckey)
+	}
+	if file != "" {
+		if bp, ok := readBuildCache(file, ckey); ok {
+			pl.bp[key] = bp
+			return bp, nil
+		}
 	}
 	bp, err := bc.ImportDir(dir, build.ImportComment)
 	if err != nil {
 		return nil, err
 	}
+	if inStore {
+		bp = slimPackage(bp)
+	}
 	pl.bp[key] = bp
+	if file != "" {
+		_ = writeBuildCache(file, ckey, bp)
+	}
 	return bp, nil
 }
 

@@ -592,7 +592,9 @@ func TestRFW067DevProtoEditReachesTree(t *testing.T) {
 	}
 	cmd := exec.Command(harness.Bin(t, "bob"), "dev", "--servers-only", "--no-servers")
 	cmd.Dir = dir
-	cmd.Env = append(append(os.Environ(), testHomeEnv(t)...), "TZ=UTC", "LC_ALL=C") // the home bob gen used (T12)
+	// The environment bob gen ran with (harness.Run's, plus the test's home, T12): a developer
+	// runs bob gen and bob dev with one PATH (correction 87).
+	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "TZ=UTC", "LC_ALL=C"}, testHomeEnv(t)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("harness: %v", err)

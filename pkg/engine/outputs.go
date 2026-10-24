@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/drv"
@@ -448,20 +449,46 @@ type Jobs struct {
 	req  PlanRequest
 	own  map[string]*drv.Derivation
 	Drvs []*drv.Derivation // in planning order
+	// modulo remembers hashDerivationModulo by drv path: a drv path names its derivation's
+	// ATerm, so the answer for a path never changes (a job's inputs were hashed once per input
+	// edge before, recursively).
+	mu     sync.Mutex
+	modulo map[string][32]byte
 }
 
 // NewJobs returns an empty job set for req.
-func NewJobs(req PlanRequest) *Jobs { return &Jobs{req: req, own: map[string]*drv.Derivation{}} }
+func NewJobs(req PlanRequest) *Jobs {
+	return &Jobs{req: req, own: map[string]*drv.Derivation{}, modulo: map[string][32]byte{}}
+}
 
 // Modulo resolves the derivations planned here first, then the engine's.
 func (j *Jobs) Modulo(p string) ([32]byte, error) {
-	if d, ok := j.own[p]; ok {
-		return d.Modulo(j)
+	j.mu.Lock()
+	h, ok := j.modulo[p]
+	d, own := j.own[p]
+	j.mu.Unlock()
+	if ok {
+		return h, nil
 	}
-	if j.req.Resolver == nil {
+	var err error
+	switch {
+	case own:
+		h, err = d.Modulo(j)
+	case j.req.Resolver == nil:
 		return [32]byte{}, fmt.Errorf("no resolver for input derivation %s", p)
+	default:
+		h, err = j.req.Resolver.Modulo(p)
 	}
-	return j.req.Resolver.Modulo(p)
+	if err != nil {
+		return h, err
+	}
+	j.mu.Lock()
+	if j.modulo == nil {
+		j.modulo = map[string][32]byte{}
+	}
+	j.modulo[p] = h
+	j.mu.Unlock()
+	return h, nil
 }
 
 // Job is one bob-builder job of an output generator.

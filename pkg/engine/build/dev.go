@@ -62,6 +62,14 @@ type DevResult struct {
 // does), so ecosystems may name any of them; nothing is built here: the CLI realises
 // DevResult.Packages and DevResult.Realise.
 func Dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
+	res, err := dev(ctx, o, shell)
+	if err = interrupted(ctx, err); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 	if o.Root == "" {
 		return nil, errors.New("build: Options.Root is empty")
 	}
