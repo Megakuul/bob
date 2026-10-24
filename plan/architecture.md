@@ -57,10 +57,9 @@ SPEC §1.1 is the source of truth for `TestLayering`.
 
 | Package | Owns | SPEC |
 |---|---|---|
-| `internal/store` | the only dynamitedb access: `Get/GetCached/Create/CAS/PutOwned/Delete`, `SeqLog`, `PagedIndex`, `ShardSet`, `Lease` | §05.3, R-STORE-106 |
+| `internal/store` | the only dynamitedb access: `Get/GetCached/Create/CAS/PutOwned/Delete`, `SeqLog`, `PagedIndex`, `ShardSet`, `Lease`; `store.Objects`, plain S3 on the artifacts bucket (staging, nix/, oci/, rel/, src/, §05.2.4) | §05.3, R-STORE-106 |
 | `internal/store/sweep` | the only LIST (cold sweeps of analytics/artifacts) | R-STORE-101 |
 | `internal/logstore` | lake tables `log_line`, `package_run`; writer, compactor, `Reader`, `Follow` | §05.10 |
-| `internal/artifacts` | plain S3 on the artifacts bucket (staging, nix/, oci/, rel/, src/) | §05.2.4 |
 | `internal/cache` | Nix binary cache endpoints, visibility, download proxy (no outbound HTTP client) | §6.6 |
 | `internal/forge` | `forge.Adapter` + GitHub / GitLab / Forgejo | §6.9 |
 | `internal/gen/bob/<area>/v1` | buf-generated Go | §6.5 |
@@ -72,8 +71,8 @@ SPEC §1.1 is the source of truth for `TestLayering`.
 | `internal/api` *(proposed)* | connect service implementations | §6.5 |
 | `internal/registry`, `internal/promote`, `internal/release` *(proposed)* | OCI pull registry, staging → served promotion and signing, release state | §6.6–§6.8 |
 
-Server dependency rules: every S3 access goes through `internal/store`, `internal/logstore`
-or `internal/artifacts`; no LIST outside `sweep`; workers never hold control-bucket
+Server dependency rules: every S3 access goes through `internal/store` (records and
+`store.Objects`) or `internal/logstore`; no LIST outside `sweep`; workers never hold control-bucket
 credentials (policy-enforced, R-SEC-002); `internal/` may import `pkg/engine/...`.
 
 ## 4. Data flow: local build (`bob build //...`)
