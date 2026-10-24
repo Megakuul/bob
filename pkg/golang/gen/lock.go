@@ -122,7 +122,13 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 		}
 	}
 	sec := &lock.GoSection{Inputs: inputs, Workspaces: map[string]lock.GoBuildList{}, Modules: []lock.GoModule{}}
-	rq := resolve.Request{Update: req.Update, Fresh: req.Update != nil && len(req.Update) == 0, TmpDir: os.TempDir()}
+	// bob lock --update re-resolves the named entries, or all of them (R-CLI-010): a named Go
+	// module moves to its newest release (with what it requires); with no names every declared
+	// module does, and the previous pins of the others give way (A457). Before, --update without
+	// names only dropped the pins, which moved modules an earlier --update <name> had raised back
+	// to their bob.go versions.
+	all := req.Update != nil && len(req.Update) == 0
+	rq := resolve.Request{Update: req.Update, Fresh: all, TmpDir: os.TempDir()}
 	locked := ""
 	if prev != nil {
 		locked = prev.Proxy
@@ -149,6 +155,11 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 			}
 		}
 		rq.Workspaces = append(rq.Workspaces, w)
+		if all {
+			for _, m := range w.Require {
+				rq.Update = append(rq.Update, m.Path)
+			}
+		}
 	}
 	res, err := resolve.Resolve(ctx, rq)
 	if err != nil {
