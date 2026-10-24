@@ -1,0 +1,319 @@
+syntax = "proto3";
+
+package bob.build.v1;
+
+import "bob/authz/v1/authz.proto";
+import "bob/common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+service BuildService {
+  rpc CreateBuild(CreateBuildRequest) returns (CreateBuildResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project_id"
+    };
+  }
+  rpc GetBuild(GetBuildRequest) returns (GetBuildResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+      resolve: RESOLVE_BUILD
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListBuilds(ListBuildsRequest) returns (ListBuildsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc CancelBuild(CancelBuildRequest) returns (CancelBuildResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+      resolve: RESOLVE_BUILD
+    };
+  }
+  // New build (trigger RETRY, retry_of set, attempt+1) of the failed/cancelled pipelines; succeeded packages are cache hits.
+  rpc RetryBuild(RetryBuildRequest) returns (RetryBuildResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+      resolve: RESOLVE_BUILD
+    };
+  }
+  // New build with the same trigger and source (trigger kind RERUN, rerun_of set).
+  rpc RerunBuild(RerunBuildRequest) returns (RerunBuildResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+      resolve: RESOLVE_BUILD
+    };
+  }
+  rpc GetBuildGraph(GetBuildGraphRequest) returns (GetBuildGraphResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "build_id"
+      resolve: RESOLVE_BUILD
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Server stream: current build first, then changes; ends when the build is terminal.
+  rpc WatchBuild(WatchBuildRequest) returns (stream WatchBuildResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+      resolve: RESOLVE_BUILD
+    };
+  }
+}
+
+service JobService {
+  rpc GetJob(GetJobRequest) returns (GetJobResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+      resolve: RESOLVE_JOB
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "build_id"
+      resolve: RESOLVE_BUILD
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// States and phases are §05.6.2's (BuildRecord `st`, `ph`).
+enum BuildState {
+  BUILD_STATE_UNSPECIFIED = 0;
+  BUILD_STATE_PENDING = 1; // created, waiting for planning or for an older build (queue rule)
+  BUILD_STATE_QUEUED = 2; // first job enqueued, not yet claimed
+  BUILD_STATE_RUNNING = 3;
+  BUILD_STATE_SUCCEEDED = 4;
+  BUILD_STATE_FAILED = 5;
+  BUILD_STATE_CANCELLED = 6;
+  BUILD_STATE_SUPERSEDED = 7; // cancelled by a newer build (concurrency rule)
+  BUILD_STATE_SKIPPED = 8; // no pipeline matched the event
+}
+enum BuildPhase {
+  BUILD_PHASE_UNSPECIFIED = 0;
+  BUILD_PHASE_EVALUATING = 1;
+  BUILD_PHASE_BUILDING = 2;
+  BUILD_PHASE_PROMOTING = 3;
+}
+enum TriggerKind {
+  TRIGGER_KIND_UNSPECIFIED = 0;
+  TRIGGER_KIND_PUSH = 1;
+  TRIGGER_KIND_TAG = 2;
+  TRIGGER_KIND_PULL_REQUEST = 3;
+  TRIGGER_KIND_API = 4; // API or UI
+  TRIGGER_KIND_REMOTE = 5; // bob build/test --remote
+  TRIGGER_KIND_RERUN = 6;
+  TRIGGER_KIND_RETRY = 7; // RetryBuild (§05: a retry is a new build with retry-of set)
+}
+message Trigger {
+  TriggerKind kind = 1;
+  string ref = 2; // refs/heads/main, refs/tags/v1.4.0, refs/pull/7/head
+  int64 pull_request = 3;
+  bool from_fork = 4;
+  string sender = 5; // forge login (display only)
+  string delivery_id = 6;
+  bob.common.v1.Principal principal = 7; // API/REMOTE/RERUN
+  string rerun_of = 8;
+  string superseded_by = 9;
+  string retry_of = 10;
+}
+message GitSource {
+  string ref = 1;
+  string sha = 2; // empty on create = resolved by the worker at checkout, then set
+  string fetch_ref = 3; // PRs: refs/pull/N/head | refs/merge-requests/N/head
+}
+message Source {
+  oneof kind {
+    GitSource git = 1;
+    string upload_sha256 = 2; // PUT /upload/source/sha256/<hex> first
+  }
+}
+message PackageCounts {
+  int32 total = 1;
+  int32 cached = 2;
+  int32 built = 3;
+  int32 running = 4;
+  int32 queued = 5;
+  int32 failed = 6;
+  int32 skipped = 7;
+  int32 cancelled = 8;
+}
+message ErrorSummary {
+  string code = 1; // BOB-E-NNNN (§02 taxonomy)
+  string message = 2;
+  bob.common.v1.PackageRef package = 3;
+  string hint = 4;
+}
+message PipelineRun {
+  string name = 1;
+  BuildState state = 2;
+  string release_id = 3; // set when the pipeline published a release
+}
+message Build {
+  string id = 1;
+  string project_id = 2;
+  int64 number = 3; // per-project sequence, shown as #N
+  BuildState state = 4;
+  Trigger trigger = 5;
+  Source source = 6;
+  repeated PipelineRun pipelines = 7;
+  repeated string targets = 8; // labels / patterns for API and REMOTE builds
+  repeated string platforms = 9;
+  repeated string variants = 10;
+  int32 attempt = 11; // 1 + number of retries in the retry-of chain
+  PackageCounts counts = 12;
+  repeated ErrorSummary errors = 13; // ≤ 20, first failures
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp started_at = 15;
+  google.protobuf.Timestamp finished_at = 16;
+  string web_url = 17; // <base>/p/<project>/builds/<id>
+  string etag = 18;
+  BuildPhase phase = 19; // while RUNNING
+}
+message CreateBuildRequest {
+  string project_id = 1;
+  Source source = 2;
+  string pipeline = 3; // run one pipeline (ignores its triggers), or
+  repeated string targets = 4; // build/test these labels (REMOTE when sent by the CLI)
+  repeated string platforms = 5; // default: pipeline/package defaults
+  repeated string variants = 6;
+  bool test = 7; // targets are tests (bob test --remote)
+  string reason = 8; // ≤ 200 bytes, shown in the UI
+  string version = 9; // release version (bob build --remote --version); default: the tag's version of a tag build, else 0.0.0-dev
+}
+message CreateBuildResponse {
+  Build build = 1;
+}
+message GetBuildRequest {
+  string id = 1;
+}
+message GetBuildResponse {
+  Build build = 1;
+}
+message ListBuildsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string project_id = 3;
+  repeated BuildState states = 4;
+  string ref = 5;
+  string pipeline = 6;
+  TriggerKind trigger_kind = 7;
+  google.protobuf.Timestamp created_after = 8;
+}
+message ListBuildsResponse {
+  repeated Build builds = 1;
+  string next_page_token = 2;
+} // newest first
+message CancelBuildRequest {
+  string id = 1;
+}
+message CancelBuildResponse {
+  Build build = 1;
+}
+message RetryBuildRequest {
+  string id = 1;
+}
+message RetryBuildResponse {
+  Build build = 1;
+}
+message RerunBuildRequest {
+  string id = 1;
+}
+message RerunBuildResponse {
+  Build build = 1;
+}
+
+enum PackageState {
+  PACKAGE_STATE_UNSPECIFIED = 0;
+  PACKAGE_STATE_PENDING = 1; // waiting for dependencies
+  PACKAGE_STATE_QUEUED = 2;
+  PACKAGE_STATE_BUILDING = 3;
+  PACKAGE_STATE_CACHED = 4; // substituted (bob cache or cache.nixos.org)
+  PACKAGE_STATE_SUCCEEDED = 5;
+  PACKAGE_STATE_FAILED = 6;
+  PACKAGE_STATE_SKIPPED = 7; // a dependency failed
+  PACKAGE_STATE_CANCELLED = 8;
+}
+message PackageNode {
+  bob.common.v1.PackageRef package = 1;
+  string drv = 2; // /nix/store/…drv (shown only in detail/-v views)
+  PackageState state = 3;
+  string job_id = 4;
+  repeated int32 deps = 5; // indexes into GetBuildGraphResponse.nodes
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp finished_at = 7;
+  ErrorSummary error = 8;
+  repeated string outputs = 9; // store paths (after success)
+}
+message GetBuildGraphRequest {
+  string build_id = 1;
+}
+message GetBuildGraphResponse {
+  repeated PackageNode nodes = 1;
+  bool complete = 2;
+} // complete=false before evaluation finished
+message WatchBuildRequest {
+  string id = 1;
+}
+message WatchBuildResponse {
+  Build build = 1; // always set
+  repeated int32 changed_nodes = 2; // indexes; client re-fetches GetBuildGraph when the length changes
+  repeated PackageNode nodes = 3; // the changed nodes
+}
+
+// Kinds and states are §05's (JobSpec.Kind, JobRecord `st`); promotion progress is Job.promotion.
+enum JobKind {
+  JOB_KIND_UNSPECIFIED = 0;
+  JOB_KIND_EVALBUILD = 1;
+  JOB_KIND_BATCH = 2;
+  JOB_KIND_EVAL = 3;
+}
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  JOB_STATE_QUEUED = 1;
+  JOB_STATE_CLAIMED = 2;
+  JOB_STATE_RUNNING = 3;
+  JOB_STATE_SUCCEEDED = 4;
+  JOB_STATE_FAILED = 5;
+  JOB_STATE_CANCELLED = 6;
+}
+message Job {
+  string id = 1;
+  string build_id = 2;
+  JobKind kind = 3;
+  JobState state = 4;
+  string platform = 5;
+  string worker_id = 6;
+  int32 attempt = 7;
+  int64 epoch = 8;
+  int32 drv_count = 9;
+  string promotion = 10; // "", "blocked: staging incomplete", "failed: artifact verification", "done"
+  repeated string non_reproducible = 11; // store paths (R-NFR-006)
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp claimed_at = 13;
+  google.protobuf.Timestamp finished_at = 14;
+  ErrorSummary error = 15;
+}
+message GetJobRequest {
+  string id = 1;
+}
+message GetJobResponse {
+  Job job = 1;
+}
+message ListJobsRequest {
+  string build_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+message ListJobsResponse {
+  repeated Job jobs = 1;
+  string next_page_token = 2;
+}

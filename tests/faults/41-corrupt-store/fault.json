@@ -1,0 +1,23 @@
+{
+ "id": "41-corrupt-store",
+ "title": "store path registered but missing on disk",
+ "source": "S15 fault 41 (corrupt-store)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "env",
+  "describe": "output path deleted behind the store's back"
+ },
+ "command": [
+  "build",
+  "//tools:user"
+ ],
+ "code": "BOB-E-7003",
+ "exit": 7,
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

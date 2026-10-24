@@ -1,0 +1,25 @@
+@nix {"action":"start","id":2711739271479296,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2711739271479296}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv"}
+@nix {"action":"start","id":2711739271479297,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2711739271479298,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2711739271479299,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2711739271479298,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2711739271479299,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2711739271479297,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2711739271479297,"type":106}
+@nix {"action":"start","id":2711739271479300,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2711739271479300}
+@nix {"action":"result","fields":[0,1,0,0],"id":2711739271479298,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2711739271479299,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2711739271479297,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2711739271479297,"type":106}
+@nix {"action":"result","fields":[0,1,0,1],"id":2711739271479298,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2711739271479299,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2711739271479297,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2711739271479297,"type":106}
+@nix {"action":"stop","id":2711739271479299}
+@nix {"action":"stop","id":2711739271479298}
+@nix {"action":"stop","id":2711739271479297}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv\u001b[0m'.\n       Reason: \u001b[31;1mplatform mismatch\u001b[0m\n       Required system: '\u001b[35;1mx86_64-linux\u001b[0m'\n       Current system: '\u001b[35;1maarch64-linux\u001b[0m'","raw_msg":"Cannot build '\u001b[35;1m/nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv\u001b[0m'.\nReason: \u001b[31;1mplatform mismatch\u001b[0m\nRequired system: '\u001b[35;1mx86_64-linux\u001b[0m'\nCurrent system: '\u001b[35;1maarch64-linux\u001b[0m'"}

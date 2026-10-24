@@ -1,0 +1,21 @@
+{
+ "id": "55-archive-dotdot",
+ "title": "unsafe archive entry (../)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "rust",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "fault HTTP server serves a crate with a ../ entry"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-3004",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 4,
+ "forbid": []
+}

@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//cbad:cbad"]}
+{"v":1,"event":"package.start","label":"//cbad:cbad","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2001","class":"build","message":"//cbad:cbad: compile error in fixture/cbad/src/cbad.c","label":"//cbad:cbad","definedAt":"fixture/cbad/bob.go:7:12","location":"fixture/cbad/src/cbad.c:4:12","excerpt":["fixture/cbad/src/cbad.c:4:12: error: 'undeclared_counter' undeclared (first use in this function)","    4 |     return undeclared_counter + 1;","      |            ^~~~~~~~~~~~~~~~~~"],"log":"bob log //cbad:cbad","args":{"file":"fixture/cbad/src/cbad.c","label":"//cbad:cbad"}}}
+{"v":1,"event":"package.finish","label":"//cbad:cbad","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

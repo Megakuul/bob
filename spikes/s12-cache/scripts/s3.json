@@ -1,0 +1,10 @@
+{
+  "identities": [
+    {"name": "orchestrator",
+     "credentials": [{"accessKey": "orchkey", "secretKey": "orchsecret0123456789"}],
+     "actions": ["Admin:artifacts", "Read:artifacts", "Write:artifacts", "List:artifacts", "Tagging:artifacts"]},
+    {"name": "worker",
+     "credentials": [{"accessKey": "workerkey", "secretKey": "workersecret0123456789"}],
+     "actions": ["Write:artifacts/staging/*", "Read:artifacts/staging/*", "List:artifacts"]}
+  ]
+}

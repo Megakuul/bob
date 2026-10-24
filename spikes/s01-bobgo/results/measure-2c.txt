@@ -1,0 +1,19 @@
+profile [2c/4G]  2026-10-20T22:23:46+00:00  load: 4.08 8.01 12.43  go: go1.26.8
+10     cold         wall= 10.32s user= 15.45s sys= 1.85s  build=10313.3ms run=2.9ms  gocache=39M
+10     noop         wall=  0.10s user=  0.07s sys= 0.05s  build=84.8ms run=2.2ms  gocache=39M
+10     leaf-body    wall=  0.31s user=  0.27s sys= 0.11s  build=292.5ms run=4.1ms  gocache=39M
+10     root-body    wall=  0.38s user=  0.34s sys= 0.14s  build=372.0ms run=3.0ms  gocache=40M
+10     root-api     wall=  0.51s user=  0.43s sys= 0.18s  build=493.1ms run=3.2ms  gocache=40M
+10     new-repo     wall=  0.49s user=  0.46s sys= 0.16s  build=483.4ms run=3.0ms  gocache=41M
+100    cold         wall= 12.31s user= 17.00s sys= 2.60s  build=12286.0ms run=4.0ms  gocache=45M
+100    noop         wall=  0.14s user=  0.11s sys= 0.09s  build=116.9ms run=3.3ms  gocache=45M
+100    leaf-body    wall=  0.39s user=  0.34s sys= 0.14s  build=365.5ms run=5.2ms  gocache=46M
+100    root-body    wall=  0.47s user=  0.42s sys= 0.17s  build=448.5ms run=4.4ms  gocache=46M
+100    root-api     wall=  0.72s user=  0.65s sys= 0.25s  build=705.9ms run=4.3ms  gocache=47M
+100    new-repo     wall=  2.69s user=  2.26s sys= 0.96s  build=2665.9ms run=5.8ms  gocache=53M
+1000   cold         wall= 39.43s user= 38.78s sys=11.72s  build=39338.2ms run=19.9ms  gocache=133M
+1000   noop         wall=  0.55s user=  0.43s sys= 0.38s  build=472.4ms run=15.6ms  gocache=140M
+1000   leaf-body    wall=  0.88s user=  0.78s sys= 0.35s  build=805.1ms run=16.2ms  gocache=141M
+1000   root-body    wall=  0.95s user=  0.82s sys= 0.39s  build=873.5ms run=19.9ms  gocache=141M
+1000   root-api     wall=  1.24s user=  1.04s sys= 0.49s  build=1157.9ms run=18.2ms  gocache=142M
+1000   new-repo     wall= 29.95s user= 24.02s sys=10.13s  build=29866.6ms run=22.3ms  gocache=236M

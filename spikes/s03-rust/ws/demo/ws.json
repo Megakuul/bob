@@ -1,0 +1,205 @@
+{
+ "root": "/root/bob/spikes/s03-rust/ws/demo",
+ "crates": [
+  {
+   "name": "mymacro",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "proc-macro",
+   "src": "mymacro",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "syn",
+     "req": "2",
+     "features": [
+      "full"
+     ]
+    },
+    {
+     "name": "quote",
+     "req": "1"
+    },
+    {
+     "name": "proc-macro2",
+     "req": "1"
+    }
+   ]
+  },
+  {
+   "name": "corelib",
+   "version": "0.2.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "corelib",
+   "root": "src/lib.rs",
+   "buildRs": "build.rs",
+   "features": {
+    "default": [
+     "fast"
+    ],
+    "fast": [],
+    "hexout": [
+     "dep:hex"
+    ]
+   },
+   "enable": [
+    "default",
+    "hexout"
+   ],
+   "deps": [
+    {
+     "name": "itoa",
+     "req": "1"
+    },
+    {
+     "name": "hex",
+     "req": "0.4",
+     "optional": true
+    }
+   ]
+  },
+  {
+   "name": "demo",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "bin",
+   "src": "demo",
+   "root": "src/main.rs",
+   "deps": [
+    {
+     "name": "serde",
+     "req": "1",
+     "features": [
+      "derive"
+     ]
+    },
+    {
+     "name": "serde_json",
+     "req": "1"
+    },
+    {
+     "name": "regex",
+     "req": "1"
+    },
+    {
+     "name": "anyhow",
+     "req": "1"
+    },
+    {
+     "name": "thiserror",
+     "req": "2"
+    },
+    {
+     "name": "clap",
+     "req": "4",
+     "features": [
+      "derive"
+     ]
+    },
+    {
+     "name": "tokio",
+     "req": "1",
+     "features": [
+      "rt",
+      "macros",
+      "time"
+     ]
+    },
+    {
+     "name": "log",
+     "req": "0.4"
+    },
+    {
+     "name": "zstd",
+     "req": "0.13"
+    },
+    {
+     "name": "libc",
+     "req": "0.2"
+    },
+    {
+     "name": "mymacro",
+     "local": true
+    },
+    {
+     "name": "corelib",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "rcore",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "staticlib",
+   "src": "rcore",
+   "root": "src/lib.rs",
+   "hdrs": "include",
+   "deps": [
+    {
+     "name": "itoa",
+     "req": "1"
+    },
+    {
+     "name": "hex",
+     "req": "0.4"
+    }
+   ]
+  },
+  {
+   "name": "rdyn",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "cdylib",
+   "src": "rdyn",
+   "root": "src/lib.rs",
+   "hdrs": "include",
+   "deps": []
+  },
+  {
+   "name": "usec",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "bin",
+   "src": "usec",
+   "root": "src/main.rs",
+   "deps": [],
+   "clibs": [
+    "cfoo"
+   ]
+  }
+ ],
+ "cc": [
+  {
+   "name": "cfoo",
+   "src": "cfoo",
+   "srcs": [
+    "src/cfoo.c"
+   ],
+   "hdrs": "include",
+   "kind": "static"
+  },
+  {
+   "name": "cmain",
+   "src": "cmain",
+   "srcs": [
+    "main.c"
+   ],
+   "kind": "bin",
+   "rustDeps": [
+    "rdyn"
+   ]
+  }
+ ],
+ "go": [
+  {
+   "name": "gapi",
+   "src": "gapi",
+   "main": ".",
+   "rustDeps": [
+    "rcore"
+   ]
+  }
+ ]
+}

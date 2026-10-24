@@ -1,0 +1,56 @@
+@nix {"action":"start","id":2767367687897088,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"start","fields":["/nix/store/rc3qplw2v7jcqr4b2ymdhw2m9f98assq-tools-hook","https://cache.nixos.org"],"id":2767367687897089,"level":4,"parent":0,"text":"querying info about '/nix/store/rc3qplw2v7jcqr4b2ymdhw2m9f98assq-tools-hook' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"start","fields":["https://cache.nixos.org/rc3qplw2v7jcqr4b2ymdhw2m9f98assq.narinfo"],"id":2767367687897090,"level":4,"parent":2767367687897089,"text":"downloading 'https://cache.nixos.org/rc3qplw2v7jcqr4b2ymdhw2m9f98assq.narinfo'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2767367687897090,"type":105}
+@nix {"action":"stop","id":2767367687897089}
+@nix {"action":"stop","id":2767367687897090}
+@nix {"action":"stop","id":2767367687897088}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv"}
+@nix {"action":"start","id":2767367687897091,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2767367687897092,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2767367687897093,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897092,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897093,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2767367687897091,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2767367687897091,"type":106}
+@nix {"action":"start","id":2767367687897094,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2767367687897094}
+@nix {"action":"result","fields":[0,1,0,0],"id":2767367687897092,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897093,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2767367687897091,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2767367687897091,"type":106}
+@nix {"action":"start","fields":["/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv","",1,1],"id":2767367687897095,"level":3,"parent":0,"text":"building '/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2767367687897092,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2767367687897093,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2767367687897091,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2767367687897091,"type":106}
+@nix {"action":"start","fields":["/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv"],"id":2767367687897096,"level":4,"parent":0,"text":"running post-build-hook '/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh'","type":110}
+@nix {"action":"result","fields":["uploading /nix/store/rc3qplw2v7jcqr4b2ymdhw2m9f98assq-tools-hook"],"id":2767367687897096,"type":107}
+@nix {"action":"result","fields":["upload failed: 503"],"id":2767367687897096,"type":107}
+@nix {"action":"stop","id":2767367687897096}
+@nix {"action":"stop","id":2767367687897095}
+@nix {"action":"stop","id":2767367687897093}
+@nix {"action":"stop","id":2767367687897092}
+@nix {"action":"stop","id":2767367687897091}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m program \u001b[35;1m\"/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh\"\u001b[0m \u001b[35;1mfailed with exit code 1\u001b[0m","raw_msg":"program \u001b[35;1m\"/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh\"\u001b[0m \u001b[35;1mfailed with exit code 1\u001b[0m"}

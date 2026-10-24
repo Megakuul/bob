@@ -1,0 +1,32 @@
+@nix {"action":"start","id":2708191628492800,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2708191628492800}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv"}
+@nix {"action":"start","id":2708191628492801,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2708191628492802,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2708191628492803,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2708191628492802,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2708191628492803,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2708191628492801,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2708191628492801,"type":106}
+@nix {"action":"start","id":2708191628492804,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2708191628492804}
+@nix {"action":"result","fields":[0,1,0,0],"id":2708191628492802,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2708191628492803,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2708191628492801,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2708191628492801,"type":106}
+@nix {"action":"start","fields":["/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv","",1,1],"id":2708191628492805,"level":3,"parent":0,"text":"building '/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2708191628492802,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2708191628492803,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2708191628492801,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2708191628492801,"type":106}
+@nix {"action":"result","fields":["\u001b[31;1merror:\u001b[0m executing '\u001b[35;1m/nix/store/00000000000000000000000000000000-bob-builder/bin/bob-builder\u001b[0m': \u001b[35;1mNo such file or directory\u001b[0m"],"id":2708191628492805,"type":101}
+@nix {"action":"result","fields":[0,1,0,1],"id":2708191628492802,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2708191628492803,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2708191628492801,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2708191628492801,"type":106}
+@nix {"action":"stop","id":2708191628492805}
+@nix {"action":"stop","id":2708191628492803}
+@nix {"action":"stop","id":2708191628492802}
+@nix {"action":"stop","id":2708191628492801}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv\u001b[0m'.\n       Reason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\n       Output paths:\n         \u001b[35;1m/nix/store/sgn3lpk330qx7xz4ncid9rd84dv8c3sz-tools-missing-builder\u001b[0m","raw_msg":"Cannot build '\u001b[35;1m/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv\u001b[0m'.\nReason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\nOutput paths:\n  \u001b[35;1m/nix/store/sgn3lpk330qx7xz4ncid9rd84dv8c3sz-tools-missing-builder\u001b[0m"}

@@ -1,0 +1,1 @@
+usage: bob pipeline run <name> [--remote]

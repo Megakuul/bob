@@ -1,0 +1,137 @@
+# I-M7b progress (M7.4 platforms and toolchains, M7.5 variants and projections, M7.6 budgets)
+
+Owner of: pkg/bob platform files (platform.go, toolchain.go), engine toolchain code
+(pkg/engine/toolchain.go, see D-M7b-1), pkg/engine/build platform code (platform.go + small
+hooks), pkg/cc/gen cross parts, pkg/golang cross/variant parts (gen, bop toolchain args).
+Not pkg/rust, pkg/npm.
+
+## done (checkpoint 19:30)
+- pkg/bob/toolchain.go: bob.Toolchain {Host, Target, Triple, Prefix, CC, Bintools, CCLib,
+  Emulator, EmulatorCmd}, p.Toolchain(), bob.ToolchainFor (R-FW-033 C/C++ row), Platform
+  methods NixSystem/GOARCH/Triple/CrossSet. Unit test toolchain_test.go.
+- pkg/engine/toolchain.go: HostPlatform/HostSystem, NodePlatform, CToolchain, GoFor (Go row),
+  RustFor (Rust row, hook for I-M8a), NixpkgsSource (R-FW-032/036 set selection), CrossRefused
+  (OCaml native-only, R-PLAT-005), Versions/TestVersions (BOB_TEST_NIXPKGS_INDEX)/CheckVersions
+  (R-PLAT-007). Unit test toolchain_test.go.
+- pkg/engine/build: every bob derivation has the host system (systemOf, R-PLAT-004; 1010 gone);
+  nixpkgs entries per (system, attr) with one index per system (platform.go indexes.check);
+  pre-check before planning; uncached target-lib note (R-FW-036b); variant-dropped note
+  (R-FW-038); cross refusals; foreign sanitised/race test units skipped with
+  "not run: needs a native <p> machine" (R-FW-039), Options.RequireAllTests → exit 1;
+  TestResult.Runner from the unit's argv (qemu-<arch>).
+- pkg/cli/cmd_build.go: note events (json {"event":"note","type":"note",code,…}; human
+  "note: …" on stderr), test.result runner/reason, SKIP line, --require-all-tests wired.
+- pkg/cc: tools from p.Toolchain() (cross cc-wrapper + bintools, gcc-lib for sanitised cross),
+  qemu-user dep for cross tests, LibraryOpts/BinaryOpts.Libs (cc.NativeLibs / cc.CrossLibs).
+  pkg/nixpkgs: (*Package).CrossSet(p) (CrossLibs re-declares a Lib from pkgsCross).
+- pkg/cc/gen: host system, prefixed gcc/g++/ar/strip/objcopy, names cc-<name>[-<platform>][-dbg]
+  [-address][-undefined], test-run under qemu, R-FW-037 rpath, External cross (CC/CXX/AR/…,
+  cmake system/compilers, autotools --host; Meson cross = 9008). Unit test cross_test.go.
+- pkg/golang: go.binary/go.test axes platform+profile+sanitizers+race; cgo C compiler from the
+  toolchain; qemu dep for cross tests. pkg/golang/gen: host system, GoTarget env (GOOS GOARCH CC
+  CXX) + -extld in every cross job, variant.go (-N -l, -race, -asan, C sanitisers on cgo/link,
+  name tags), cgo forced on for race/asan. pkg/golang/bop: Toolchain.Env/GCFlags/LDFlags/CFlags,
+  go-std with -race/-asan/-gcflags, compiler shim for cross -asan. BuilderVersion 7 (shared with
+  the OCaml unit's bump), builders.go + framework.zip regenerated.
+- Verified: cc fixture `bob build --platform linux-amd64 //app:app` on arm64: x86-64 ELF,
+  interpreter cross glibc; runs under qemu-x86_64: "gcd=12 isqrt=31 crc32=d7183e61
+  sha256=fde5eea7a256ddf8 zstd=12->21" (External zstd via make cross, openssl/zlib from
+  legacyPackages.x86_64-linux). Cold cross build 4m41s at load ~30 [8c/15G shared].
+
+- Verified (scratch repo /var/tmp/i-m7b/go = go fixture without api/proto/rcore + capp, a cgo
+  module linking //native/foo): `bob build --platform linux-amd64` → capp (cgo, dynamic, cross
+  glibc interpreter) prints "capp linux/amd64 checksum=306254" under qemu-x86_64; stamp (pure,
+  x/sync) static x86-64. `bob test --platform linux-amd64 --json //capp/... //lib/...`: 3 units
+  pass with "runner":"qemu-x86_64" (lib/fastadd runs its amd64 assembly). `@linux-amd64+race`
+  and `+asan`: status skipped, reason "not run: needs a native linux-amd64 machine", exit 0;
+  --require-all-tests exit 1.
+- R-PLAT-001 (tests/platforms): exit 2 and no nix dir for @linux-riscv64; host arch refused
+  under `setarch linux32` (armv8l), exit 2. Still red on text: CLI renders "error[BOB-E-…]"
+  blocks instead of "✗ …" (NEEDS 5) and code 1 has no "(known: …)" (NEEDS 1).
+
+- Go variants: capp @linux-arm64 +race/+asan/+debug build and run natively (tsan/asan runtime
+  linked); @linux-amd64 +asan (cross -asan std through the compiler shim) and +debug build;
+  +debug runs under qemu. Cold variant builds 32-52 s each at load ~25 [8c/15G shared].
+- cc: `bob test --platform linux-amd64 //...` mathx_test passes, runner qemu-x86_64.
+  Libs: cc.CrossLibs on pack → notes "openssl for linux-amd64 is not in the binary cache and
+  will be built from source (several minutes)" (and zlib) before any build (JSON note events).
+- R-PLAT-007: BOB_TEST_NIXPKGS_INDEX glibc 2.42/2.43 → refused before planning (exit 3,
+  1021); without the file the real lookup (x86_64-linux glibc 2.42 vs
+  pkgsCross.gnu64.stdenv.cc.libc 2.42) passes.
+- R-FW-030 restriction (platrestrict repo by hand): @linux-amd64 → exit 2 BOB-E-0006
+  "//only:only does not support linux-amd64 (it allows: linux-arm64)"; @linux-arm64 builds.
+- M7.6 (measured, proxy: cc fixture, the polyglot rows need Rust M8 + codegen M10): closure of
+  //app:app native 67.3 MiB (10 paths), @linux-amd64 91.1 MiB (11 paths: cross glibc +
+  x86_64 glibc from openssl, R-FW-036 default). Cross cc-wrapper closure 425 MiB unpacked
+  (shared with the native toolchain in part), qemu-user 213.6 MiB. Budget benchmarks are
+  registered in tools/internal/budgets (protected); TestRNIX030ClosureBudgets needs polyglot.
+- Unit tests green: pkg/bob, pkg/engine, pkg/engine/build (platform), pkg/cc/..., pkg/golang/...,
+  pkg/cli, pkg (layering). gofmt/vet/staticcheck clean on touched packages; tools/ci
+  fmt/vet fail only on other units' WIP (internal/notify, internal/store, tests/store).
+- Acceptance: tests/core and tests/platforms harness builds cmd/bob-server, which other units'
+  WIP breaks (internal/notify, internal/build); tests/platforms TestRPLAT001 ran: exit codes
+  and "no nix dir" right, text red (NEEDS 1, 5).
+
+## next
+- nothing in this chain beyond NEEDS / TEST PROBLEM.
+
+## DECISIONS
+- D-M7b-1: engine toolchain code lives in package engine (pkg/engine/toolchain.go), not a new
+  pkg/engine/toolchain: TestLayering (pkg/layering_test.go, a test) rejects packages missing
+  from its layer table; package engine is E2 already.
+- D-M7b-2: bob.Toolchain.CC is the nixpkgs attribute (host set) of the compiler wrapper, not a
+  drv.Ref (SPEC §04.2): the evaluator computes no derivations; ecosystems take it as
+  nixpkgs.Tool(p, tc.CC), so all packages of one kind and target share one derivation.
+- D-M7b-3: C/C++ derivation names follow §03.1 (G14): cc-<name>[-<platform if cross>][-tag];
+  tags dbg/address/undefined. Go: go-<ip>[-<platform>][-tag], go-std-<v>-linux-<arch>[-cgo][-tag],
+  go-link-<name>[...], tags dbg/address/undefined/race.
+- D-M7b-4: target nixpkgs libraries for a cross target are looked up in an index opened for the
+  target system (legacyPackages.<sys>.<attr>); Cross() and cc.CrossLibs use
+  pkgsCross.<set>.<attr> of the host index.
+- D-M7b-5: cc.CrossLibs is applied at evaluation: the cc constructor replaces each nixpkgs.Lib
+  dep by the same Lib from the cross set ((*nixpkgs.Package).CrossSet); natively it changes
+  nothing.
+- D-M7b-6: R-PLAT-007 needs no code for its messages in §02.3; uses BOB-E-1021 (label
+  "nixpkgs", reason = SPEC text, hint in Cause); OCaml cross refusal uses usage code 6
+  ("<label> does not support <p> (it allows: <host>)", exit 2) with the SPEC text in Cause.
+  Unknown --platform/@platform: code 1 (kind platform, hint naming the known ones), checked in
+  the CLI before the store opens. See NEEDS 1.
+- D-M7b-7: race and asan force cgo on (cmd/go: both require cgo); CGoOff + race/asan →
+  BOB-E-1020; race+asan together → 1020.
+- D-M7b-8: cross `go list -asan` (std) runs with a CC shim script that strips the triple prefix
+  from `--version` (cmd/go compilerVersion requires output starting with "gcc").
+- D-M7b-9: cross sanitised/race test units are not built at all (skipped, R-FW-039);
+  others run as `<qemu-user>/bin/qemu-<arch> <binary> …` inside the test-run job.
+
+## NEEDS
+1. coordinator/SPEC §02.3 (+ codes.lock, owner-approved tests/goldens/diag/codes.golden): codes
+   for "nixpkgs mismatch: {what}" (R-PLAT-007, two hints) and "{label}: {eco} packages cannot be
+   cross-compiled yet (requested {platform} on a {host} host)" (usage, exit 2, R-PLAT-005).
+2. SPEC §02.4 + schema/events-v1.json (protected): a "note" event (type, code, message, attr,
+   platform, label, field), test.result status "skipped" and fields "runner"/"reason".
+3. I-M8a (Rust): use engine.RustFor(host, target) / p.Toolchain() for --target, sysroot
+   (rust-std-<triple> from legacyPackages.<target>.rustc.unwrapped), linker <triple>-cc, host
+   units with RustFor(host, host); qemu-user dep for cross rust tests (p.Toolchain().Emulator).
+4. OCaml unit: nothing (engine refuses cross OCaml nodes before planning).
+6. cc owner (pkg/cc/gen Stale): `bob test //libs/mathx:mathx_test` alone reports BOB-E-1012
+   "the cc.External declarations changed": Stale compares the inputs of the Externals of a
+   partial graph with the whole repository's section (any pattern without the External).
+7. Files outside my ownership changed (small, additive): pkg/cli/cmd_build.go (platform
+   pre-check, note/test.result rendering, --require-all-tests), pkg/cli/cli.go (uname check),
+   pkg/engine/build/{build.go,pipeline.go,plan.go,realise.go} (hooks), pkg/cc/cc.go,
+   pkg/cc/internal/ccspec, pkg/golang/golang.go, pkg/golang/internal/gospec, pkg/nixpkgs
+   (CrossSet), pkg/builder/bspec (BuilderVersion 7 comment), builders.go, framework.zip.
+5. CLI owner (pkg/cli output.go diagnose): usage errors print "error[BOB-E-0001]: …" blocks;
+   tests/platforms R-PLAT-001/005/007 want the "✗ <message>" form of §02.5 (same as I-M7a NEEDS 4).
+
+## TEST PROBLEM
+1. tests/platforms/platform_test.go restrictedAppGo calls `cc.Binary(p, …)` returning
+   *cc.Binary: cannot compile (D-M7a-1, cc.NewBinary); R-PLAT-006 test cannot pass as written.
+2. tests/platforms TestRPLAT004 checks every .drv in the store for the host system, including
+   nixpkgs derivations of target libraries (legacyPackages.x86_64-linux.openssl has system
+   x86_64-linux by definition, and R-FW-032's test requires exactly that). Ruling G11 fixed
+   this for R-FW-030 only; R-PLAT-004 should check bob-builder derivations (or exclude
+   nixpkgs target libraries).
+3. tests/core TestRFW038DerivationNames wants `libs-foo-foo-<platform>-address` and
+   TestRFW033 looks up `libs-mathx-mathx`/`libs-pack-pack`; ruling G14 makes §03 names win for
+   ecosystem packages (cc-<name>…, which tests/eco/cc requires). Both cannot hold.

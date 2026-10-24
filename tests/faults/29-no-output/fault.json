@@ -1,0 +1,26 @@
+{
+ "id": "29-no-output",
+ "title": "build produced no output",
+ "source": "S15 fault 29 (no-output)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "builder exits 0 without writing $out"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-9002",
+ "exit": 70,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:18:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

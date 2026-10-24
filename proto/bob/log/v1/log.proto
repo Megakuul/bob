@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package bob.log.v1;
+
+import "bob/authz/v1/authz.proto";
+
+service LogService {
+  // Persisted log of a build or one package, ordered by (package, seq).
+  rpc GetLog(GetLogRequest) returns (GetLogResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "build_id"
+      resolve: RESOLVE_BUILD
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Server stream: persisted + live lines after the cursor, gap-free and duplicate-free (ADR 0019 merge).
+  // While at least one follower exists, the orchestrator pulls the running workers' in-memory logs.
+  rpc FollowLog(FollowLogRequest) returns (stream FollowLogResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "build_id"
+      resolve: RESOLVE_BUILD
+    };
+  }
+  rpc SearchLog(SearchLogRequest) returns (SearchLogResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "build_id"
+      resolve: RESOLVE_BUILD
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+enum Stream {
+  STREAM_UNSPECIFIED = 0;
+  STREAM_STDOUT = 1;
+  STREAM_STDERR = 2;
+  STREAM_BOB = 3;
+}
+message LogLine {
+  string package = 1; // label
+  int64 seq = 2; // per (build, package), from 1, continues across attempts
+  int32 attempt = 3;
+  Stream stream = 4;
+  int64 ts_unix_nano = 5;
+  string text = 6; // UTF-8, ≤ 4 KiB; rendered inert by every client
+}
+message Cursor {
+  int64 seq = 1;
+  int32 attempt = 2;
+}
+message Restart {
+  string package = 1;
+  int32 attempt = 2;
+  int64 from_seq = 3;
+}
+message Final {
+  string package = 1;
+  int64 last_seq = 2;
+  int32 attempt = 3;
+}
+
+message GetLogRequest {
+  string build_id = 1;
+  string package = 2;
+  int64 after_seq = 3;
+  int32 limit = 4;
+} // limit default 10,000, max 100,000
+message GetLogResponse {
+  repeated LogLine lines = 1;
+  bool truncated = 2;
+}
+message FollowLogRequest {
+  string build_id = 1;
+  string package = 2;
+  map<string, Cursor> cursor = 3;
+}
+message FollowLogResponse {
+  repeated LogLine lines = 1;
+  repeated Restart restarts = 2; // client drops its lines of that package with seq >= from_seq
+  repeated Final end = 3;
+  bool done = 4;
+  bool delayed = 5; // true while no live source is reachable (lake only)
+}
+message SearchLogRequest {
+  string build_id = 1;
+  string term = 2;
+  string package = 3;
+} // term 3..200 bytes, case-sensitive
+message SearchLogResponse {
+  repeated LogLine hits = 1;
+  bool truncated = 2;
+} // ≤ 1,000 hits

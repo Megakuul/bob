@@ -1,0 +1,1 @@
+usage: bob build [patterns…] [--remote] [--platform P] [--variant V] [--print-paths] [--keep-going=true] [--lock]

@@ -1,0 +1,3 @@
+ok  	example.com/acme/cmd/api	0.006s
+ok  	example.com/acme/internal/greet	0.005s
+untagged build/vet/test: ok

@@ -1,0 +1,26 @@
+{
+ "id": "03-insecure-pkg",
+ "title": "insecure nixpkgs package",
+ "source": "S15 fault 3 (insecure-pkg)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.go depends on nixpkgs bzip2_1_1 (known CVE)"
+ },
+ "command": [
+  "build",
+  "//libfoo:foo"
+ ],
+ "code": "BOB-E-1003",
+ "exit": 3,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/libfoo/bob.go:8:11"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

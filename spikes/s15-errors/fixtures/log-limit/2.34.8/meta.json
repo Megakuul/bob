@@ -1,0 +1,52 @@
+{
+  "name": "log-limit",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "--option",
+    "max-build-log-size",
+    "20000",
+    "/nix/store/94ncd584xaxfvskk2w690wjiadv6mxkv-tools-log-flood.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 264,
+    "nixVersion": "2.34.8"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/94ncd584xaxfvskk2w690wjiadv6mxkv-tools-log-flood.drv": {
+        "label": "//tools:log-flood",
+        "definedAt": "fixture/tools/bob.go:25:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/5arbi7bkfh31v2r6sb86s97p6581f2jh-tools-log-flood": "/nix/store/94ncd584xaxfvskk2w690wjiadv6mxkv-tools-log-flood.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:log-flood"
+    ],
+    "limits": {
+      "maxLogBytes": 20000,
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

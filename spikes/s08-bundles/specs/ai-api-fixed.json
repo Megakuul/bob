@@ -1,0 +1,19 @@
+{
+  "name": "api",
+  "entry": "/nix/store/59ds6rahi73qa7dvs3dg3s1k9mwfc63m-api-api/bin/api",
+  "cacerts": "/nix/store/7hjrv0fx6lfwb9bwk7p3wbpmr10dgv5l-nss-cacert-3.126",
+  "runtime": "/root/scratch-s08/dl/rt/runtime-aarch64",
+  "launcher": "bin/bobrun-arm64",
+  "mksquashfs": "/nix/store/jfjxsxwwsg6mrifh7kvrq7ir2ycshs6a-squashfs-4.7.5/bin/mksquashfs",
+  "work": "tmp/ai2",
+  "out": "out/api-fixed-aarch64.AppImage",
+  "strip": true,
+  "prune": [
+    "/nix/store/*-glibc-*/share/i18n",
+    "/nix/store/*-glibc-*/share/locale",
+    "/nix/store/*-glibc-*/lib/gconv",
+    "/nix/store/*-gcc-*-lib/lib/lib?san.so*",
+    "/nix/store/*-gcc-*-lib/lib/libhwasan.so*",
+    "/nix/store/*-itoa-*-src"
+  ]
+}

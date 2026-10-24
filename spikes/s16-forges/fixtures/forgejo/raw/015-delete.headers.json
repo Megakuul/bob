@@ -1,0 +1,23 @@
+{
+  "Accept-Encoding": "gzip",
+  "Content-Length": "3773",
+  "Content-Type": "application/json",
+  "User-Agent": "Go-http-client/1.1",
+  "X-Forgejo-Delivery": "72de2521-0076-4472-9a1f-29fa704c4785",
+  "X-Forgejo-Event": "delete",
+  "X-Forgejo-Event-Type": "delete",
+  "X-Forgejo-Signature": "dcd40e9b2ccfcbbaa748a18cc83b019419ce3fa7bd346ed85d295f972d77f416",
+  "X-Gitea-Delivery": "72de2521-0076-4472-9a1f-29fa704c4785",
+  "X-Gitea-Event": "delete",
+  "X-Gitea-Event-Type": "delete",
+  "X-Gitea-Signature": "dcd40e9b2ccfcbbaa748a18cc83b019419ce3fa7bd346ed85d295f972d77f416",
+  "X-Github-Delivery": "72de2521-0076-4472-9a1f-29fa704c4785",
+  "X-Github-Event": "delete",
+  "X-Github-Event-Type": "delete",
+  "X-Gogs-Delivery": "72de2521-0076-4472-9a1f-29fa704c4785",
+  "X-Gogs-Event": "delete",
+  "X-Gogs-Event-Type": "delete",
+  "X-Gogs-Signature": "dcd40e9b2ccfcbbaa748a18cc83b019419ce3fa7bd346ed85d295f972d77f416",
+  "X-Hub-Signature": "sha1=3ab56c3b222cf4d55d57a05a4ab6ac7ea556c5df",
+  "X-Hub-Signature-256": "sha256=dcd40e9b2ccfcbbaa748a18cc83b019419ce3fa7bd346ed85d295f972d77f416"
+}

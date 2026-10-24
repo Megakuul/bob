@@ -1,0 +1,9 @@
+[31;1m✗[0m //api:api
+
+[31;1merror[BOB-E-2004]:[0m [1m//api:api: library zstd_s15 not found[0m
+  package defined at fixture/api/bob.go:13:11
+   [2m│[0m cannot find -lzstd_s15: No such file or directory
+  [32mhint:[0m add the package that provides libzstd_s15 to Deps, or remove the link flag
+  [2mfull log: bob log //api:api[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

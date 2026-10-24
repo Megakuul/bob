@@ -1,0 +1,48 @@
+{
+  "name": "unsupported-system",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 160,
+    "nixVersion": "2.34.9"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv": {
+        "label": "//tools:cross",
+        "definedAt": "fixture/tools/bob.go:21:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/qdja5jj6mxbsjgwwa0dyy0arkjpdj8ka-tools-cross": "/nix/store/vdc4n52hq77a0hlpfnb4s109hhc1iz99-tools-cross.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:cross"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

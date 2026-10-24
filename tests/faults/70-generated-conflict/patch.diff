@@ -1,0 +1,11 @@
+diff --git a/svc/gen/rest/version.go b/svc/gen/rest/version.go
+new file mode 100644
+index 0000000..2cc9edf
+--- /dev/null
++++ b/svc/gen/rest/version.go
+@@ -0,0 +1,5 @@
++// Package rest is hand-written.
++package rest
++
++// Version is the API version.
++const Version = "1"

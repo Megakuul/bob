@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:diskfull
+
+[31;1merror[BOB-E-6001]:[0m [1mno space left on device while building //tools:diskfull[0m
+  package defined at fixture/tools/bob.go:15:15
+  cause: the disk holding bob's store is full
+  [32mhint:[0m free disk space (bob gc) or move bob's store to a larger disk
+
+[31;1mbob: 1 failed[0m (exit 6)

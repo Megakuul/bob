@@ -1,0 +1,5 @@
+error[BOB-E-1003]: nixpkgs package "bzip2_1_1" (2020-08-11) is marked insecure: CVE-2026-42250
+  package defined at fixture/libfoo/bob.go:8:11
+  hint: use a fixed version; bob refuses known-vulnerable packages unless allowed per package
+
+bob: nothing was built (exit 3)

@@ -1,0 +1,14 @@
+[31;1m✗[0m //api:api
+
+[31;1merror[BOB-E-2005]:[0m [1m//api:api: tests failed[0m
+  package defined at fixture/api/bob.go:13:11
+  cause: test TestDigest failed
+   [2m│[0m --- FAIL: TestDigest (0.00s)
+   [2m│[0m     main_test.go:7: sha256Hex(bob) = 81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9, want 0000
+   [2m│[0m FAIL
+   [2m│[0m FAIL	example.com/api/cmd/api	0.031s
+   [2m│[0m FAIL
+  [32mhint:[0m run bob test //api:api -v to see the full test output
+  [2mfull log: bob log //api:api[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

@@ -1,0 +1,49 @@
+@nix {"action":"start","id":3162066592464896,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3162066592464896}
+@nix {"action":"msg","level":3,"msg":"this path will be fetched (51.8 KiB download, 51.8 KiB unpacked):"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload"}
+@nix {"action":"start","id":3162066592464897,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3162066592464898,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3162066592464899,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3162066592464897,"type":106}
+@nix {"action":"start","id":3162066592464900,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3162066592464900}
+@nix {"action":"result","fields":[0,1,0,0],"id":3162066592464898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3162066592464898,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":3162066592464899,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3162066592464898,"type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":3162066592464899,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3162066592464897,"type":106}
+@nix {"action":"start","fields":["/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload","http://127.0.0.1:21513"],"id":3162066592464901,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload","http://127.0.0.1:21513","local://"],"id":3162066592464902,"level":3,"parent":3162066592464901,"text":"copying path '/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload' from 'http://127.0.0.1:21513'","type":100}
+@nix {"action":"start","fields":["http://127.0.0.1:21513/nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar"],"id":3162066592464903,"level":4,"parent":3162066592464902,"text":"downloading 'http://127.0.0.1:21513/nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[19,19,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[19,19,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"result","fields":[19,19,0,0],"id":3162066592464903,"type":105}
+@nix {"action":"stop","id":3162066592464903}
+@nix {"action":"stop","id":3162066592464902}
+@nix {"action":"stop","id":3162066592464901}
+@nix {"action":"msg","column":null,"file":null,"level":1,"line":null,"msg":"\u001b[35;1mwarning:\u001b[0m file '\u001b[35;1mnar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar\u001b[0m' does not exist in binary cache '\u001b[35;1mhttp://127.0.0.1:21513\u001b[0m'","raw_msg":"file '\u001b[35;1mnar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar\u001b[0m' does not exist in binary cache '\u001b[35;1mhttp://127.0.0.1:21513\u001b[0m'"}
+@nix {"action":"result","fields":[0,1,0,1],"id":3162066592464898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3162066592464899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3162066592464897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3162066592464897,"type":106}
+@nix {"action":"stop","id":3162066592464899}
+@nix {"action":"stop","id":3162066592464898}
+@nix {"action":"stop","id":3162066592464897}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\n       Reason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\n       Hint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'","raw_msg":"Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\nReason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\nHint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'"}

@@ -1,0 +1,3 @@
+# Written by go generate ./pkg/engine/store (bob-builder, R-NIX-015); never committed.
+*
+!.gitignore

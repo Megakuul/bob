@@ -1,0 +1,19 @@
+//go:build bob
+
+package appimage_test
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/output/appimage"
+)
+
+func ExampleNewBundle() {
+	_ = bob.Define(func(p *bob.P) *appimage.Bundle {
+		return appimage.NewBundle(p, "tools", appimage.BundleOpts{
+			Program: nixpkgs.Exe(p, "curl", "bin/curl"),
+			Entries: map[string]bob.Executable{"date": nixpkgs.Exe(p, "coreutils", "bin/date")},
+			Locales: []string{"C.UTF-8", "en_US.UTF-8"},
+		})
+	})
+}

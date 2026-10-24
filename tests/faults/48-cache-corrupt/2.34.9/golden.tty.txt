@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:payload
+
+[31;1merror[BOB-E-4005]:[0m [1mcache http://127.0.0.1:21516 served corrupted data for //tools:payload[0m
+   [2m│[0m expected: sha256:1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d
+   [2m│[0m received: sha256:1wpfk610awzyixjivxwmhq4dvzv102a3q0p3f7nqkahp79k87inn
+  [32mhint:[0m report this to the cache admin; bob refused the download
+
+[31;1mbob: 1 failed[0m (exit 4)

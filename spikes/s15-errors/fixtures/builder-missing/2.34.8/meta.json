@@ -1,0 +1,48 @@
+{
+  "name": "builder-missing",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 288,
+    "nixVersion": "2.34.8"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv": {
+        "label": "//tools:missing-builder",
+        "definedAt": "fixture/tools/bob.go:17:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/sgn3lpk330qx7xz4ncid9rd84dv8c3sz-tools-missing-builder": "/nix/store/dbq5n9vzaww7vjnjj9f5y2j4vzfc4i8g-tools-missing-builder.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:missing-builder"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

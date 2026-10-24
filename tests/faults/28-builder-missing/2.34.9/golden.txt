@@ -1,0 +1,8 @@
+FAILED  //tools:missing-builder
+
+error[BOB-E-9001]: bob's builder for //tools:missing-builder is broken: cannot execute …/bob-builder/bin/bob-builder: No such file or directory
+  package defined at fixture/tools/bob.go:17:15
+  hint: this is a bob bug; please report it with bob log //tools:missing-builder
+  full log: bob log //tools:missing-builder
+
+bob: 1 failed (exit 70)

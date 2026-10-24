@@ -1,0 +1,5 @@
+[31;1merror[BOB-E-1001]:[0m [1mnixpkgs has no package "opensll"[0m
+  package defined at fixture/libfoo/bob.go:8:11
+  [32mhint:[0m did you mean openslp, openssl, openal?
+
+[31;1mbob: nothing was built[0m (exit 3)

@@ -1,0 +1,11 @@
+[31;1m✗[0m //cbad:cbad
+
+[31;1merror[BOB-E-2001]:[0m [1m//cbad:cbad: compile error in fixture/cbad/src/cbad.c[0m
+  [36m-->[0m fixture/cbad/src/cbad.c:4:12
+  package defined at fixture/cbad/bob.go:7:12
+   [2m│[0m fixture/cbad/src/cbad.c:4:12: error: 'undeclared_counter' undeclared (first use in this function)
+   [2m│[0m     4 |     return undeclared_counter + 1;
+   [2m│[0m       |            ^~~~~~~~~~~~~~~~~~
+  [2mfull log: bob log //cbad:cbad[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

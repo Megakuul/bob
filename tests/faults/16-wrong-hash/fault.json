@@ -1,0 +1,29 @@
+{
+ "id": "16-wrong-hash",
+ "title": "fixed-output hash mismatch (wrong hash in bob.lock)",
+ "source": "S15 fault 16 (hash-mismatch)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "crate hash in bob.lock is wrong"
+ },
+ "command": [
+  "build",
+  "//rcore:rcore"
+ ],
+ "code": "BOB-E-3001",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/rcore/bob.go:9:9"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "hash mismatch in fixed-output derivation",
+  "Cannot build"
+ ]
+}

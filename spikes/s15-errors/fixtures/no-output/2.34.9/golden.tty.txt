@@ -1,0 +1,10 @@
+[31;1m✗[0m //tools:no-output
+
+[31;1merror[BOB-E-9002]:[0m [1m//tools:no-output did not produce its output[0m
+  package defined at fixture/tools/bob.go:18:15
+  cause: the build step finished successfully but did not create its output
+   [2m│[0m done
+  [32mhint:[0m this is a bob bug; please report it with bob log //tools:no-output
+  [2mfull log: bob log //tools:no-output[0m
+
+[31;1mbob: 1 failed[0m (exit 70)

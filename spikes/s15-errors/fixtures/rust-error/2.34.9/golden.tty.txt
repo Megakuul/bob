@@ -1,0 +1,15 @@
+[31;1m✗[0m //rcore:rcore
+
+[31;1merror[BOB-E-2001]:[0m [1m//rcore:rcore: compile error in fixture/rcore/src/lib.rs[0m
+  [36m-->[0m fixture/rcore/src/lib.rs:30:5
+  package defined at fixture/rcore/bob.go:13:13
+   [2m│[0m error[E0308]: mismatched types
+   [2m│[0m   --> fixture/rcore/src/lib.rs:30:5
+   [2m│[0m    |
+   [2m│[0m 29 | pub fn broken() -> u32 {
+   [2m│[0m    |                    --- expected `u32` because of return type
+   [2m│[0m 30 |     "not a number"
+   [2m│[0m    |     ^^^^^^^^^^^^^^ expected `u32`, found `&str`
+  [2mfull log: bob log //rcore:rcore[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

@@ -1,0 +1,6 @@
+stopped //tools:sleep
+
+error[BOB-E-8001]: build cancelled
+   | stopped while building: //tools:sleep
+
+bob: 1 stopped (exit 130)

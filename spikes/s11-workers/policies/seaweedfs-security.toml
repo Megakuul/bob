@@ -1,0 +1,15 @@
+# SeaweedFS security.toml for bob (S11). Keys here are test values; generate 32+ random bytes each.
+# Without these, the filer and volume HTTP ports accept unauthenticated reads and writes that
+# bypass every S3 policy (verified in S11).
+[jwt.signing]                 # volume server writes
+key = "s11-volume-write-key-0123456789abcdef"
+expires_after_seconds = 10
+[jwt.signing.read]            # volume server reads
+key = "s11-volume-read-key-0123456789abcdef"
+expires_after_seconds = 10
+[jwt.filer_signing]           # filer HTTP writes
+key = "s11-filer-write-key-0123456789abcdef"
+expires_after_seconds = 10
+[jwt.filer_signing.read]      # filer HTTP reads
+key = "s11-filer-read-key-0123456789abcdef"
+expires_after_seconds = 10

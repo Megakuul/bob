@@ -1,0 +1,28 @@
+{
+ "id": "28-builder-missing",
+ "title": "builder binary missing",
+ "source": "S15 fault 28 (builder-missing)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "builder path does not exist"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-9001",
+ "exit": 70,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:17:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

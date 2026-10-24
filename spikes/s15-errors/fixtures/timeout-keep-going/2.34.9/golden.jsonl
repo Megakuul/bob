@@ -1,0 +1,8 @@
+{"v":1,"event":"run.start","requested":["//tools:sleep","//tools:silent","//tools:user"]}
+{"v":1,"event":"package.start","label":"//tools:silent","action":"build"}
+{"v":1,"event":"package.start","label":"//tools:sleep","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2007","class":"build","message":"//tools:sleep timed out after 3s","label":"//tools:sleep","definedAt":"fixture/tools/bob.go:10:15","excerpt":["start 2.34.9-1792533167016190400"],"hint":"raise the package's timeout if the step is legitimately slow","log":"bob log //tools:sleep","args":{"label":"//tools:sleep","seconds":"3"}}}
+{"v":1,"event":"package.finish","label":"//tools:sleep","status":"failed"}
+{"v":1,"event":"package.finish","label":"//tools:user","status":"skipped"}
+{"v":1,"event":"package.finish","label":"//tools:silent","status":"built"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":1,"cached":0,"failed":1,"skipped":1,"cancelled":0,"upstream":0,"downloaded":9}}

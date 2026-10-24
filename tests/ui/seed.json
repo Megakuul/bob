@@ -1,0 +1,1042 @@
+{
+ "clock": "2026-03-02T10:00:00Z",
+ "rpc": {
+  "/bob.auth.v1.AuthService/GetServerInfo": {
+   "serverName": "bob-test",
+   "baseUrl": "https://bob.test",
+   "version": "0.1.0",
+   "ociRegistry": "bob.test",
+   "loginOptions": [
+    {
+     "providerId": "",
+     "displayName": "Password"
+    },
+    {
+     "providerId": "corp",
+     "displayName": "Corp SSO",
+     "startUrl": "/auth/oidc/start?provider=corp"
+    }
+   ]
+  },
+  "/bob.auth.v1.AuthService/WhoAmI": {
+   "principal": {
+    "id": "user:u01jbq0000000000000000alice",
+    "displayName": "alice"
+   },
+   "login": "alice",
+   "bindings": [
+    {
+     "role": "admin",
+     "project": "*"
+    }
+   ],
+   "projects": [
+    "*"
+   ],
+   "tokenScope": "session",
+   "tokenExpiresAt": "2026-03-02T20:00:00Z",
+   "nix": {
+    "substituter": "https://bob.test/nix",
+    "publicKeys": [
+     "bob-test-1:Xq8b0m5V2s9d1Wn7Hc4Ga3Zr6Tp0Kk2Yf5Lj8Ue1Rw4="
+    ]
+   }
+  },
+  "/bob.auth.v1.AuthService/ListMySessions": {
+   "sessions": [
+    {
+     "id": "s1",
+     "kind": "browser",
+     "userAgent": "Firefox 140 on Linux",
+     "createdAt": "2026-03-02T08:12:00Z",
+     "lastUsedAt": "2026-03-02T00:00:00Z",
+     "current": true
+    },
+    {
+     "id": "s2",
+     "kind": "cli",
+     "userAgent": "bob 0.1.0 (linux/arm64)",
+     "createdAt": "2026-02-25T09:00:00Z",
+     "lastUsedAt": "2026-03-01T00:00:00Z"
+    }
+   ]
+  },
+  "/bob.analytics.v1.AnalyticsService/GetOverview": {
+   "running": [
+    {
+     "id": "01jbq7k2p4m8x0c3v5n7r9t1y6",
+     "projectId": "api",
+     "number": "412",
+     "state": "BUILD_STATE_RUNNING",
+     "trigger": {
+      "kind": "TRIGGER_KIND_PUSH",
+      "ref": "refs/heads/main",
+      "sender": "alice"
+     },
+     "source": {
+      "git": {
+       "ref": "refs/heads/main",
+       "sha": "3f2a91c0d4e5f60718293a4b5c6d7e8f90a1b2c3"
+      }
+     },
+     "pipelines": [
+      {
+       "name": "ci",
+       "state": "BUILD_STATE_RUNNING"
+      }
+     ],
+     "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+     ],
+     "attempt": 1,
+     "createdAt": "2026-03-02T09:58:00Z",
+     "variants": [
+      "release"
+     ],
+     "startedAt": "2026-03-02T09:58:02Z",
+     "phase": "BUILD_PHASE_BUILDING",
+     "counts": {
+      "total": 120,
+      "cached": 28,
+      "built": 12,
+      "failed": 1,
+      "running": 1,
+      "queued": 78
+     }
+    }
+   ],
+   "fleet": [
+    {
+     "platform": "linux/amd64",
+     "active": 8,
+     "busy": 6,
+     "queuedJobs": 7
+    },
+    {
+     "platform": "linux/arm64",
+     "active": 2,
+     "busy": 2
+    }
+   ],
+   "cacheHitRate24h": 0.91,
+   "recentFailures": [
+    {
+     "id": "01jbq7aa0d2f4h6k8m0p2r4t6v",
+     "projectId": "web",
+     "number": "411",
+     "state": "BUILD_STATE_FAILED",
+     "trigger": {
+      "kind": "TRIGGER_KIND_PUSH",
+      "ref": "refs/pull/88/head",
+      "sender": "alice"
+     },
+     "source": {
+      "git": {
+       "ref": "refs/pull/88/head",
+       "sha": "77c0e1b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9"
+      }
+     },
+     "pipelines": [
+      {
+       "name": "ci",
+       "state": "BUILD_STATE_FAILED"
+      }
+     ],
+     "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+     ],
+     "attempt": 1,
+     "createdAt": "2026-03-02T09:46:00Z",
+     "startedAt": "2026-03-02T09:46:03Z",
+     "finishedAt": "2026-03-02T09:50:40Z",
+     "errors": [
+      {
+       "code": "BOB-E-2005",
+       "message": "tests failed",
+       "package": {
+        "label": "//lib/auth:test",
+        "definedAt": "lib/auth/bob.go:12:3"
+       }
+      }
+     ],
+     "counts": {
+      "total": 64,
+      "cached": 40,
+      "built": 20,
+      "failed": 1,
+      "skipped": 3
+     }
+    }
+   ],
+   "queueDepth": 7
+  },
+  "/bob.analytics.v1.AnalyticsService/PackageDurations": {
+   "rows": [
+    {
+     "label": "//svc/api:server",
+     "day": "2026-03-01",
+     "avgMs": 42000,
+     "count": "12"
+    },
+    {
+     "label": "//lib/db:db",
+     "day": "2026-03-01",
+     "avgMs": 9000,
+     "count": "3"
+    }
+   ]
+  },
+  "/bob.analytics.v1.AnalyticsService/BuildHistory": {
+   "days": [
+    {
+     "day": "2026-02-01",
+     "succeeded": 11,
+     "failed": 1,
+     "cancelled": 1,
+     "p50DurationS": 203,
+     "p90DurationS": 427
+    },
+    {
+     "day": "2026-02-02",
+     "succeeded": 12,
+     "failed": 2,
+     "cancelled": 0,
+     "p50DurationS": 206,
+     "p90DurationS": 434
+    },
+    {
+     "day": "2026-02-03",
+     "succeeded": 13,
+     "failed": 0,
+     "cancelled": 1,
+     "p50DurationS": 209,
+     "p90DurationS": 441
+    },
+    {
+     "day": "2026-02-04",
+     "succeeded": 14,
+     "failed": 1,
+     "cancelled": 0,
+     "p50DurationS": 212,
+     "p90DurationS": 448
+    },
+    {
+     "day": "2026-02-05",
+     "succeeded": 10,
+     "failed": 2,
+     "cancelled": 1,
+     "p50DurationS": 215,
+     "p90DurationS": 455
+    },
+    {
+     "day": "2026-02-06",
+     "succeeded": 11,
+     "failed": 0,
+     "cancelled": 0,
+     "p50DurationS": 218,
+     "p90DurationS": 462
+    },
+    {
+     "day": "2026-02-07",
+     "succeeded": 12,
+     "failed": 1,
+     "cancelled": 1,
+     "p50DurationS": 221,
+     "p90DurationS": 469
+    },
+    {
+     "day": "2026-02-08",
+     "succeeded": 13,
+     "failed": 2,
+     "cancelled": 0,
+     "p50DurationS": 224,
+     "p90DurationS": 476
+    },
+    {
+     "day": "2026-02-09",
+     "succeeded": 14,
+     "failed": 0,
+     "cancelled": 1,
+     "p50DurationS": 227,
+     "p90DurationS": 483
+    },
+    {
+     "day": "2026-02-10",
+     "succeeded": 10,
+     "failed": 1,
+     "cancelled": 0,
+     "p50DurationS": 230,
+     "p90DurationS": 490
+    },
+    {
+     "day": "2026-02-11",
+     "succeeded": 11,
+     "failed": 2,
+     "cancelled": 1,
+     "p50DurationS": 233,
+     "p90DurationS": 497
+    },
+    {
+     "day": "2026-02-12",
+     "succeeded": 12,
+     "failed": 0,
+     "cancelled": 0,
+     "p50DurationS": 236,
+     "p90DurationS": 504
+    },
+    {
+     "day": "2026-02-13",
+     "succeeded": 13,
+     "failed": 1,
+     "cancelled": 1,
+     "p50DurationS": 239,
+     "p90DurationS": 511
+    },
+    {
+     "day": "2026-02-14",
+     "succeeded": 14,
+     "failed": 2,
+     "cancelled": 0,
+     "p50DurationS": 242,
+     "p90DurationS": 518
+    },
+    {
+     "day": "2026-02-15",
+     "succeeded": 10,
+     "failed": 0,
+     "cancelled": 1,
+     "p50DurationS": 245,
+     "p90DurationS": 525
+    },
+    {
+     "day": "2026-02-16",
+     "succeeded": 11,
+     "failed": 1,
+     "cancelled": 0,
+     "p50DurationS": 248,
+     "p90DurationS": 532
+    },
+    {
+     "day": "2026-02-17",
+     "succeeded": 12,
+     "failed": 2,
+     "cancelled": 1,
+     "p50DurationS": 251,
+     "p90DurationS": 539
+    },
+    {
+     "day": "2026-02-18",
+     "succeeded": 13,
+     "failed": 0,
+     "cancelled": 0,
+     "p50DurationS": 254,
+     "p90DurationS": 546
+    },
+    {
+     "day": "2026-02-19",
+     "succeeded": 14,
+     "failed": 1,
+     "cancelled": 1,
+     "p50DurationS": 257,
+     "p90DurationS": 553
+    },
+    {
+     "day": "2026-02-20",
+     "succeeded": 10,
+     "failed": 2,
+     "cancelled": 0,
+     "p50DurationS": 260,
+     "p90DurationS": 560
+    },
+    {
+     "day": "2026-02-21",
+     "succeeded": 11,
+     "failed": 0,
+     "cancelled": 1,
+     "p50DurationS": 263,
+     "p90DurationS": 567
+    },
+    {
+     "day": "2026-02-22",
+     "succeeded": 12,
+     "failed": 1,
+     "cancelled": 0,
+     "p50DurationS": 266,
+     "p90DurationS": 574
+    },
+    {
+     "day": "2026-02-23",
+     "succeeded": 13,
+     "failed": 2,
+     "cancelled": 1,
+     "p50DurationS": 269,
+     "p90DurationS": 581
+    },
+    {
+     "day": "2026-02-24",
+     "succeeded": 14,
+     "failed": 0,
+     "cancelled": 0,
+     "p50DurationS": 272,
+     "p90DurationS": 588
+    },
+    {
+     "day": "2026-02-25",
+     "succeeded": 10,
+     "failed": 1,
+     "cancelled": 1,
+     "p50DurationS": 275,
+     "p90DurationS": 595
+    },
+    {
+     "day": "2026-02-26",
+     "succeeded": 11,
+     "failed": 2,
+     "cancelled": 0,
+     "p50DurationS": 278,
+     "p90DurationS": 602
+    },
+    {
+     "day": "2026-02-27",
+     "succeeded": 12,
+     "failed": 0,
+     "cancelled": 1,
+     "p50DurationS": 281,
+     "p90DurationS": 609
+    },
+    {
+     "day": "2026-02-28",
+     "succeeded": 13,
+     "failed": 1,
+     "cancelled": 0,
+     "p50DurationS": 284,
+     "p90DurationS": 616
+    },
+    {
+     "day": "2026-03-01",
+     "succeeded": 14,
+     "failed": 1,
+     "p50DurationS": 260,
+     "p90DurationS": 610
+    }
+   ]
+  },
+  "/bob.analytics.v1.AnalyticsService/RecentFailures": {
+   "builds": [
+    {
+     "id": "01jbq7aa0d2f4h6k8m0p2r4t6v",
+     "projectId": "web",
+     "number": "411",
+     "state": "BUILD_STATE_FAILED",
+     "trigger": {
+      "kind": "TRIGGER_KIND_PUSH",
+      "ref": "refs/pull/88/head",
+      "sender": "alice"
+     },
+     "source": {
+      "git": {
+       "ref": "refs/pull/88/head",
+       "sha": "77c0e1b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9"
+      }
+     },
+     "pipelines": [
+      {
+       "name": "ci",
+       "state": "BUILD_STATE_FAILED"
+      }
+     ],
+     "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+     ],
+     "attempt": 1,
+     "createdAt": "2026-03-02T09:46:00Z",
+     "startedAt": "2026-03-02T09:46:03Z",
+     "finishedAt": "2026-03-02T09:50:40Z",
+     "errors": [
+      {
+       "code": "BOB-E-2005",
+       "message": "tests failed",
+       "package": {
+        "label": "//lib/auth:test",
+        "definedAt": "lib/auth/bob.go:12:3"
+       }
+      }
+     ],
+     "counts": {
+      "total": 64,
+      "cached": 40,
+      "built": 20,
+      "failed": 1,
+      "skipped": 3
+     }
+    }
+   ]
+  },
+  "/bob.project.v1.ProjectService/ListProjects": {
+   "projects": [
+    {
+     "id": "api",
+     "displayName": "API",
+     "repoFullName": "acme/api",
+     "defaultBranch": "main",
+     "linkHealth": "LINK_HEALTH_OK",
+     "forgeIntegrationId": "forgejo",
+     "createdAt": "2026-01-10T09:00:00Z"
+    },
+    {
+     "id": "web",
+     "displayName": "Web",
+     "repoFullName": "acme/web",
+     "defaultBranch": "main",
+     "linkHealth": "LINK_HEALTH_OK",
+     "forgeIntegrationId": "forgejo",
+     "createdAt": "2026-01-11T09:00:00Z"
+    }
+   ]
+  },
+  "/bob.project.v1.ProjectService/GetProject": {
+   "project": {
+    "id": "api",
+    "displayName": "API",
+    "repoFullName": "acme/api",
+    "defaultBranch": "main",
+    "repoWebUrl": "https://git.test/acme/api",
+    "linkHealth": "LINK_HEALTH_OK",
+    "forgeIntegrationId": "forgejo",
+    "createdAt": "2026-01-10T09:00:00Z"
+   }
+  },
+  "/bob.build.v1.BuildService/ListBuilds": {
+   "builds": [
+    {
+     "id": "01jbq7k2p4m8x0c3v5n7r9t1y6",
+     "projectId": "api",
+     "number": "412",
+     "state": "BUILD_STATE_RUNNING",
+     "trigger": {
+      "kind": "TRIGGER_KIND_PUSH",
+      "ref": "refs/heads/main",
+      "sender": "alice"
+     },
+     "source": {
+      "git": {
+       "ref": "refs/heads/main",
+       "sha": "3f2a91c0d4e5f60718293a4b5c6d7e8f90a1b2c3"
+      }
+     },
+     "pipelines": [
+      {
+       "name": "ci",
+       "state": "BUILD_STATE_RUNNING"
+      }
+     ],
+     "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+     ],
+     "attempt": 1,
+     "createdAt": "2026-03-02T09:58:00Z",
+     "variants": [
+      "release"
+     ],
+     "startedAt": "2026-03-02T09:58:02Z",
+     "phase": "BUILD_PHASE_BUILDING",
+     "counts": {
+      "total": 120,
+      "cached": 28,
+      "built": 12,
+      "failed": 1,
+      "running": 1,
+      "queued": 78
+     }
+    },
+    {
+     "id": "01jbq79h0d2f4h6k8m0p2r4t6w",
+     "projectId": "api",
+     "number": "410",
+     "state": "BUILD_STATE_SUPERSEDED",
+     "trigger": {
+      "kind": "TRIGGER_KIND_PUSH",
+      "ref": "refs/heads/main",
+      "sender": "alice",
+      "supersededBy": "01jbq7k2p4m8x0c3v5n7r9t1y6"
+     },
+     "source": {
+      "git": {
+       "ref": "refs/heads/main",
+       "sha": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5"
+      }
+     },
+     "pipelines": [
+      {
+       "name": "ci",
+       "state": "BUILD_STATE_SUPERSEDED"
+      }
+     ],
+     "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+     ],
+     "attempt": 1,
+     "createdAt": "2026-03-02T09:51:00Z",
+     "startedAt": "2026-03-02T09:51:02Z",
+     "finishedAt": "2026-03-02T09:51:42Z"
+    }
+   ]
+  },
+  "/bob.build.v1.BuildService/GetBuild": {
+   "build": {
+    "id": "01jbq7k2p4m8x0c3v5n7r9t1y6",
+    "projectId": "api",
+    "number": "412",
+    "state": "BUILD_STATE_RUNNING",
+    "trigger": {
+     "kind": "TRIGGER_KIND_PUSH",
+     "ref": "refs/heads/main",
+     "sender": "alice"
+    },
+    "source": {
+     "git": {
+      "ref": "refs/heads/main",
+      "sha": "3f2a91c0d4e5f60718293a4b5c6d7e8f90a1b2c3"
+     }
+    },
+    "pipelines": [
+     {
+      "name": "ci",
+      "state": "BUILD_STATE_RUNNING"
+     }
+    ],
+    "platforms": [
+     "linux/amd64",
+     "linux/arm64"
+    ],
+    "attempt": 1,
+    "createdAt": "2026-03-02T09:58:00Z",
+    "variants": [
+     "release"
+    ],
+    "startedAt": "2026-03-02T09:58:02Z",
+    "phase": "BUILD_PHASE_BUILDING",
+    "counts": {
+     "total": 120,
+     "cached": 28,
+     "built": 12,
+     "failed": 1,
+     "running": 1,
+     "queued": 78
+    }
+   }
+  },
+  "/bob.build.v1.BuildService/GetBuildGraph": {
+   "nodes": [
+    {
+     "package": {
+      "label": "//svc/api:server",
+      "platform": "linux/amd64",
+      "definedAt": "svc/api/bob.go:9:5"
+     },
+     "state": "PACKAGE_STATE_SUCCEEDED",
+     "deps": [
+      1
+     ],
+     "startedAt": "2026-03-02T09:58:21Z",
+     "finishedAt": "2026-03-02T09:59:03Z",
+     "outputs": [
+      "/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server"
+     ]
+    },
+    {
+     "package": {
+      "label": "//lib/db:db",
+      "platform": "linux/amd64",
+      "definedAt": "lib/db/bob.go:7:5"
+     },
+     "state": "PACKAGE_STATE_CACHED",
+     "startedAt": "2026-03-02T09:58:05Z",
+     "finishedAt": "2026-03-02T09:58:20Z",
+     "outputs": [
+      "/nix/store/1d3f5h7j9l0c3v5n7r9t1y6k2p4m8x0b-db"
+     ]
+    },
+    {
+     "package": {
+      "label": "//lib/auth:test",
+      "platform": "linux/amd64",
+      "definedAt": "lib/auth/bob.go:12:3"
+     },
+     "state": "PACKAGE_STATE_FAILED",
+     "startedAt": "2026-03-02T09:58:30Z",
+     "finishedAt": "2026-03-02T09:58:39Z",
+     "error": {
+      "code": "BOB-E-2005",
+      "message": "tests failed",
+      "package": {
+       "label": "//lib/auth:test",
+       "definedAt": "lib/auth/bob.go:12:3"
+      }
+     }
+    },
+    {
+     "package": {
+      "label": "//svc/api:image",
+      "platform": "linux/amd64",
+      "definedAt": "svc/api/bob.go:21:5"
+     },
+     "state": "PACKAGE_STATE_BUILDING",
+     "startedAt": "2026-03-02T09:59:18Z"
+    }
+   ],
+   "complete": true
+  },
+  "/bob.build.v1.BuildService/WatchBuild": {
+   "stream": [
+    {
+     "lines": []
+    }
+   ]
+  },
+  "/bob.cache.v1.CacheService/GetPath": {
+   "storePath": "/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server",
+   "narSize": "1258291",
+   "fileSize": "402653",
+   "projects": [
+    "api"
+   ],
+   "public": true,
+   "buildId": "01jbq7k2p4m8x0c3v5n7r9t1y6"
+  },
+  "/bob.log.v1.LogService/GetLog": {
+   "lines": [
+    {
+     "package": "//svc/api:image",
+     "seq": "41",
+     "attempt": 1,
+     "stream": "STREAM_STDOUT",
+     "tsUnixNano": "1772445558000000000",
+     "text": "0041 compiling internal/http"
+    }
+   ]
+  },
+  "/bob.log.v1.LogService/FollowLog": {
+   "stream": [
+    {
+     "lines": [
+      {
+       "package": "//svc/api:image",
+       "seq": "42",
+       "attempt": 1,
+       "stream": "STREAM_STDOUT",
+       "tsUnixNano": "1772445559000000000",
+       "text": "0042 linking server"
+      }
+     ]
+    },
+    {
+     "waitRelease": true,
+     "lines": [
+      {
+       "package": "//svc/api:image",
+       "seq": "43",
+       "attempt": 1,
+       "stream": "STREAM_STDOUT",
+       "tsUnixNano": "1772445560000000000",
+       "text": "0043 LIVE-LINE-LATE"
+      }
+     ]
+    }
+   ]
+  },
+  "/bob.fleet.v1.FleetService/ListWorkers": {
+   "workers": [
+    {
+     "id": "w3kq8p0q",
+     "state": "WORKER_STATE_ACTIVE",
+     "platform": "linux/amd64",
+     "labels": {
+      "ssd": ""
+     },
+     "capabilities": [
+      "big-parallel"
+     ],
+     "version": "0.1.0",
+     "cpus": 8,
+     "memoryBytes": "16106127360",
+     "jobIds": [
+      "01jbq7k2p4j0b00000000000s1"
+     ],
+     "registeredAt": "2026-02-20T08:00:00Z",
+     "lastHeartbeat": "2026-03-02T09:59:56Z"
+    }
+   ]
+  },
+  "/bob.fleet.v1.FleetService/GetWorker": {
+   "worker": {
+    "id": "w3kq8p0q",
+    "state": "WORKER_STATE_ACTIVE",
+    "platform": "linux/amd64",
+    "labels": {
+     "ssd": ""
+    },
+    "capabilities": [
+     "big-parallel"
+    ],
+    "version": "0.1.0",
+    "cpus": 8,
+    "memoryBytes": "16106127360",
+    "jobIds": [
+     "01jbq7k2p4j0b00000000000s1"
+    ],
+    "registeredAt": "2026-02-20T08:00:00Z",
+    "lastHeartbeat": "2026-03-02T09:59:56Z"
+   }
+  },
+  "/bob.fleet.v1.FleetService/ListOrchestrators": {
+   "orchestrators": [
+    {
+     "id": "o-1",
+     "endpoint": "https://10.0.0.5:8443",
+     "version": "0.1.0",
+     "startedAt": "2026-02-27T10:00:00Z",
+     "lastHeartbeat": "2026-03-02T09:59:58Z",
+     "leaderOf": [
+      "promotion",
+      "gc"
+     ]
+    }
+   ]
+  },
+  "/bob.cache.v1.CacheService/GetCacheStats": {
+   "narBytes": "53687091200",
+   "paths": "120443",
+   "hitRate24h": 0.91,
+   "hitRate7d": 0.88,
+   "retentionUnreferencedDays": 30,
+   "measuredAt": "2026-03-02T03:00:00Z"
+  },
+  "/bob.cache.v1.CacheService/ListTopPackages": {
+   "packages": [
+    {
+     "projectId": "api",
+     "label": "//svc/api:server",
+     "hits7d": "812",
+     "narBytes": "1258291"
+    }
+   ]
+  },
+  "/bob.release.v1.ReleaseService/ListReleases": {
+   "releases": [
+    {
+     "id": "01jbq6r0000000000000000rel",
+     "projectId": "api",
+     "name": "api",
+     "version": "1.4.2",
+     "visibility": "VISIBILITY_PUBLIC",
+     "state": "RELEASE_STATE_PUBLISHED",
+     "buildId": "01jbq7k2p4m8x0c3v5n7r9t1y6",
+     "sha": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+     "closures": [
+      {
+       "platform": "linux/amd64",
+       "roots": [
+        "/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server"
+       ],
+       "closureNarBytes": "8388608"
+      },
+      {
+       "platform": "linux/arm64",
+       "roots": [
+        "/nix/store/9l0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j-api-server"
+       ],
+       "closureNarBytes": "8178892"
+      }
+     ],
+     "assets": [
+      {
+       "file": "api-1.4.2-x86_64.AppImage",
+       "kind": "ASSET_KIND_APPIMAGE",
+       "platform": "linux/amd64",
+       "size": "10813440",
+       "sha256": "5e8f0c1d2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5",
+       "url": "/r/api/api/1.4.2/api-1.4.2-x86_64.AppImage"
+      }
+     ],
+     "images": [
+      {
+       "repository": "api-server",
+       "tag": "1.4.2",
+       "digest": "sha256:4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3"
+      }
+     ],
+     "createdAt": "2026-03-01T16:20:00Z"
+    }
+   ]
+  },
+  "/bob.release.v1.ReleaseService/ResolveRelease": {
+   "release": {
+    "id": "01jbq6r0000000000000000rel",
+    "projectId": "api",
+    "name": "api",
+    "version": "1.4.2",
+    "visibility": "VISIBILITY_PUBLIC",
+    "state": "RELEASE_STATE_PUBLISHED",
+    "buildId": "01jbq7k2p4m8x0c3v5n7r9t1y6",
+    "sha": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+    "closures": [
+     {
+      "platform": "linux/amd64",
+      "roots": [
+       "/nix/store/0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j9l-api-server"
+      ],
+      "closureNarBytes": "8388608"
+     },
+     {
+      "platform": "linux/arm64",
+      "roots": [
+       "/nix/store/9l0c3v5n7r9t1y6k2p4m8x0b1d3f5h7j-api-server"
+      ],
+      "closureNarBytes": "8178892"
+     }
+    ],
+    "assets": [
+     {
+      "file": "api-1.4.2-x86_64.AppImage",
+      "kind": "ASSET_KIND_APPIMAGE",
+      "platform": "linux/amd64",
+      "size": "10813440",
+      "sha256": "5e8f0c1d2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5",
+      "url": "/r/api/api/1.4.2/api-1.4.2-x86_64.AppImage"
+     }
+    ],
+    "images": [
+     {
+      "repository": "api-server",
+      "tag": "1.4.2",
+      "digest": "sha256:4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3"
+     }
+    ],
+    "createdAt": "2026-03-01T16:20:00Z"
+   }
+  },
+  "/bob.registry.v1.RegistryService/ListRepositories": {
+   "repositories": [
+    {
+     "name": "api-server",
+     "projectId": "api",
+     "hasPublicTags": true,
+     "tagCount": 2,
+     "updatedAt": "2026-03-02T09:00:00Z",
+     "pullRef": "bob.test/api-server"
+    }
+   ]
+  },
+  "/bob.registry.v1.RegistryService/GetRepository": {
+   "repository": {
+    "name": "api-server",
+    "projectId": "api",
+    "hasPublicTags": true,
+    "tagCount": 2,
+    "updatedAt": "2026-03-02T09:00:00Z",
+    "pullRef": "bob.test/api-server"
+   }
+  },
+  "/bob.registry.v1.RegistryService/ListTags": {
+   "tags": [
+    {
+     "tag": "1.4.2",
+     "digest": "sha256:4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3",
+     "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+     ],
+     "size": "31457280",
+     "releaseId": "01jbq6r0000000000000000rel",
+     "public": true,
+     "createdAt": "2026-03-01T16:20:00Z"
+    },
+    {
+     "tag": "b-01jbq7k2p4m8x0c3v5n7r9t1y6",
+     "digest": "sha256:8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f",
+     "platforms": [
+      "linux/amd64"
+     ],
+     "size": "31457280",
+     "createdAt": "2026-03-02T09:59:00Z"
+    }
+   ]
+  },
+  "/bob.access.v1.UserService/ListUsers": {
+   "users": [
+    {
+     "id": "u01jbq0000000000000000alice",
+     "login": "alice",
+     "displayName": "Alice",
+     "source": "USER_SOURCE_LOCAL",
+     "lastLoginAt": "2026-03-02T08:12:00Z",
+     "createdAt": "2026-01-05T10:00:00Z"
+    },
+    {
+     "id": "u01jbq00000000000000000bob",
+     "login": "bob",
+     "displayName": "Bob",
+     "source": "USER_SOURCE_OIDC",
+     "oidcProviderId": "corp",
+     "lastLoginAt": "2026-02-27T14:00:00Z",
+     "createdAt": "2026-01-08T10:00:00Z"
+    }
+   ]
+  },
+  "/bob.access.v1.RoleService/ListRoleBindings": {
+   "bindings": [
+    {
+     "id": "rb1",
+     "principal": {
+      "id": "user:u01jbq0000000000000000alice",
+      "displayName": "alice"
+     },
+     "role": "admin",
+     "project": "*",
+     "source": "BINDING_SOURCE_MANUAL",
+     "createdAt": "2026-01-05T10:00:00Z"
+    },
+    {
+     "id": "rb2",
+     "principal": {
+      "id": "user:u01jbq00000000000000000bob",
+      "displayName": "bob"
+     },
+     "role": "developer",
+     "project": "api",
+     "source": "BINDING_SOURCE_OIDC",
+     "createdAt": "2026-01-08T10:00:00Z"
+    }
+   ]
+  },
+  "/bob.settings.v1.SettingsService/GetSettings": {
+   "settings": {
+    "serverName": "bob-test",
+    "baseUrl": "https://bob.test",
+    "retention": {
+     "logsDays": 30,
+     "analyticsDays": 400,
+     "buildsDays": 365,
+     "cacheUnreferencedDays": 90,
+     "stagingDays": 7
+    },
+    "sessions": {
+     "cliIdleDays": 7,
+     "cliMaxDays": 30,
+     "browserIdleHours": 12,
+     "browserMaxDays": 7,
+     "saTokenMaxDays": 365
+    },
+    "liveLogEnabled": true,
+    "maxParallelDownloads": 256,
+    "etag": "e1"
+   }
+  }
+ }
+}

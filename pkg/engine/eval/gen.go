@@ -1,0 +1,260 @@
+package eval
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+// Evaluator generation (R-FW-043.2–.4, S1 §5.3): a go.mod that requires the framework and the
+// dependency bob repositories, an overlay that hides every other compilable file of a bob.go
+// directory and renames package main bob.go files, and the virtual main <root>/_bobeval/main.go.
+// Paths inside the files are sandbox paths (the repository is /src there), so the generated
+// files do not depend on where the repository is checked out.
+
+const (
+	genDir  = ".bob/eval"
+	mainDir = "_bobeval"
+	// renameSub (below genDir) holds the copies of bob.go files the evaluator compiles in
+	// place of the originals; the sandbox mounts it at renameDir, outside srcDir. go build
+	// -trimpath maps an overlay file back to the name of the file it replaces only when no
+	// package directory prefix matches it first: below srcDir, the root package's prefix
+	// ("/src => <module>") would claim it, so the root bob.go's frames were named
+	// "<module>/.bob/eval/rename/<n>.go" and no call was found in a bob.go (A450). The name
+	// must not start with srcDir either (the rewrite is a plain string prefix).
+	renameSub = "rename"
+	renameDir = "/bobren"
+)
+
+// hiddenExts are the compilable files the overlay hides in a bob.go directory (S1 §5.3).
+var hiddenExts = map[string]bool{".go": true, ".c": true, ".cc": true, ".cpp": true, ".cxx": true, ".m": true,
+	".f": true, ".F": true, ".for": true, ".f90": true, ".s": true, ".S": true, ".sx": true, ".swig": true,
+	".swigcxx": true, ".syso": true}
+
+// generated is what the generation wrote.
+type generated struct {
+	renames map[string]string // renameDir/<n>.go → original bob.go (repo-relative)
+	files   map[string][]byte // name below .bob/eval → content
+}
+
+// selfModule is the evaluator's main module path in bob's own repository (A154).
+const selfModule = "bobrepo"
+
+// evalModule is the evaluator's main module path: the root module's, except in bob's own
+// repository, whose root module is the framework itself. There the main module gets another
+// name, so its bob.go files compile against the framework of the running bob (R-FW-043.4) and
+// not against the working tree's pkg/bob, whose build info carries no module version.
+func evalModule(module string) string {
+	if module == frameworkModule {
+		return selfModule
+	}
+	return module
+}
+
+// generate writes the evaluator's sources for the repository at root.
+func generate(root string, rootMod goMod, s *repoScan, own map[string]*bobFile, deps *depSet, fw *framework) (*generated, error) {
+	out := filepath.Join(root, genDir)
+	g := &generated{renames: map[string]string{}, files: map[string][]byte{}}
+	replace := map[string]string{sandboxPath(mainDir, "main.go"): sandboxPath(genDir, "main.go")}
+	for _, m := range s.bobMods {
+		replace[sandboxPath(path.Dir(m), path.Base(m))] = "" // bob's module of the Go code: not another module here
+	}
+	var imports []string
+	n := 0
+	for _, d := range s.bobDirs {
+		for _, name := range s.goDirs[d] {
+			if hiddenExts[path.Ext(name)] {
+				replace[sandboxPath(d, name)] = ""
+			}
+		}
+		f := own[d]
+		imports = append(imports, relImport(evalModule(rootMod.module), d))
+		// Imports of bob.go packages by the path of a Go module of this repository
+		// (example.com/tools) name the same package as the root module's path of its
+		// directory, which the evaluator compiles: the evaluator sees a copy with the import
+		// rewritten on the same line, so line positions stay the same.
+		rewritten, err := rewriteImports(f, func(p string) (string, bool) {
+			if p == rootMod.module || strings.HasPrefix(p, rootMod.module+"/") {
+				return "", false
+			}
+			dir, ok := ownDirOf(rootMod.module, s.nested, p)
+			if !ok {
+				return "", false
+			}
+			return relImport(rootMod.module, dir), true
+		})
+		if err != nil {
+			return nil, err
+		}
+		if f.pkg != "main" && rewritten == nil {
+			continue
+		}
+		rn := strconv.Itoa(n) + ".go"
+		renamed := rewritten
+		if f.pkg == "main" {
+			// A main package cannot be imported: the evaluator sees a copy whose package clause
+			// is renamed on the same line, so positions stay the same.
+			src := *f
+			if rewritten != nil {
+				src.src = rewritten // the package clause precedes the imports: its offset holds
+			}
+			if renamed, err = renamePackage(&src, "bobmain"+strconv.Itoa(n)); err != nil {
+				return nil, err
+			}
+		}
+		// A trailing comment (no line moves) keeps the content apart from copies compiled by
+		// earlier bob versions at another path: go build's cache keys an overlay file by its
+		// content, and a cached package keeps the file names it was compiled with (A450).
+		g.files[path.Join(renameSub, rn)] = slices.Concat(bytes.TrimRight(renamed, "\n"), []byte("\n\n// bob: evaluator copy of "+f.shown+"\n"))
+		g.renames[path.Join(renameDir, rn)] = f.shown
+		replace[sandboxPath(d, "bob.go")] = path.Join(renameDir, rn)
+		n++
+	}
+	if _, ok := s.content["go.mod"]; !ok {
+		// A new repository without a root go.mod (A451): go build -modfile still needs one to
+		// find the main module's directory; the overlay provides it.
+		replace[sandboxPath("go.mod")] = sandboxPath(genDir, "go.mod")
+	}
+	ov, err := json.MarshalIndent(map[string]any{"Replace": replace}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	g.files["overlay.json"] = append(ov, '\n')
+
+	var main strings.Builder
+	main.WriteString("//go:build bob\n\n// Code generated by bob. DO NOT EDIT.\n\npackage main\n\nimport (\n")
+	for _, imp := range imports {
+		fmt.Fprintf(&main, "\t_ %q\n", imp)
+	}
+	// The garbage collector waits for a soft limit of 256 MiB: an evaluation is short, and the
+	// sandbox enforces the real memory limit (a quarter of the run time of a 1,000-package graph).
+	fmt.Fprintf(&main, "\n\t\"runtime/debug\"\n\n\t%q\n)\n\nfunc main() {\n\tdebug.SetGCPercent(-1)\n\tdebug.SetMemoryLimit(256 << 20)\n\tbob.Main()\n}\n", frameworkModule+"/pkg/bob")
+	g.files["main.go"] = []byte(main.String())
+
+	goDir := fw.goDir
+	if rootMod.goDir != "" && !versionLess(rootMod.goDir, goDir) {
+		goDir = rootMod.goDir
+	}
+	var mod strings.Builder
+	fmt.Fprintf(&mod, "// Code generated by bob. DO NOT EDIT.\n\nmodule %s\n\ngo %s\n\nrequire (\n\t%s %s\n", evalModule(rootMod.module), goDir, frameworkModule, fw.version)
+	sorted := deps.sorted()
+	for _, m := range sorted {
+		fmt.Fprintf(&mod, "\t%s %s\n", m.path, m.version)
+	}
+	mod.WriteString(")\n")
+	for _, m := range sorted {
+		fmt.Fprintf(&mod, "\nreplace %s %s => %s\n", m.path, m.version, sandboxPath(genDir, "mods", m.copyDir()))
+		files := map[string][]byte{"go.mod": depGoMod(m)}
+		for rel, f := range m.bob {
+			files[bobPath(rel)] = f.src
+		}
+		for name, c := range files {
+			g.files[path.Join("mods", m.copyDir(), name)] = c
+		}
+	}
+	g.files["go.mod"] = []byte(mod.String())
+	g.files["go.sum"] = []byte(fw.sumLines())
+
+	for name := range g.files {
+		// Names hold module paths and versions from go.mod files: never write outside out.
+		if err := genName(name); err != nil {
+			return nil, err
+		}
+	}
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return nil, err
+	}
+	// Remove what an earlier generation wrote and this one does not.
+	for _, d := range []string{renameSub, "mods"} {
+		if err := makeWritable(filepath.Join(out, d)); err != nil {
+			return nil, err
+		}
+		if err := os.RemoveAll(filepath.Join(out, d)); err != nil {
+			return nil, err
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(out, renameSub), 0o755); err != nil { // mounted at renameDir
+		return nil, err
+	}
+	for name, content := range g.files {
+		p := filepath.Join(out, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return nil, err
+		}
+		if err := writeIfChanged(p, content); err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
+}
+
+// sandboxPath is a repo-relative path inside the sandbox.
+func sandboxPath(elem ...string) string {
+	return path.Join(append([]string{srcDir}, elem...)...)
+}
+
+// rewriteImports returns f's source with every import path that to maps replaced (the string
+// literal only, so lines do not move), or nil when no import changes.
+func rewriteImports(f *bobFile, to func(string) (string, bool)) ([]byte, error) {
+	if f.file == nil {
+		return nil, nil
+	}
+	type edit struct {
+		off, end int
+		lit      string
+	}
+	var edits []edit
+	for _, imp := range f.file.Imports {
+		p, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue
+		}
+		np, ok := to(p)
+		if !ok {
+			continue
+		}
+		off := f.fset.Position(imp.Path.Pos()).Offset
+		end := off + len(imp.Path.Value)
+		if off < 0 || end > len(f.src) || string(f.src[off:end]) != imp.Path.Value {
+			return nil, fmt.Errorf("%s: import %s not found", f.shown, imp.Path.Value)
+		}
+		edits = append(edits, edit{off, end, strconv.Quote(np)})
+	}
+	if len(edits) == 0 {
+		return nil, nil
+	}
+	var b bytes.Buffer
+	last := 0
+	for _, e := range edits { // in source order
+		b.Write(f.src[last:e.off])
+		b.WriteString(e.lit)
+		last = e.end
+	}
+	b.Write(f.src[last:])
+	return b.Bytes(), nil
+}
+
+// renamePackage returns f's source with the package clause's name replaced by name, in place:
+// the rest of the clause's line keeps its columns as far as the new name allows, all other
+// lines are unchanged.
+func renamePackage(f *bobFile, name string) ([]byte, error) {
+	if f.file == nil {
+		return nil, fmt.Errorf("%s does not parse", f.shown)
+	}
+	off := f.fset.Position(f.file.Name.Pos()).Offset
+	end := off + len(f.file.Name.Name)
+	if off < 0 || end > len(f.src) || !bytes.Equal(f.src[off:end], []byte(f.file.Name.Name)) {
+		return nil, fmt.Errorf("%s: package clause not found", f.shown)
+	}
+	var b bytes.Buffer
+	b.Write(f.src[:off])
+	b.WriteString(name)
+	b.Write(f.src[end:])
+	return b.Bytes(), nil
+}

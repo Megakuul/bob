@@ -1,0 +1,27 @@
+FAILED  //libfoo:foo
+FAILED  //rcore:rcore
+skipped //api:api  (a dependency failed)
+
+error[BOB-E-2001]: //libfoo:foo: compile error in fixture/libfoo/src/foo.cpp
+  --> fixture/libfoo/src/foo.cpp:13:13
+  package defined at fixture/libfoo/bob.go:8:11
+   | fixture/libfoo/src/foo.cpp:13:13: error: expected ';' before '}' token
+   |    13 |     return 0
+   |       |             ^
+   |       |             ;
+   |    14 | }
+  full log: bob log //libfoo:foo
+
+error[BOB-E-2001]: //rcore:rcore: compile error in fixture/rcore/src/lib.rs
+  --> fixture/rcore/src/lib.rs:30:5
+  package defined at fixture/rcore/bob.go:13:13
+   | error[E0308]: mismatched types
+   |   --> fixture/rcore/src/lib.rs:30:5
+   |    |
+   | 29 | pub fn broken() -> u32 {
+   |    |                    --- expected `u32` because of return type
+   | 30 |     "not a number"
+   |    |     ^^^^^^^^^^^^^^ expected `u32`, found `&str`
+  full log: bob log //rcore:rcore
+
+bob: 2 failed, 1 skipped (exit 1)

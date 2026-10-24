@@ -1,0 +1,21 @@
+{
+ "id": "75-drift-all-unknown",
+ "title": "Nix drift and an all-unknown failure",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "unknown Nix version and only unknown messages"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-9998",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 70,
+ "forbid": []
+}

@@ -1,0 +1,20 @@
+{
+ "id": "80-eval-time",
+ "title": "evaluator limit: time",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "evil",
+ "inject": {
+  "kind": "limit",
+  "describe": "endless loop in bob.go"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "forbid": []
+}

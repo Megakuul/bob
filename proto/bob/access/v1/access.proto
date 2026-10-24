@@ -1,0 +1,427 @@
+syntax = "proto3";
+
+package bob.access.v1;
+
+import "bob/authz/v1/authz.proto";
+import "bob/common/v1/common.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc SetUserPassword(SetUserPasswordRequest) returns (SetUserPasswordResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+}
+
+service RoleService {
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  } // refused while bound
+  // Every RPC with its rule, generated from the descriptors (for the role editor and matrix).
+  rpc ListPermissionCatalog(ListPermissionCatalogRequest) returns (ListPermissionCatalogResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // project "*" in the binding needs a {CreateRoleBinding, *} permission (KIND_PROJECT with value "*").
+  rpc CreateRoleBinding(CreateRoleBindingRequest) returns (CreateRoleBindingResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project"
+    };
+  }
+  rpc DeleteRoleBinding(DeleteRoleBindingRequest) returns (DeleteRoleBindingResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project"
+    };
+  }
+  rpc ListRoleBindings(ListRoleBindingsRequest) returns (ListRoleBindingsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+service ServiceAccountService {
+  rpc CreateServiceAccount(CreateServiceAccountRequest) returns (CreateServiceAccountResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc GetServiceAccount(GetServiceAccountRequest) returns (GetServiceAccountResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListServiceAccounts(ListServiceAccountsRequest) returns (ListServiceAccountsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpdateServiceAccount(UpdateServiceAccountRequest) returns (UpdateServiceAccountResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc DeleteServiceAccount(DeleteServiceAccountRequest) returns (DeleteServiceAccountResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc CreateServiceAccountToken(CreateServiceAccountTokenRequest) returns (CreateServiceAccountTokenResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc ListServiceAccountTokens(ListServiceAccountTokensRequest) returns (ListServiceAccountTokensResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc RevokeServiceAccountToken(RevokeServiceAccountTokenRequest) returns (RevokeServiceAccountTokenResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+}
+
+service OidcService {
+  rpc CreateOidcProvider(CreateOidcProviderRequest) returns (CreateOidcProviderResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc GetOidcProvider(GetOidcProviderRequest) returns (GetOidcProviderResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListOidcProviders(ListOidcProvidersRequest) returns (ListOidcProvidersResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpdateOidcProvider(UpdateOidcProviderRequest) returns (UpdateOidcProviderResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc DeleteOidcProvider(DeleteOidcProviderRequest) returns (DeleteOidcProviderResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc CreateOidcMapping(CreateOidcMappingRequest) returns (CreateOidcMappingResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc ListOidcMappings(ListOidcMappingsRequest) returns (ListOidcMappingsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc DeleteOidcMapping(DeleteOidcMappingRequest) returns (DeleteOidcMappingResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+}
+
+enum UserSource {
+  USER_SOURCE_UNSPECIFIED = 0;
+  USER_SOURCE_LOCAL = 1;
+  USER_SOURCE_OIDC = 2;
+}
+message User {
+  string id = 1; // u + 26-char id (output only)
+  string login = 2; // local: chosen; OIDC: username_claim value (display only)
+  string display_name = 3;
+  string email = 4;
+  UserSource source = 5; // output only
+  string oidc_provider_id = 6; // output only
+  bool disabled = 7;
+  bool must_change_password = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp last_login_at = 10;
+  string etag = 11;
+}
+message CreateUserRequest {
+  User user = 1;
+  string initial_password = 2;
+} // creates a LOCAL user
+message CreateUserResponse {
+  User user = 1;
+}
+message GetUserRequest {
+  string id = 1;
+}
+message GetUserResponse {
+  User user = 1;
+}
+message ListUsersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string query = 3;
+  UserSource source = 4;
+  bool include_disabled = 5;
+}
+message ListUsersResponse {
+  repeated User users = 1;
+  string next_page_token = 2;
+}
+message UpdateUserRequest {
+  User user = 1;
+  google.protobuf.FieldMask update_mask = 2;
+} // display_name, email (local), disabled, must_change_password
+message UpdateUserResponse {
+  User user = 1;
+}
+message DeleteUserRequest {
+  string id = 1;
+  string etag = 2;
+} // revokes sessions and tokens, deletes bindings
+message DeleteUserResponse {}
+message SetUserPasswordRequest {
+  string id = 1;
+  string new_password = 2;
+  bool must_change = 3;
+}
+message SetUserPasswordResponse {}
+
+message Permission {
+  string method = 1; // "bob.build.v1.BuildService/CancelBuild" | "bob.build.v1.BuildService/*" | "*"
+  string project = 2; // project id | "*"
+}
+message Role {
+  string id = 1;
+  string description = 2;
+  repeated Permission permissions = 3; // ≤ 500
+  bool built_in = 4; // output only; true only for admin
+  string etag = 5;
+}
+message CreateRoleRequest {
+  Role role = 1;
+}
+message CreateRoleResponse {
+  Role role = 1;
+}
+message GetRoleRequest {
+  string id = 1;
+}
+message GetRoleResponse {
+  Role role = 1;
+}
+message ListRolesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string query = 3;
+}
+message ListRolesResponse {
+  repeated Role roles = 1;
+  string next_page_token = 2;
+}
+message UpdateRoleRequest {
+  Role role = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+message UpdateRoleResponse {
+  Role role = 1;
+}
+message DeleteRoleRequest {
+  string id = 1;
+  string etag = 2;
+}
+message DeleteRoleResponse {}
+message CatalogEntry {
+  string method = 1; // full method name
+  string kind = 2; // PROJECT | GLOBAL | LIST_FILTERED | AUTHENTICATED | PUBLIC
+  string description = 3; // first line of the rpc comment
+}
+message ListPermissionCatalogRequest {}
+message ListPermissionCatalogResponse {
+  repeated CatalogEntry entries = 1;
+} // excludes WORKER / ORCHESTRATOR
+enum BindingSource {
+  BINDING_SOURCE_UNSPECIFIED = 0;
+  BINDING_SOURCE_MANUAL = 1;
+  BINDING_SOURCE_OIDC = 2;
+}
+message RoleBinding {
+  string id = 1; // output only
+  bob.common.v1.Principal principal = 2;
+  string role = 3;
+  string project = 4; // project id | "*"
+  BindingSource source = 5; // output only
+  google.protobuf.Timestamp created_at = 6;
+}
+message CreateRoleBindingRequest {
+  string principal_id = 1;
+  string role = 2;
+  string project = 3;
+}
+message CreateRoleBindingResponse {
+  RoleBinding binding = 1;
+}
+message DeleteRoleBindingRequest {
+  string id = 1;
+  string project = 2;
+} // project must equal the binding's
+message DeleteRoleBindingResponse {}
+message ListRoleBindingsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string principal_id = 3;
+  string role = 4;
+  string project = 5;
+}
+message ListRoleBindingsResponse {
+  repeated RoleBinding bindings = 1;
+  string next_page_token = 2;
+}
+
+message ServiceAccount {
+  string id = 1; // slug
+  string description = 2;
+  bool disabled = 3;
+  google.protobuf.Timestamp created_at = 4;
+  string etag = 5;
+}
+enum TokenScope {
+  TOKEN_SCOPE_UNSPECIFIED = 0;
+  TOKEN_SCOPE_API = 1;
+  TOKEN_SCOPE_DOWNLOAD = 2;
+}
+message ServiceAccountToken {
+  string id = 1;
+  string name = 2;
+  TokenScope scope = 3;
+  google.protobuf.Timestamp expires_at = 4; // unset = no expiry (needs no_expiry)
+  google.protobuf.Timestamp last_used_on = 5; // day precision
+  google.protobuf.Timestamp created_at = 6;
+}
+message CreateServiceAccountRequest {
+  ServiceAccount service_account = 1;
+}
+message CreateServiceAccountResponse {
+  ServiceAccount service_account = 1;
+}
+message GetServiceAccountRequest {
+  string id = 1;
+}
+message GetServiceAccountResponse {
+  ServiceAccount service_account = 1;
+}
+message ListServiceAccountsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string query = 3;
+}
+message ListServiceAccountsResponse {
+  repeated ServiceAccount service_accounts = 1;
+  string next_page_token = 2;
+}
+message UpdateServiceAccountRequest {
+  ServiceAccount service_account = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+message UpdateServiceAccountResponse {
+  ServiceAccount service_account = 1;
+}
+message DeleteServiceAccountRequest {
+  string id = 1;
+  string etag = 2;
+}
+message DeleteServiceAccountResponse {}
+message CreateServiceAccountTokenRequest {
+  string service_account_id = 1;
+  string name = 2;
+  TokenScope scope = 3;
+  int32 ttl_days = 4;
+  bool no_expiry = 5;
+}
+message CreateServiceAccountTokenResponse {
+  ServiceAccountToken token = 1;
+  string secret = 2;
+} // secret returned once
+message ListServiceAccountTokensRequest {
+  string service_account_id = 1;
+}
+message ListServiceAccountTokensResponse {
+  repeated ServiceAccountToken tokens = 1;
+} // ≤ 20 tokens per SA
+message RevokeServiceAccountTokenRequest {
+  string service_account_id = 1;
+  string token_id = 2;
+}
+message RevokeServiceAccountTokenResponse {}
+
+message OidcProvider {
+  string id = 1;
+  string display_name = 2;
+  string issuer_url = 3; // https only
+  string client_id = 4;
+  string client_secret = 5; // input only; never returned
+  bool has_client_secret = 6; // output only
+  repeated string scopes = 7; // default ["openid","profile","email"]
+  string username_claim = 8; // default "preferred_username"
+  bool require_mapping = 9; // default true
+  string redirect_url = 10; // output only: <base>/auth/oidc/callback
+  string etag = 11;
+}
+message OidcMapping {
+  string id = 1;
+  string provider_id = 2;
+  string claim = 3; // e.g. "groups"
+  string value = 4;
+  string role = 5;
+  string project = 6; // project id | "*"
+}
+message CreateOidcProviderRequest {
+  OidcProvider provider = 1;
+}
+message CreateOidcProviderResponse {
+  OidcProvider provider = 1;
+}
+message GetOidcProviderRequest {
+  string id = 1;
+}
+message GetOidcProviderResponse {
+  OidcProvider provider = 1;
+}
+message ListOidcProvidersRequest {}
+message ListOidcProvidersResponse {
+  repeated OidcProvider providers = 1;
+} // ≤ 10
+message UpdateOidcProviderRequest {
+  OidcProvider provider = 1;
+  google.protobuf.FieldMask update_mask = 2;
+}
+message UpdateOidcProviderResponse {
+  OidcProvider provider = 1;
+}
+message DeleteOidcProviderRequest {
+  string id = 1;
+  string etag = 2;
+}
+message DeleteOidcProviderResponse {}
+message CreateOidcMappingRequest {
+  OidcMapping mapping = 1;
+}
+message CreateOidcMappingResponse {
+  OidcMapping mapping = 1;
+}
+message ListOidcMappingsRequest {
+  string provider_id = 1;
+}
+message ListOidcMappingsResponse {
+  repeated OidcMapping mappings = 1;
+} // ≤ 500 per provider
+message DeleteOidcMappingRequest {
+  string id = 1;
+}
+message DeleteOidcMappingResponse {}

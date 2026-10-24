@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package bob.common.v1;
+
+message ErrorDetail {
+  string code = 1; // BOB-API-NNNN (§6.1)
+  string field = 2; // request field path for InvalidArgument
+  string hint = 3;
+}
+
+enum Visibility {
+  VISIBILITY_UNSPECIFIED = 0;
+  VISIBILITY_PRIVATE = 1;
+  VISIBILITY_PUBLIC = 2;
+}
+
+message Principal {
+  string id = 1; // "user:u01j…" | "sa:ci"
+  string display_name = 2;
+}
+
+message RoleBindingRef {
+  string role = 1;
+  string project = 2; // project id or "*"
+}
+
+// A bob label and where it is defined (R-FW-016).
+message PackageRef {
+  string label = 1; // //svc/api:server
+  string platform = 2; // linux/amd64 | linux/arm64
+  string variant = 3; // "" = default
+  string defined_at = 4; // svc/api/bob.go:17:9
+}

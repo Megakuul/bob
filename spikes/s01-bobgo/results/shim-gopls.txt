@@ -1,0 +1,46 @@
+### bind
+{"ok":true,"step":"initialize","t_ms":65}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":66}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":2074}
+{"count":1,"items":["Lib"],"latency_ms":7,"step":"complete cmd/api/bob.go \"foo.\"","t_ms":2081}
+{"latency_ms":0,"locations":["/libs/foo/bob.go:12"],"step":"def cmd/api/bob.go \"foo.Lib\"","t_ms":2082}
+{"count":1,"items":["CGo"],"latency_ms":0,"step":"complete cmd/api/bob.go \"golang.BinaryOpts{\\n\\t\\tC\"","t_ms":2083}
+{"hover":"var rcore.Crate func(p *bob.P) *rust.StaticLib\nCrate is the rcore staticlib (label //crates/rcore:rcore).\n","latency_ms":2,"step":"hover cmd/api/bob.go \"rcore.Crate\"","t_ms":2086}
+{"ok":true,"step":"change cmd/api/bob.go \"rcore.Crate(p)}\" \"rcore.Crate(p), Binary(p)}\"","t_ms":2086}
+{"diagnostics":["14:5 sev1 compiler: initialization cycle: Binary refers to itself","17:51 sev1 compiler: cannot use Binary(p) (value of type *golang.Binary) as cc.Linkable value in array or slice literal: *golang.Binary does not implement cc.Linkable (missing method LinkInfo)"],"step":"diag cmd/api/bob.go","t_ms":3591}
+{"ok":true,"step":"change cmd/api/bob.go \"rcore.Crate(p), Binary(p)}\" \"rcore.Crate(p)}\"","t_ms":3591}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":5095}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":5095}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":6701}
+{"count":2,"items":["Hello","Test"],"latency_ms":3,"step":"complete cmd/api/main.go \"greet.\"","t_ms":6704}
+{"latency_ms":0,"locations":["/internal/greet/greet.go:5"],"step":"def cmd/api/main.go \"greet.Hello\"","t_ms":6705}
+{"count":5,"items":["greet","golang","fmt.GoStringer","greet.Hello","greet.Test"],"latency_ms":68,"step":"complete cmd/api/main.go \"fmt.Println(g\"","t_ms":6773}
+{"ok":true,"step":"open libs/foo/bob.go","t_ms":6774}
+{"diagnostics":null,"step":"diag libs/foo/bob.go","t_ms":8281}
+{"latency_ms":3,"locations":["/home/bobtest/s01/fw/pkg/cc/cc.go:47"],"step":"def libs/foo/bob.go \"cc.SharedLibrary\"","t_ms":8285}
+{"ok":true,"step":"open internal/greet/greet_test.go","t_ms":8285}
+{"diagnostics":null,"step":"diag internal/greet/greet_test.go","t_ms":9890}
+{"messages":null,"step":"server-messages","t_ms":9890}
+### pivot
+{"ok":true,"step":"initialize","t_ms":63}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":63}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":1769}
+{"count":1,"items":["Lib"],"latency_ms":9,"step":"complete cmd/api/bob.go \"foo.\"","t_ms":1778}
+{"latency_ms":0,"locations":["/libs/foo/bob.go:12"],"step":"def cmd/api/bob.go \"foo.Lib\"","t_ms":1779}
+{"count":1,"items":["CGo"],"latency_ms":0,"step":"complete cmd/api/bob.go \"golang.BinaryOpts{\\n\\t\\tC\"","t_ms":1780}
+{"hover":"var rcore.Crate func(p *bob.P) *rust.StaticLib\nCrate is the rcore staticlib (label //crates/rcore:rcore).\n","latency_ms":2,"step":"hover cmd/api/bob.go \"rcore.Crate\"","t_ms":1782}
+{"ok":true,"step":"change cmd/api/bob.go \"rcore.Crate(p)}\" \"rcore.Crate(p), Binary(p)}\"","t_ms":1782}
+{"diagnostics":["14:5 sev1 compiler: initialization cycle: Binary refers to itself","17:51 sev1 compiler: cannot use Binary(p) (value of type *golang.Binary) as cc.Linkable value in array or slice literal: *golang.Binary does not implement cc.Linkable (missing method LinkInfo)"],"step":"diag cmd/api/bob.go","t_ms":3291}
+{"ok":true,"step":"change cmd/api/bob.go \"rcore.Crate(p), Binary(p)}\" \"rcore.Crate(p)}\"","t_ms":3291}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":4796}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":4797}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":6301}
+{"count":2,"items":["Hello","Test"],"latency_ms":3,"step":"complete cmd/api/main.go \"greet.\"","t_ms":6305}
+{"latency_ms":0,"locations":["/internal/greet/greet.go:5"],"step":"def cmd/api/main.go \"greet.Hello\"","t_ms":6306}
+{"count":5,"items":["greet","golang","fmt.GoStringer","greet.Hello","greet.Test"],"latency_ms":60,"step":"complete cmd/api/main.go \"fmt.Println(g\"","t_ms":6367}
+{"ok":true,"step":"open libs/foo/bob.go","t_ms":6367}
+{"diagnostics":null,"step":"diag libs/foo/bob.go","t_ms":7873}
+{"latency_ms":2,"locations":["/home/bobtest/s01/fw/pkg/cc/cc.go:47"],"step":"def libs/foo/bob.go \"cc.SharedLibrary\"","t_ms":7876}
+{"ok":true,"step":"open internal/greet/greet_test.go","t_ms":7876}
+{"diagnostics":null,"step":"diag internal/greet/greet_test.go","t_ms":9381}
+{"messages":null,"step":"server-messages","t_ms":9381}

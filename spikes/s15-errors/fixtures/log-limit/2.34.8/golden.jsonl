@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:log-flood"]}
+{"v":1,"event":"package.start","label":"//tools:log-flood","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2011","class":"build","message":"//tools:log-flood wrote more than 20000 bytes of log output and was stopped","label":"//tools:log-flood","definedAt":"fixture/tools/bob.go:25:15","excerpt":["line 440 of a very chatty build step","line 441 of a very chatty build step","line 442 of a very chatty build step","line 443 of a very chatty build step","line 444 of a very chatty build step"],"hint":"a step is printing in a loop; reduce its output or raise the log limit","log":"bob log //tools:log-flood","args":{"bytes":"20000","label":"//tools:log-flood"}}}
+{"v":1,"event":"package.finish","label":"//tools:log-flood","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

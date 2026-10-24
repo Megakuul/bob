@@ -1,0 +1,4 @@
+[31;1merror[BOB-E-7002]:[0m [1mbob's store is not accessible: permission denied (/nix/var/nix/db/big-lock)[0m
+  [32mhint:[0m bob's state directory belongs to another user or is read-only
+
+[31;1mbob: nothing was built[0m (exit 7)

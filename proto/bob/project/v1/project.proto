@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package bob.project.v1;
+
+import "bob/authz/v1/authz.proto";
+import "bob/common/v1/common.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+service ProjectService {
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "id"
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project.id"
+    };
+  }
+  // Refused while non-terminal builds exist. Releases must be deleted first (R-STORE-007).
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+  }
+  // Pipelines from the newest evaluation of the default branch.
+  rpc ListPipelines(ListPipelinesRequest) returns (ListPipelinesResponse) {
+    option (bob.authz.v1.rule) = {
+      kind: KIND_PROJECT
+      project_field: "project_id"
+    };
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+enum LinkHealth {
+  LINK_HEALTH_UNSPECIFIED = 0;
+  LINK_HEALTH_OK = 1;
+  LINK_HEALTH_REPO_NOT_FOUND = 2;
+  LINK_HEALTH_AUTH_FAILED = 3;
+  LINK_HEALTH_WEBHOOK_MISSING = 4;
+}
+message Project {
+  string id = 1; // slug; immutable; used in OCI repos and release URLs
+  string display_name = 2;
+  string description = 3;
+  string forge_integration_id = 4;
+  string repo_full_name = 5; // "acme/api"
+  int64 repo_id = 6; // output only (adapter LookupRepo)
+  string default_branch = 7; // output only
+  string repo_web_url = 8; // output only
+  LinkHealth link_health = 9; // output only
+  google.protobuf.Timestamp created_at = 10;
+  string etag = 11;
+}
+message CreateProjectRequest {
+  Project project = 1;
+} // links the repo, ensures the webhook
+message CreateProjectResponse {
+  Project project = 1;
+}
+message GetProjectRequest {
+  string id = 1;
+}
+message GetProjectResponse {
+  Project project = 1;
+}
+message ListProjectsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string query = 3;
+}
+message ListProjectsResponse {
+  repeated Project projects = 1;
+  string next_page_token = 2;
+}
+message UpdateProjectRequest {
+  Project project = 1;
+  google.protobuf.FieldMask update_mask = 2;
+} // display_name, description, forge_integration_id, repo_full_name
+message UpdateProjectResponse {
+  Project project = 1;
+}
+message DeleteProjectRequest {
+  string id = 1;
+  string etag = 2;
+}
+message DeleteProjectResponse {}
+enum Concurrency {
+  CONCURRENCY_UNSPECIFIED = 0;
+  CONCURRENCY_SUPERSEDE = 1;
+  CONCURRENCY_QUEUE = 2;
+  CONCURRENCY_PARALLEL = 3;
+}
+message Pipeline {
+  string name = 1;
+  repeated string triggers = 2; // human form: "push main", "pull_request", "tag v*"
+  Concurrency concurrency = 3;
+  bool releases = 4; // produces releases
+  bob.common.v1.PackageRef defined_at = 5;
+  string last_build_id = 6;
+  string last_state = 7; // BuildState name
+}
+message ListPipelinesRequest {
+  string project_id = 1;
+}
+message ListPipelinesResponse {
+  repeated Pipeline pipelines = 1;
+  string evaluated_sha = 2;
+}

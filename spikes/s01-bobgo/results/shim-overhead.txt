@@ -1,0 +1,9 @@
+gopls version: via shim 77458us/run, inside namespace directly 69820us/run, overhead 7638us
+go version: via shim 24208us/run, inside namespace directly 12799us/run, overhead 11409us
+true: via shim 7406us/run, inside namespace directly 155us/run, overhead 7251us
+gopls version: via shim 81408us/run, inside namespace directly 69169us/run, overhead 12239us
+go version: via shim 22167us/run, inside namespace directly 13473us/run, overhead 8694us
+true: via shim 7052us/run, inside namespace directly 261us/run, overhead 6791us
+gopls version: via shim 94197us/run, inside namespace directly 74401us/run, overhead 19796us
+go version: via shim 20360us/run, inside namespace directly 13772us/run, overhead 6588us
+true: via shim 7454us/run, inside namespace directly 236us/run, overhead 7218us

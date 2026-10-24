@@ -1,0 +1,33 @@
+## settings {}
+{"ok":true,"step":"initialize","t_ms":70}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":71}
+{"diagnostics":["3:9 sev2 go list: No packages found for open file /root/bob/spikes/s01-bobgo/examples/acme/cmd/api/bob.go.\nThis file may be excluded due to its build tags; try adding \"-tags=\u003cbuild tag\u003e\" to your gopls \"buildFlags\" configuration\nSee the documentation for more information on working with build tags:\nhttps://github.com/golang/tools/blob/master/gopls/doc/settings.md#buildflags."],"step":"diag cmd/api/bob.go","t_ms":3082}
+{"count":0,"items":null,"latency_ms":1,"step":"complete cmd/api/bob.go \"foo.\"","t_ms":3084}
+{"error":"{\"code\":0,\"message\":\"no package metadata for file file:///root/bob/spikes/s01-bobgo/examples/acme/cmd/api/bob.go\"}","latency_ms":0,"step":"def cmd/api/bob.go \"foo.Lib\"","t_ms":3084}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":3084}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":4589}
+{"count":1,"items":["Hello"],"latency_ms":7,"step":"complete cmd/api/main.go \"greet.\"","t_ms":4597}
+{"messages":null,"step":"server-messages","t_ms":4597}
+{"server_maxrss_mb":58,"step":"exit","t_ms":4606}
+## settings {"standaloneTags":["ignore","bob"]}
+{"ok":true,"step":"initialize","t_ms":96}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":96}
+{"diagnostics":["6:2 sev1 compiler: could not import example.com/acme/crates/rcore (current file is not included in a workspace module)","6:2 sev1 compiler: error while importing example.com/acme/crates/rcore: build constraints exclude all Go files in /root/bob/spikes/s01-bobgo/examples/acme/crates/rcore","7:2 sev1 compiler: could not import example.com/acme/libs/foo (current file is not included in a workspace module)","7:2 sev1 compiler: error while importing example.com/acme/libs/foo: build constraints exclude all Go files in /root/bob/spikes/s01-bobgo/examples/acme/libs/foo"],"step":"diag cmd/api/bob.go","t_ms":1904}
+{"count":0,"items":null,"latency_ms":1,"step":"complete cmd/api/bob.go \"foo.\"","t_ms":1905}
+{"latency_ms":0,"locations":null,"step":"def cmd/api/bob.go \"foo.Lib\"","t_ms":1906}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":1906}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":3411}
+{"count":1,"items":["Hello"],"latency_ms":5,"step":"complete cmd/api/main.go \"greet.\"","t_ms":3417}
+{"messages":null,"step":"server-messages","t_ms":3417}
+{"server_maxrss_mb":156,"step":"exit","t_ms":3440}
+## GOFLAGS=-tags=bob, no settings
+{"ok":true,"step":"initialize","t_ms":69}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":69}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":1776}
+{"count":1,"items":["Lib"],"latency_ms":8,"step":"complete cmd/api/bob.go \"foo.\"","t_ms":1784}
+{"latency_ms":0,"locations":["/libs/foo/bob.go:12"],"step":"def cmd/api/bob.go \"foo.Lib\"","t_ms":1789}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":1789}
+{"diagnostics":null,"step":"diag cmd/api/main.go","t_ms":3393}
+{"count":2,"items":["Hello","Test"],"latency_ms":1,"step":"complete cmd/api/main.go \"greet.\"","t_ms":3395}
+{"messages":null,"step":"server-messages","t_ms":3395}
+{"server_maxrss_mb":54,"step":"exit","t_ms":3402}

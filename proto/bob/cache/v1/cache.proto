@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package bob.cache.v1;
+
+import "bob/authz/v1/authz.proto";
+import "google/protobuf/timestamp.proto";
+
+service CacheService {
+  rpc GetCacheStats(GetCacheStatsRequest) returns (GetCacheStatsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_GLOBAL};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Metadata of one served store path. Visible paths only (§6.6.2); otherwise NotFound.
+  // Also the permission name that gates /nix/* downloads of private paths.
+  rpc GetPath(GetPathRequest) returns (GetPathResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListTopPackages(ListTopPackagesRequest) returns (ListTopPackagesResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_LIST_FILTERED};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message GetCacheStatsRequest {}
+message GetCacheStatsResponse {
+  int64 nar_bytes = 1; // compressed bytes under nix/nar/ (from the daily GC sweep)
+  int64 paths = 2;
+  double hit_rate_24h = 3; // narinfo 200 / (200 + 404), all orchestrators
+  double hit_rate_7d = 4;
+  int32 retention_unreferenced_days = 5;
+  google.protobuf.Timestamp measured_at = 6;
+}
+message GetPathRequest {
+  string store_hash = 1;
+} // 32-char Nix base32
+message GetPathResponse {
+  string store_path = 1;
+  int64 nar_size = 2;
+  int64 file_size = 3;
+  repeated string references = 4;
+  repeated string signatures = 5;
+  repeated string projects = 6; // only projects the caller may see
+  bool public = 7;
+  string build_id = 8; // first publication
+  google.protobuf.Timestamp promoted_at = 9;
+}
+message TopPackage {
+  string project_id = 1;
+  string label = 2;
+  int64 hits_7d = 3;
+  int64 nar_bytes = 4;
+}
+message ListTopPackagesRequest {
+  string project_id = 1;
+  int32 limit = 2;
+} // limit ≤ 100
+message ListTopPackagesResponse {
+  repeated TopPackage packages = 1;
+}

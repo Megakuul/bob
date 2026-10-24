@@ -1,0 +1,29 @@
+{
+ "id": "08-go-compile",
+ "title": "Go compile error",
+ "source": "S15 fault 8 (go-error)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "type error in cmd/api/main.go"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-2001",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11",
+  "site": "fixture/api/cmd/api/main.go:59:28"
+ },
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

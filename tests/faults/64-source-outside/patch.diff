@@ -1,0 +1,13 @@
+diff --git a/libs/foo/bob.go b/libs/foo/bob.go
+index 4a731d7..5999b82 100644
+--- a/libs/foo/bob.go
++++ b/libs/foo/bob.go
+@@ -11,7 +11,7 @@ import (
+ // Lib is libfoo.so (label //libs/foo:foo).
+ var Lib = bob.Define(func(p *bob.P) *cc.Library {
+ 	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
+-		Srcs: bob.Glob("src/*.cpp"),
++		Srcs: bob.Glob("../../../outside/*.cpp"),
+ 		Hdrs: "include",
+ 		Std:  cc.CXX20,
+ 		Deps: []cc.Linkable{nixpkgs.Lib(p, "openssl", nixpkgs.Modules("libcrypto"))},

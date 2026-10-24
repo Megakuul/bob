@@ -1,0 +1,25 @@
+diff --git a/native/bob.go b/native/bob.go
+--- a/native/bob.go
++++ b/native/bob.go
+@@ -5,6 +5,7 @@
+ import (
+ 	"github.com/megakuul/bob/pkg/bob"
+ 	"github.com/megakuul/bob/pkg/npm"
++	"github.com/megakuul/bob/pkg/output/appimage"
+ )
+ 
+ var noBundle = false
+@@ -23,3 +24,13 @@
+ 		Options: []npm.Option{npm.AllowScripts("better-sqlite3", "esbuild")},
+ 	})
+ })
++
++// Bundle is the AppImage of the app; its prune pattern removes the C++ runtime that the
++// better-sqlite3 addon loads (fault 54).
++var Bundle = bob.Define(func(p *bob.P) *appimage.Bundle {
++	//bob:fault 54-prune-needed-file
++	return appimage.NewBundle(p, "native-appimage", appimage.BundleOpts{
++		Program: App(p),
++		Prune:   []string{"/nix/store/*-gcc-*-lib/lib/libstdc++.so*"},
++	})
++})

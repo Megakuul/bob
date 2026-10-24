@@ -1,0 +1,9 @@
+[rustfs] 2x HTTP 500 then success (SDK retries 3x)      -> ok                      
+[rustfs] persistent HTTP 500                            -> opaque error           operation error S3: GetObject, exceeded maximum number of attempts, 3, https response error StatusCode: 500, R… after 1.431s
+[rustfs] persistent 503 SlowDown on Update              -> opaque error           operation error S3: GetObject, exceeded maximum number of attempts, 3, https response error StatusCode: 503, R… 
+[rustfs] connection reset on every request              -> opaque error           operation error S3: PutObject, exceeded maximum number of attempts, 3, https response error StatusCode: 0, Req… 
+[rustfs] Create: response lost, SDK retries             -> ErrAlreadyExists       already exists (object exists afterwards: true)
+[rustfs] Update: response lost, SDK retries             -> ErrConcurrencyConflict optimistic lock failed (value written: true)
+[rustfs] Claim: PUT response lost                       -> ok                      (claimed=true ambiguousWins=1)
+[rustfs] slow backend, ctx deadline 500ms               -> opaque error           operation error S3: GetObject, https response error StatusCode: 0, RequestID: , HostID: , canceled, context de… after 501ms; errors.Is(DeadlineExceeded)=false
+[rustfs] S3 endpoint down (connection refused)          -> opaque error           operation error S3: GetObject, exceeded maximum number of attempts, 3, https response error StatusCode: 0, Req… after 4.309s

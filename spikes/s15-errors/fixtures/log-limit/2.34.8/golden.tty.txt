@@ -1,0 +1,13 @@
+[31;1m✗[0m //tools:log-flood
+
+[31;1merror[BOB-E-2011]:[0m [1m//tools:log-flood wrote more than 20000 bytes of log output and was stopped[0m
+  package defined at fixture/tools/bob.go:25:15
+   [2m│[0m line 440 of a very chatty build step
+   [2m│[0m line 441 of a very chatty build step
+   [2m│[0m line 442 of a very chatty build step
+   [2m│[0m line 443 of a very chatty build step
+   [2m│[0m line 444 of a very chatty build step
+  [32mhint:[0m a step is printing in a loop; reduce its output or raise the log limit
+  [2mfull log: bob log //tools:log-flood[0m
+
+[31;1mbob: 1 failed[0m (exit 1)

@@ -1,0 +1,25 @@
+{
+ "id": "43-cache-401-fallback",
+ "title": "cache 401, local builds on",
+ "source": "S15 fault 43 (subst-401-fallback)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "cache answers 401; bob builds locally"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "unable to download"
+ ]
+}

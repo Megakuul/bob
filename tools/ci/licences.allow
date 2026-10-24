@@ -1,0 +1,14 @@
+# Licence allowlist for the `licence` CI stage (HARNESS.md §1.3 stage 7, AGENTS.md §5.7).
+# bob is AGPL-3.0. Allowed: permissive licences and MPL-2.0 (file-level copyleft).
+# GPL, AGPL and LGPL can never be allowed wholesale (the parser rejects it);
+# a single dependency may pass as an exception that names an owner decision:
+#   except <go module path | npm:<name>> <SPDX> D<n> <note>
+allow MIT
+allow BSD-2-Clause
+allow BSD-3-Clause
+allow Apache-2.0
+allow ISC
+allow MPL-2.0
+allow Unlicense
+allow CC0-1.0
+allow Zlib

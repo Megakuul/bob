@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package bob.auth.v1;
+
+import "bob/authz/v1/authz.proto";
+import "bob/common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+service AuthService {
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+  }
+  rpc WhoAmI(WhoAmIRequest) returns (WhoAmIResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (bob.authz.v1.rule) = {
+      kind: KIND_AUTHENTICATED
+      allow_download_scope: true
+    };
+  }
+  // Sets the bob_session cookie. Local users only.
+  rpc LoginPassword(LoginPasswordRequest) returns (LoginPasswordResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+  }
+  // Ends the calling session (cookie or refresh token); clears the cookie.
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+  }
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+  }
+  rpc ListMySessions(ListMySessionsRequest) returns (ListMySessionsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+  }
+  rpc RevokeMySession(RevokeMySessionRequest) returns (RevokeMySessionResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_AUTHENTICATED};
+  }
+}
+
+message NixInfo {
+  string substituter = 1; // https://bob.example/nix
+  repeated string public_keys = 2; // all ACTIVE and VERIFY_ONLY keys, "name:base64"
+}
+message LoginOption {
+  string provider_id = 1; // "" = local password
+  string display_name = 2;
+  string start_url = 3; // /auth/oidc/start?provider=<id>
+}
+message GetServerInfoRequest {}
+message GetServerInfoResponse {
+  string server_name = 1;
+  string base_url = 2;
+  string version = 3;
+  NixInfo nix = 4;
+  repeated LoginOption login_options = 5;
+  string oci_registry = 6; // host[:port] for docker/podman
+}
+message WhoAmIRequest {}
+message WhoAmIResponse {
+  bob.common.v1.Principal principal = 1;
+  string login = 2;
+  repeated bob.common.v1.RoleBindingRef bindings = 3;
+  repeated string projects = 4; // projects with at least one permission ("*" if any {*, *})
+  string token_scope = 5; // api | download | session
+  google.protobuf.Timestamp token_expires_at = 6;
+  NixInfo nix = 7;
+  bool must_change_password = 8;
+}
+message LoginPasswordRequest {
+  string login = 1;
+  string password = 2;
+}
+message LoginPasswordResponse {
+  bob.common.v1.Principal principal = 1;
+  bool must_change_password = 2;
+}
+message LogoutRequest {}
+message LogoutResponse {}
+message ChangePasswordRequest {
+  string old_password = 1;
+  string new_password = 2;
+}
+message ChangePasswordResponse {} // all other sessions of the user are revoked
+message Session {
+  string id = 1;
+  string kind = 2; // cli | browser
+  string user_agent = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp last_used_at = 5; // day precision
+  bool current = 6;
+}
+message ListMySessionsRequest {}
+message ListMySessionsResponse {
+  repeated Session sessions = 1;
+}
+message RevokeMySessionRequest {
+  string session_id = 1;
+}
+message RevokeMySessionResponse {}

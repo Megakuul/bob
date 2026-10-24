@@ -1,0 +1,12 @@
+scenario=fanout mode=peer builds=20 followers(build0)=50 other_followers=19 rate=200 lines/s/build dur=1m0s
+  correctness: gaps=0 dups=0 not_done=0 mismatches_vs_lake(first 3 builds)=0
+  latency build0 ms p50=123 p99=297 max=440 | all builds p50=122 p99=291 (n=807156)
+  bytes (JSON payload): worker->orch 36.3 MB, orch->orch 23.5 MB, orch->clients 124.9 MB
+  S3 by orchestrators: 907 req (15.1 req/s), 199 LIST, GET 0.2 MB, lake polls 22 | S3 by workers: 1667 req, PUT 36.1 MB
+  orchestrator CPU total 14.1 s (23% of one core)
+scenario=fanout mode=pushall builds=20 followers(build0)=50 other_followers=19 rate=200 lines/s/build dur=1m0s
+  correctness: gaps=0 dups=0 not_done=0 mismatches_vs_lake(first 3 builds)=0
+  latency build0 ms p50=133 p99=289 max=395 | all builds p50=132 p99=285 (n=801270)
+  bytes (JSON payload): worker->orch 108.1 MB, orch->orch 0.0 MB, orch->clients 124.0 MB
+  S3 by orchestrators: 907 req (15.1 req/s), 199 LIST, GET 0.2 MB, lake polls 22 | S3 by workers: 1651 req, PUT 35.9 MB
+  orchestrator CPU total 18.8 s (31% of one core)

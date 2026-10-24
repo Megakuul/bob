@@ -1,0 +1,10 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "AllBobBuckets", "Effect": "Allow", "Action": ["s3:*"],
+     "Resource": ["arn:aws:s3:::bob-control", "arn:aws:s3:::bob-control/*",
+                  "arn:aws:s3:::bob-fleet", "arn:aws:s3:::bob-fleet/*",
+                  "arn:aws:s3:::bob-analytics", "arn:aws:s3:::bob-analytics/*",
+                  "arn:aws:s3:::bob-artifacts", "arn:aws:s3:::bob-artifacts/*"]}
+  ]
+}

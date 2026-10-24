@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:payload"]}
+{"v":1,"event":"package.start","label":"//tools:payload","action":"download","cache":"http://127.0.0.1:21516"}
+{"v":1,"event":"error","error":{"code":"BOB-E-4005","class":"cache","message":"cache http://127.0.0.1:21516 served corrupted data for //tools:payload","excerpt":["expected: sha256:1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d","received: sha256:1wpfk610awzyixjivxwmhq4dvzv102a3q0p3f7nqkahp79k87inn"],"hint":"report this to the cache admin; bob refused the download","args":{"cache":"http://127.0.0.1:21516","what":"//tools:payload"}}}
+{"v":1,"event":"package.finish","label":"//tools:payload","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":4,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":53008}}

@@ -1,0 +1,28 @@
+{
+ "id": "31-wrong-platform",
+ "title": "wrong platform",
+ "source": "S15 fault 31 (unsupported-system)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "package requires x86_64-linux"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1010",
+ "exit": 3,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:21:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

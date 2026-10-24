@@ -1,0 +1,9 @@
+FAILED  //tools:network
+
+error[BOB-E-2009]: //tools:network tried to use the network during the build
+  package defined at fixture/tools/bob.go:12:15
+   | bash: connect: Network is unreachable
+  hint: builds are offline; declare the download as a fetched dependency so bob.lock pins it
+  full log: bob log //tools:network
+
+bob: 1 failed (exit 1)

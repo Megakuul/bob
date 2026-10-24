@@ -1,0 +1,14 @@
+== s03-rust start 2026-10-21T08:51:05Z load 4.10 4.77 4.63
+| Measurement | [8c/15G] | [2c/4G] |
+|---|---|---|
+| demo cold | 48.31 s / 485 MB | 130.93 s / 485 MB |
+| demo no-op | 0.56 s / 36 MB | 0.47 s / 35 MB |
+| demo incr-leaf | 2.92 s / 261 MB | 4.60 s / 261 MB |
+| demo incr-lib | 3.80 s / 261 MB | 5.36 s / 261 MB |
+| cargo cold | 40.70 s / 353 MB | 119.34 s / 345 MB |
+| chain30 cold (max-jobs 1) | 4.37 s / 132 MB | 3.46 s / 132 MB |
+| plan+drvs demo (no build) | 0.49 s / 35 MB | |
+| lock big (392 crates, offline index) | 0.85 s / 118 MB | |
+
+Run 2026-10-21T08:57:22Z on vibe-engine. Cells: wall time / peak RSS of the largest process.
+== s03-rust exit 0 end 2026-10-21T08:57:22Z

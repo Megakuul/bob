@@ -1,0 +1,335 @@
+{
+ "unknown-attr": {
+  "codes": [
+   "BOB-E-1001"
+  ],
+  "exit": 3
+ },
+ "broken-pkg": {
+  "codes": [
+   "BOB-E-1002"
+  ],
+  "exit": 3
+ },
+ "insecure-pkg": {
+  "codes": [
+   "BOB-E-1003"
+  ],
+  "exit": 3
+ },
+ "cycle": {
+  "codes": [
+   "BOB-E-1006"
+  ],
+  "exit": 3
+ },
+ "go-too-new": {
+  "codes": [
+   "BOB-E-1008"
+  ],
+  "exit": 3
+ },
+ "ok-fixture": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-cold": {
+  "codes": [],
+  "exit": 0
+ },
+ "cxx-error": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "c-error": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "go-error": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "rust-error": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "rust-missing-crate": {
+  "codes": [
+   "BOB-E-2010"
+  ],
+  "exit": 1
+ },
+ "link-error": {
+  "codes": [
+   "BOB-E-2002"
+  ],
+  "exit": 1
+ },
+ "missing-header": {
+  "codes": [
+   "BOB-E-2003"
+  ],
+  "exit": 1
+ },
+ "missing-lib": {
+  "codes": [
+   "BOB-E-2004"
+  ],
+  "exit": 1
+ },
+ "test-failure": {
+  "codes": [
+   "BOB-E-2005"
+  ],
+  "exit": 1
+ },
+ "two-failures": {
+  "codes": [
+   "BOB-E-2001",
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "hash-mismatch": {
+  "codes": [
+   "BOB-E-3001"
+  ],
+  "exit": 4
+ },
+ "fetch-404": {
+  "codes": [
+   "BOB-E-3003"
+  ],
+  "exit": 4
+ },
+ "fetch-dns": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "fetch-refused": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "fetch-500": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "fetch-stall": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "fetch-ok": {
+  "codes": [],
+  "exit": 0
+ },
+ "build-timeout": {
+  "codes": [
+   "BOB-E-2007"
+  ],
+  "exit": 1
+ },
+ "timeout-keep-going": {
+  "codes": [
+   "BOB-E-2007"
+  ],
+  "exit": 1
+ },
+ "silent-timeout": {
+  "codes": [
+   "BOB-E-2008"
+  ],
+  "exit": 1
+ },
+ "sandbox-network": {
+  "codes": [
+   "BOB-E-2009"
+  ],
+  "exit": 1
+ },
+ "sandbox-nochroot": {
+  "codes": [
+   "BOB-E-9004"
+  ],
+  "exit": 70
+ },
+ "builder-syntax": {
+  "codes": [
+   "BOB-E-9001"
+  ],
+  "exit": 70
+ },
+ "builder-missing": {
+  "codes": [
+   "BOB-E-9001"
+  ],
+  "exit": 70
+ },
+ "no-output": {
+  "codes": [
+   "BOB-E-9002"
+  ],
+  "exit": 70
+ },
+ "disallowed-ref": {
+  "codes": [
+   "BOB-E-9003"
+  ],
+  "exit": 70
+ },
+ "unsupported-system": {
+  "codes": [
+   "BOB-E-1010"
+  ],
+  "exit": 3
+ },
+ "log-limit": {
+  "codes": [
+   "BOB-E-2011"
+  ],
+  "exit": 1
+ },
+ "oom": {
+  "codes": [
+   "BOB-E-6002"
+  ],
+  "exit": 6
+ },
+ "oom-scope-stop": {
+  "codes": [
+   "BOB-E-8001"
+  ],
+  "exit": 130,
+  "byVersion": {
+   "2.34.8": {
+    "codes": [
+     "BOB-E-6003"
+    ],
+    "exit": 6
+   }
+  }
+ },
+ "sigint": {
+  "codes": [
+   "BOB-E-8001"
+  ],
+  "exit": 130
+ },
+ "sigkill": {
+  "codes": [
+   "BOB-E-6003"
+  ],
+  "exit": 6
+ },
+ "post-build-hook": {
+  "codes": [
+   "BOB-E-4007"
+  ],
+  "exit": 4
+ },
+ "ok-structured": {
+  "codes": [],
+  "warnings": [
+   "BOB-E-9999"
+  ],
+  "exit": 0
+ },
+ "lock-wait-first": {
+  "codes": [],
+  "exit": 0
+ },
+ "lock-wait": {
+  "codes": [],
+  "exit": 0
+ },
+ "store-permission": {
+  "codes": [
+   "BOB-E-7002"
+  ],
+  "exit": 7
+ },
+ "upstream-fail": {
+  "codes": [
+   "BOB-E-5001"
+  ],
+  "exit": 5
+ },
+ "disk-full": {
+  "codes": [
+   "BOB-E-6001"
+  ],
+  "exit": 6
+ },
+ "corrupt-prep": {
+  "codes": [],
+  "exit": 0
+ },
+ "corrupt-store": {
+  "codes": [
+   "BOB-E-7003"
+  ],
+  "exit": 7
+ },
+ "ok-substitute": {
+  "codes": [],
+  "exit": 0
+ },
+ "subst-401": {
+  "codes": [
+   "BOB-E-4001"
+  ],
+  "exit": 4
+ },
+ "subst-401-fallback": {
+  "codes": [],
+  "warnings": [
+   "BOB-E-4001"
+  ],
+  "exit": 0
+ },
+ "subst-nar404": {
+  "codes": [
+   "BOB-E-4002"
+  ],
+  "exit": 4
+ },
+ "subst-refused": {
+  "codes": [
+   "BOB-E-4003"
+  ],
+  "exit": 4
+ },
+ "subst-stall": {
+  "codes": [
+   "BOB-E-4003"
+  ],
+  "exit": 4
+ },
+ "subst-untrusted": {
+  "codes": [
+   "BOB-E-4004"
+  ],
+  "exit": 4
+ },
+ "subst-corrupt": {
+  "codes": [
+   "BOB-E-4005"
+  ],
+  "exit": 4
+ }
+}

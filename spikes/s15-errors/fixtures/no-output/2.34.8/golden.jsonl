@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:no-output"]}
+{"v":1,"event":"package.start","label":"//tools:no-output","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-9002","class":"internal","message":"//tools:no-output did not produce its output","label":"//tools:no-output","definedAt":"fixture/tools/bob.go:18:15","cause":"the build step finished successfully but did not create its output","excerpt":["done"],"hint":"this is a bob bug; please report it with bob log //tools:no-output","log":"bob log //tools:no-output","args":{"label":"//tools:no-output"}}}
+{"v":1,"event":"package.finish","label":"//tools:no-output","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":70,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

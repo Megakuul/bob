@@ -1,0 +1,48 @@
+@nix {"action":"start","id":2769558121218048,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"start","fields":["/nix/store/8v703ljjglgvlfw0pgnbblwck0816zyv-tools-lock","https://cache.nixos.org"],"id":2769558121218049,"level":4,"parent":0,"text":"querying info about '/nix/store/8v703ljjglgvlfw0pgnbblwck0816zyv-tools-lock' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"start","fields":["https://cache.nixos.org/8v703ljjglgvlfw0pgnbblwck0816zyv.narinfo"],"id":2769558121218050,"level":4,"parent":2769558121218049,"text":"downloading 'https://cache.nixos.org/8v703ljjglgvlfw0pgnbblwck0816zyv.narinfo'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"result","fields":[3,3,0,0],"id":2769558121218050,"type":105}
+@nix {"action":"stop","id":2769558121218049}
+@nix {"action":"stop","id":2769558121218050}
+@nix {"action":"stop","id":2769558121218048}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/hjhk4y9s3fzrgr9jyqm6v8fd06pkr3c3-tools-lock.drv"}
+@nix {"action":"start","id":2769558121218051,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2769558121218052,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2769558121218053,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218052,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218053,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2769558121218051,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2769558121218051,"type":106}
+@nix {"action":"start","id":2769558121218054,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2769558121218054}
+@nix {"action":"result","fields":[0,1,0,0],"id":2769558121218052,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218053,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2769558121218051,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2769558121218051,"type":106}
+@nix {"action":"start","fields":["/nix/store/hjhk4y9s3fzrgr9jyqm6v8fd06pkr3c3-tools-lock.drv","",1,1],"id":2769558121218055,"level":3,"parent":0,"text":"building '/nix/store/hjhk4y9s3fzrgr9jyqm6v8fd06pkr3c3-tools-lock.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2769558121218052,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218053,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2769558121218051,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2769558121218051,"type":106}
+@nix {"action":"result","fields":["locking 1792533232565923458"],"id":2769558121218055,"type":101}
+@nix {"action":"result","fields":[1,2,0,0],"id":2769558121218052,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2769558121218053,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2769558121218051,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2769558121218051,"type":106}
+@nix {"action":"stop","id":2769558121218055}
+@nix {"action":"stop","id":2769558121218053}
+@nix {"action":"stop","id":2769558121218052}
+@nix {"action":"stop","id":2769558121218051}

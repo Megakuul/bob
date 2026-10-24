@@ -1,0 +1,420 @@
+{
+ "root": "/root/bob/spikes/s03-rust/ws/chain",
+ "crates": [
+  {
+   "name": "c0",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c0",
+   "root": "src/lib.rs",
+   "deps": []
+  },
+  {
+   "name": "c1",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c1",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c0",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c2",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c2",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c1",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c3",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c3",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c2",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c4",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c4",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c3",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c5",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c5",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c4",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c6",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c6",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c5",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c7",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c7",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c6",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c8",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c8",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c7",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c9",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c9",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c8",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c10",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c10",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c9",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c11",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c11",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c10",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c12",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c12",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c11",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c13",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c13",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c12",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c14",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c14",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c13",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c15",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c15",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c14",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c16",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c16",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c15",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c17",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c17",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c16",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c18",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c18",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c17",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c19",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c19",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c18",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c20",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c20",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c19",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c21",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c21",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c20",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c22",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c22",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c21",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c23",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c23",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c22",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c24",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c24",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c23",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c25",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c25",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c24",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c26",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c26",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c25",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c27",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c27",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c26",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c28",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "lib",
+   "src": "c28",
+   "root": "src/lib.rs",
+   "deps": [
+    {
+     "name": "c27",
+     "local": true
+    }
+   ]
+  },
+  {
+   "name": "c29",
+   "version": "0.1.0",
+   "edition": "2021",
+   "type": "bin",
+   "src": "c29",
+   "root": "src/main.rs",
+   "deps": [
+    {
+     "name": "c28",
+     "local": true
+    }
+   ]
+  }
+ ]
+}

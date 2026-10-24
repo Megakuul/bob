@@ -1,0 +1,18 @@
+[rustfs] build-number CAS counter: 20 allocators x 5 = 100 numbers, duplicates=0, conflict retries=1396, 26.349s
+[rustfs] UI list                                  key prefix               page1  requests page1         page2 (StartAfter)
+[rustfs] projects                                 project/                 21     LIST=1 GET=21          - 
+[rustfs] builds of project (newest first)         build/p01/n/             50     LIST=1 GET=50          50 items, LIST=1 GET=50 err=<nil> 
+[rustfs] running builds (overview)                buildidx/running/b/      10     LIST=1 GET=10          - 
+[rustfs] recent failures (overview)               buildidx/failed/b/       30     LIST=1 GET=30          - 
+[rustfs] releases of project                      release/p01/v/           40     LIST=1 GET=40          - 
+[rustfs] jobs of build (finished)                 jobs/B1/j/               40     LIST=1 GET=40          - 
+[rustfs] live jobs per platform (queued+running)  live/aarch64-linux/j/    50     LIST=1 GET=50          10 items, LIST=1 GET=10 err=<nil> 
+[rustfs] queue depth per platform (keys only)     jobq/aarch64-linux/j/    50     LIST=1 GET=0           10 items, LIST=1 GET=0 err=<nil> 
+[rustfs] workers                                  worker/                  50     LIST=1 GET=50          50 items, LIST=1 GET=50 err=<nil> 
+[rustfs] users                                    user/                    50     LIST=1 GET=50          50 items, LIST=1 GET=50 err=<nil> 
+[rustfs] roles                                    role/                    10     LIST=1 GET=10          - 
+[rustfs] roles of user                            userrole/u0001/r/        10     LIST=1 GET=10          - 
+[rustfs] users of role                            roleuser/r01/u/          30     LIST=1 GET=30          - 
+[rustfs] dynamitedb.Query builds of project, WithLimit(50): items=50 first=#300 LIST=1 GET=50 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0) err=<nil>
+[rustfs] dynamitedb.Query users (pk-only type) WithLimit(50): items=50 LIST=1 GET=50 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0) err=<nil> 
+[rustfs] dynamitedb.Query builds filtered State=failed (none match) WithLimit(10): items=0 LIST=1 GET=300 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0) err=<nil> (filter is client-side: scans the partition)

@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:payload
+
+[31;1merror[BOB-E-4002]:[0m [1mcache http://127.0.0.1:21513 lists a package but cannot deliver it (HTTP 404)[0m
+  package defined at fixture/tools/bob.go:23:15
+  cause: nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar is missing
+  [32mhint:[0m the cache is inconsistent; bob built locally instead or report it to the cache admin
+
+[31;1mbob: 1 failed[0m (exit 4)

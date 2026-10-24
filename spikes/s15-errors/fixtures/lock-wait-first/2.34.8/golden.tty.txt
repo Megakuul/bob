@@ -1,0 +1,3 @@
+[32m✓[0m //tools:lock
+
+[32mbob: 1 built[0m

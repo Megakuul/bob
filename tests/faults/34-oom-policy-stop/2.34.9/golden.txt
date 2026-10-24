@@ -1,0 +1,7 @@
+stopped //tools:memory
+
+error[BOB-E-8001]: build cancelled
+  cause: Nix received a termination signal from outside bob (for example a service manager, a container runtime or an OOM policy)
+   | stopped while building: //tools:memory
+
+bob: 1 stopped (exit 130)

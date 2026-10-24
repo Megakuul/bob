@@ -1,0 +1,26 @@
+{
+ "id": "04-cycle",
+ "title": "dependency cycle",
+ "source": "S15 fault 4 (cycle)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "libfoo depends on //api:api, which depends on libfoo"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-1006",
+ "exit": 3,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

@@ -1,0 +1,30 @@
+@nix {"action":"start","id":3218231879794688,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3218231879794688}
+@nix {"action":"msg","level":3,"msg":"this path will be fetched (51.8 KiB download, 51.8 KiB unpacked):"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload"}
+@nix {"action":"start","id":3218231879794689,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3218231879794690,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3218231879794691,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218231879794690,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218231879794691,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3218231879794689,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3218231879794689,"type":106}
+@nix {"action":"start","id":3218231879794692,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3218231879794692}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218231879794690,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218231879794691,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3218231879794689,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3218231879794689,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218231879794690,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":3218231879794691,"type":105}
+@nix {"action":"result","fields":[101,53008],"id":3218231879794689,"type":106}
+@nix {"action":"result","fields":[100,53008],"id":3218231879794689,"type":106}
+@nix {"action":"msg","level":1,"msg":"\u001b[35;1mwarning:\u001b[0m ignoring substitute for '/nix/store/m1kix7w6aacndx443n6kq0az5cgsvjq9-tools-payload' from 'http://127.0.0.1:21515', as it's not signed by any of the keys in 'trusted-public-keys'"}
+@nix {"action":"result","fields":[0,1,0,1],"id":3218231879794690,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3218231879794691,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3218231879794689,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3218231879794689,"type":106}
+@nix {"action":"stop","id":3218231879794691}
+@nix {"action":"stop","id":3218231879794690}
+@nix {"action":"stop","id":3218231879794689}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\n       Reason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\n       Hint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'","raw_msg":"Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\nReason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\nHint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'"}

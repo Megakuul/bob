@@ -1,0 +1,41 @@
+diff --git a/internal/greet/bob.go b/internal/greet/bob.go
+index ae67fda..e5e57c8 100644
+--- a/internal/greet/bob.go
++++ b/internal/greet/bob.go
+@@ -4,6 +4,7 @@ package greet
+ 
+ import (
+ 	"example.com/acme"
++	version "example.com/acme/tools/version"
+ 	"github.com/megakuul/bob/pkg/bob"
+ 	"github.com/megakuul/bob/pkg/golang"
+ )
+@@ -12,3 +13,6 @@ import (
+ var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+ 	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: "greet_tests"})
+ })
++
++// Version reuses a definition of tools/version, which is a main package.
++var Version = version.Version
+diff --git a/tools/version/bob.go b/tools/version/bob.go
+new file mode 100644
+index 0000000..d9345bd
+--- /dev/null
++++ b/tools/version/bob.go
+@@ -0,0 +1,6 @@
++//go:build bob
++
++package main
++
++// Version is the version string of the release.
++var Version = "dev"
+diff --git a/tools/version/main.go b/tools/version/main.go
+new file mode 100644
+index 0000000..b80bd3e
+--- /dev/null
++++ b/tools/version/main.go
+@@ -0,0 +1,4 @@
++// Command version prints the version.
++package main
++
++func main() { println("dev") }

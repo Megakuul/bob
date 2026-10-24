@@ -1,0 +1,58 @@
+{
+  "name": "disallowed-ref",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 151,
+    "nixVersion": "2.34.9",
+    "valid": [
+      "/nix/store/nic9fng0ifv80b61h13akir13ngq8j5a-tools-base.drv",
+      "/nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/nic9fng0ifv80b61h13akir13ngq8j5a-tools-base.drv": {
+        "label": "//tools:base",
+        "definedAt": "fixture/tools/bob.go:19:15",
+        "kind": "script"
+      },
+      "/nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv": {
+        "label": "//tools:leak-ref",
+        "definedAt": "fixture/tools/bob.go:20:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/0pdmycy9xixax044ivy90sjvq8gvbw90-tools-leak-ref": "/nix/store/nlxbhjvacsa2rm45l6mpvlch0scqp9wy-tools-leak-ref.drv",
+      "/nix/store/21c23ig7xw63bqsnfs5rs90v055rjwdw-tools-base": "/nix/store/nic9fng0ifv80b61h13akir13ngq8j5a-tools-base.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:leak-ref"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

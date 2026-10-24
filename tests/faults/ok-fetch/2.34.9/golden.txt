@@ -1,0 +1,3 @@
+built   //third_party:itoa-1.0.18.crate
+
+bob: 1 built

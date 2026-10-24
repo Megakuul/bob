@@ -1,0 +1,284 @@
+diff -ru -x .git lake/bucket.go lake-patched/bucket.go
+--- lake/bucket.go	2026-10-20 21:24:30.165040219 +0000
++++ lake-patched/bucket.go	2026-10-20 21:50:11.674827156 +0000
+@@ -7,6 +7,7 @@
+ 	"errors"
+ 	"io"
+ 	"maps"
++	"math/rand/v2"
+ 	"net/http"
+ 	"path"
+ 	"sync"
+@@ -28,6 +29,7 @@
+ 	catalog              catalog.Catalog
+ 	catalogLock          sync.RWMutex
+ 	maxGroupRows         int
++	commitRetries        int
+ }
+ 
+ type BucketOption func(*Bucket, *s3.Options)
+@@ -85,6 +87,7 @@
+ 		client:               client,
+ 		catalogCacheDuration: time.Minute,
+ 		maxGroupRows:         1000,
++		commitRetries:        50,
+ 	}
+ 	for _, opt := range opts {
+ 		opt(b, nil)
+@@ -121,15 +124,45 @@
+ 		Ranges: ranges,
+ 	}
+ 	// retry on optimistic lock failure
+-	for range 5 {
++	// PATCH(S10 P1): HEAD returned nil after 5 failed attempts (err overwritten by loadCatalog);
++	// return ErrOptimisticLock instead, retry more often with jittered backoff.
++	for attempt := range b.commitRetries {
+ 		if err = b.commitCatalog(ctx, tableName, []catalog.Shard{shard}, nil); !errors.Is(err, ErrOptimisticLock) {
+ 			return err
+ 		}
+-		if err = b.loadCatalog(ctx); err != nil {
+-			return err
++		if lerr := b.loadCatalog(ctx); lerr != nil {
++			return lerr
++		}
++		backoff(ctx, attempt)
++	}
++	return ErrOptimisticLock
++}
++
++// backoff sleeps a jittered, growing delay (PATCH S10 P1).
++func backoff(ctx context.Context, attempt int) {
++	d := time.Duration(5+rand.IntN(20*(1+min(attempt, 10)))) * time.Millisecond
++	select {
++	case <-ctx.Done():
++	case <-time.After(d):
++	}
++}
++
++// WithCatalogCacheDuration sets how long a loaded catalog is reused by queries (PATCH S10 P5).
++func WithCatalogCacheDuration(d time.Duration) BucketOption {
++	return func(b *Bucket, o *s3.Options) {
++		if b != nil {
++			b.catalogCacheDuration = d
++		}
++	}
++}
++
++// WithCommitRetries sets how often a commit is retried on optimistic lock failure (PATCH S10 P1).
++func WithCommitRetries(n int) BucketOption {
++	return func(b *Bucket, o *s3.Options) {
++		if b != nil {
++			b.commitRetries = n
+ 		}
+ 	}
+-	return err
+ }
+ 
+ func newCatalog() catalog.Catalog {
+@@ -188,6 +221,10 @@
+ 
+ var ErrOptimisticLock = errors.New("optimistic lock failure")
+ 
++// ErrShardsGone is returned when a commit removes shards that are no longer in the catalog
++// (another compactor already replaced them). PATCH S10 P2.
++var ErrShardsGone = errors.New("shards to remove are no longer in the catalog")
++
+ // commitCatalog adds the provided shards to the table and writes the current catalog to datastore.
+ // It uses optimistic locking, if retry is set to true it will retry once on optimistic failure.
+ func (b *Bucket) commitCatalog(ctx context.Context, table string, add, remove []catalog.Shard) error {
+@@ -203,6 +240,19 @@
+ 	for _, shard := range remove {
+ 		removeMapper[shard.Target] = true
+ 	}
++	// PATCH(S10 P2): every shard to remove must still be present, otherwise the commit would
++	// add a second copy of rows another compactor already rewrote.
++	if len(remove) > 0 {
++		present := map[string]bool{}
++		for _, shard := range b.catalog.Tables[table].Shards {
++			present[shard.Target] = true
++		}
++		for _, shard := range remove {
++			if !present[shard.Target] {
++				return ErrShardsGone
++			}
++		}
++	}
+ 	for _, shard := range append(b.catalog.Tables[table].Shards, add...) {
+ 		if !removeMapper[shard.Target] {
+ 			newTable.Shards = append(newTable.Shards, shard)
+diff -ru -x .git lake/compactor.go lake-patched/compactor.go
+--- lake/compactor.go	2026-10-20 21:24:30.167825833 +0000
++++ lake-patched/compactor.go	2026-10-20 21:50:23.416353175 +0000
+@@ -17,10 +17,18 @@
+ )
+ 
+ type Compactor[T any] struct {
+-	table   string
+-	sorting []parquet.SortingColumn
+-	minSize int
+-	bucket  *Bucket
++	table    string
++	sorting  []parquet.SortingColumn
++	minSize  int
++	maxInput int
++	bucket   *Bucket
++}
++
++// WithCompactionMaxInput bounds the bytes of small shards merged in one run (PATCH S10 P7).
++func WithCompactionMaxInput[T any](max int) CompactorOption[T] {
++	return func(c *Compactor[T]) {
++		c.maxInput = max
++	}
+ }
+ 
+ type CompactorOption[T any] func(c *Compactor[T])
+@@ -61,10 +69,16 @@
+ 	schema := parquet.NewSchema(c.table, parquet.SchemaOf(*new(T)))
+ 
+ 	rowGroups := []parquet.RowGroup{}
++	inputBytes := 0
+ 	for _, shard := range currentShards {
+ 		if shard.Size > c.minSize {
+ 			continue
+ 		}
++		// PATCH(S10 P7): bound the memory of one run.
++		if c.maxInput > 0 && inputBytes+shard.Size > c.maxInput && len(compactableShards) >= 2 {
++			break
++		}
++		inputBytes += shard.Size
+ 		compactableShards = append(compactableShards, shard)
+ 	}
+ 	if len(compactableShards) < 2 {
+@@ -148,7 +162,18 @@
+ 		newShards = append(newShards, shard)
+ 	}
+ 
+-	err = c.bucket.commitCatalog(ctx, c.table, newShards, compactableShards)
++	// PATCH(S10 P3): rebase on optimistic lock failure instead of giving up; P2 makes this safe.
++	for attempt := range c.bucket.commitRetries {
++		err = c.bucket.commitCatalog(ctx, c.table, newShards, compactableShards)
++		if !errors.Is(err, ErrOptimisticLock) {
++			break
++		}
++		if lerr := c.bucket.loadCatalog(ctx); lerr != nil {
++			err = lerr
++			break
++		}
++		backoff(ctx, attempt)
++	}
+ 	if err != nil {
+ 		// the new shards are not referenced by the catalog; remove them to not leave orphans.
+ 		for _, shard := range newShards {
+diff -ru -x .git lake/engine.go lake-patched/engine.go
+--- lake/engine.go	2026-10-20 21:24:30.167825833 +0000
++++ lake-patched/engine.go	2026-10-20 21:53:58.349387407 +0000
+@@ -3,12 +3,15 @@
+ import (
+ 	"bytes"
+ 	"context"
++	"errors"
+ 	"fmt"
+ 	"io"
+ 	"math/big"
++	"slices"
+ 	"time"
+ 
+ 	"github.com/aws/aws-sdk-go-v2/service/s3"
++	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+ 	"github.com/megakuul/lake/internal/catalog"
+ 	"github.com/megakuul/lake/internal/group"
+ 	"github.com/parquet-go/parquet-go"
+@@ -70,7 +73,14 @@
+ 	}
+ 
+ 	if !applyAggregation {
+-		return b.extract(rowGroup, rows) // without aggregators just extract and return full rows.
++		result, err := b.extract(rowGroup, rows) // without aggregators just extract and return full rows.
++		if err != nil || len(q.sorting) == 0 {
++			return result, err
++		}
++		// PATCH(S10 P4b): shards are concatenated (see load), so sort the result here.
++		compare := rowGroup.Schema().Comparator(q.sorting...)
++		slices.SortStableFunc(result, compare)
++		return result, nil
+ 	}
+ 
+ 	groups := group.NewHashmap()
+@@ -87,6 +97,19 @@
+ 
+ // load reads the underlying bucket parquet files into a rowGroup and returns it.
+ func (b *Bucket) load(ctx context.Context, schema *parquet.Schema, sort bool, q *query) (parquet.RowGroup, error) {
++	// PATCH(S10 P6): a shard can be compacted away between catalog load and download;
++	// reload the catalog once and retry.
++	rg, err := b.loadOnce(ctx, schema, sort, q)
++	if _, ok := errors.AsType[*types.NoSuchKey](err); ok {
++		if err := b.loadCatalog(ctx); err != nil {
++			return nil, err
++		}
++		return b.loadOnce(ctx, schema, sort, q)
++	}
++	return rg, err
++}
++
++func (b *Bucket) loadOnce(ctx context.Context, schema *parquet.Schema, sort bool, q *query) (parquet.RowGroup, error) {
+ 	b.catalogLock.RLock()
+ 	expires := b.catalog.Expires
+ 	b.catalogLock.RUnlock()
+@@ -128,6 +151,13 @@
+ 	if sort {
+ 		options = append(options, parquet.SortingRowGroupConfig(parquet.SortingColumns(q.sorting...)))
+ 	}
++	// PATCH(S10 P4b): without an explicit sort, parquet-go auto-detects the shards' common
++	// sorting columns and merges overlapping shards; the filter bitset is computed on
++	// ColumnChunks (concatenation order) but rows are read in merge order, so results are
++	// wrong. Concatenate instead when no sort is requested.
++	if !sort && len(rowGroups) > 0 {
++		return parquet.MultiRowGroup(rowGroups...), nil
++	}
+ 	rowGroup, err := parquet.MergeRowGroups(rowGroups, options...)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("merge shards: %v", err)
+@@ -294,23 +324,33 @@
+ 
+ // extract reads the provided row bitset, parses the rows and returns them.
+ func (b *Bucket) extract(rowGroup parquet.RowGroup, rows *big.Int) ([]parquet.Row, error) {
++	// PATCH(S10 P4): read sequentially and keep matching rows. HEAD seeks before every row with
++	// a 1-row buffer; on merged (sorted, overlapping) row groups parquet-go's skip loop then
++	// spins forever.
+ 	reader := rowGroup.Rows()
+ 	defer reader.Close()
+ 
+ 	result := make([]parquet.Row, 0)
+-	for row := range rows.BitLen() {
+-		if rows.Bit(row) == 0 {
+-			continue
+-		}
+-		if err := reader.SeekToRow(int64(row)); err != nil {
+-			return nil, fmt.Errorf("failed to seek row: %v", err)
+-		}
+-		buffer := make([]parquet.Row, 1)
++	last := rows.BitLen()
++	buffer := make([]parquet.Row, 1024)
++	index := 0
++	for index < last {
+ 		n, err := reader.ReadRows(buffer)
+-		if err != nil && err != io.EOF {
++		for i := range n {
++			if rows.Bit(index+i) == 1 {
++				result = append(result, buffer[i].Clone())
++			}
++		}
++		index += n
++		if err != nil {
++			if err == io.EOF {
++				break
++			}
+ 			return nil, fmt.Errorf("failed to read rows: %v", err)
+ 		}
+-		result = append(result, buffer[:n]...)
++		if n == 0 {
++			break
++		}
+ 	}
+ 	return result, nil
+ }

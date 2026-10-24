@@ -1,0 +1,21 @@
+{
+ "id": "72-s3-no-conditional-writes",
+ "title": "unsupported S3 backend (no conditional writes)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "counting proxy strips If-Match"
+ },
+ "command": [
+  "orchestrator"
+ ],
+ "code": "BOB-E-7007",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 7,
+ "binary": "bob-server",
+ "forbid": []
+}

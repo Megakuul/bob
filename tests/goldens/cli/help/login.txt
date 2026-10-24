@@ -1,0 +1,1 @@
+usage: bob login [<url>] [--device] [--token-stdin]

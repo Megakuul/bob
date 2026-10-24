@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//api:api"]}
+{"v":1,"event":"package.start","label":"//api:api","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2003","class":"build","message":"//api:api: header rcore.h not found","label":"//api:api","definedAt":"fixture/api/bob.go:13:11","location":"fixture/api/cmd/api/main.go:7:10","excerpt":["cmd/api/main.go:7:10: fatal error: rcore.h: No such file or directory","    7 | #include \"rcore.h\"","      |          ^~~~~~~~~"],"hint":"add the package that provides rcore.h to Deps","log":"bob log //api:api","args":{"header":"rcore.h","label":"//api:api"}}}
+{"v":1,"event":"package.finish","label":"//api:api","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

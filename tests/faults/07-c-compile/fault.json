@@ -1,0 +1,29 @@
+{
+ "id": "07-c-compile",
+ "title": "C compile error",
+ "source": "S15 fault 7 (c-error)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "undeclared identifier in a C library"
+ },
+ "command": [
+  "build",
+  "//cbad:cbad"
+ ],
+ "code": "BOB-E-2001",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/cbad/bob.go:7:12",
+  "site": "fixture/cbad/src/cbad.c:4:12"
+ },
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

@@ -1,0 +1,16 @@
+ok   peer: valid token A->B                               -> accepted
+ok   peer: worker token on peer endpoint                  -> unauthenticated: peer token invalid: wrong token type
+ok   peer: token for audience A replayed to B             -> unauthenticated: peer token invalid: audience mismatch
+ok   peer: expired token                                  -> unauthenticated: peer token invalid: expired
+ok   peer: issuer not a live orchestrator                 -> unauthenticated: peer token invalid: issuer is not a live orchestrator
+ok   peer: token signed with another key                  -> unauthenticated: peer token invalid: bad signature
+ok   peer: peer token with worker domain                  -> unauthenticated: peer token invalid: bad signature
+ok   tls: endpoint of B with A's pin (redirected address) -> unavailable: peer certificate does not match orch record pin
+ok   push: own build                                      -> accepted
+ok   push: build of another worker                        -> unauthenticated: worker token invalid: worker holds no job of this build
+ok   push: peer token as worker token                     -> unauthenticated: worker token invalid: wrong token type
+ok   push: line > 4 KiB                                   -> invalid_argument: invalid line "p0"/2
+ok   push: package name with control chars                -> invalid_argument: invalid line "p0\x1b[2J"/2
+ok   push: 6 MB body                                      -> resource_exhausted: message size 6057441 is larger than configured max 4194304
+flood: 3 s of ~1 MB pushes: accepted=7 rejected=138 (expect ~4 burst + ~3 refill)
+security cases failed: 0

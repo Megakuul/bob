@@ -1,0 +1,23 @@
+{
+ "id": "ok-fixture",
+ "title": "no-op build of the fixture",
+ "source": "S15 ok scenario (ok-fixture)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "no-op build of the fixture"
+ },
+ "command": [
+  "build",
+  "//api:api\n\n#"
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

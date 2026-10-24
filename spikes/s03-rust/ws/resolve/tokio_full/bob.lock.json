@@ -1,0 +1,1389 @@
+{
+ "version": 1,
+ "crates": [
+  {
+   "name": "bitflags",
+   "version": "2.13.2",
+   "checksum": "sha256-Pe1AV8JYuhmeLSY4bTrzeAlX7K7mxO9AQca0uLl8CwY=",
+   "features": {
+    "example_generated": [],
+    "serde": [
+     "serde_core"
+    ],
+    "std": []
+   }
+  },
+  {
+   "name": "bytes",
+   "version": "1.12.1",
+   "checksum": "sha256-/GUqSMNSrvPqOu0yCAUBzz727V2nhgKgIMmRd1sK/wQ=",
+   "features": {
+    "default": [
+     "std"
+    ],
+    "std": []
+   }
+  },
+  {
+   "name": "cfg-if",
+   "version": "1.0.5",
+   "checksum": "sha256-TnZIF1tFqaSFNtZ29o2RgnBpkQKqjatUlt8GkEyRRgA=",
+   "features": {
+    "rustc-dep-of-std": [
+     "core"
+    ]
+   }
+  },
+  {
+   "name": "errno",
+   "version": "0.3.14",
+   "checksum": "sha256-Ocq3FheuDWP1GjbWn4ZjkXNbUWkdvaY89vltBCtj7+s=",
+   "deps": [
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(target_os=\"hermit\")",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(target_os=\"wasi\")",
+     "noDefault": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(unix)",
+     "noDefault": true
+    },
+    {
+     "name": "windows-sys",
+     "crate": "windows-sys@0.61.2",
+     "target": "cfg(windows)",
+     "features": [
+      "Win32_Foundation",
+      "Win32_System_Diagnostics_Debug"
+     ]
+    }
+   ],
+   "features": {
+    "default": [
+     "std"
+    ],
+    "std": [
+     "libc/std"
+    ]
+   }
+  },
+  {
+   "name": "libc",
+   "version": "0.2.191",
+   "checksum": "sha256-Zc2HyabWBTZYCzFq2YVyYQRzClFRyZhF8kkEKO+RJAo=",
+   "features": {
+    "align": [],
+    "const-extern-fn": [],
+    "default": [
+     "std"
+    ],
+    "extra_traits": [],
+    "rustc-dep-of-std": [
+     "align",
+     "rustc-std-workspace-core"
+    ],
+    "std": [],
+    "use_std": [
+     "std"
+    ]
+   }
+  },
+  {
+   "name": "lock_api",
+   "version": "0.4.14",
+   "checksum": "sha256-IkOZ50uHtfNVdRHZjf+LFAibPa2vyra7k+q2fTqs6WU=",
+   "deps": [
+    {
+     "name": "scopeguard",
+     "crate": "scopeguard@1.2.0",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "arc_lock": [],
+    "atomic_usize": [],
+    "default": [
+     "atomic_usize"
+    ],
+    "nightly": []
+   }
+  },
+  {
+   "name": "mio",
+   "version": "1.2.4",
+   "checksum": "sha256-F4jtuH/cCcfiYwRHHi9b6M3vsbaTDW45hfwC/1O/hu4=",
+   "deps": [
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(any(unix, target_os = \"hermit\", target_os = \"wasi\"))"
+    },
+    {
+     "name": "wasi",
+     "crate": "wasi@0.11.1+wasi-snapshot-preview1",
+     "target": "cfg(target_os = \"wasi\")"
+    },
+    {
+     "name": "windows-sys",
+     "crate": "windows-sys@0.61.2",
+     "target": "cfg(windows)",
+     "features": [
+      "Wdk_Foundation",
+      "Wdk_Storage_FileSystem",
+      "Wdk_System_IO",
+      "Win32_Foundation",
+      "Win32_Networking_WinSock",
+      "Win32_Storage_FileSystem",
+      "Win32_Security",
+      "Win32_System_IO",
+      "Win32_System_WindowsProgramming"
+     ]
+    }
+   ],
+   "features": {
+    "default": [
+     "log"
+    ],
+    "net": [],
+    "os-ext": [
+     "os-poll",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_Security"
+    ],
+    "os-poll": []
+   }
+  },
+  {
+   "name": "parking_lot",
+   "version": "0.12.5",
+   "checksum": "sha256-k4V0UyUOMHe9cf+YtqZepmIaGbsPVZqFJIlVrBLEWho=",
+   "deps": [
+    {
+     "name": "lock_api",
+     "crate": "lock_api@0.4.14"
+    },
+    {
+     "name": "parking_lot_core",
+     "crate": "parking_lot_core@0.9.12"
+    }
+   ],
+   "features": {
+    "arc_lock": [
+     "lock_api/arc_lock"
+    ],
+    "deadlock_detection": [
+     "parking_lot_core/deadlock_detection"
+    ],
+    "default": [],
+    "hardware-lock-elision": [],
+    "nightly": [
+     "parking_lot_core/nightly",
+     "lock_api/nightly"
+    ],
+    "owning_ref": [
+     "lock_api/owning_ref"
+    ],
+    "send_guard": [],
+    "serde": [
+     "lock_api/serde"
+    ]
+   }
+  },
+  {
+   "name": "parking_lot_core",
+   "version": "0.9.12",
+   "checksum": "sha256-JiFoWYWi6/HFFogcAmAyrH3q/NoaLJt4UNyB49/LZME=",
+   "deps": [
+    {
+     "name": "cfg-if",
+     "crate": "cfg-if@1.0.5"
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(unix)"
+    },
+    {
+     "name": "redox_syscall",
+     "crate": "redox_syscall@0.5.18",
+     "target": "cfg(target_os = \"redox\")"
+    },
+    {
+     "name": "smallvec",
+     "crate": "smallvec@1.16.3"
+    },
+    {
+     "name": "windows-link",
+     "crate": "windows-link@0.2.1",
+     "target": "cfg(windows)"
+    }
+   ],
+   "features": {
+    "deadlock_detection": [
+     "petgraph",
+     "backtrace"
+    ],
+    "nightly": []
+   }
+  },
+  {
+   "name": "pin-project-lite",
+   "version": "0.2.17",
+   "checksum": "sha256-qJMi356+HBV41onJIxjgcJZ9EEK1Eq++SVGHI/Tm1c0="
+  },
+  {
+   "name": "proc-macro2",
+   "version": "1.0.107",
+   "checksum": "sha256-mF5+ybt0XmzmU1tUTYTWzW962L1xHDmJOK6YO5GnZtk=",
+   "deps": [
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "nightly": [],
+    "proc-macro": [],
+    "span-locations": []
+   }
+  },
+  {
+   "name": "quote",
+   "version": "1.0.47",
+   "checksum": "sha256-H79NsUKkc6jYDCa78YRU7UWL+NJsghnDMdrs/b0HkAE=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro"
+    ]
+   }
+  },
+  {
+   "name": "redox_syscall",
+   "version": "0.5.18",
+   "checksum": "sha256-7SvyVHVRpwU9b9+v2j+TiXlkXESBL7/NoJj6rj8aNi0=",
+   "deps": [
+    {
+     "name": "bitflags",
+     "crate": "bitflags@2.13.2"
+    }
+   ],
+   "features": {
+    "default": [
+     "userspace"
+    ],
+    "rustc-dep-of-std": [
+     "core",
+     "bitflags/rustc-dep-of-std"
+    ],
+    "std": [],
+    "userspace": []
+   }
+  },
+  {
+   "name": "scopeguard",
+   "version": "1.2.0",
+   "checksum": "sha256-lBQ/N3JRCfksJi7Sz15ZvOdJjAG8wVAte5r+Q5pOn0k=",
+   "features": {
+    "default": [
+     "use_std"
+    ],
+    "use_std": []
+   }
+  },
+  {
+   "name": "signal-hook-registry",
+   "version": "1.4.8",
+   "checksum": "sha256-xNtpy6ERCv/A6fe81Iu/h7P0/Hxh/JFVr9TEaes9bBs=",
+   "deps": [
+    {
+     "name": "errno",
+     "crate": "errno@0.3.14"
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191"
+    }
+   ]
+  },
+  {
+   "name": "smallvec",
+   "version": "1.16.3",
+   "checksum": "sha256-Wz3Ir0dPUWqFH/S9Ett4D5SLklCtNyEeTuwLzOpU4Bs=",
+   "features": {
+    "const_generics": [],
+    "const_new": [
+     "const_generics"
+    ],
+    "drain_filter": [],
+    "drain_keep_rest": [
+     "drain_filter"
+    ],
+    "impl_bincode": [
+     "bincode",
+     "unty"
+    ],
+    "may_dangle": [],
+    "specialization": [],
+    "union": [],
+    "write": []
+   }
+  },
+  {
+   "name": "socket2",
+   "version": "0.6.5",
+   "checksum": "sha256-w9Hix/J/jUyxBUKgLEkAXb1ukwlXmdbzvnRfrp+P7dQ=",
+   "deps": [
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(any(unix, target_os = \"wasi\"))"
+    },
+    {
+     "name": "windows-sys",
+     "crate": "windows-sys@0.61.2",
+     "target": "cfg(windows)",
+     "features": [
+      "Win32_Foundation",
+      "Win32_Networking_WinSock",
+      "Win32_System_IO",
+      "Win32_System_Threading",
+      "Win32_System_WindowsProgramming"
+     ]
+    }
+   ],
+   "features": {
+    "all": []
+   }
+  },
+  {
+   "name": "syn",
+   "version": "3.0.9",
+   "checksum": "sha256-14yN7kx78OFGcwlyVv7WFCzp07haQIGJ0HSCRCFFgjs=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "clone-impls": [],
+    "default": [
+     "derive",
+     "parsing",
+     "printing",
+     "clone-impls",
+     "proc-macro"
+    ],
+    "derive": [],
+    "extra-traits": [],
+    "fold": [],
+    "full": [],
+    "parsing": [],
+    "printing": [
+     "dep:quote"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro",
+     "quote?/proc-macro"
+    ],
+    "test": [
+     "syn-test-suite/all-features"
+    ],
+    "visit": [],
+    "visit-mut": []
+   }
+  },
+  {
+   "name": "tokio",
+   "version": "1.54.0",
+   "checksum": "sha256-oMFopHS5W/7P6QimXUvf/FIxRLZJp0wJwoavs11T4Lw=",
+   "deps": [
+    {
+     "name": "bytes",
+     "crate": "bytes@1.12.1",
+     "optional": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(all(tokio_unstable, target_os = \"linux\"))",
+     "optional": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(target_os = \"wasi\")",
+     "optional": true
+    },
+    {
+     "name": "libc",
+     "crate": "libc@0.2.191",
+     "target": "cfg(unix)",
+     "optional": true
+    },
+    {
+     "name": "mio",
+     "crate": "mio@1.2.4",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "mio",
+     "crate": "mio@1.2.4",
+     "target": "cfg(all(tokio_unstable, target_os = \"linux\"))",
+     "optional": true,
+     "noDefault": true,
+     "features": [
+      "os-poll",
+      "os-ext"
+     ]
+    },
+    {
+     "name": "parking_lot",
+     "crate": "parking_lot@0.12.5",
+     "optional": true
+    },
+    {
+     "name": "pin-project-lite",
+     "crate": "pin-project-lite@0.2.17"
+    },
+    {
+     "name": "signal-hook-registry",
+     "crate": "signal-hook-registry@1.4.8",
+     "target": "cfg(unix)",
+     "optional": true
+    },
+    {
+     "name": "socket2",
+     "crate": "socket2@0.6.5",
+     "target": "cfg(any(not(target_family = \"wasm\"), target_os = \"emscripten\", all(target_os = \"wasi\", not(target_env = \"p1\"))))",
+     "optional": true,
+     "features": [
+      "all"
+     ]
+    },
+    {
+     "name": "tokio-macros",
+     "crate": "tokio-macros@2.7.2",
+     "optional": true
+    },
+    {
+     "name": "windows-sys",
+     "crate": "windows-sys@0.61.2",
+     "target": "cfg(windows)",
+     "optional": true
+    }
+   ],
+   "features": {
+    "default": [],
+    "fs": [],
+    "full": [
+     "fs",
+     "io-util",
+     "io-std",
+     "macros",
+     "net",
+     "parking_lot",
+     "process",
+     "rt",
+     "rt-multi-thread",
+     "signal",
+     "sync",
+     "time"
+    ],
+    "io-std": [],
+    "io-uring": [
+     "dep:io-uring",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "dep:slab"
+    ],
+    "io-util": [
+     "bytes"
+    ],
+    "macros": [
+     "tokio-macros"
+    ],
+    "net": [
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "socket2",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_Security",
+     "windows-sys/Win32_Storage_FileSystem",
+     "windows-sys/Win32_System_Pipes",
+     "windows-sys/Win32_System_SystemServices"
+    ],
+    "process": [
+     "bytes",
+     "libc",
+     "mio/os-poll",
+     "mio/os-ext",
+     "mio/net",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Threading",
+     "windows-sys/Win32_System_WindowsProgramming"
+    ],
+    "rt": [],
+    "rt-multi-thread": [
+     "rt"
+    ],
+    "schedule-latency": [],
+    "signal": [
+     "libc",
+     "mio/os-poll",
+     "mio/net",
+     "mio/os-ext",
+     "signal-hook-registry",
+     "windows-sys/Win32_Foundation",
+     "windows-sys/Win32_System_Console"
+    ],
+    "sync": [],
+    "taskdump": [
+     "dep:backtrace"
+    ],
+    "test-util": [
+     "rt",
+     "sync",
+     "time"
+    ],
+    "time": []
+   }
+  },
+  {
+   "name": "tokio-macros",
+   "version": "2.7.2",
+   "checksum": "sha256-eHc6Kjl/RRWCzgaAFZhcMxk89t6ot00qY5/kV7Lwew4=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107"
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47"
+    },
+    {
+     "name": "syn",
+     "crate": "syn@3.0.9",
+     "features": [
+      "full"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "unicode-ident",
+   "version": "1.0.27",
+   "checksum": "sha256-osdU1sM3laHDJHJ0KOWn3ttbBhlfmJC9vLp2DT4kZWM="
+  },
+  {
+   "name": "wasi",
+   "version": "0.11.1+wasi-snapshot-preview1",
+   "checksum": "sha256-zPPsZRqEfrAd5zzK0V632Z+ASF3gQ++y83DNZU9OpEs=",
+   "features": {
+    "default": [
+     "std"
+    ],
+    "rustc-dep-of-std": [
+     "core",
+     "rustc-std-workspace-alloc"
+    ],
+    "std": []
+   }
+  },
+  {
+   "name": "windows-link",
+   "version": "0.2.1",
+   "checksum": "sha256-8IBSIuV/dSHWpi42+pFjvIkazUIvlx3v6X1k5w0KT+U="
+  },
+  {
+   "name": "windows-sys",
+   "version": "0.61.2",
+   "checksum": "sha256-rhNyKby9bN8Pe4CjHfYXZhRQd930lBanKLAss5If8/w=",
+   "deps": [
+    {
+     "name": "windows-link",
+     "crate": "windows-link@0.2.1",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "Wdk": [
+     "Win32_Foundation"
+    ],
+    "Wdk_Devices": [
+     "Wdk"
+    ],
+    "Wdk_Devices_Bluetooth": [
+     "Wdk_Devices"
+    ],
+    "Wdk_Devices_HumanInterfaceDevice": [
+     "Wdk_Devices"
+    ],
+    "Wdk_Foundation": [
+     "Wdk"
+    ],
+    "Wdk_Graphics": [
+     "Wdk"
+    ],
+    "Wdk_Graphics_Direct3D": [
+     "Wdk_Graphics"
+    ],
+    "Wdk_NetworkManagement": [
+     "Wdk"
+    ],
+    "Wdk_NetworkManagement_Ndis": [
+     "Wdk_NetworkManagement"
+    ],
+    "Wdk_NetworkManagement_WindowsFilteringPlatform": [
+     "Wdk_NetworkManagement"
+    ],
+    "Wdk_Storage": [
+     "Wdk"
+    ],
+    "Wdk_Storage_FileSystem": [
+     "Wdk_Storage"
+    ],
+    "Wdk_Storage_FileSystem_Minifilters": [
+     "Wdk_Storage_FileSystem"
+    ],
+    "Wdk_System": [
+     "Wdk"
+    ],
+    "Wdk_System_IO": [
+     "Wdk_System"
+    ],
+    "Wdk_System_Memory": [
+     "Wdk_System"
+    ],
+    "Wdk_System_OfflineRegistry": [
+     "Wdk_System"
+    ],
+    "Wdk_System_Registry": [
+     "Wdk_System"
+    ],
+    "Wdk_System_SystemInformation": [
+     "Wdk_System"
+    ],
+    "Wdk_System_SystemServices": [
+     "Wdk_System"
+    ],
+    "Wdk_System_Threading": [
+     "Wdk_System"
+    ],
+    "Win32": [
+     "Win32_Foundation"
+    ],
+    "Win32_Data": [
+     "Win32"
+    ],
+    "Win32_Data_HtmlHelp": [
+     "Win32_Data"
+    ],
+    "Win32_Data_RightsManagement": [
+     "Win32_Data"
+    ],
+    "Win32_Devices": [
+     "Win32"
+    ],
+    "Win32_Devices_AllJoyn": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Beep": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_BiometricFramework": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Bluetooth": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Cdrom": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Communication": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_DeviceAndDriverInstallation": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_DeviceQuery": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Display": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Dvd": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Enumeration": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Enumeration_Pnp": [
+     "Win32_Devices_Enumeration"
+    ],
+    "Win32_Devices_Fax": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_HumanInterfaceDevice": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Nfc": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Nfp": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_PortableDevices": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Properties": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Pwm": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Sensors": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_SerialCommunication": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Tapi": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_Usb": [
+     "Win32_Devices"
+    ],
+    "Win32_Devices_WebServicesOnDevices": [
+     "Win32_Devices"
+    ],
+    "Win32_Foundation": [
+     "Win32"
+    ],
+    "Win32_Gaming": [
+     "Win32"
+    ],
+    "Win32_Globalization": [
+     "Win32"
+    ],
+    "Win32_Graphics": [
+     "Win32"
+    ],
+    "Win32_Graphics_Dwm": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Gdi": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_GdiPlus": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Hlsl": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_OpenGL": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Printing": [
+     "Win32_Graphics"
+    ],
+    "Win32_Graphics_Printing_PrintTicket": [
+     "Win32_Graphics_Printing"
+    ],
+    "Win32_Management": [
+     "Win32"
+    ],
+    "Win32_Management_MobileDeviceManagementRegistration": [
+     "Win32_Management"
+    ],
+    "Win32_Media": [
+     "Win32"
+    ],
+    "Win32_Media_Audio": [
+     "Win32_Media"
+    ],
+    "Win32_Media_DxMediaObjects": [
+     "Win32_Media"
+    ],
+    "Win32_Media_KernelStreaming": [
+     "Win32_Media"
+    ],
+    "Win32_Media_Multimedia": [
+     "Win32_Media"
+    ],
+    "Win32_Media_Streaming": [
+     "Win32_Media"
+    ],
+    "Win32_Media_WindowsMediaFormat": [
+     "Win32_Media"
+    ],
+    "Win32_NetworkManagement": [
+     "Win32"
+    ],
+    "Win32_NetworkManagement_Dhcp": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Dns": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_InternetConnectionWizard": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_IpHelper": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Multicast": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Ndis": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetBios": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetManagement": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetShell": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_NetworkDiagnosticsFramework": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_P2P": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_QoS": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Rras": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_Snmp": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WNet": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WebDav": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WiFi": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsConnectionManager": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsFilteringPlatform": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsFirewall": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_NetworkManagement_WindowsNetworkVirtualization": [
+     "Win32_NetworkManagement"
+    ],
+    "Win32_Networking": [
+     "Win32"
+    ],
+    "Win32_Networking_ActiveDirectory": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_Clustering": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_HttpServer": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_Ldap": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WebSocket": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WinHttp": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WinInet": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WinSock": [
+     "Win32_Networking"
+    ],
+    "Win32_Networking_WindowsWebServices": [
+     "Win32_Networking"
+    ],
+    "Win32_Security": [
+     "Win32"
+    ],
+    "Win32_Security_AppLocker": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Authentication": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Authentication_Identity": [
+     "Win32_Security_Authentication"
+    ],
+    "Win32_Security_Authorization": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Credentials": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Cryptography": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Cryptography_Catalog": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_Cryptography_Certificates": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_Cryptography_Sip": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_Cryptography_UI": [
+     "Win32_Security_Cryptography"
+    ],
+    "Win32_Security_DiagnosticDataQuery": [
+     "Win32_Security"
+    ],
+    "Win32_Security_DirectoryServices": [
+     "Win32_Security"
+    ],
+    "Win32_Security_EnterpriseData": [
+     "Win32_Security"
+    ],
+    "Win32_Security_ExtensibleAuthenticationProtocol": [
+     "Win32_Security"
+    ],
+    "Win32_Security_Isolation": [
+     "Win32_Security"
+    ],
+    "Win32_Security_LicenseProtection": [
+     "Win32_Security"
+    ],
+    "Win32_Security_NetworkAccessProtection": [
+     "Win32_Security"
+    ],
+    "Win32_Security_WinTrust": [
+     "Win32_Security"
+    ],
+    "Win32_Security_WinWlx": [
+     "Win32_Security"
+    ],
+    "Win32_Storage": [
+     "Win32"
+    ],
+    "Win32_Storage_Cabinets": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_CloudFilters": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Compression": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_DistributedFileSystem": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_FileHistory": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_FileSystem": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Imapi": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_IndexServer": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_InstallableFileSystems": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_IscsiDisc": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Jet": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Nvme": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_OfflineFiles": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_OperationRecorder": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Packaging": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Packaging_Appx": [
+     "Win32_Storage_Packaging"
+    ],
+    "Win32_Storage_ProjectedFileSystem": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_StructuredStorage": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Vhd": [
+     "Win32_Storage"
+    ],
+    "Win32_Storage_Xps": [
+     "Win32_Storage"
+    ],
+    "Win32_System": [
+     "Win32"
+    ],
+    "Win32_System_AddressBook": [
+     "Win32_System"
+    ],
+    "Win32_System_Antimalware": [
+     "Win32_System"
+    ],
+    "Win32_System_ApplicationInstallationAndServicing": [
+     "Win32_System"
+    ],
+    "Win32_System_ApplicationVerifier": [
+     "Win32_System"
+    ],
+    "Win32_System_ClrHosting": [
+     "Win32_System"
+    ],
+    "Win32_System_Com": [
+     "Win32_System"
+    ],
+    "Win32_System_Com_Marshal": [
+     "Win32_System_Com"
+    ],
+    "Win32_System_Com_StructuredStorage": [
+     "Win32_System_Com"
+    ],
+    "Win32_System_Com_Urlmon": [
+     "Win32_System_Com"
+    ],
+    "Win32_System_ComponentServices": [
+     "Win32_System"
+    ],
+    "Win32_System_Console": [
+     "Win32_System"
+    ],
+    "Win32_System_CorrelationVector": [
+     "Win32_System"
+    ],
+    "Win32_System_DataExchange": [
+     "Win32_System"
+    ],
+    "Win32_System_DeploymentServices": [
+     "Win32_System"
+    ],
+    "Win32_System_DeveloperLicensing": [
+     "Win32_System"
+    ],
+    "Win32_System_Diagnostics": [
+     "Win32_System"
+    ],
+    "Win32_System_Diagnostics_Ceip": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_Debug": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_Debug_Extensions": [
+     "Win32_System_Diagnostics_Debug"
+    ],
+    "Win32_System_Diagnostics_Etw": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_ProcessSnapshotting": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_ToolHelp": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_Diagnostics_TraceLogging": [
+     "Win32_System_Diagnostics"
+    ],
+    "Win32_System_DistributedTransactionCoordinator": [
+     "Win32_System"
+    ],
+    "Win32_System_Environment": [
+     "Win32_System"
+    ],
+    "Win32_System_ErrorReporting": [
+     "Win32_System"
+    ],
+    "Win32_System_EventCollector": [
+     "Win32_System"
+    ],
+    "Win32_System_EventLog": [
+     "Win32_System"
+    ],
+    "Win32_System_EventNotificationService": [
+     "Win32_System"
+    ],
+    "Win32_System_GroupPolicy": [
+     "Win32_System"
+    ],
+    "Win32_System_HostCompute": [
+     "Win32_System"
+    ],
+    "Win32_System_HostComputeNetwork": [
+     "Win32_System"
+    ],
+    "Win32_System_HostComputeSystem": [
+     "Win32_System"
+    ],
+    "Win32_System_Hypervisor": [
+     "Win32_System"
+    ],
+    "Win32_System_IO": [
+     "Win32_System"
+    ],
+    "Win32_System_Iis": [
+     "Win32_System"
+    ],
+    "Win32_System_Ioctl": [
+     "Win32_System"
+    ],
+    "Win32_System_JobObjects": [
+     "Win32_System"
+    ],
+    "Win32_System_Js": [
+     "Win32_System"
+    ],
+    "Win32_System_Kernel": [
+     "Win32_System"
+    ],
+    "Win32_System_LibraryLoader": [
+     "Win32_System"
+    ],
+    "Win32_System_Mailslots": [
+     "Win32_System"
+    ],
+    "Win32_System_Mapi": [
+     "Win32_System"
+    ],
+    "Win32_System_Memory": [
+     "Win32_System"
+    ],
+    "Win32_System_Memory_NonVolatile": [
+     "Win32_System_Memory"
+    ],
+    "Win32_System_MessageQueuing": [
+     "Win32_System"
+    ],
+    "Win32_System_MixedReality": [
+     "Win32_System"
+    ],
+    "Win32_System_Ole": [
+     "Win32_System"
+    ],
+    "Win32_System_PasswordManagement": [
+     "Win32_System"
+    ],
+    "Win32_System_Performance": [
+     "Win32_System"
+    ],
+    "Win32_System_Performance_HardwareCounterProfiling": [
+     "Win32_System_Performance"
+    ],
+    "Win32_System_Pipes": [
+     "Win32_System"
+    ],
+    "Win32_System_Power": [
+     "Win32_System"
+    ],
+    "Win32_System_ProcessStatus": [
+     "Win32_System"
+    ],
+    "Win32_System_Recovery": [
+     "Win32_System"
+    ],
+    "Win32_System_Registry": [
+     "Win32_System"
+    ],
+    "Win32_System_RemoteDesktop": [
+     "Win32_System"
+    ],
+    "Win32_System_RemoteManagement": [
+     "Win32_System"
+    ],
+    "Win32_System_RestartManager": [
+     "Win32_System"
+    ],
+    "Win32_System_Restore": [
+     "Win32_System"
+    ],
+    "Win32_System_Rpc": [
+     "Win32_System"
+    ],
+    "Win32_System_Search": [
+     "Win32_System"
+    ],
+    "Win32_System_Search_Common": [
+     "Win32_System_Search"
+    ],
+    "Win32_System_SecurityCenter": [
+     "Win32_System"
+    ],
+    "Win32_System_Services": [
+     "Win32_System"
+    ],
+    "Win32_System_SetupAndMigration": [
+     "Win32_System"
+    ],
+    "Win32_System_Shutdown": [
+     "Win32_System"
+    ],
+    "Win32_System_StationsAndDesktops": [
+     "Win32_System"
+    ],
+    "Win32_System_SubsystemForLinux": [
+     "Win32_System"
+    ],
+    "Win32_System_SystemInformation": [
+     "Win32_System"
+    ],
+    "Win32_System_SystemServices": [
+     "Win32_System"
+    ],
+    "Win32_System_Threading": [
+     "Win32_System"
+    ],
+    "Win32_System_Time": [
+     "Win32_System"
+    ],
+    "Win32_System_TpmBaseServices": [
+     "Win32_System"
+    ],
+    "Win32_System_UserAccessLogging": [
+     "Win32_System"
+    ],
+    "Win32_System_Variant": [
+     "Win32_System"
+    ],
+    "Win32_System_VirtualDosMachines": [
+     "Win32_System"
+    ],
+    "Win32_System_WindowsProgramming": [
+     "Win32_System"
+    ],
+    "Win32_System_Wmi": [
+     "Win32_System"
+    ],
+    "Win32_UI": [
+     "Win32"
+    ],
+    "Win32_UI_Accessibility": [
+     "Win32_UI"
+    ],
+    "Win32_UI_ColorSystem": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Controls": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Controls_Dialogs": [
+     "Win32_UI_Controls"
+    ],
+    "Win32_UI_HiDpi": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Input": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Input_Ime": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_KeyboardAndMouse": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_Pointer": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_Touch": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_Input_XboxController": [
+     "Win32_UI_Input"
+    ],
+    "Win32_UI_InteractionContext": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Magnification": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Shell": [
+     "Win32_UI"
+    ],
+    "Win32_UI_Shell_Common": [
+     "Win32_UI_Shell"
+    ],
+    "Win32_UI_Shell_PropertiesSystem": [
+     "Win32_UI_Shell"
+    ],
+    "Win32_UI_TabletPC": [
+     "Win32_UI"
+    ],
+    "Win32_UI_TextServices": [
+     "Win32_UI"
+    ],
+    "Win32_UI_WindowsAndMessaging": [
+     "Win32_UI"
+    ],
+    "Win32_Web": [
+     "Win32"
+    ],
+    "Win32_Web_InternetExplorer": [
+     "Win32_Web"
+    ],
+    "default": [],
+    "docs": []
+   }
+  }
+ ]
+}

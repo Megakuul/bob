@@ -1,0 +1,281 @@
+{
+ "version": 1,
+ "crates": [
+  {
+   "name": "itoa",
+   "version": "1.0.18",
+   "checksum": "sha256-j0KmDL35qX9dIwXwiofcTgkwjRJ20oyGnGhNd3doVoI="
+  },
+  {
+   "name": "memchr",
+   "version": "2.8.3",
+   "checksum": "sha256-z4uvHFXmL/ys56nwb0vZzT8MS+sCLTs2cla5G4dRPZg=",
+   "features": {
+    "alloc": [],
+    "default": [
+     "std"
+    ],
+    "libc": [],
+    "logging": [
+     "dep:log"
+    ],
+    "rustc-dep-of-std": [
+     "core"
+    ],
+    "std": [
+     "alloc"
+    ],
+    "use_std": [
+     "std"
+    ]
+   }
+  },
+  {
+   "name": "proc-macro2",
+   "version": "1.0.107",
+   "checksum": "sha256-mF5+ybt0XmzmU1tUTYTWzW962L1xHDmJOK6YO5GnZtk=",
+   "deps": [
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "nightly": [],
+    "proc-macro": [],
+    "span-locations": []
+   }
+  },
+  {
+   "name": "quote",
+   "version": "1.0.47",
+   "checksum": "sha256-H79NsUKkc6jYDCa78YRU7UWL+NJsghnDMdrs/b0HkAE=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    }
+   ],
+   "features": {
+    "default": [
+     "proc-macro"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro"
+    ]
+   }
+  },
+  {
+   "name": "serde",
+   "version": "1.0.229",
+   "checksum": "sha256-QUhZCv662jhmiPGHc9phd5K/LvA//B5MvSsdRbAj4Lo=",
+   "deps": [
+    {
+     "name": "serde_core",
+     "crate": "serde_core@1.0.229",
+     "noDefault": true,
+     "features": [
+      "result"
+     ]
+    }
+   ],
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "default": [
+     "std"
+    ],
+    "derive": [
+     "serde_derive"
+    ],
+    "rc": [
+     "serde_core/rc"
+    ],
+    "std": [
+     "serde_core/std"
+    ],
+    "unstable": [
+     "serde_core/unstable"
+    ]
+   }
+  },
+  {
+   "name": "serde_core",
+   "version": "1.0.229",
+   "checksum": "sha256-Z9yiycUeWKR5Gkse1YMIs5xkIk00mpNatQOao2CUKkg=",
+   "deps": [
+    {
+     "name": "serde_derive",
+     "crate": "serde_derive@1.0.229",
+     "target": "cfg(any())"
+    }
+   ],
+   "features": {
+    "alloc": [],
+    "default": [
+     "std",
+     "result"
+    ],
+    "rc": [],
+    "result": [],
+    "std": [],
+    "unstable": []
+   }
+  },
+  {
+   "name": "serde_derive",
+   "version": "1.0.229",
+   "checksum": "sha256-56XXEmOlp9R7Qfaz8GuidvEMwYsJMfF5n3EFeOIwk0g=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true,
+     "features": [
+      "proc-macro"
+     ]
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "noDefault": true,
+     "features": [
+      "proc-macro"
+     ]
+    },
+    {
+     "name": "syn",
+     "crate": "syn@3.0.9",
+     "noDefault": true,
+     "features": [
+      "clone-impls",
+      "derive",
+      "parsing",
+      "printing",
+      "proc-macro"
+     ]
+    }
+   ],
+   "features": {
+    "default": [],
+    "deserialize_in_place": []
+   }
+  },
+  {
+   "name": "serde_json",
+   "version": "1.0.154",
+   "checksum": "sha256-5+nMixuFJkB0+8wCqIaAxAlrHkffj3OdzrA79ILwS9Y=",
+   "deps": [
+    {
+     "name": "itoa",
+     "crate": "itoa@1.0.18"
+    },
+    {
+     "name": "memchr",
+     "crate": "memchr@2.8.3",
+     "noDefault": true
+    },
+    {
+     "name": "serde",
+     "crate": "serde@1.0.229",
+     "target": "cfg(any())",
+     "noDefault": true
+    },
+    {
+     "name": "serde_core",
+     "crate": "serde_core@1.0.229",
+     "noDefault": true
+    },
+    {
+     "name": "zmij",
+     "crate": "zmij@1.0.23"
+    }
+   ],
+   "features": {
+    "alloc": [
+     "serde_core/alloc"
+    ],
+    "arbitrary_precision": [],
+    "default": [
+     "std"
+    ],
+    "float_roundtrip": [],
+    "preserve_order": [
+     "indexmap",
+     "alloc",
+     "dep:foldhash"
+    ],
+    "raw_value": [],
+    "std": [
+     "memchr/std",
+     "serde_core/std"
+    ],
+    "unbounded_depth": []
+   }
+  },
+  {
+   "name": "syn",
+   "version": "3.0.9",
+   "checksum": "sha256-14yN7kx78OFGcwlyVv7WFCzp07haQIGJ0HSCRCFFgjs=",
+   "deps": [
+    {
+     "name": "proc-macro2",
+     "crate": "proc-macro2@1.0.107",
+     "noDefault": true
+    },
+    {
+     "name": "quote",
+     "crate": "quote@1.0.47",
+     "optional": true,
+     "noDefault": true
+    },
+    {
+     "name": "unicode-ident",
+     "crate": "unicode-ident@1.0.27"
+    }
+   ],
+   "features": {
+    "clone-impls": [],
+    "default": [
+     "derive",
+     "parsing",
+     "printing",
+     "clone-impls",
+     "proc-macro"
+    ],
+    "derive": [],
+    "extra-traits": [],
+    "fold": [],
+    "full": [],
+    "parsing": [],
+    "printing": [
+     "dep:quote"
+    ],
+    "proc-macro": [
+     "proc-macro2/proc-macro",
+     "quote?/proc-macro"
+    ],
+    "test": [
+     "syn-test-suite/all-features"
+    ],
+    "visit": [],
+    "visit-mut": []
+   }
+  },
+  {
+   "name": "unicode-ident",
+   "version": "1.0.27",
+   "checksum": "sha256-osdU1sM3laHDJHJ0KOWn3ttbBhlfmJC9vLp2DT4kZWM="
+  },
+  {
+   "name": "zmij",
+   "version": "1.0.23",
+   "checksum": "sha256-KWZtCrv60ePcTc9hRHMN06OrIlu72sgzGTRbG0TM/Bs="
+  }
+ ]
+}

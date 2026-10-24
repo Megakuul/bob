@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:network"]}
+{"v":1,"event":"package.start","label":"//tools:network","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2009","class":"build","message":"//tools:network tried to use the network during the build","label":"//tools:network","definedAt":"fixture/tools/bob.go:12:15","excerpt":["bash: connect: Network is unreachable"],"hint":"builds are offline; declare the download as a fetched dependency so bob.lock pins it","log":"bob log //tools:network","args":{"label":"//tools:network"}}}
+{"v":1,"event":"package.finish","label":"//tools:network","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

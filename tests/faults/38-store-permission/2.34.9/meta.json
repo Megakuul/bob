@@ -1,0 +1,52 @@
+{
+  "name": "store-permission",
+  "nix": "2.34.9",
+  "command": [
+    "runuser",
+    "-u",
+    "bobtest",
+    "--",
+    "/home/bobtest/s15/nix-2.34.9",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/dx6pm6lgliahr3lsqkcqvafjwlg3v7cp-tools-hook.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 208,
+    "nixVersion": "2.34.9"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/dx6pm6lgliahr3lsqkcqvafjwlg3v7cp-tools-hook.drv": {
+        "label": "//tools:hook",
+        "definedAt": "fixture/tools/bob.go:24:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/qbxnlpyz5df9ya63k330ay9ly2qw2y12-tools-hook": "/nix/store/dx6pm6lgliahr3lsqkcqvafjwlg3v7cp-tools-hook.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:hook"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

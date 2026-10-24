@@ -1,0 +1,3 @@
+✗ //libfoo:foo  nixpkgs has no package "opensssl" at revision cd4ea8d57de1   (defined at fixture.go:101)
+  check the spelling, or search for it: bob search opensssl
+exit=1

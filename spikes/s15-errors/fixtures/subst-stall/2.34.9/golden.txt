@@ -1,0 +1,7 @@
+FAILED  //tools:payload
+
+error[BOB-E-4003]: cache http://127.0.0.1:21514 is unreachable: timed out
+  package defined at fixture/tools/bob.go:23:15
+  hint: bob builds locally when a cache is down; check the network or the cache URL
+
+bob: 1 failed (exit 4)

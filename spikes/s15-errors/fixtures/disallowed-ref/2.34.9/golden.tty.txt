@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:leak-ref
+
+[31;1merror[BOB-E-9003]:[0m [1m//tools:leak-ref refers to //tools:base, which it must not reference[0m
+  package defined at fixture/tools/bob.go:20:15
+  [32mhint:[0m this is a bob bug (missing fixup); please report it
+  [2mfull log: bob log //tools:leak-ref[0m
+
+[31;1mbob: 1 failed[0m (exit 70)

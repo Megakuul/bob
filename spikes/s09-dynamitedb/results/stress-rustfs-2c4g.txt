@@ -1,0 +1,3 @@
+[rustfs] same-job race (cas=put keys=true pick=50): 20 claimers x 20 rounds, histogram(winners->rounds)=map[1:20], winner claim latency p50=72.3ms
+[rustfs] drain (cas=put keys=true pick=50): jobs=300 claimed=300 double-claims=0 leftLive=0 enqueue=1.079s (278/s) drain=9.603s (31 claims/s)
+[rustfs]   claimer requests (claim+complete, incl. 60 empty polls): LIST=360 GET=1722 PUT=904 DELETE=608 other=0 (412=12 404=0 5xx=0); per job=12.0; CAS conflicts=185 staleHints=306 ambiguousWins=0

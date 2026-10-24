@@ -1,0 +1,9 @@
+[31;1m✗[0m //tools:syntax
+
+[31;1merror[BOB-E-9001]:[0m [1mbob's builder for //tools:syntax is broken: its build script has a syntax error[0m
+  package defined at fixture/tools/bob.go:16:15
+   [2m│[0m bash: -c: line 2: syntax error near unexpected token `then'
+  [32mhint:[0m this is a bob bug; please report it with bob log //tools:syntax
+  [2mfull log: bob log //tools:syntax[0m
+
+[31;1mbob: 1 failed[0m (exit 70)

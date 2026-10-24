@@ -1,0 +1,3 @@
+✗ //libfoo:foo  nixpkgs package "hyper" is marked broken at this revision   (defined at fixture.go:101)
+  pin another nixpkgs revision or use a different package
+exit=1

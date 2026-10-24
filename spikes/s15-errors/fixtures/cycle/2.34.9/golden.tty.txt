@@ -1,0 +1,7 @@
+[31;1merror[BOB-E-1006]:[0m [1mdependency cycle: //api:api → //libfoo:foo → //api:api[0m
+  package defined at fixture/api/bob.go:13:11
+   [2m│[0m //api:api  defined at fixture/api/bob.go:13:11
+   [2m│[0m //libfoo:foo  defined at fixture/libfoo/bob.go:8:11
+  [32mhint:[0m a package cannot depend on itself; move the shared code into its own package
+
+[31;1mbob: nothing was built[0m (exit 3)

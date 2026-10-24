@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Probe the SeaweedFS filer/volume/master ports directly (no S3 credentials). $1 = label.
+. "$(dirname "$0")/env.sh"
+F=http://127.0.0.1:$WEED_FILER; G="$S11/.tools/grpcurl/bin/grpcurl"
+AWS_ACCESS_KEY_ID=$ROOT_AK AWS_SECRET_ACCESS_KEY=$ROOT_SK AWS_DEFAULT_REGION=us-east-1 $AWS --endpoint-url http://127.0.0.1:$WEED_S3 s3api put-object --bucket bob-control --key user/secret --body /etc/hostname >/dev/null
+echo "| $1 | filer HTTP GET $(curl -s -o /dev/null -w '%{http_code}' $F/buckets/bob-control/user/secret) | filer HTTP PUT $(curl -s -o /dev/null -w '%{http_code}' -X PUT --data-binary x $F/buckets/bob-control/user/evil) | volume upload $(curl -s -o /dev/null -w '%{http_code}' -F file=@/etc/hostname http://127.0.0.1:$WEED_VOLUME/$(curl -s http://127.0.0.1:$WEED_MASTER/dir/assign | jq -r .fid)) | gRPC plaintext ListEntries $(timeout 15 $G -plaintext -d '{"directory":"/buckets/bob-control/user"}' 127.0.0.1:$((WEED_FILER+10)) filer_pb.SeaweedFiler/ListEntries >/dev/null 2>&1 && echo OPEN || echo refused) | gRPC plaintext CreateEntry $(timeout 15 $G -plaintext -d '{"directory":"/buckets/bob-control/user","entry":{"name":"grpc-evil","content":"cHduZWQ=","attributes":{"fileSize":5,"fileMode":432}}}' 127.0.0.1:$((WEED_FILER+10)) filer_pb.SeaweedFiler/CreateEntry >/dev/null 2>&1 && echo OPEN || echo refused) |"

@@ -1,0 +1,28 @@
+{
+ "id": "25-sandbox-network",
+ "title": "network access in the sandbox",
+ "source": "S15 fault 25 (sandbox-network)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "build step opens a network connection"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2009",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:12:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

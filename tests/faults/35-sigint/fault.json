@@ -1,0 +1,25 @@
+{
+ "id": "35-sigint",
+ "title": "Ctrl-C",
+ "source": "S15 fault 35 (sigint)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "signal",
+  "describe": "SIGINT to the build"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-8001",
+ "exit": 130,
+ "position": "none",
+ "excerpt": true,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "interrupted by the user"
+ ]
+}

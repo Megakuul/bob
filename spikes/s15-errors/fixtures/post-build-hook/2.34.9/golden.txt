@@ -1,0 +1,9 @@
+built   //tools:hook
+
+error[BOB-E-4007]: uploading //tools:hook to the cache failed
+  package defined at fixture/tools/bob.go:24:15
+   | uploading …/tools-hook
+   | upload failed: 503
+  hint: the build itself succeeded; the worker retries the upload
+
+bob: 1 built (exit 4)

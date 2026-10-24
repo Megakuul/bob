@@ -1,0 +1,19 @@
+diff --git a/svc/bob.go b/svc/bob.go
+index eb73ab3..c7a2ce4 100644
+--- a/svc/bob.go
++++ b/svc/bob.go
+@@ -16,10 +16,12 @@ import (
+ // (gqlgen) and gen/rest (oapi-codegen) (label //svc:module).
+ var Module = bob.Define(func(p *bob.P) *golang.Module {
+ 	return golang.NewModule(p, golang.ModuleOpts{
+-		Path: "example.com/svc",
+-		Go:   "1.26",
++		Path:    "example.com/svc",
++		Go:      "1.26",
++		Require: []golang.Requirement{golang.Require("github.com/99designs/gqlgen", "v0.17.89")},
+ 		Generated: []golang.Generated{
+ 			connect.Go(greetv1.Greet(p), connect.GoOpts{}),
++			//bob:fault 69-toolchain-generator
+ 			graphql.Gqlgen(schema.API(p), graphql.GqlgenOpts{}),
+ 			openapi.Go(schema.Items(p), openapi.GoOpts{Package: "rest", Server: openapi.StdHTTP}),
+ 		},

@@ -1,0 +1,28 @@
+{
+ "id": "24-silent-timeout",
+ "title": "silence timeout",
+ "source": "S15 fault 24 (silent-timeout)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "limit",
+  "describe": "max silent time 3 s"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2008",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:11:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "timed out after"
+ ]
+}

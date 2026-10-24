@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:payload"]}
+{"v":1,"event":"package.start","label":"//tools:payload","action":"download","cache":"http://127.0.0.1:21513"}
+{"v":1,"event":"error","error":{"code":"BOB-E-4002","class":"cache","message":"cache http://127.0.0.1:21513 lists a package but cannot deliver it (HTTP 404)","label":"//tools:payload","definedAt":"fixture/tools/bob.go:23:15","cause":"nar/1lr5ld5ra5pp64c68xbpm7jx77iz0v8nshir2w432fa43dbq3j9d.nar is missing","hint":"the cache is inconsistent; bob built locally instead or report it to the cache admin","args":{"cache":"http://127.0.0.1:21513","status":"404","what":"a package"}}}
+{"v":1,"event":"package.finish","label":"//tools:payload","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":4,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":19}}

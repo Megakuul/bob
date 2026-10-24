@@ -1,0 +1,582 @@
+{
+ "01-unknown-attr": {
+  "codes": [
+   "BOB-E-1001"
+  ],
+  "exit": 3
+ },
+ "02-broken-pkg": {
+  "codes": [
+   "BOB-E-1002"
+  ],
+  "exit": 3
+ },
+ "03-insecure-pkg": {
+  "codes": [
+   "BOB-E-1003"
+  ],
+  "exit": 3
+ },
+ "04-cycle": {
+  "codes": [
+   "BOB-E-1006"
+  ],
+  "exit": 3
+ },
+ "05-go-too-new": {
+  "codes": [
+   "BOB-E-1008"
+  ],
+  "exit": 3
+ },
+ "06-cxx-compile": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "07-c-compile": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "08-go-compile": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "09-rust-compile": {
+  "codes": [
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "10-rust-missing-crate": {
+  "codes": [
+   "BOB-E-2010"
+  ],
+  "exit": 1
+ },
+ "11-link-error": {
+  "codes": [
+   "BOB-E-2002"
+  ],
+  "exit": 1
+ },
+ "12-missing-header": {
+  "codes": [
+   "BOB-E-2003"
+  ],
+  "exit": 1
+ },
+ "13-missing-lib": {
+  "codes": [
+   "BOB-E-2004"
+  ],
+  "exit": 1
+ },
+ "14-go-test-failure": {
+  "codes": [
+   "BOB-E-2005"
+  ],
+  "exit": 1
+ },
+ "15-two-failures": {
+  "codes": [
+   "BOB-E-2001",
+   "BOB-E-2001"
+  ],
+  "exit": 1
+ },
+ "16-wrong-hash": {
+  "codes": [
+   "BOB-E-3001"
+  ],
+  "exit": 4
+ },
+ "17-fetch-404": {
+  "codes": [
+   "BOB-E-3003"
+  ],
+  "exit": 4
+ },
+ "18-fetch-dns": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "19-fetch-refused": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "20-fetch-500": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "21-fetch-stall": {
+  "codes": [
+   "BOB-E-3002"
+  ],
+  "exit": 4
+ },
+ "22-build-timeout": {
+  "codes": [
+   "BOB-E-2007"
+  ],
+  "exit": 1
+ },
+ "23-timeout-keep-going": {
+  "codes": [
+   "BOB-E-2007"
+  ],
+  "exit": 1
+ },
+ "24-silent-timeout": {
+  "codes": [
+   "BOB-E-2008"
+  ],
+  "exit": 1
+ },
+ "25-sandbox-network": {
+  "codes": [
+   "BOB-E-2009"
+  ],
+  "exit": 1
+ },
+ "26-sandbox-nochroot": {
+  "codes": [
+   "BOB-E-9004"
+  ],
+  "exit": 70
+ },
+ "27-builder-syntax": {
+  "codes": [
+   "BOB-E-9001"
+  ],
+  "exit": 70
+ },
+ "28-builder-missing": {
+  "codes": [
+   "BOB-E-9001"
+  ],
+  "exit": 70
+ },
+ "29-no-output": {
+  "codes": [
+   "BOB-E-9002"
+  ],
+  "exit": 70
+ },
+ "30-disallowed-ref": {
+  "codes": [
+   "BOB-E-9003"
+  ],
+  "exit": 70
+ },
+ "31-wrong-platform": {
+  "codes": [
+   "BOB-E-1010"
+  ],
+  "exit": 3
+ },
+ "32-log-flood": {
+  "codes": [
+   "BOB-E-2011"
+  ],
+  "exit": 1
+ },
+ "33-oom": {
+  "codes": [
+   "BOB-E-6002"
+  ],
+  "exit": 6
+ },
+ "34-oom-policy-stop": {
+  "codes": [
+   "BOB-E-8001"
+  ],
+  "exit": 130,
+  "alt": [
+   {
+    "codes": [
+     "BOB-E-6003"
+    ],
+    "exit": 6
+   }
+  ]
+ },
+ "35-sigint": {
+  "codes": [
+   "BOB-E-8001"
+  ],
+  "exit": 130
+ },
+ "36-sigkill": {
+  "codes": [
+   "BOB-E-6003"
+  ],
+  "exit": 6
+ },
+ "37-post-build-hook": {
+  "codes": [
+   "BOB-E-4007"
+  ],
+  "exit": 4
+ },
+ "38-store-permission": {
+  "codes": [
+   "BOB-E-7002"
+  ],
+  "exit": 7
+ },
+ "39-upstream-fail": {
+  "codes": [
+   "BOB-E-5001"
+  ],
+  "exit": 5
+ },
+ "40-disk-full": {
+  "codes": [
+   "BOB-E-6001"
+  ],
+  "exit": 6
+ },
+ "41-corrupt-store": {
+  "codes": [
+   "BOB-E-7003"
+  ],
+  "exit": 7
+ },
+ "42-cache-401": {
+  "codes": [
+   "BOB-E-4001"
+  ],
+  "exit": 4
+ },
+ "43-cache-401-fallback": {
+  "codes": [],
+  "exit": 0,
+  "warnings": [
+   "BOB-E-4001"
+  ]
+ },
+ "44-cache-nar404": {
+  "codes": [
+   "BOB-E-4002"
+  ],
+  "exit": 4
+ },
+ "45-cache-refused": {
+  "codes": [
+   "BOB-E-4003"
+  ],
+  "exit": 4
+ },
+ "46-cache-stall": {
+  "codes": [
+   "BOB-E-4003"
+  ],
+  "exit": 4
+ },
+ "47-cache-untrusted": {
+  "codes": [
+   "BOB-E-4004"
+  ],
+  "exit": 4
+ },
+ "48-cache-corrupt": {
+  "codes": [
+   "BOB-E-4005"
+  ],
+  "exit": 4
+ },
+ "49-gomod-drift": {
+  "codes": [
+   "BOB-E-1011"
+  ],
+  "exit": 3,
+  "messages": [
+   "generated file api/go.mod was edited by hand"
+  ]
+ },
+ "50-lock-outdated": {
+  "codes": [
+   "BOB-E-1012"
+  ],
+  "exit": 3
+ },
+ "51-lock-conflict": {
+  "codes": [
+   "BOB-E-1019"
+  ],
+  "exit": 3,
+  "messages": [
+   "bob.lock cannot be read: "
+  ]
+ },
+ "52-npm-script-denied": {
+  "codes": [
+   "BOB-E-2013"
+  ],
+  "exit": 1
+ },
+ "53-npm-undeclared-peer": {
+  "codes": [
+   "BOB-E-2014"
+  ],
+  "exit": 1
+ },
+ "54-prune-needed-file": {
+  "codes": [
+   "BOB-E-2015"
+  ],
+  "exit": 1
+ },
+ "55-archive-dotdot": {
+  "codes": [
+   "BOB-E-3004"
+  ],
+  "exit": 4
+ },
+ "56-archive-absolute": {
+  "codes": [
+   "BOB-E-3004"
+  ],
+  "exit": 4
+ },
+ "57-archive-device": {
+  "codes": [
+   "BOB-E-3004"
+  ],
+  "exit": 4
+ },
+ "58-bobgo-r1": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: the first line must be \"//go:build bob\" so that go build, go vet and go test ignore it"
+  ]
+ },
+ "59-bobgo-r2": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: package greeting, but the Go code in this directory is package greet; bob.go must use package greet"
+  ]
+ },
+ "60-bobgo-r3": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: imports the build definitions of tools/version/, which is a main package and cannot be imported; define the shared package in a bob.go of a non-main directory"
+  ]
+ },
+ "61-bobgo-r4": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "Hello is also declared at internal/greet/greet.go:5; bob.go shares its package with that code, rename one of them"
+  ]
+ },
+ "62-bobgo-r6": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go imports internal/hello, whose Go code imports internal/greet (cycle exists only for build definitions); move the definition"
+  ]
+ },
+ "63-bobgo-r7": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: imports github.com/google/uuid, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages"
+  ]
+ },
+ "64-source-outside": {
+  "codes": [
+   "BOB-E-1025"
+  ],
+  "exit": 3,
+  "messages": [
+   "source pattern \"../../../outside/*.cpp\" leaves the repository"
+  ]
+ },
+ "65-glob-empty": {
+  "codes": [
+   "BOB-E-1025"
+  ],
+  "exit": 3,
+  "messages": [
+   "bob.Glob(\"src/*.cc\") matches no files"
+  ]
+ },
+ "66-nondeterministic-bobgo": {
+  "codes": [
+   "BOB-E-1018"
+  ],
+  "exit": 3,
+  "messages": [
+   "evaluating bob.go is not deterministic: //libs/foo:foo"
+  ]
+ },
+ "67-toolchain-go": {
+  "codes": [
+   "BOB-E-1021"
+  ],
+  "exit": 3
+ },
+ "68-toolchain-rust": {
+  "codes": [
+   "BOB-E-1021"
+  ],
+  "exit": 3
+ },
+ "69-toolchain-generator": {
+  "codes": [
+   "BOB-E-1021"
+  ],
+  "exit": 3,
+  "messages": [
+   "//svc:gen-graph: generator gqlgen ",
+   "does not match its runtime",
+   "but svc/bob.go requires v0.17.89"
+  ]
+ },
+ "70-generated-conflict": {
+  "codes": [
+   "BOB-E-1016"
+  ],
+  "exit": 3,
+  "messages": [
+   "svc/gen/rest/version.go conflicts with generated output of "
+  ]
+ },
+ "71-userns-blocked": {
+  "codes": [
+   "BOB-E-7005"
+  ],
+  "exit": 7,
+  "messages": [
+   "\n  cause: ",
+   "\n  fix (run once as an administrator):\n    bob runs only where unprivileged user namespaces are allowed; inside containers, allow them (e.g. podman --security-opt seccomp=unconfined, or docker --security-opt seccomp=unconfined)\n"
+  ]
+ },
+ "72-s3-no-conditional-writes": {
+  "codes": [
+   "BOB-E-7007"
+  ],
+  "exit": 7
+ },
+ "73-s3-policy-permissive": {
+  "codes": [
+   "BOB-E-7008"
+  ],
+  "exit": 7
+ },
+ "74-unknown-nix-message": {
+  "codes": [
+   "BOB-E-9999"
+  ],
+  "exit": 70
+ },
+ "75-drift-all-unknown": {
+  "codes": [
+   "BOB-E-9998"
+  ],
+  "exit": 70
+ },
+ "76-remote-no-server": {
+  "codes": [
+   "BOB-E-4009"
+  ],
+  "exit": 4
+ },
+ "77-login-expired": {
+  "codes": [
+   "BOB-E-4008"
+  ],
+  "exit": 4
+ },
+ "78-eval-pids": {
+  "codes": [],
+  "messages": [
+   "evaluating bob.go failed after trying to start more than",
+   "processes or threads"
+  ]
+ },
+ "79-eval-memory": {
+  "codes": [],
+  "messages": [
+   "evaluating bob.go used more than",
+   "of memory and was stopped"
+  ]
+ },
+ "80-eval-time": {
+  "codes": [],
+  "messages": [
+   "evaluating bob.go took longer than",
+   "and was stopped"
+  ]
+ },
+ "81-eval-output": {
+  "codes": [],
+  "messages": [
+   "evaluating bob.go produced more than",
+   "of graph output and was stopped"
+  ]
+ },
+ "ok-cold": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-corrupt-prep": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-fetch": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-fixture": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-lock-wait": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-lock-wait-first": {
+  "codes": [],
+  "exit": 0
+ },
+ "ok-structured": {
+  "codes": [],
+  "exit": 0,
+  "warnings": [
+   "BOB-E-9999"
+  ]
+ },
+ "ok-substitute": {
+  "codes": [],
+  "exit": 0
+ }
+}

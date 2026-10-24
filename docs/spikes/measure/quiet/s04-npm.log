@@ -1,0 +1,25 @@
+== s04-npm start 2026-10-21T08:58:57Z load 2.10 3.89 4.57
+== resolve (8c): cold registry cache / warm (ETag revalidation) / offline cache
+vite-react packages=119 cold=2.36s warm=2.04s offline=0.25s
+ts-lib packages=206 cold=3.52s warm=2.90s offline=0.42s
+fastify packages=94 cold=2.03s warm=1.55s offline=0.20s
+native packages=69 cold=1.57s warm=1.42s offline=0.11s
+mono packages=88 cold=2.96s warm=2.40s offline=0.16s
+stress packages=411 cold=6.35s warm=6.38s offline=0.31s
+== install: isolated (one drv per package) vs hoisted (one drv), vite-react; tarballs already fetched
+web cold(build all package drvs + node_modules + tsc + vite build)=8.87s noop=0.52s node_modules=326.4MiB storePaths=66
+web-hoisted cold(build all package drvs + node_modules + tsc + vite build)=7.50s noop=0.47s node_modules=60.9MiB storePaths=1
+== cold install including downloads (vite-react isolated)
+web cold+fetch=12.57s
+== node_modules only (materialise), vite-react: cold / no-op
+materialise cold=4.79s noop=0.58s
+== one source file changed -> rebuild
+vite-react App.tsx changed: isolated=5.79s
+vite-react App.tsx changed: hoisted=5.73s
+ts-lib index.ts changed (tsc lib)=7.74s
+fastify server.ts changed (tsc + esbuild bundle)=5.69s
+== dependency added (clsx) -> relock + rebuild node_modules
+derivations that change: 4
+relock=2.35s isolated materialise=0.87s hoisted node_modules rebuild=2.27s
+done
+== s04-npm exit 0 end 2026-10-21T09:01:00Z

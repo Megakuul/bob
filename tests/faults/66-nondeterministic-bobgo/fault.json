@@ -1,0 +1,21 @@
+{
+ "id": "66-nondeterministic-bobgo",
+ "title": "non-deterministic bob.go",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.go reads time.Now"
+ },
+ "command": [
+  "check",
+  "--determinism"
+ ],
+ "code": "BOB-E-1018",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

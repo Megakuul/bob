@@ -1,0 +1,57 @@
+{
+  "v": 1,
+  "nixpkgs": "github:NixOS/nixpkgs/cd4ea8d57de16f4810bc5f14207bac45fbf19f67",
+  "tools": {
+    "rustfs": {
+      "version": "1.0.3",
+      "note": "upstream musl release; not in nixpkgs at the pin (S9/S11, D63)",
+      "platforms": {
+        "linux/arm64": {
+          "url": "https://github.com/rustfs/rustfs/releases/download/1.0.3/rustfs-linux-aarch64-musl-v1.0.3.zip",
+          "sha256": "28e973c6e630dfa1c7a6d7af86b360e598a34c476d34a0dcbcfbeb70b1f06747",
+          "size": 93720685,
+          "extract": "rustfs"
+        }
+      }
+    }
+  },
+  "nix": {
+    "forgejo": "forgejo",
+    "git": "gitMinimal",
+    "nix": "nixVersions.nix_2_34",
+    "podman": "podman",
+    "gitlab": "gitlab",
+    "gitaly": "gitaly",
+    "gitlab-workhorse": "gitlab-workhorse",
+    "gitlab-shell": "gitlab-shell",
+    "postgresql": "postgresql_17",
+    "redis": "redis",
+    "gitlab-rubyenv": "gitlab.rubyEnv",
+    "gitaly-git": "gitaly.git",
+    "nodejs": "nodejs_24",
+    "ruby": "ruby_3_4",
+    "remarshal": "remarshal",
+    "openssl-bin": "openssl.bin",
+    "crane": "crane",
+    "skopeo": "skopeo",
+    "squashfs-tools": "squashfsTools",
+    "qemu-user": "qemu-user",
+    "mesa": "mesa",
+    "vulkan-tools": "vulkan-tools",
+    "rustc": "rustc",
+    "cargo": "cargo",
+    "gopls": "gopls",
+    "clangd": "clang-tools",
+    "rust-analyzer": "rust-analyzer",
+    "binutils": "binutils",
+    "typescript": "typescript",
+    "opam": "opam",
+    "bun": "bun",
+    "zsh": "zsh",
+    "fish": "fish",
+    "strace": "strace",
+    "bashInteractive": "bashInteractive",
+    "bash": "bashInteractive",
+    "chromium": "chromium"
+  }
+}

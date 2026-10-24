@@ -1,0 +1,7 @@
+# Temporary allowlist of known dbusage findings (I-G1). Protected tool area (D68).
+# Format: <import|call> <repo-relative file> <reason>
+# Findings in a listed file are printed as "expected" instead of failing the lint stage.
+# Each unit that fixes a location removes its line.
+#
+# Empty since I-B27 (2026-10-23): internal/store uses dynamitedb (I-B15) and is judged by the rule
+# in full; lake is imported only by internal/logstore (the worker no longer imports it).

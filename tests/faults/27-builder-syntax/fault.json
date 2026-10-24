@@ -1,0 +1,28 @@
+{
+ "id": "27-builder-syntax",
+ "title": "builder script syntax error",
+ "source": "S15 fault 27 (builder-syntax)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "builder script has a syntax error"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-9001",
+ "exit": 70,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:16:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

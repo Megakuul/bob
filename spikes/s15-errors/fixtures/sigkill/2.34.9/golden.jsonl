@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:sleep"]}
+{"v":1,"event":"package.start","label":"//tools:sleep","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-6003","class":"resource","message":"bob's build engine was killed by signal SIGKILL","cause":"the Nix process stopped before it could report; on Linux SIGKILL usually means the out-of-memory killer or a service manager","excerpt":["was building: //tools:sleep"],"hint":"run the build again; if it repeats, reduce parallel jobs (bob build -j)","args":{"signal":"SIGKILL","what":"bob's build engine"}}}
+{"v":1,"event":"package.finish","label":"//tools:sleep","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":6,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

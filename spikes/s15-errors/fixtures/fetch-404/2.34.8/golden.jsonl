@@ -1,0 +1,7 @@
+{"v":1,"event":"run.start","requested":["//rcore:rcore"]}
+{"v":1,"event":"package.start","label":"//third_party:itoa-1.0.18.crate","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-3003","class":"fetch","message":"//third_party:itoa-1.0.18.crate: download not found (HTTP 403)","label":"//third_party:itoa-1.0.18.crate","definedAt":"fixture/rcore/bob.go:9:9","cause":"many file hosts (S3, crates.io) answer 403 instead of 404 for files that do not exist","excerpt":["url: https://static.crates.io/crates/itoa/itoa-0.0.0-s15.crate"],"hint":"the file was removed or the URL in bob.go is wrong","log":"bob log //third_party:itoa-1.0.18.crate","args":{"label":"//third_party:itoa-1.0.18.crate","status":"403"}}}
+{"v":1,"event":"package.finish","label":"//third_party:itoa-1.0.18.crate","status":"failed"}
+{"v":1,"event":"package.finish","label":"//rcore:rcore","status":"skipped"}
+{"v":1,"event":"package.finish","label":"//third_party/crates:itoa-1.0.18","status":"skipped"}
+{"v":1,"event":"run.finish","exitCode":4,"counts":{"built":0,"cached":0,"failed":1,"skipped":2,"cancelled":0,"upstream":0,"downloaded":243}}

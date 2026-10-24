@@ -1,0 +1,4 @@
+# Build outputs of the website (never committed).
+/node_modules/
+/.svelte-kit/
+/build/

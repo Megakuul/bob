@@ -1,0 +1,9 @@
+{"v":1,"event":"run.start","requested":["//api:api"]}
+{"v":1,"event":"package.start","label":"//libfoo:foo","action":"build"}
+{"v":1,"event":"package.start","label":"//rcore:rcore","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2001","class":"build","message":"//rcore:rcore: compile error in fixture/rcore/src/lib.rs","label":"//rcore:rcore","definedAt":"fixture/rcore/bob.go:13:13","location":"fixture/rcore/src/lib.rs:30:5","excerpt":["error[E0308]: mismatched types","  --> fixture/rcore/src/lib.rs:30:5","   |","29 | pub fn broken() -> u32 {","   |                    --- expected `u32` because of return type","30 |     \"not a number\"","   |     ^^^^^^^^^^^^^^ expected `u32`, found `&str`"],"log":"bob log //rcore:rcore","args":{"file":"fixture/rcore/src/lib.rs","label":"//rcore:rcore"}}}
+{"v":1,"event":"error","error":{"code":"BOB-E-2001","class":"build","message":"//libfoo:foo: compile error in fixture/libfoo/src/foo.cpp","label":"//libfoo:foo","definedAt":"fixture/libfoo/bob.go:8:11","location":"fixture/libfoo/src/foo.cpp:13:13","excerpt":["fixture/libfoo/src/foo.cpp:13:13: error: expected ';' before '}' token","   13 |     return 0","      |             ^","      |             ;","   14 | }"],"log":"bob log //libfoo:foo","args":{"file":"fixture/libfoo/src/foo.cpp","label":"//libfoo:foo"}}}
+{"v":1,"event":"package.finish","label":"//libfoo:foo","status":"failed"}
+{"v":1,"event":"package.finish","label":"//rcore:rcore","status":"failed"}
+{"v":1,"event":"package.finish","label":"//api:api","status":"skipped"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":2,"skipped":1,"cancelled":0,"upstream":0,"downloaded":0}}

@@ -1,0 +1,83 @@
+{
+ "definitions": 5,
+ "packages": [
+  {
+   "label": "//cmd/api:api",
+   "kind": "go_binary",
+   "definedAt": "example.com/acme/cmd/api/bob.go:15",
+   "deps": [
+    "//crates/rcore:rcore",
+    "//libs/foo:foo"
+   ],
+   "attrs": {
+    "cgo": true,
+    "requires": [
+     {
+      "Path": "github.com/google/uuid",
+      "Version": "v1.6.0"
+     }
+    ]
+   }
+  },
+  {
+   "label": "//crates/rcore:rcore",
+   "kind": "rust_staticlib",
+   "definedAt": "example.com/acme/crates/rcore/bob.go:12",
+   "attrs": {
+    "crates": [
+     {
+      "Name": "itoa",
+      "Version": "1.0.11"
+     },
+     {
+      "Name": "hex",
+      "Version": "0.4.3"
+     }
+    ]
+   }
+  },
+  {
+   "label": "//internal/greet:test",
+   "kind": "go_test",
+   "definedAt": "example.com/acme/internal/greet/bob.go:12"
+  },
+  {
+   "label": "//libs/foo:foo",
+   "kind": "cc_library",
+   "definedAt": "example.com/acme/libs/foo/bob.go:13",
+   "deps": [
+    "nixpkgs:openssl"
+   ],
+   "attrs": {
+    "shared": true,
+    "srcs": [
+     "src/*.cpp"
+    ],
+    "std": "c++20"
+   }
+  },
+  {
+   "label": "//web:web",
+   "kind": "npm_vite_app",
+   "definedAt": "example.com/acme/web/bob.go:12",
+   "attrs": {
+    "deps": {
+     "svelte": "^5.0.0"
+    },
+    "devDeps": {
+     "@sveltejs/vite-plugin-svelte": "^5.0.0",
+     "vite": "^6.0.0"
+    },
+    "runtime": "node"
+   }
+  },
+  {
+   "label": "nixpkgs:openssl",
+   "kind": "nixpkgs",
+   "definedAt": "",
+   "attrs": {
+    "attr": "openssl"
+   }
+  }
+ ]
+}

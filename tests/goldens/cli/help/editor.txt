@@ -1,0 +1,1 @@
+usage: bob editor vscode|nvim|helix|zed|jetbrains [--write]

@@ -1,0 +1,29 @@
+{
+ "id": "47-cache-untrusted",
+ "title": "cache untrusted signature",
+ "source": "S15 fault 47 (subst-untrusted)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "NAR signed with an unknown key"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4004",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:23:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "ignoring substitute for",
+  "Cannot build"
+ ]
+}

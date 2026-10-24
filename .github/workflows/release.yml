@@ -1,0 +1,96 @@
+# Release on a v* tag (owner chat decision 2026-10-24, plan/progress/N1.md): the bob AppImage
+# for x86_64 and aarch64, built by bob itself (scripts/bootstrap.sh, R-ARCH-005) with the
+# embedded static Nix (ADR 0002), attached to the GitHub release with sha256 files, so that
+#   https://github.com/megakuul/bob/releases/latest/download/bob-x86_64.AppImage
+#   https://github.com/megakuul/bob/releases/latest/download/bob-aarch64.AppImage
+# always name the newest release. Each architecture builds natively on its own runner.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  appimage:
+    name: bob-${{ matrix.arch }}.AppImage
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Nix provides only the Go of the flake's devShell (the Go that reproduces bob-builder,
+      # which scripts/bootstrap.sh checks) plus curl and zstd. bob itself runs its own embedded
+      # Nix in its own rootless store, never this one.
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # bob's rootless store needs unprivileged user namespaces, which Ubuntu 24.04 restricts
+      # with AppArmor (BOB-E-7005 prints this fix).
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Bootstrap bob (scripts/bootstrap.sh)
+        env:
+          BOB_HOME: ${{ runner.temp }}/bobhome
+        run: |
+          nix develop --command scripts/bootstrap.sh > "$RUNNER_TEMP/bob-path"
+          echo "BOB=$(tail -n 1 "$RUNNER_TEMP/bob-path")" >> "$GITHUB_ENV"
+      - name: Build the AppImage (bob build //:bob)
+        env:
+          BOB_HOME: ${{ runner.temp }}/bobhome
+        run: |
+          "$BOB" build //:bob --print-paths | tee "$RUNNER_TEMP/build.out"
+          out=$(sed -n 's|^//:bob \(/.*\)$|\1|p' "$RUNNER_TEMP/build.out" | tail -n 1)
+          test -n "$out"
+          mkdir -p dist
+          # The output lives in bob's private store; read it from inside bob's namespace.
+          "$BOB" exec /bin/sh -c 'cp "$1/bob-$2.AppImage" "$3/"' sh "$out" "${{ matrix.arch }}" "$PWD/dist" \
+            || cp "$out/bob-${{ matrix.arch }}.AppImage" dist/
+          chmod 0755 "dist/bob-${{ matrix.arch }}.AppImage"
+          ./dist/bob-${{ matrix.arch }}.AppImage version
+          cd dist && sha256sum "bob-${{ matrix.arch }}.AppImage" > "bob-${{ matrix.arch }}.AppImage.sha256"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bob-${{ matrix.arch }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: appimage
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release and upload the AppImages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l dist
+          (cd dist && sha256sum -c ./*.sha256)
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "bob $TAG" --generate-notes
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/bob-x86_64.AppImage dist/bob-x86_64.AppImage.sha256 \
+            dist/bob-aarch64.AppImage dist/bob-aarch64.AppImage.sha256

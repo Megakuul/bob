@@ -1,0 +1,29 @@
+{
+ "id": "12-missing-header",
+ "title": "missing header (dependency dropped)",
+ "source": "S15 fault 12 (missing-header)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "//api:api drops its dep on //rcore:rcore"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-2003",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11",
+  "site": "fixture/api/cmd/api/main.go:7:10"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

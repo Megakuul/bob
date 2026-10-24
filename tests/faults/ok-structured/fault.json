@@ -1,0 +1,23 @@
+{
+ "id": "ok-structured",
+ "title": "builder setPhase/msg; injected unknown message",
+ "source": "S15 ok scenario (ok-structured)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "builder setPhase/msg; injected unknown message"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

@@ -1,0 +1,10 @@
+FAILED  //api:api
+
+error[BOB-E-2002]: //api:api: undefined symbol foo_sha256_hex
+  package defined at fixture/api/bob.go:13:11
+   | …/binutils-2.46/bin/ld.bfd: /build/go-link-3208804788/000001.o: in function `_cgo_7ed13c886866_Cfunc_foo_sha256_hex':
+   | main.cgo2.c:(.text+0x64): undefined reference to `foo_sha256_hex'
+  hint: the symbol is not provided by any linked library; a dependency is probably missing from Deps
+  full log: bob log //api:api
+
+bob: 1 failed (exit 1)

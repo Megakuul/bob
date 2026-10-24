@@ -1,0 +1,15 @@
+== s07-cross start 2026-10-21T09:08:13Z load 3.26 4.20 4.41
+subst x86_64-unknown-linux-gnu-gcc-wrapper-15.3.0: 2202 ms
+subst qemu-user-10.2.4: 990 ms
+subst openssl-3.6.5-dev: 556 ms
+subst rustc-1.95.0: 6598 ms
+2.0G	/root/scratch-s07/store
+cold [8c15G] api : 25236 ms -> /nix/store/v400q22z3afqla4v90g8qg5vgxiq02np-go-example.com-api-cmd-api
+cold [8c15G] api -platform linux-amd64: 24711 ms -> /nix/store/biszb9qipkwb6z81yh4745icllxq2kzk-go-example.com-api-cmd-api-linux-amd64
+cold [8c15G] api -platform linux-amd64 -sanitize address: 26621 ms -> /nix/store/qrl1x6p1j955vl7910skhd8gxayqrl7j-go-example.com-api-cmd-api-linux-amd64-address
+cold [8c15G] api -platform linux-amd64 -profile debug: 21644 ms -> /nix/store/5cjk7h24f5f3ixsldwyvv08linzrssha-go-example.com-api-cmd-api-linux-amd64-dbg
+cold [2c4G] api : 56930 ms -> /nix/store/v400q22z3afqla4v90g8qg5vgxiq02np-go-example.com-api-cmd-api
+cold [2c4G] api -platform linux-amd64: 55463 ms -> /nix/store/biszb9qipkwb6z81yh4745icllxq2kzk-go-example.com-api-cmd-api-linux-amd64
+cold [2c4G] api -platform linux-amd64 -sanitize address: 63794 ms -> /nix/store/qrl1x6p1j955vl7910skhd8gxayqrl7j-go-example.com-api-cmd-api-linux-amd64-address
+cold [2c4G] api -platform linux-amd64 -profile debug: 45424 ms -> /nix/store/5cjk7h24f5f3ixsldwyvv08linzrssha-go-example.com-api-cmd-api-linux-amd64-dbg
+== s07-cross exit 0 end 2026-10-21T09:16:49Z

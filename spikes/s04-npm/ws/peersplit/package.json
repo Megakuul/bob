@@ -1,0 +1,1 @@
+{"name":"peersplit","private":true,"workspaces":["packages/*"],"dependencies":{"react":"^18.3.0","use-sync-external-store":"^1.5.0"}}

@@ -1,0 +1,22 @@
+{
+ "importers": {
+  ".": {
+   "deps": {
+    "hono": "hono@4.13.13",
+    "zod": "zod@4.6.7"
+   }
+  }
+ },
+ "packages": {
+  "hono@4.13.13": {
+   "name": "hono",
+   "version": "4.13.13",
+   "integrity": "sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA=="
+  },
+  "zod@4.6.7": {
+   "name": "zod",
+   "version": "4.6.7",
+   "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
+  }
+ }
+}

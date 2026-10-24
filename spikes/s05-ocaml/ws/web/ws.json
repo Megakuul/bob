@@ -1,0 +1,1 @@
+{"opam":["cohttp-lwt-unix"],"exes":[{"name":"web","src":"app","main":"main","libs":["zarith","uri","cohttp-lwt-unix"]}]}

@@ -1,0 +1,20 @@
+{
+ "id": "61-bobgo-r4",
+ "title": "bob.go rule R4 (name clash)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.go declares a name the Go code declares"
+ },
+ "command": [
+  "check"
+ ],
+ "code": "BOB-E-1024",
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

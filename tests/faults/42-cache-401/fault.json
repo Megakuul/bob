@@ -1,0 +1,29 @@
+{
+ "id": "42-cache-401",
+ "title": "cache 401, local builds off",
+ "source": "S15 fault 42 (subst-401)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "cache answers 401; max-jobs 0"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4001",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:23:15"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "unable to download",
+  "Cannot build"
+ ]
+}

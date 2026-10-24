@@ -1,0 +1,21 @@
+{
+ "id": "53-npm-undeclared-peer",
+ "title": "undeclared npm peer",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "npm",
+ "inject": {
+  "kind": "patch",
+  "describe": "package uses a peer it does not declare"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2014",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 1,
+ "forbid": []
+}

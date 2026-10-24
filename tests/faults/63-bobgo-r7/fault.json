@@ -1,0 +1,20 @@
+{
+ "id": "63-bobgo-r7",
+ "title": "bob.go rule R7 (forbidden import)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.go imports a third-party module"
+ },
+ "command": [
+  "check"
+ ],
+ "code": "BOB-E-1024",
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

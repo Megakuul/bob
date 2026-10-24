@@ -1,0 +1,26 @@
+{
+ "id": "01-unknown-attr",
+ "title": "unknown nixpkgs attribute",
+ "source": "S15 fault 1 (unknown-attr)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "bob.go names nixpkgs attr \"opensll\""
+ },
+ "command": [
+  "build",
+  "//libfoo:foo"
+ ],
+ "code": "BOB-E-1001",
+ "exit": 3,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/libfoo/bob.go:8:11"
+ },
+ "excerpt": false,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

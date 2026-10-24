@@ -1,0 +1,23 @@
+{
+ "id": "ok-lock-wait",
+ "title": "second build waits on the store lock",
+ "source": "S15 ok scenario (lock-wait)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "second build waits on the store lock"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

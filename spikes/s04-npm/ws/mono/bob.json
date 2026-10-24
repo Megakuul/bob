@@ -1,0 +1,2 @@
+{"libs":[{"importer":"packages/ui","name":"@demo/ui","consumer":"apps/web"}],
+ "targets":[{"name":"web","importer":"apps/web","cmd":"vite build --outDir $out/dist --emptyOutDir --logLevel warn && grep -l ui-badge $out/dist/assets/*.js"}]}

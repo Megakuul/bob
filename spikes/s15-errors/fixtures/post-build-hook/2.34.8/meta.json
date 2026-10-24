@@ -1,0 +1,54 @@
+{
+  "name": "post-build-hook",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "--option",
+    "post-build-hook",
+    "/root/bob/spikes/s15-errors/tmp/work/hook/hook.sh",
+    "/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 304,
+    "nixVersion": "2.34.8",
+    "valid": [
+      "/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv": {
+        "label": "//tools:hook",
+        "definedAt": "fixture/tools/bob.go:24:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/rc3qplw2v7jcqr4b2ymdhw2m9f98assq-tools-hook": "/nix/store/099x01pwb8nnz27n0x9zir1zkib8xlvf-tools-hook.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:hook"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

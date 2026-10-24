@@ -1,0 +1,16 @@
+## in-process (store.Call wraps every dynamitedb call)
+[seaweedfs] Get with update operator in filter               PANIC recovered  store: dynamitedb panicked: incorrect DataField usage: cannot use filter from update or value operator
+[seaweedfs] Update with filter operator                      PANIC recovered  store: dynamitedb panicked: incorrect DataField usage: cannot set value from filter or value operator
+[seaweedfs] Create with filter operator                      PANIC recovered  store: dynamitedb panicked: incorrect DataField usage: cannot set value from filter or value operator
+[seaweedfs] Query exact key with update operator             PANIC recovered  store: dynamitedb panicked: incorrect DataField usage: cannot use filter from update or value operator
+[seaweedfs] Get on non-struct type                           PANIC recovered  store: dynamitedb panicked: reflect: Fields of non-struct type int
+[seaweedfs] Get with nil model                               PANIC recovered  store: dynamitedb panicked: reflect: call of reflect.Value.Type on zero Value
+[seaweedfs] Get with KeyPrefix (non-exact)                   returned error   get database call requires exact key match
+[seaweedfs] Get with missing pk                              returned error   partition key 't' is unset
+[seaweedfs] Get, backend/proxy omits ETag header             PANIC recovered  store: dynamitedb panicked: runtime error: invalid memory address or nil pointer dereference
+[seaweedfs] Update, backend/proxy omits ETag header          returned error   no panic, but Update sent 1 PUT without If-Match (lost-update risk); err=<nil>
+[seaweedfs] Reading Value() of a filter operator (user code) PANIC recovered  store: dynamitedb panicked: incorrect DataField usage: cannot read value from filter or update operator
+## child process (panic inside dynamitedb's Query goroutines)
+[seaweedfs] query-update-op                  exit=2  panic: incorrect DataField usage: cannot use filter from update or value operator
+[seaweedfs] query-noetag                     exit=2  panic: runtime error: invalid memory address or nil pointer dereference
+[seaweedfs] query-noetag-wrapped-goroutine   exit=2  panic: runtime error: invalid memory address or nil pointer dereference

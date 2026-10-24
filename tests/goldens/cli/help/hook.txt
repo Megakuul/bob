@@ -1,0 +1,1 @@
+usage: bob hook bash|zsh|fish

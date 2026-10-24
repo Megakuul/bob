@@ -1,0 +1,23 @@
+{
+ "id": "ok-corrupt-prep",
+ "title": "preparation build of corrupt-store",
+ "source": "S15 ok scenario (corrupt-prep)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "none",
+  "describe": "preparation build of corrupt-store"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "",
+ "exit": 0,
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

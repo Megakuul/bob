@@ -1,0 +1,21 @@
+{
+ "id": "74-unknown-nix-message",
+ "title": "unknown Nix message",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "ir-script",
+  "describe": "builder makes Nix print a message no pattern knows"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-9999",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 70,
+ "forbid": []
+}

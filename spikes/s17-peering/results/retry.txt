@@ -1,0 +1,9 @@
+scenario=retry mode=peer build=r-0828292 lost_unflushed_lines=198 restarts=[{p0 2 334} {p1 2 334} {p2 2 333}]
+  follower: done=true gaps=0 dups=0 restart_markers=3 reconnects=0
+  vs lake truth: EQUAL (1995 lines)
+scenario=retry mode=pushall build=r-0828551 lost_unflushed_lines=197 restarts=[{p0 2 334} {p1 2 334} {p2 2 333}]
+  follower: done=true gaps=0 dups=0 restart_markers=3 reconnects=0
+  vs lake truth: EQUAL (1993 lines)
+scenario=retry mode=lakeonly build=r-0829211 lost_unflushed_lines=194 restarts=[{p0 2 334} {p1 2 334} {p2 2 333}]
+  follower: done=true gaps=0 dups=0 restart_markers=0 reconnects=0
+  vs lake truth: EQUAL (1990 lines)

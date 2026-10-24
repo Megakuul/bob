@@ -1,0 +1,8 @@
+[31;1m✗[0m //tools:memory
+
+[31;1merror[BOB-E-6003]:[0m [1mbob's build engine was killed by signal SIGKILL[0m
+  cause: the Nix process stopped before it could report; on Linux SIGKILL usually means the out-of-memory killer or a service manager
+   [2m│[0m was building: //tools:memory
+  [32mhint:[0m run the build again; if it repeats, reduce parallel jobs (bob build -j)
+
+[31;1mbob: 1 failed[0m (exit 6)

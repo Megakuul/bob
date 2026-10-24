@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:memory"]}
+{"v":1,"event":"package.start","label":"//tools:memory","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-6002","class":"resource","message":"//tools:memory was killed: out of memory","label":"//tools:memory","definedAt":"fixture/tools/bob.go:14:15","cause":"the build step was killed with SIGKILL; on Linux this is almost always the out-of-memory killer","hint":"reduce parallel jobs (bob build -j) or raise the memory limit","log":"bob log //tools:memory","args":{"label":"//tools:memory","what":"//tools:memory"}}}
+{"v":1,"event":"package.finish","label":"//tools:memory","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":6,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

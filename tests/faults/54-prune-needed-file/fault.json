@@ -1,0 +1,21 @@
+{
+ "id": "54-prune-needed-file",
+ "title": "prune pattern removes a needed file",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "npm",
+ "inject": {
+  "kind": "patch",
+  "describe": "prune pattern matches a file a dependent loads"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2015",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 1,
+ "forbid": []
+}

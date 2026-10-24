@@ -1,0 +1,11 @@
+== s12-cache rerun start 2026-10-21T09:25:34Z load 1.01 1.68 2.96
+| profile | run | upload s | upload MiB/s | promote s | nix substitute s | nix MiB/s | curl NARs s | curl MiB/s |
+|---|---|---|---|---|---|---|---|---|
+| [8c/15G] | 1 | 0.74 | 137 | 0.54 | 0.62 | 164 | 0.26 | 393 |
+| [8c/15G] | 2 | 0.76 | 133 | 0.51 | 0.67 | 150 | 0.25 | 397 |
+| [8c/15G] | 3 | 0.64 | 157 | 0.49 | 0.61 | 165 | 0.25 | 404 |
+
+upload log: staged build=m8c312495 paths=4 nar=100.7MiB zst=95.8MiB nix=0.61s total=0.61s nar-throughput=165.2MiB/s maxrss=211MiB
+promote: {"promoted":4,"alreadyThere":0,"images":0,"seconds":0.473945814,"narMiB":100.67724609375}
+narinfo=9 nar=21 narBytes=602557299 maxrssMiB=32
+== exit 0 end 2026-10-21T09:26:08Z

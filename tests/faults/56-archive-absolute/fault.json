@@ -1,0 +1,21 @@
+{
+ "id": "56-archive-absolute",
+ "title": "unsafe archive entry (absolute path)",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "rust",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "fault HTTP server serves a crate with an absolute entry"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-3004",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 4,
+ "forbid": []
+}

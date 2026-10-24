@@ -1,0 +1,28 @@
+{
+ "id": "23-timeout-keep-going",
+ "title": "timeout with keep-going, a sibling and a dependent",
+ "source": "S15 fault 23 (timeout-keep-going)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "limit",
+  "describe": "build timeout 3 s with a sibling and a dependent"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2007",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:10:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

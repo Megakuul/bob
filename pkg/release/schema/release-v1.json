@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bob.megakuul.ch/schema/release-v1.json",
+  "title": "bob.release/v1",
+  "description": "Release manifest written by the release derivation (SPEC R-OUT-023). Keys sorted, artifacts sorted by name then platform. Per-kind required fields: closure needs entrypoints; appimage and tarball need file, sha256, size; oci needs repo, tags, index and platform multi.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "project", "release", "label", "version", "public", "artifacts"],
+  "properties": {
+    "schema": {"const": "bob.release/v1"},
+    "project": {"type": "string"},
+    "release": {"type": "string", "minLength": 1},
+    "label": {"type": "string", "pattern": "^//"},
+    "version": {"type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$"},
+    "public": {"type": "boolean"},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "platform", "storePath"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["closure", "oci", "appimage", "tarball"]},
+          "platform": {"enum": ["linux-amd64", "linux-arm64", "multi"]},
+          "storePath": {"type": "string", "pattern": "^/nix/store/[0-9a-z]{32}-.+"},
+          "entrypoints": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+          "file": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size": {"type": "integer", "minimum": 1},
+          "repo": {"type": "string", "minLength": 1},
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "index": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

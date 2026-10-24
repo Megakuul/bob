@@ -1,0 +1,28 @@
+{
+ "id": "11-link-error",
+ "title": "link error (undefined symbol)",
+ "source": "S15 fault 11 (link-error)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "foo_sha256_hex renamed in the definition only"
+ },
+ "command": [
+  "build",
+  "//api:api"
+ ],
+ "code": "BOB-E-2002",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/api/bob.go:13:11"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

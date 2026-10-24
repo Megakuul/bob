@@ -1,0 +1,62 @@
+## V1 flat C sources next to bob.go
+{"ok":true,"step":"initialize","t_ms":55}
+{"ok":true,"step":"open libs/flat/bob.go","t_ms":55}
+{"diagnostics":null,"step":"diag libs/flat/bob.go","t_ms":1763}
+{"count":3,"items":["SharedLibrary","StaticLibrary","Std"],"latency_ms":2,"step":"complete libs/flat/bob.go \"cc.S\"","t_ms":1766}
+{"ok":true,"step":"open cmd/api/bob.go","t_ms":1766}
+{"diagnostics":null,"step":"diag cmd/api/bob.go","t_ms":3371}
+{"count":1,"items":["Lib"],"latency_ms":4,"step":"complete cmd/api/bob.go \"flat.\"","t_ms":3376}
+{"messages":null,"step":"server-messages","t_ms":3377}
+{"server_maxrss_mb":63,"step":"exit","t_ms":3385}
+## V1b same, but .S/.s assembly and .cpp
+{"ok":true,"step":"initialize","t_ms":95}
+{"ok":true,"step":"open libs/asm/bob.go","t_ms":95}
+{"diagnostics":null,"step":"diag libs/asm/bob.go","t_ms":1801}
+{"ok":true,"step":"open libs/cpp/bob.go","t_ms":1801}
+{"diagnostics":null,"step":"diag libs/cpp/bob.go","t_ms":3306}
+{"messages":null,"step":"server-messages","t_ms":3306}
+{"server_maxrss_mb":150,"step":"exit","t_ms":3339}
+## V2 bob.go with a different package name than the Go code in its directory
+{"ok":true,"step":"initialize","t_ms":60}
+{"ok":true,"step":"open internal/greet/bob.go","t_ms":60}
+{"diagnostics":null,"step":"diag internal/greet/bob.go","t_ms":1767}
+{"ok":true,"step":"open internal/greet/greet.go","t_ms":1767}
+{"diagnostics":["2:1 sev1 compiler: package greet; expected package bob"],"step":"diag internal/greet/greet.go","t_ms":1767}
+{"ok":true,"step":"open cmd/api/main.go","t_ms":1767}
+{"diagnostics":["6:2 sev1 go list: found packages bob (bob.go) and greet (greet.go) in /root/bob/spikes/s01-bobgo/tmp/variants/v2/internal/greet","6:2 sev1 compiler: \"example.com/acme/internal/greet\" imported as bob and not used","9:27 sev1 compiler: undefined: greet"],"step":"diag cmd/api/main.go","t_ms":4377}
+{"count":0,"items":null,"latency_ms":5,"step":"complete cmd/api/main.go \"greet.\"","t_ms":4382}
+{"messages":null,"step":"server-messages","t_ms":4382}
+{"server_maxrss_mb":62,"step":"exit","t_ms":4392}
+## V3 a bob.go imports the bob.go of a main package
+{"ok":true,"step":"initialize","t_ms":53}
+{"ok":true,"step":"open deploy/bob.go","t_ms":53}
+{"diagnostics":["6:2 sev1 go list: import \"example.com/acme/cmd/api\" is a program, not an importable package","6:2 sev1 compiler: \"example.com/acme/cmd/api\" imported as main and not used","11:63 sev1 compiler: undefined: api"],"step":"diag deploy/bob.go","t_ms":1759}
+{"messages":null,"step":"server-messages","t_ms":1759}
+{"server_maxrss_mb":57,"step":"exit","t_ms":1769}
+## V4 a bob.go identifier collides with an identifier of the real Go code
+{"ok":true,"step":"initialize","t_ms":60}
+{"ok":true,"step":"open internal/greet/greet.go","t_ms":60}
+{"diagnostics":["8:6 sev1 compiler: Test redeclared in this block"],"step":"diag internal/greet/greet.go","t_ms":1767}
+{"ok":true,"step":"open internal/greet/bob.go","t_ms":1767}
+{"diagnostics":["11:5 sev1 compiler: Test redeclared in this block (this error: other declaration of Test)"],"step":"diag internal/greet/bob.go","t_ms":1767}
+{"messages":null,"step":"server-messages","t_ms":1767}
+{"server_maxrss_mb":56,"step":"exit","t_ms":2786}
+V4 untagged go build+vet: ok
+## V5 directory with only external tests (package x_test) + bob.go package x
+{"ok":true,"step":"initialize","t_ms":55}
+{"ok":true,"step":"open itest/bob.go","t_ms":55}
+{"diagnostics":null,"step":"diag itest/bob.go","t_ms":1763}
+{"ok":true,"step":"open itest/x_test.go","t_ms":1763}
+{"diagnostics":null,"step":"diag itest/x_test.go","t_ms":3268}
+{"messages":null,"step":"server-messages","t_ms":3268}
+{"server_maxrss_mb":57,"step":"exit","t_ms":3276}
+ok  	example.com/acme/itest	(cached)
+V5 untagged vet+test: ok
+## V6 import cycle that exists only under the bob tag
+{"ok":true,"step":"initialize","t_ms":57}
+{"ok":true,"step":"open internal/util/bob.go","t_ms":57}
+{"diagnostics":null,"step":"diag internal/util/bob.go","t_ms":1763}
+{"ok":true,"step":"open internal/greet/greet.go","t_ms":1764}
+{"diagnostics":["1:1 sev1 go list: import cycle not allowed in test","4:8 sev1 compiler: could not import example.com/acme/internal/util (missing metadata for import of \"example.com/acme/internal/util\")"],"step":"diag internal/greet/greet.go","t_ms":3371}
+{"messages":null,"step":"server-messages","t_ms":3372}
+{"server_maxrss_mb":58,"step":"exit","t_ms":3382}

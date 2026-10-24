@@ -1,0 +1,151 @@
+@nix {"action":"start","id":2340679866908672,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2340679866908672}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/8p65f10cfjg0xf49ijh29vfm8hr23yxv-rcore-rcore.drv"}
+@nix {"action":"start","id":2340679866908673,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2340679866908674,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2340679866908675,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"start","id":2340679866908676,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2340679866908676}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,2,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,3,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,4,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,5,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,6,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,7,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,8,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,9,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,10,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,9,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,8,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,7,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,6,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,5,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,4,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,3,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,2,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"start","fields":["/nix/store/8p65f10cfjg0xf49ijh29vfm8hr23yxv-rcore-rcore.drv","",1,1],"id":2340679866908677,"level":3,"parent":0,"text":"building '/nix/store/8p65f10cfjg0xf49ijh29vfm8hr23yxv-rcore-rcore.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":["\u001b[1m\u001b[91merror[E0432]\u001b[0m\u001b[1m: unresolved import `serde`\u001b[0m"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":[" \u001b[1m\u001b[94m--> \u001b[0m/nix/store/vqyc5x122ipbsj4z42i003clmj41iqr2-rcore/src/lib.rs:2:5"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["  \u001b[1m\u001b[94m|\u001b[0m"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["\u001b[1m\u001b[94m2\u001b[0m \u001b[1m\u001b[94m|\u001b[0m use serde::Serialize;"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["  \u001b[1m\u001b[94m|\u001b[0m     \u001b[1m\u001b[91m^^^^^\u001b[0m \u001b[1m\u001b[91muse of unresolved module or unlinked crate `serde`\u001b[0m"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["  \u001b[1m\u001b[94m|\u001b[0m"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["  \u001b[1m\u001b[94m= \u001b[0m\u001b[1mhelp\u001b[0m: you might be missing a crate named `serde`"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":[""],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["\u001b[1m\u001b[91merror\u001b[0m\u001b[1m: aborting due to 1 previous error\u001b[0m"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":[""],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["\u001b[1mFor more information about this error, try `rustc --explain E0432`.\u001b[0m"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":["bob-builder: command failed (exit 1): rustc --crate-name rcore --edition 2021 --crate-type staticlib -C opt-level=2 -C metadata=rcore-0.1.0 --extern hex=/nix/store/4lvl2n5nc1irnla1ignwcrhnjrj0a35n-third_party-crates-hex-0.4.3/lib/libhex.rlib --extern itoa=/nix/store/zipzyzs6qlbhjghazwb9yq2pp5xmz8xi-third_party-crates-itoa-1.0.18/lib/libitoa.rlib -L dependency=/nix/store/4lvl2n5nc1irnla1ignwcrhnjrj0a35n-third_party-crates-hex-0.4.3/lib -L dependency=/nix/store/zipzyzs6qlbhjghazwb9yq2pp5xmz8xi-third_party-crates-itoa-1.0.18/lib /nix/store/vqyc5x122ipbsj4z42i003clmj41iqr2-rcore/src/lib.rs --out-dir $out/lib"],"id":2340679866908677,"type":101}
+@nix {"action":"result","fields":[0,1,0,1],"id":2340679866908674,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2340679866908675,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2340679866908673,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2340679866908673,"type":106}
+@nix {"action":"stop","id":2340679866908677}
+@nix {"action":"stop","id":2340679866908675}
+@nix {"action":"stop","id":2340679866908674}
+@nix {"action":"stop","id":2340679866908673}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/8p65f10cfjg0xf49ijh29vfm8hr23yxv-rcore-rcore.drv\u001b[0m'.\n       Reason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\n       Output paths:\n         \u001b[35;1m/nix/store/lln89b031zfnhz6kbj17pamwjryjmg5p-rcore-rcore\u001b[0m","raw_msg":"Cannot build '\u001b[35;1m/nix/store/8p65f10cfjg0xf49ijh29vfm8hr23yxv-rcore-rcore.drv\u001b[0m'.\nReason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\nOutput paths:\n  \u001b[35;1m/nix/store/lln89b031zfnhz6kbj17pamwjryjmg5p-rcore-rcore\u001b[0m"}

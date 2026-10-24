@@ -1,0 +1,28 @@
+{
+ "id": "32-log-flood",
+ "title": "log flood",
+ "source": "S15 fault 32 (log-limit)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "limit",
+  "describe": "max build log size 20000 bytes"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-2011",
+ "exit": 1,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:25:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "building derivation"
+ ]
+}

@@ -1,0 +1,3 @@
+{"v":1,"event":"run.start","requested":["//tools:hook"]}
+{"v":1,"event":"error","error":{"code":"BOB-E-7002","class":"store","message":"bob's store is not accessible: permission denied (/nix/var/nix/db/big-lock)","hint":"bob's state directory belongs to another user or is read-only","args":{"reason":"permission denied (/nix/var/nix/db/big-lock)"}}}
+{"v":1,"event":"run.finish","exitCode":7,"counts":{"built":0,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}

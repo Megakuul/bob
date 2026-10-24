@@ -1,0 +1,7 @@
+[32m✓[0m //tools:structured
+
+[33mwarning[BOB-E-9999]:[0m [1munrecognised Nix error[0m
+  cause: builder says error
+  [32mhint:[0m this is a bob bug; the raw message is shown with -v
+
+[32mbob: 1 built[0m

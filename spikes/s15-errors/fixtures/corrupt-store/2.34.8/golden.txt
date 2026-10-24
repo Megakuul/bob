@@ -1,0 +1,4 @@
+error[BOB-E-7003]: bob's store is damaged: //tools:base is registered but missing on disk
+  hint: run bob doctor --repair
+
+bob: nothing was built (exit 7)

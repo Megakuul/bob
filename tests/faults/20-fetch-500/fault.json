@@ -1,0 +1,29 @@
+{
+ "id": "20-fetch-500",
+ "title": "fetch HTTP 500",
+ "source": "S15 fault 20 (fetch-500)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "cache-fault",
+  "describe": "fault HTTP server answers 500"
+ },
+ "command": [
+  "build",
+  "//rcore:rcore"
+ ],
+ "code": "BOB-E-3002",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/rcore/bob.go:9:9"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "unable to download",
+  "Cannot build"
+ ]
+}

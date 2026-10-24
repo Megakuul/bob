@@ -1,0 +1,54 @@
+{
+  "name": "lock-wait-first",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/47hf4llyy1wd9sxahdwwcjy5shhbn6bs-tools-lock.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 0,
+    "durationMs": 1573,
+    "nixVersion": "2.34.8",
+    "valid": [
+      "/nix/store/47hf4llyy1wd9sxahdwwcjy5shhbn6bs-tools-lock.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/47hf4llyy1wd9sxahdwwcjy5shhbn6bs-tools-lock.drv": {
+        "label": "//tools:lock",
+        "definedAt": "fixture/tools/bob.go:27:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/pzzy0rnjvv5vppa3ar4gdbdymfacqpmb-tools-lock": "/nix/store/47hf4llyy1wd9sxahdwwcjy5shhbn6bs-tools-lock.drv"
+    },
+    "sources": {},
+    "nixpkgs": {},
+    "users": {},
+    "requested": [
+      "//tools:lock"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  },
+  "stdout": [
+    "/nix/store/pzzy0rnjvv5vppa3ar4gdbdymfacqpmb-tools-lock"
+  ]
+}

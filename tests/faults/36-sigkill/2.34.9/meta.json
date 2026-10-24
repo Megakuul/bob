@@ -1,0 +1,71 @@
+{
+  "name": "sigkill",
+  "nix": "2.34.9",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.9/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/y5kml8f48s30gw23kxv90f8rqg84c379-tools-sleep.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 137,
+    "signal": "killed",
+    "durationMs": 4011,
+    "nixVersion": "2.34.9"
+  },
+  "context": {
+    "packages": {
+      "/nix/store/y5kml8f48s30gw23kxv90f8rqg84c379-tools-sleep.drv": {
+        "label": "//tools:sleep",
+        "definedAt": "fixture/tools/bob.go:10:15",
+        "kind": "script"
+      }
+    },
+    "outputs": {
+      "/nix/store/8b4rdbxgnlqkhxlkcshhmzma0prnq0ra-tools-sleep": "/nix/store/y5kml8f48s30gw23kxv90f8rqg84c379-tools-sleep.drv"
+    },
+    "sources": {},
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//tools:sleep"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//tools:sleep"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//tools:sleep"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//tools:sleep"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//tools:sleep"
+      ]
+    },
+    "requested": [
+      "//tools:sleep"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

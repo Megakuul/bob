@@ -1,0 +1,28 @@
+{
+ "id": "39-upstream-fail",
+ "title": "nixpkgs package built from source fails",
+ "source": "S15 fault 39 (upstream-fail)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "patch",
+  "describe": "patched nixpkgs hello fails to build"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-5001",
+ "exit": 5,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:28:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": [
+  "Cannot build"
+ ]
+}

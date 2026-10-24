@@ -1,0 +1,4 @@
+[31;1merror[BOB-E-7003]:[0m [1mbob's store is damaged: //tools:base is registered but missing on disk[0m
+  [32mhint:[0m run bob doctor --repair
+
+[31;1mbob: nothing was built[0m (exit 7)

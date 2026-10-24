@@ -1,0 +1,19 @@
+open cmd/api/bob.go
+diag cmd/api/bob.go
+complete cmd/api/bob.go "foo."
+def cmd/api/bob.go "foo.Lib"
+complete cmd/api/bob.go "golang.BinaryOpts{\n\t\tX"
+hover cmd/api/bob.go "rcore.Crate"
+change cmd/api/bob.go "rcore.Crate(p)}" "rcore.Crate(p), Binary(p)}"
+diag cmd/api/bob.go
+change cmd/api/bob.go "rcore.Crate(p), Binary(p)}" "rcore.Crate(p)}"
+diag cmd/api/bob.go
+open cmd/api/main.go
+diag cmd/api/main.go
+complete cmd/api/main.go "greet."
+def cmd/api/main.go "greet.Hello"
+open libs/foo/bob.go
+diag libs/foo/bob.go
+def libs/foo/bob.go "cc.SharedLibrary"
+open internal/greet/greet_test.go
+diag internal/greet/greet_test.go

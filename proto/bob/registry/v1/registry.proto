@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package bob.registry.v1;
+
+import "bob/authz/v1/authz.proto";
+import "google/protobuf/timestamp.proto";
+
+service RegistryService {
+  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Also the permission name that gates /v2/ pulls of private manifests and blobs.
+  rpc GetRepository(GetRepositoryRequest) returns (GetRepositoryResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListTags(ListTagsRequest) returns (ListTagsResponse) {
+    option (bob.authz.v1.rule) = {kind: KIND_PUBLIC};
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message Repository {
+  string name = 1; // "<project>/<image>"
+  string project_id = 2;
+  bool has_public_tags = 3;
+  int32 tag_count = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  string pull_ref = 6; // <registry host>/<name>
+}
+message Tag {
+  string tag = 1;
+  string digest = 2;
+  string media_type = 3; // OCI index or manifest
+  repeated string platforms = 4;
+  int64 size = 5; // sum of layer sizes, largest platform
+  string release_id = 6;
+  bool public = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+message ListRepositoriesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string project_id = 3;
+  string query = 4;
+}
+message ListRepositoriesResponse {
+  repeated Repository repositories = 1;
+  string next_page_token = 2;
+}
+message GetRepositoryRequest {
+  string name = 1;
+}
+message GetRepositoryResponse {
+  Repository repository = 1;
+}
+message ListTagsRequest {
+  string repository = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+message ListTagsResponse {
+  repeated Tag tags = 1;
+  string next_page_token = 2;
+} // visible tags only

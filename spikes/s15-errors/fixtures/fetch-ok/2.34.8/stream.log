@@ -1,0 +1,54 @@
+@nix {"action":"start","id":2678345900752896,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2678345900752896}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv"}
+@nix {"action":"start","id":2678345900752897,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2678345900752898,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2678345900752899,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2678345900752897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2678345900752897,"type":106}
+@nix {"action":"start","id":2678345900752900,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2678345900752900}
+@nix {"action":"result","fields":[0,1,0,0],"id":2678345900752898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2678345900752897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2678345900752897,"type":106}
+@nix {"action":"start","fields":["/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv","",1,1],"id":2678345900752901,"level":3,"parent":0,"text":"building '/nix/store/12v20mxsx21cks39sj67ql6ggp9nxh1q-itoa-1.0.18.crate.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2678345900752898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2678345900752897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2678345900752897,"type":106}
+@nix {"action":"start","fields":["https://static.crates.io/crates/itoa/itoa-1.0.18.crate"],"id":2678345900752902,"level":4,"parent":2678345900752901,"text":"downloading 'https://static.crates.io/crates/itoa/itoa-1.0.18.crate'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"result","fields":[15935,15935,0,0],"id":2678345900752902,"type":105}
+@nix {"action":"stop","id":2678345900752902}
+@nix {"action":"result","fields":[1,2,0,0],"id":2678345900752898,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2678345900752899,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2678345900752897,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2678345900752897,"type":106}
+@nix {"action":"stop","id":2678345900752901}
+@nix {"action":"stop","id":2678345900752899}
+@nix {"action":"stop","id":2678345900752898}
+@nix {"action":"stop","id":2678345900752897}

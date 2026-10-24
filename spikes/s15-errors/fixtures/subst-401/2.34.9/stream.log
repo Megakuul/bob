@@ -1,0 +1,37 @@
+@nix {"action":"start","id":3160735152603136,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"start","fields":["http://127.0.0.1:21511/nix-cache-info"],"id":3160735152603137,"level":4,"parent":0,"text":"downloading 'http://127.0.0.1:21511/nix-cache-info'","type":101}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"result","fields":[13,13,0,0],"id":3160735152603137,"type":105}
+@nix {"action":"stop","id":3160735152603137}
+@nix {"action":"msg","column":null,"file":null,"level":1,"line":null,"msg":"\u001b[35;1mwarning:\u001b[0m unable to download '\u001b[35;1mhttp://127.0.0.1:21511/nix-cache-info\u001b[0m': HTTP error \u001b[35;1m401\u001b[0m\u001b[35;1m\u001b[0m\n\n         response body:\n\n         \u001b[35;1munauthorized\u001b[0m","raw_msg":"unable to download '\u001b[35;1mhttp://127.0.0.1:21511/nix-cache-info\u001b[0m': HTTP error \u001b[35;1m401\u001b[0m\u001b[35;1m\u001b[0m\n\nresponse body:\n\n\u001b[35;1munauthorized\u001b[0m"}
+@nix {"action":"stop","id":3160735152603136}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv"}
+@nix {"action":"start","id":3160735152603138,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":3160735152603139,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":3160735152603140,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603139,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603140,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3160735152603138,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3160735152603138,"type":106}
+@nix {"action":"start","id":3160735152603141,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":3160735152603141}
+@nix {"action":"result","fields":[0,1,0,0],"id":3160735152603139,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603140,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3160735152603138,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3160735152603138,"type":106}
+@nix {"action":"result","fields":[0,1,0,1],"id":3160735152603139,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":3160735152603140,"type":105}
+@nix {"action":"result","fields":[101,0],"id":3160735152603138,"type":106}
+@nix {"action":"result","fields":[100,0],"id":3160735152603138,"type":106}
+@nix {"action":"stop","id":3160735152603140}
+@nix {"action":"stop","id":3160735152603139}
+@nix {"action":"stop","id":3160735152603138}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\n       Reason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\n       Hint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'","raw_msg":"Cannot build '\u001b[35;1m/nix/store/lnc1h0j303p8d0v433kfrd69q96hlyk5-tools-payload.drv\u001b[0m'.\nReason: \u001b[31;1mlocal builds are disabled\u001b[0m (max-jobs = 0)\nHint: set 'max-jobs' to a non-zero value to enable local builds, or configure remote builders via 'builders'"}

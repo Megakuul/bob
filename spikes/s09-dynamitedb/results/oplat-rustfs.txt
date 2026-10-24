@@ -1,0 +1,9 @@
+[rustfs] Create                       p50=11.1ms   p90=15.2ms   p99=31.5ms   req/op=1.0 errs=0
+[rustfs] Get                          p50=1.6ms    p90=4.4ms    p99=8.2ms    req/op=1.0 errs=0
+[rustfs] Put                          p50=11.3ms   p90=18ms     p99=128.4ms  req/op=1.0 errs=0
+[rustfs] Update(Increment)            p50=14.8ms   p90=24.7ms   p99=38.6ms   req/op=2.0 errs=0
+[rustfs] Get+Put(ETag) CAS            p50=14.4ms   p90=16.7ms   p99=27.8ms   req/op=2.0 errs=0
+[rustfs] Query 10 items               p50=8.7ms    p90=18.4ms   p99=41.8ms   req/op=11.0 errs=0
+[rustfs] ListKeys 10 items            p50=5.5ms    p90=6.5ms    p99=9.3ms    req/op=1.0 errs=0
+[rustfs] Query empty partition        p50=1.9ms    p90=2.3ms    p99=3.5ms    req/op=1.0 errs=0
+[rustfs] Delete                       p50=38.6ms   p90=50.4ms   p99=91.8ms   req/op=2.0 errs=0

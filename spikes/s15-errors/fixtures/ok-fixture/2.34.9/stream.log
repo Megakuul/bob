@@ -1,0 +1,22 @@
+@nix {"action":"start","id":2225286980567040,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2225286980567040}
+@nix {"action":"start","id":2225286980567041,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2225286980567042,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2225286980567043,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2225286980567042,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2225286980567043,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2225286980567041,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2225286980567041,"type":106}
+@nix {"action":"start","id":2225286980567044,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2225286980567044}
+@nix {"action":"result","fields":[0,1,0,0],"id":2225286980567042,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2225286980567043,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2225286980567041,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2225286980567041,"type":106}
+@nix {"action":"result","fields":[0,0,0,0],"id":2225286980567042,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2225286980567043,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2225286980567041,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2225286980567041,"type":106}
+@nix {"action":"stop","id":2225286980567043}
+@nix {"action":"stop","id":2225286980567042}
+@nix {"action":"stop","id":2225286980567041}

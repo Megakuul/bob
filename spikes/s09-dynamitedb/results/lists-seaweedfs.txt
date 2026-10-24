@@ -1,0 +1,18 @@
+[seaweedfs] build-number CAS counter: 20 allocators x 5 = 100 numbers, duplicates=0, conflict retries=955, 958ms
+[seaweedfs] UI list                                  key prefix               page1  requests page1         page2 (StartAfter)
+[seaweedfs] projects                                 project/                 21     LIST=1 GET=21          - 
+[seaweedfs] builds of project (newest first)         build/p01/n/             50     LIST=1 GET=50          50 items, LIST=1 GET=50 err=<nil> 
+[seaweedfs] running builds (overview)                buildidx/running/b/      10     LIST=1 GET=10          - 
+[seaweedfs] recent failures (overview)               buildidx/failed/b/       30     LIST=1 GET=30          - 
+[seaweedfs] releases of project                      release/p01/v/           40     LIST=1 GET=40          - 
+[seaweedfs] jobs of build (finished)                 jobs/B1/j/               40     LIST=1 GET=40          - 
+[seaweedfs] live jobs per platform (queued+running)  live/aarch64-linux/j/    50     LIST=1 GET=50          10 items, LIST=1 GET=10 err=<nil> 
+[seaweedfs] queue depth per platform (keys only)     jobq/aarch64-linux/j/    50     LIST=1 GET=0           10 items, LIST=1 GET=0 err=<nil> 
+[seaweedfs] workers                                  worker/                  50     LIST=1 GET=50          50 items, LIST=1 GET=50 err=<nil> 
+[seaweedfs] users                                    user/                    50     LIST=1 GET=50          50 items, LIST=1 GET=50 err=<nil> 
+[seaweedfs] roles                                    role/                    10     LIST=1 GET=10          - 
+[seaweedfs] roles of user                            userrole/u0001/r/        10     LIST=1 GET=10          - 
+[seaweedfs] users of role                            roleuser/r01/u/          30     LIST=1 GET=30          - 
+[seaweedfs] dynamitedb.Query builds of project, WithLimit(50): items=50 first=#300 LIST=1 GET=50 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0) err=<nil>
+[seaweedfs] dynamitedb.Query users (pk-only type) WithLimit(50): items=50 LIST=1 GET=50 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0) err=<nil> 
+[seaweedfs] dynamitedb.Query builds filtered State=failed (none match) WithLimit(10): items=0 LIST=1 GET=300 PUT=0 DELETE=0 other=0 (412=0 404=0 5xx=0) err=<nil> (filter is client-side: scans the partition)

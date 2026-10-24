@@ -1,0 +1,80 @@
+{
+  "name": "c-error",
+  "nix": "2.34.8",
+  "command": [
+    "/root/bob/spikes/s15-errors/nixbin/2.34.8/nix",
+    "build",
+    "--no-link",
+    "--print-out-paths",
+    "--log-format",
+    "internal-json",
+    "-L",
+    "--keep-going",
+    "/nix/store/4ms6hq4hwnqxzw2vixj8spd7x0q1khyq-cbad-cbad.drv^out"
+  ],
+  "outcome": {
+    "exitCode": 1,
+    "durationMs": 598,
+    "nixVersion": "2.34.8",
+    "valid": [
+      "/nix/store/4ms6hq4hwnqxzw2vixj8spd7x0q1khyq-cbad-cbad.drv"
+    ]
+  },
+  "context": {
+    "packages": {
+      "/nix/store/4ms6hq4hwnqxzw2vixj8spd7x0q1khyq-cbad-cbad.drv": {
+        "label": "//cbad:cbad",
+        "definedAt": "fixture/cbad/bob.go:7:12",
+        "kind": "cc_library",
+        "srcDir": "fixture/cbad"
+      }
+    },
+    "outputs": {
+      "/nix/store/yd9iw19ixxp76zi1c5cnn9yrr6hzrbqm-cbad-cbad": "/nix/store/4ms6hq4hwnqxzw2vixj8spd7x0q1khyq-cbad-cbad.drv"
+    },
+    "sources": {
+      "/nix/store/0gpmglqh89rszsxxklrzfdyz5h0rcgh6-cbad": "fixture/cbad"
+    },
+    "nixpkgs": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": "coreutils",
+      "/nix/store/52dk32w642kazfdmrydn6fm99q5x44zs-gcc-wrapper-15.3.0.drv": "stdenv.cc",
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": "gnused",
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": "findutils",
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": "gnugrep",
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": "bash"
+    },
+    "users": {
+      "/nix/store/0im48mm81g1d5pw5hky7ssqdck6y9q9g-coreutils-9.11.drv": [
+        "//cbad:cbad"
+      ],
+      "/nix/store/52dk32w642kazfdmrydn6fm99q5x44zs-gcc-wrapper-15.3.0.drv": [
+        "//cbad:cbad"
+      ],
+      "/nix/store/h5bnxz0jbfx7id753j67rl22mvv6z2j1-gnused-4.10.drv": [
+        "//cbad:cbad"
+      ],
+      "/nix/store/mj6hz2ns22ad7lh20gldghy3xxv8rck1-findutils-4.10.0.drv": [
+        "//cbad:cbad"
+      ],
+      "/nix/store/mjgh72rbi5l67kchy3sw2xh5syb3vbn6-gnugrep-3.12.drv": [
+        "//cbad:cbad"
+      ],
+      "/nix/store/wc33p0bh1ghvj4zyflprxsnwq57skjp4-bash-interactive-5.3p9.drv": [
+        "//cbad:cbad"
+      ]
+    },
+    "requested": [
+      "//cbad:cbad"
+    ],
+    "limits": {
+      "localBuilds": true
+    },
+    "substituters": [
+      {
+        "url": "https://cache.nixos.org",
+        "name": "cache.nixos.org",
+        "auth": false
+      }
+    ]
+  }
+}

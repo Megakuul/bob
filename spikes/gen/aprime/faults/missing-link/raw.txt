@@ -1,0 +1,24 @@
+this derivation will be built:
+  /nix/store/njidmnjdfllvvdnjbyp2gyy0ix3pfsa6-api-api.drv
+building '/nix/store/njidmnjdfllvvdnjbyp2gyy0ix3pfsa6-api-api.drv'...
+error: Cannot build '/nix/store/njidmnjdfllvvdnjbyp2gyy0ix3pfsa6-api-api.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/skka0fzhkxqi8nc5m3r4cf0xix4hpx24-api-api
+       Last 14 log lines:
+       > Running phase: unpackPhase
+       > unpacking source archive /nix/store/cpy22zfkcl6hcal76d3009phs16vsl3z-api-api-src
+       > source root is api-api-src
+       > Running phase: patchPhase
+       > Running phase: updateAutotoolsGnuConfigScriptsPhase
+       > Running phase: buildPhase
+       > go: downloading github.com/google/uuid v1.6.0
+       > go: downloading google.golang.org/protobuf v1.36.11
+       > go: downloading golang.org/x/sync v0.24.0
+       > # example.com/api/cmd/api
+       > cmd/api/main.go:7:10: fatal error: rcore.h: No such file or directory
+       >     7 | #include "rcore.h"
+       >       |          ^~~~~~~~~
+       > compilation terminated.
+       For full logs, run:
+         nix log /nix/store/njidmnjdfllvvdnjbyp2gyy0ix3pfsa6-api-api.drv

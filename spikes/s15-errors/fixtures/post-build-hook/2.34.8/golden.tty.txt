@@ -1,0 +1,9 @@
+[32m✓[0m //tools:hook
+
+[31;1merror[BOB-E-4007]:[0m [1muploading //tools:hook to the cache failed[0m
+  package defined at fixture/tools/bob.go:24:15
+   [2m│[0m uploading …/tools-hook
+   [2m│[0m upload failed: 503
+  [32mhint:[0m the build itself succeeded; the worker retries the upload
+
+[31;1mbob: 1 built[0m (exit 4)

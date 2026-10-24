@@ -1,0 +1,9 @@
+[31;1m✗[0m //tools:memory
+
+[31;1merror[BOB-E-6002]:[0m [1m//tools:memory was killed: out of memory[0m
+  package defined at fixture/tools/bob.go:14:15
+  cause: the build step was killed with SIGKILL; on Linux this is almost always the out-of-memory killer
+  [32mhint:[0m reduce parallel jobs (bob build -j) or raise the memory limit
+  [2mfull log: bob log //tools:memory[0m
+
+[31;1mbob: 1 failed[0m (exit 6)

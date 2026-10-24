@@ -1,0 +1,16 @@
+== s08-bundles start 2026-10-21T09:16:49Z load 3.12 3.84 4.29
+[] oci api-v1 (cold):
+index sha256:40e7305114f49d9702ac24adfef4e6d1dbf7a8a7cff5b97337d560cf5d7adfb0 total=1.91s
+[] oci api-v1-one (cold):
+index sha256:a3a39de014508f666b36cf49f25cc9446ed1260a6380c634415f576219270048 total=3.19s
+[] oci api-v1-g4 (cold):
+index sha256:0b3d29b215e3832aeba66310cf5ed3914d964ab00b792b47e8e62cb5fbc415bf total=2.75s
+[] oci api-v2 incremental into a v1 layout:
+index sha256:a1554efc0c4995b694bd64c88e7005ac0c2f306e2f89d3dd7c9d01eef30b680a total=0.40s
+[] appimage ai-api:
+appimage out/api-aarch64.AppImage sha256=2725705450e7c62fc8839bda9e496041a7798312edf96b389d9f51410896065a size=21223944 closure=80272752 paths=13 time=5.83s
+[] appimage ai-api-fixed:
+appimage out/api-fixed-aarch64.AppImage sha256=0e5a4e01eac17fdfedd6a8b2c7dd9388a60cdec3a8f0bbadc33637576065ace7 size=10848776 closure=80272752 paths=13 time=3.00s
+[] appimage ai-curl:
+appimage out/curl-aarch64.AppImage sha256=e6d76c2803d401d70766cf701cf3a05ef156a857813168ea22e7732c86cc75cd size=23427592 closure=92026520 paths=28 time=6.73s
+== s08-bundles exit 0 end 2026-10-21T09:17:13Z

@@ -1,0 +1,25 @@
+error:
+       … while calling the 'derivationStrict' builtin
+         at «nix-internal»/derivation-internal.nix:37:12:
+           36|
+           37|   strict = derivationStrict drvAttrs;
+             |            ^
+           38|
+
+       … while evaluating derivation 'libfoo-foo'
+         whose name attribute is located at /nix/store/x605rbj3d9bjxd3zdnqy0iphq7g6ly50-source/pkgs/stdenv/generic/make-derivation.nix:647:11
+
+       … while evaluating attribute 'buildInputs' of derivation 'libfoo-foo'
+         at /nix/store/x605rbj3d9bjxd3zdnqy0iphq7g6ly50-source/pkgs/stdenv/generic/make-derivation.nix:718:11:
+          717|           depsHostHost = hostHostOutputs;
+          718|           buildInputs = hostTargetOutputs;
+             |           ^
+          719|           depsTargetTarget = targetTargetOutputs;
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Refusing to evaluate package 'openssl-1.1.1w' in /nix/store/x605rbj3d9bjxd3zdnqy0iphq7g6ly50-source/pkgs/development/libraries/openssl/default.nix:394 because it is marked as insecure
+
+       Known issues:
+        - OpenSSL 1.1 is reaching its end of life on 2023/09/11 and cannot be supported through the NixOS 23.11 release cycle. https://www.openssl.org/blog/blog/2023/03/28/1.1.1-EOL/
+

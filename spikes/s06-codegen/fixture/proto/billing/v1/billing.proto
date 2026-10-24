@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package billing.v1;
+
+message Invoice {
+  string id = 1;
+  int64 cents = 2;
+}
+
+service BillingService {
+  rpc GetInvoice(GetInvoiceRequest) returns (Invoice) {}
+}
+
+message GetInvoiceRequest {
+  string id = 1;
+}

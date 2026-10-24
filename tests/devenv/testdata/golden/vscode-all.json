@@ -1,0 +1,8 @@
+{
+  "go.alternateTools": { "go": "${workspaceFolder}/.bob/bin/go", "gopls": "${workspaceFolder}/.bob/bin/gopls" },
+  "go.toolsManagement.autoUpdate": false,
+  "gopls": { "build.buildFlags": ["-tags=bob"], "build.directoryFilters": ["-.bob"] },
+  "rust-analyzer.server.path": "${workspaceFolder}/.bob/bin/rust-analyzer",
+  "clangd.path": "${workspaceFolder}/.bob/bin/clangd",
+  "files.watcherExclude": { "**/.bob/**": true }
+}

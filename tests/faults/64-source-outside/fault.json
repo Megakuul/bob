@@ -1,0 +1,21 @@
+{
+ "id": "64-source-outside",
+ "title": "source pattern leaves the repository",
+ "source": "HARNESS.md \u00a75.1 added fault",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "Srcs pattern ../outside"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1025",
+ "position": "none",
+ "excerpt": false,
+ "hint": false,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

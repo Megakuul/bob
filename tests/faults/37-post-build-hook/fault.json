@@ -1,0 +1,26 @@
+{
+ "id": "37-post-build-hook",
+ "title": "post-build hook fails (worker upload)",
+ "source": "S15 fault 37 (post-build-hook)",
+ "fixture": "polyglot",
+ "inject": {
+  "kind": "env",
+  "describe": "upload hook exits 1"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-4007",
+ "exit": 4,
+ "position": "marker",
+ "expectPosition": {
+  "definedAt": "fixture/tools/bob.go:24:15"
+ },
+ "excerpt": true,
+ "hint": true,
+ "nixver": [
+  "2.34.9"
+ ],
+ "forbid": []
+}

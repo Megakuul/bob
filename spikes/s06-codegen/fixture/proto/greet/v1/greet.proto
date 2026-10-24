@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package greet.v1;
+
+import "common/v1/common.proto";
+
+message GreetRequest {
+  string name = 1;
+}
+
+message GreetResponse {
+  string greeting = 1;
+  common.v1.Meta meta = 2;
+}
+
+service GreetService {
+  rpc Greet(GreetRequest) returns (GreetResponse) {}
+}

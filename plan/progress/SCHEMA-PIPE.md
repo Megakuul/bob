@@ -1,0 +1,1 @@
+SCHEMA-PIPE done: schema/events-v1.json, tests/cli/events_test.go, go.mod/go.sum (jsonschema v5.3.1), pkg/bob/repo.go, protected globs (tools/internal/protected, tests/protected.sha256 header, HARNESS 2.1), docs/operations/worker-compromise.md

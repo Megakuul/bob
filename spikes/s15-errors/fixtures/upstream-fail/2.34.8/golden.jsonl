@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//tools:upstream"]}
+{"v":1,"event":"upstream.start","name":"hello-s15-2.12.3"}
+{"v":1,"event":"error","error":{"code":"BOB-E-5001","class":"upstream","message":"nixpkgs package hello-s15 failed to build from source (needed by //tools:upstream)","label":"//tools:upstream","definedAt":"fixture/tools/bob.go:28:15","cause":"nixpkgs hello-s15-2.12.3: builder failed with exit code 1","excerpt":["structuredAttrs is enabled","Using versionCheckHook","Running phase: unpackPhase","unpacking source archive …/hello-2.12.3.tar.gz","source root is hello-2.12.3","setting SOURCE_DATE_EPOCH to timestamp 1773804383 of file \"hello-2.12.3/ChangeLog\"","Running phase: patchPhase","checking s15"],"hint":"this is not your code: the package is not in any cache for this nixpkgs revision; pin another revision or ask your bob server admin","log":"bob log --nixpkgs hello-s15","args":{"attr":"hello-s15","users":"//tools:upstream"}}}
+{"v":1,"event":"package.finish","label":"//tools:upstream","status":"skipped"}
+{"v":1,"event":"run.finish","exitCode":5,"counts":{"built":0,"cached":0,"failed":0,"skipped":1,"cancelled":0,"upstream":1,"downloaded":0}}

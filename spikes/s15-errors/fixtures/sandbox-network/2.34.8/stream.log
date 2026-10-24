@@ -1,0 +1,94 @@
+@nix {"action":"start","id":2706473641574400,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2706473641574400}
+@nix {"action":"msg","level":3,"msg":"this derivation will be built:"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/m67cd124qvdi0f47x7w8fh7zy9qzsfrc-tools-network.drv"}
+@nix {"action":"start","id":2706473641574401,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2706473641574402,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2706473641574403,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"start","id":2706473641574404,"level":6,"parent":0,"text":"querying info about missing paths","type":0}
+@nix {"action":"stop","id":2706473641574404}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,2,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,3,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,4,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,5,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,6,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,5,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,4,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,3,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,2,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"start","fields":["/nix/store/m67cd124qvdi0f47x7w8fh7zy9qzsfrc-tools-network.drv","",1,1],"id":2706473641574405,"level":3,"parent":0,"text":"building '/nix/store/m67cd124qvdi0f47x7w8fh7zy9qzsfrc-tools-network.drv'","type":105}
+@nix {"action":"result","fields":[0,1,1,0],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":["bash: connect: Network is unreachable"],"id":2706473641574405,"type":101}
+@nix {"action":"result","fields":["bash: line 2: /dev/tcp/1.1.1.1/80: Network is unreachable"],"id":2706473641574405,"type":101}
+@nix {"action":"result","fields":["bob-builder: command failed (exit 1): exec 3<> /dev/tcp/1.1.1.1/80"],"id":2706473641574405,"type":101}
+@nix {"action":"result","fields":[0,1,0,1],"id":2706473641574402,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2706473641574403,"type":105}
+@nix {"action":"result","fields":[101,0],"id":2706473641574401,"type":106}
+@nix {"action":"result","fields":[100,0],"id":2706473641574401,"type":106}
+@nix {"action":"stop","id":2706473641574405}
+@nix {"action":"stop","id":2706473641574403}
+@nix {"action":"stop","id":2706473641574402}
+@nix {"action":"stop","id":2706473641574401}
+@nix {"action":"msg","column":null,"file":null,"level":0,"line":null,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/m67cd124qvdi0f47x7w8fh7zy9qzsfrc-tools-network.drv\u001b[0m'.\n       Reason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\n       Output paths:\n         \u001b[35;1m/nix/store/vgzqwpk4xd496pwgpcr6dh3zk05r2xnm-tools-network\u001b[0m","raw_msg":"Cannot build '\u001b[35;1m/nix/store/m67cd124qvdi0f47x7w8fh7zy9qzsfrc-tools-network.drv\u001b[0m'.\nReason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\nOutput paths:\n  \u001b[35;1m/nix/store/vgzqwpk4xd496pwgpcr6dh3zk05r2xnm-tools-network\u001b[0m"}

@@ -1,0 +1,5 @@
+{"v":1,"event":"run.start","requested":["//api:api"]}
+{"v":1,"event":"package.start","label":"//api:api","action":"build"}
+{"v":1,"event":"error","error":{"code":"BOB-E-2005","class":"build","message":"//api:api: tests failed","label":"//api:api","definedAt":"fixture/api/bob.go:13:11","cause":"test TestDigest failed","excerpt":["--- FAIL: TestDigest (0.00s)","    main_test.go:7: sha256Hex(bob) = 81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9, want 0000","FAIL","FAIL\texample.com/api/cmd/api\t0.031s","FAIL"],"hint":"run bob test //api:api -v to see the full test output","log":"bob log //api:api","args":{"label":"//api:api"}}}
+{"v":1,"event":"package.finish","label":"//api:api","status":"failed"}
+{"v":1,"event":"run.finish","exitCode":1,"counts":{"built":0,"cached":0,"failed":1,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0}}
