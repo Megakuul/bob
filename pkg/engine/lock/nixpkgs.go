@@ -2,12 +2,16 @@ package lock
 
 import (
 	"context"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 )
 
@@ -61,7 +65,10 @@ func ChannelRev(ctx context.Context, channel string) (string, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("nixpkgs channel %s: %w", channel, err)
+		if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+			return "", err
+		}
+		return "", channelError(channel, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -118,4 +125,30 @@ func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPi
 	}
 	pin.NarHash = narHash
 	return pin, nil
+}
+
+// channelError is a failed request for a channel's revision: a download failure (BOB-E-3002)
+// with the network cause in plain words, not an internal error (A471: a resolver that does not
+// answer was reported as "Nix stopped unexpectedly").
+func channelError(channel string, err error) error {
+	host := "channels.nixos.org"
+	reason := err.Error()
+	var dns *net.DNSError
+	var unknown x509.UnknownAuthorityError
+	var invalid x509.CertificateInvalidError
+	var hostErr x509.HostnameError
+	var op *net.OpError
+	switch {
+	case errors.As(err, &dns):
+		reason = "the name " + host + " cannot be resolved; check the network and /etc/resolv.conf"
+	case errors.As(err, &unknown), errors.As(err, &invalid), errors.As(err, &hostErr):
+		reason = "the TLS certificate of " + host + " is not trusted; check the CA bundle of this system and any proxy"
+	case errors.Is(err, context.DeadlineExceeded):
+		reason = host + " did not answer within 30 s"
+	case errors.As(err, &op):
+		reason = host + " cannot be reached (" + op.Err.Error() + ")"
+	}
+	d := diag.New(3002, "label", "nixpkgs channel "+channel, "reason", reason)
+	d.Raw = []string{err.Error()}
+	return d
 }

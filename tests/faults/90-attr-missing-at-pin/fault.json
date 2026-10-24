@@ -1,0 +1,24 @@
+{
+ "id": "90-attr-missing-at-pin",
+ "title": "typed nixpkgs handle missing at the pinned revision (R-NIX-032)",
+ "source": "HARNESS.md \u00a75.1 added fault (ADR 0020, D71/D72, Q1 2026-10-24)",
+ "fixture": "acme",
+ "inject": {
+  "kind": "env",
+  "describe": "the index reports openssl missing at the pin (test hook of R-NIX-032)",
+  "env": [
+   "BOB_TEST_NIXPKGS_MISSING=openssl"
+  ]
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1001",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

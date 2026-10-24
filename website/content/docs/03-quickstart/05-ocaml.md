@@ -10,51 +10,72 @@ test. bob compiles with `ocamlopt` from nixpkgs and writes `.merlin` files for o
 
 You need [bob installed](../02-install/02-install-bob.md). You do not need OCaml, opam or dune.
 
-## The project
-
-```tree
-📁 hello-ocaml/
-  📄 bob.go
-  🐫 hello.ml
-  🐫 main.ml
-  🐫 test.ml
-```
+## Start the project
 
 ```bash
 mkdir hello-ocaml && cd hello-ocaml
 git init
 ```
 
-## Write the code
+Let bob write the project, lock it and write the files it generates (it never overwrites a
+file):
+
+```bash run
+bob init --lang ocaml
+```
+
+```text expect
+bob init: ocaml project in …
+  + bob.go
+  + hello.ml
+  + main.ml
+  + test.ml
+bob.lock: 2 changes
+…
+next: bob build && bob test && bob run //:hello
+```
+
+```tree
+📁 hello-ocaml/
+  📄 bob.go
+  📄 bob.lock
+  🐫 hello.ml
+  🐫 main.ml
+  🐫 test.ml
+```
+
+## The code
 
 `hello.ml` is the library. Its module is wrapped in the library's namespace, as dune does, so
 other code calls it `Greet.Hello`:
 
-```ocaml file=hello.ml
+```ocaml
 let greeting name = "hello, " ^ name
 ```
 
-```ocaml file=main.ml
+`main.ml` is the program:
+
+```ocaml
 let () = print_endline (Greet.Hello.greeting "bob")
 ```
 
 `test.ml` is a test: exit status 0 means pass, and TAP output is reported per case.
 
-```ocaml file=test.ml
+```ocaml
 let () =
   let ok = Greet.Hello.greeting "bob" = "hello, bob" in
   Printf.printf "TAP version 14\n1..1\n%s 1 - greeting\n" (if ok then "ok" else "not ok");
   if not ok then exit 1
 ```
 
-## Describe the build
+## The build description
 
 All three share one directory, so each package names its files:
 
-```go file=bob.go
+```go verify
 //go:build bob
 
-package helloml
+package helloocaml
 
 import (
 	"github.com/megakuul/bob/pkg/bob"
@@ -76,17 +97,13 @@ var Test = bob.Define(func(p *bob.P) *ocaml.Test {
 })
 ```
 
-## Lock, build, test, run
+## Build, test, run
 
 ```bash run
-bob lock
 bob build
 ```
 
 ```text expect
-…
-  + nixpkgs  nixpkgs   …
-…
 bob: 2 built
 ```
 

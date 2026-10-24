@@ -64,7 +64,7 @@ func corpusRepo(t *testing.T, spec workspaceSpec) string {
 	}
 	files := map[string]string{
 		"go.mod":       "module example.com/rsroot\n\ngo 1.26.0\n",
-		"bob.go":       "//go:build bob\n\npackage rsroot\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":       "//go:build bob\n\npackage rsroot\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"w/src/lib.rs": "pub fn id() -> u32 { 1 }\n",
 		"w/bob.go": "//go:build bob\n\npackage w\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/rust\"\n)\n\n" +
 			"// Lib is the corpus crate (label //w:w).\nvar Lib = bob.Define(func(p *bob.P) *rust.Lib {\n\treturn rust.Library(p, rust.LibOpts{Deps: []rust.Dep{\n" + deps.String() + "\t}})\n})\n",

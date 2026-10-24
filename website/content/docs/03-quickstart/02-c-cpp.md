@@ -11,25 +11,43 @@ also get `compile_commands.json` for clangd and a dev shell with GCC.
 You need [bob installed](../02-install/02-install-bob.md). You do not need a compiler: bob
 uses GCC from nixpkgs.
 
-## The project
-
-```tree
-📁 hello-cc/
-  📄 bob.go
-  📄 main.cpp
-  📄 test.cpp
-```
+## Start the project
 
 ```bash
 mkdir hello-cc && cd hello-cc
 git init
 ```
 
-## Write the code
+Let bob write the project, lock it and write the files it generates (it never overwrites a
+file):
+
+```bash run
+bob init --lang cc
+```
+
+```text expect
+bob init: cc project in …
+  + bob.go
+  + main.cpp
+  + test.cpp
+bob.lock: 2 changes
+…
+next: bob build && bob test && bob run //:hello
+```
+
+```tree
+📁 hello-cc/
+  📄 bob.go
+  📄 bob.lock
+  📄 main.cpp
+  📄 test.cpp
+```
+
+## The code
 
 `main.cpp` prints the zlib version it was linked with:
 
-```cpp file=main.cpp
+```cpp
 #include <cstdio>
 #include <zlib.h>
 
@@ -42,7 +60,7 @@ int main() {
 `test.cpp` is a test: exit status 0 means pass. Output in [TAP](https://testanything.org)
 format is reported per case:
 
-```cpp file=test.cpp
+```cpp
 #include <cstdio>
 #include <zlib.h>
 
@@ -53,9 +71,9 @@ int main() {
 }
 ```
 
-## Describe the build
+## The build description
 
-```go file=bob.go
+```go verify
 //go:build bob
 
 package hellocc
@@ -88,19 +106,9 @@ var Test = bob.Define(func(p *bob.P) *cc.Test {
 bob generates the repository's `go.mod` itself (the `bob.go` files are Go code); you do not
 write one.
 
-## Lock, build, test, run
+## Build, test, run
 
-```bash run
-bob lock
-```
-
-```text expect
-bob.lock: 2 changes
-…
-  + nixpkgs  nixpkgs   …
-```
-
-For C and C++, the nixpkgs revision fixes GCC and zlib.
+For C and C++, the nixpkgs revision in `bob.lock` fixes GCC and zlib.
 
 ```bash run
 bob build

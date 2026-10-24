@@ -942,3 +942,68 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
    go build -modfile) and removed the hand-written go.mod blocks from the quickstarts and
    guides 03/06. A page that has a go.mod block is checked as before (a block without a module
    line still fails). Result: tests/docs PASS.
+98. APPLIED 2026-10-24 Q1 (A480), owner approved all, chat 2026-10-24 (D71/D72, ADR 0020).
+   tests/fixtures/repos/* migrated to the typed surface and per-package modules:
+   `Nixpkgs: bob.NixOS2605` in every root; nixpkgs handles (`nixpkgs.Openssl.Lib(p, …)`,
+   `nixpkgs.Jq.Tool(p)`, `nixpkgs.Bash/Coreutils/Zlib…`); `Hdrs`/`Headers: bob.IncludeDir("include")`;
+   Go declarations moved into the Go package's own bob.go without directory strings
+   (acme/cmd/api, polyglot/cmd/api (new), bigclosure/cmd/big (new), go/api/cmd/api (new),
+   go/api/internal/ffi (new), go/tools/cmd/stamp (new), codegen/svc/cmd/{server,client} (new));
+   module roots use `Tests(golang.TestOpts{Recursive: true})`; main-package binaries reach
+   deploy/ through `bob.Slot` (acme.API, polyglot.API, bigclosure.Big) so every label and release
+   name stays; cpp-lib's binary moved to cpp-lib/tool/bob.go (label //tool:ringtool, was
+   //:ringtool); npm native: `npm.AllowScripts(sqlite, esbuild)` with handles; pipelines
+   `Releases: []bob.Pattern{"//deploy:api"}` / `{"//deploy:polyglot"}`. acme LSP script: steps
+   `complete libs/foo/bob.go "nixpkgs.Op"` and `hover libs/foo/bob.go "nixpkgs.Openssl"`.
+   Result: TestRFW070FixtureLocality PASS; fixtures evaluate again once Q2/Q3 land (red until then).
+99. APPLIED 2026-10-24 Q1 (A481), owner approved all, chat 2026-10-24. Test repositories and
+   embedded bob.go sources migrated the same way: tests/core/testdata/repos (svc: cmd/sleeper/bob.go
+   + slot `svc.Sleeper`, `postgres.Options{Server: nixpkgs.Postgresql17}`; typecheck/linkable without
+   the dir string; nixtool keeps its intentional type error as `nixpkgs.Openssl.Tool(p)`),
+   tests/cli/testdata/repos (pipe/app/bob.go, exits/tools/<prog>/bob.go), tests/devenv/testdata/repos,
+   and the bob.go strings in tests/eco/{golang,rust,npm,cc,ocaml}, tests/core/steps_test.go,
+   tests/nix/{closure,layer,namespace}_test.go, tests/rootless, tests/outputs/overlays_test.go
+   (`nixpkgs.Curl.Exe(p, nixpkgs.MainProgram("bin/curl"))`), tests/server/srvtest,
+   tests/fixtures/evil. tests/eco/rust uses `nixpkgs.Rust1_97PackagesStableRustc` (include.json
+   entry, ADR 0020 §2); tests/eco/npm/scripts_test.go expects the handle wording of 2013;
+   tests/nix/layer_test.go TestRNIX005 writes `Nixpkgs: bob.NixOS2605, NixpkgsRev: "<rev>"`.
+100. APPLIED 2026-10-24 Q1 (A482), owner approved all, chat 2026-10-24. Fault patches refreshed
+   for the migrated fixtures (context lines only, same faults): 54, 60, 61, 62, 63, 64, 65, 66
+   (`acme.Module(p).Tests(golang.TestOpts{…})`, `bob.IncludeDir`, `nixpkgs.Openssl.Lib`,
+   `npm.AllowScripts(sqlite, esbuild)`). All 14 patch faults checked with `git apply --check`
+   against a private copy of the fixture.
+101. APPLIED 2026-10-24 Q1 (A483), owner approved all, chat 2026-10-24. New faults 82–92
+   (fault.json, patch.diff or env hook, expect.json rows; expect.json now sorted by key):
+   82 source outside package (1028), 83 root lists subpackage sources (1028), 84 two cc units in
+   one package (1029), 85 `-I` of another package (1020), 86 string nixpkgs attribute (1020 +
+   typed hint), 87 misspelt handle (1020 + did-you-mean), 88 nixext import (1024 R7), 89 assignment
+   to a framework value (1024 R8), 90 handle missing at the pin (1001 `pin`, hook
+   `BOB_TEST_NIXPKGS_MISSING`), 91 public headers outside the package (1028), 92 unbound slot (1020).
+   tests/faults/README.md range updated. Red until Q2/Q3 implement the checks.
+102. APPLIED 2026-10-24 Q1 (A484), owner approved all, chat 2026-10-24. Code table (SPEC §02.3):
+   1001 variant `pin`, 1024 variant `R8`, new 1028 (`outside`, `subpackage`) and 1029 (1027 stays
+   reserved for the I-B32 proposal); 2013/2014 hints name handles instead of strings.
+   pkg/bob/diag/codes.go (data only), codes.lock (5 lines appended), tests/goldens/diag/codes.golden
+   regenerated (`go test ./pkg/bob/diag -update`), website 05-cli/02-errors.md regenerated
+   (`BOB_DOCS_UPDATE=1`). Diffs in out/golden-candidates/q1/.
+103. APPLIED 2026-10-24 Q1 (A485), owner approved all, chat 2026-10-24. New guards:
+   tests/core/typesafe_test.go (TestRFW072TypedSurface with the protected allowlist and violation
+   list, TestRNIX031GeneratedSurface, TestRFW070FixtureLocality, TestBoblintCatchesViolations,
+   TestRFW070GlobStopsAtSubpackage, TestRFW071Slots), tests/harness/boblint (shared go/ast
+   linter), tests/docs/locality_test.go (TestDocsPackageLocality, waits for the surface),
+   tests/core/bobgo_test.go (R-FW-002 cases r7nixext and r8, LSP nixpkgs completion/hover
+   checks), test repositories define/slot, define/slot2, rules/r7nixext, rules/r8.
+104. APPLIED 2026-10-24 Q1 (A486), owner approved all, chat 2026-10-24. Budgets B-098…B-103 for
+   the generated surface (SPEC Appendix B, status proposal, no benchmark yet);
+   tests/budgets/budgets.json regenerated by tools/internal/budgets (`go test -update`), whose
+   row count check and file note moved from 97 to 103.
+105. APPLIED 2026-10-24 Q1 (A487), owner approved all, chat 2026-10-24. tests/nix/embedded_test.go
+   TestRNIX025SystemNixCoexistence builds `//tool:ringtool` (cpp-lib's binary is its own package
+   since correction 98; it was `//:ringtool`). Nothing else changes.
+106. APPLIED 2026-10-24 Q1 (A488), owner approved all, chat 2026-10-24. tests/core/api_test.go
+   TestRFW010NoLabelStringLiterals skips the elements of `[]bob.Pattern` literals: pipeline label
+   patterns are the CLI form SPEC R-FW-010 (amended, ADR 0020) allows, and pipelines now name
+   releases by pattern (`Releases: []bob.Pattern{"//deploy:api"}`). This also resolves the
+   pre-existing failure on nondet's `Targets: []bob.Pattern{"//:nonce"}`. Every other label
+   literal still fails.
+

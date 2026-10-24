@@ -121,7 +121,7 @@ func synRepo(t *testing.T, n, width int) (string, map[int][]int) {
 	m.WriteString("\tfmt.Println(\"total\", t)\n}\n")
 	write("syn/cmd/syn/main.go", m.String())
 	write("go.mod", "module example.com/synroot\n\ngo 1.26.0\n")
-	write("bob.go", "//go:build bob\n\npackage synroot\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n")
+	write("bob.go", "//go:build bob\n\npackage synroot\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n")
 	write("syn/bob.go", `//go:build bob
 
 package syn
@@ -135,10 +135,21 @@ import (
 var Module = bob.Define(func(p *bob.P) *golang.Module {
 	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/syn", Go: "1.26"})
 })
+`)
+	// The binary is declared in its main package's own bob.go (R-FW-070, ADR 0020).
+	write("syn/cmd/syn/bob.go", `//go:build bob
+
+package main
+
+import (
+	"example.com/synroot/syn"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+)
 
 // Syn is the binary (label //syn/cmd/syn:syn).
 var Syn = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/syn", golang.BinaryOpts{})
+	return syn.Module(p).Binary(golang.BinaryOpts{})
 })
 `)
 	for _, args := range [][]string{

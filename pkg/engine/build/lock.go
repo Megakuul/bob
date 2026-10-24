@@ -53,11 +53,26 @@ func lockPath(root string) string { return filepath.Join(root, "bob.lock") }
 
 // readLock reads bob.lock; a missing file is an empty lock.
 func readLock(root string) (*lock.File, error) {
+	if emptyLock(lockPath(root)) {
+		return &lock.File{LockVersion: lock.Version}, nil
+	}
 	f, err := lock.Read(lockPath(root))
 	if errors.Is(err, fs.ErrNotExist) {
 		return &lock.File{LockVersion: lock.Version}, nil
 	}
 	return f, err
+}
+
+// emptyLock reports whether bob.lock exists and holds nothing but white space. Such a file
+// marks the repository root (`touch bob.lock` starts a repository, SPEC §1.2) and pins nothing
+// yet: it is read like a missing lock, not as the unreadable lock of R-FW-048 (A472).
+func emptyLock(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > 4096 {
+		return false
+	}
+	b, err := os.ReadFile(path)
+	return err == nil && len(bytes.TrimSpace(b)) == 0
 }
 
 // nixpkgsDecl is RepoOpts.Nixpkgs of the graph (default channel when unset).
@@ -421,7 +436,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		if rev := lock.SalvageNixpkgsRev(raw); rev != "" {
 			lf.Nixpkgs.Rev = rev
 		}
-	case errors.Is(rerr, fs.ErrNotExist):
+	case errors.Is(rerr, fs.ErrNotExist), rerr == nil && len(bytes.TrimSpace(raw)) == 0:
 		lf = &lock.File{LockVersion: lock.Version}
 	case rerr != nil:
 		return nil, rerr
@@ -605,10 +620,44 @@ func goChanges(prev, next json.RawMessage) []LockChange {
 			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, From: v, Op: "remove"})
 		}
 	}
-	if len(out) == 0 { // only hashes or other details changed
-		out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: lock.SectionGo, Op: "update"})
+	if len(out) == 0 { // no module moved: name the workspaces whose go version is new or changed
+		out = goWorkspaceChanges(prev, next)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// goWorkspaceChanges lists the workspace modules of next that are new or whose go version
+// changed ("+ go example.com/hello go 1.26.0" in a fresh lock); with none, the section itself
+// (only hashes or other details changed). Q4: a fresh lock printed "~ go go → ".
+func goWorkspaceChanges(prev, next json.RawMessage) []LockChange {
+	ws := func(raw json.RawMessage) map[string]lock.GoBuildList {
+		if len(raw) == 0 {
+			return nil
+		}
+		v, err := lock.DecodeSection(lock.SectionGo, raw)
+		if err != nil {
+			return nil
+		}
+		return v.(*lock.GoSection).Workspaces
+	}
+	a, b := ws(prev), ws(next)
+	var out []LockChange
+	for p, bl := range b {
+		switch old, ok := a[p]; {
+		case !ok:
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, To: "go " + bl.Go, Op: "add"})
+		case old.Go != bl.Go:
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, From: "go " + old.Go, To: "go " + bl.Go, Op: "update"})
+		}
+	}
+	if len(out) == 0 {
+		op := "update"
+		if len(prev) == 0 {
+			op = "add"
+		}
+		out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: lock.SectionGo, Op: op})
+	}
 	return out
 }
 

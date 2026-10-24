@@ -12,6 +12,6 @@ import (
 var Bad = bob.Define(func(p *bob.P) *cc.Library {
 	return cc.StaticLibrary(p, "bad", cc.LibraryOpts{
 		Srcs: bob.Glob("*.c"),
-		Deps: []cc.Linkable{nixpkgs.Tool(p, "openssl")},
+		Deps: []cc.Linkable{nixpkgs.Openssl.Tool(p)},
 	})
 })

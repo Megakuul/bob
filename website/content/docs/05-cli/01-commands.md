@@ -229,6 +229,25 @@ bob status [--json]
 Shows each generated root (`fresh`, `stale`, `missing`, `edited`, `orphan`) and whether the
 lock is fresh.
 
+### bob init
+
+```text
+bob init [dir] [--lang go|cc|rust|npm|ocaml]
+```
+
+Starts a new project in `dir` (default: the current directory, created when missing): writes
+`bob.go` and the program and test of the language's [quickstart](../03-quickstart/01-go.md),
+then locks it (`bob.lock`) and writes the files bob generates (`go.mod`, `Cargo.toml`,
+`package.json`, …). `bob build`, `bob test` and `bob run` work right after it. The Go module
+path is `example.com/<directory name>`; change it in `bob.go` and run `bob lock`.
+
+`bob init` never overwrites anything: a directory that already holds `bob.go`, `bob.lock` or
+a file of the template is refused (`BOB-E-0004`) before a file is written.
+
+| Flag | Meaning |
+|---|---|
+| `--lang` | the language of the project: `go` (default), `cc` (C++), `rust`, `npm` (TypeScript), `ocaml` |
+
 ### bob lock
 
 ```text
@@ -237,6 +256,11 @@ bob lock [--update [names…]] [--nixpkgs <rev>] [--offline]
 
 Adds missing pins and removes unused ones. Prints every change (`+`, `~`, `-`) or
 `bob.lock: no changes`. See [Dependencies and locking](../04-guides/02-dependencies-and-locking.md).
+
+In a new project without `bob.lock`, run `bob lock` in the directory that holds the root
+`bob.go`: it becomes the repository root (or the directory of the nearest `.git` above it)
+and `bob lock` creates `bob.lock` there. An empty `bob.lock` counts as "nothing locked yet".
+Every other command needs `bob.lock` to find the root and says which command creates it.
 
 | Flag | Meaning |
 |---|---|

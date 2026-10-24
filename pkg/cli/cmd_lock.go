@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -84,7 +85,15 @@ func printChanges(o *out, cs []build.LockChange) {
 		case "remove":
 			mark, ver = "-", c.From
 		}
-		o.printf("  %s %s%s%s%s%s\n", mark, c.Ecosystem, strings.Repeat(" ", ew-utf8.RuneCountInString(c.Ecosystem)+2),
-			c.Name, strings.Repeat(" ", nw-utf8.RuneCountInString(c.Name)+3), ver)
+		if c.From == "" && c.To == "" {
+			ver = "" // a whole section, or details without versions: no "→" column (Q4)
+		}
+		name := c.Name
+		if name == c.Ecosystem && ver == "" {
+			name = "" // the section itself ("+ cc", not "+ cc cc")
+		}
+		line := fmt.Sprintf("  %s %s%s%s%s%s", mark, c.Ecosystem, strings.Repeat(" ", ew-utf8.RuneCountInString(c.Ecosystem)+2),
+			name, strings.Repeat(" ", nw-utf8.RuneCountInString(name)+3), ver)
+		o.printf("%s\n", strings.TrimRight(line, " "))
 	}
 }

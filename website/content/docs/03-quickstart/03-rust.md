@@ -10,23 +10,42 @@ rustc from nixpkgs and writes a `Cargo.toml` so rust-analyzer and `cargo` keep w
 
 You need [bob installed](../02-install/02-install-bob.md). You do not need Rust installed.
 
-## The project
-
-```tree
-📁 hello-rust/
-  📄 bob.go
-  📁 src/
-    🦀 main.rs
-```
+## Start the project
 
 ```bash
 mkdir hello-rust && cd hello-rust
 git init
 ```
 
-## Write the code
+Let bob write the project, lock it and write the files it generates (it never overwrites a
+file):
 
-```rust file=src/main.rs
+```bash run
+bob init --lang rust
+```
+
+```text expect
+bob init: rust project in …
+  + bob.go
+  + src/main.rs
+bob.lock: 2 changes
+…
+next: bob build && bob test && bob run //:hello
+```
+
+```tree
+📁 hello-rust/
+  📄 bob.go
+  📄 bob.lock
+  📁 src/
+    🦀 main.rs
+```
+
+## The code
+
+`src/main.rs` is the program and its unit test:
+
+```rust
 fn greeting(name: &str) -> String {
     format!("hello, {name}")
 }
@@ -44,9 +63,9 @@ mod tests {
 }
 ```
 
-## Describe the build
+## The build description
 
-```go file=bob.go
+```go verify
 //go:build bob
 
 package hellorust
@@ -70,17 +89,13 @@ var Test = bob.Define(func(p *bob.P) *rust.TestSet {
 The crate root is `src/main.rs` by default. Without `Name`, the crate is named after its
 directory.
 
-## Lock, build, test, run
+## Build, test, run
 
 ```bash run
-bob lock
 bob build
 ```
 
 ```text expect
-…
-  + nixpkgs  nixpkgs   …
-…
 built   //:hello
 bob: 1 built
 ```

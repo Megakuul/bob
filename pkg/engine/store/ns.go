@@ -128,6 +128,10 @@ func setupNamespace(home string) error {
 	cwd, _ := os.Getwd()
 	store := filepath.Join(home, "nix")
 	if fi, err := os.Stat("/nix"); err == nil && fi.IsDir() {
+		// /etc links into the host store (NixOS) must resolve after /nix is covered (A470).
+		if err := mirrorEtc("/etc", filepath.Join(home, "nsetc"), "/nix"); err != nil {
+			return err
+		}
 		if err := syscall.Mount(store, "/nix", "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
 			return fmt.Errorf("bind %s on /nix: %w", store, err)
 		}

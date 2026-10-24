@@ -85,7 +85,7 @@ func writeRepo(t *testing.T, gr graph) string {
 	files := map[string]string{
 		"go.mod":      "module example.com/corpus\n\ngo 1.26\n",
 		"bob.lock":    "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":      "//go:build bob\n\npackage root\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":      "//go:build bob\n\npackage root\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"app/main.ml": "let () = ()\n",
 		"app/bob.go": "//go:build bob\n\npackage app\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/ocaml\"\n)\n\n" +
 			"var App = bob.Define(func(p *bob.P) *ocaml.Exe {\n\treturn ocaml.Executable(p, ocaml.ExeOpts{Name: \"app\", Deps: []ocaml.Dep{" + strings.Join(deps, ", ") + "}})\n})\n",

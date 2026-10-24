@@ -8,7 +8,7 @@ import (
 )
 
 func shell(p *bob.P) []bob.Tool {
-	return []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")}
+	return []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)}
 }
 
 // Env records the environment the step sees (label //steps:env).
@@ -32,7 +32,7 @@ var Home = bob.Define(func(p *bob.P) *bob.Step {
 // Curl tries to download something (label //steps:curl); builds are offline.
 var Curl = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "curl", bob.RunOpts{
-		Tools:   append(shell(p), nixpkgs.Tool(p, "curl")),
+		Tools:   append(shell(p), nixpkgs.Curl.Tool(p)),
 		Cmd:     []string{"curl", "--max-time", "10", "-sS", "-o", "x", "https://example.com/"},
 		Outputs: []string{"x"},
 	})

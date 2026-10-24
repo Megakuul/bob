@@ -16,10 +16,7 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 	})
 })
 
-// Stamp is a pure-Go binary (label //tools/cmd/stamp:stamp).
-var Stamp = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/stamp", golang.BinaryOpts{CGo: golang.CGoOff})
+// Tests runs one test unit per Go package of the module region; cmd/stamp has its own bob.go.
+var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+	return Module(p).Tests(golang.TestOpts{Recursive: true})
 })
-
-// Tests runs one test unit per package of the module.
-var Tests = bob.Define(func(p *bob.P) *golang.TestSet { return Module(p).Tests("./...", golang.TestOpts{}) })

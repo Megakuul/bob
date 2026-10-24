@@ -544,6 +544,109 @@
    "of graph output and was stopped"
   ]
  },
+ "82-source-outside-package": {
+  "codes": [
+   "BOB-E-1028"
+  ],
+  "exit": 3,
+  "messages": [
+   "\"../libs/mathx/src/*.c\" leaves the package directory app/"
+  ]
+ },
+ "83-source-in-subpackage": {
+  "codes": [
+   "BOB-E-1028"
+  ],
+  "exit": 3,
+  "messages": [
+   "\"app/*.c\" is inside app/, which has its own bob.go"
+  ]
+ },
+ "84-two-units-one-package": {
+  "codes": [
+   "BOB-E-1029"
+  ],
+  "exit": 3,
+  "messages": [
+   "libs/mathx/bob.go already defines the cc library //libs/mathx:mathx",
+   "one library or binary per directory package"
+  ]
+ },
+ "85-include-flag-other-package": {
+  "codes": [
+   "BOB-E-1020"
+  ],
+  "exit": 3,
+  "messages": [
+   "flag \"-I../libs/mathx/include\" is not allowed; use Deps to add include paths"
+  ]
+ },
+ "86-nixpkgs-string-attr": {
+  "codes": [
+   "BOB-E-1020"
+  ],
+  "exit": 3,
+  "messages": [
+   "undefined: nixpkgs.Lib",
+   "nixpkgs packages are typed: write nixpkgs.Openssl.Lib(p)"
+  ]
+ },
+ "87-nixpkgs-typo": {
+  "codes": [
+   "BOB-E-1020"
+  ],
+  "exit": 3,
+  "messages": [
+   "undefined: nixpkgs.Opensll",
+   "did you mean nixpkgs.Openssl?"
+  ]
+ },
+ "88-nixext-import": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "internal/greet/bob.go: imports github.com/megakuul/bob/pkg/nixpkgs/nixext, which build definitions cannot use"
+  ]
+ },
+ "89-assign-framework-value": {
+  "codes": [
+   "BOB-E-1024"
+  ],
+  "exit": 3,
+  "messages": [
+   "assigns to nixpkgs.Jq, a value of the bob framework; framework values are read-only"
+  ]
+ },
+ "90-attr-missing-at-pin": {
+  "codes": [
+   "BOB-E-1001"
+  ],
+  "exit": 3,
+  "messages": [
+   "has no package \"openssl\" (nixpkgs.Openssl)",
+   "libs/foo/bob.go:"
+  ]
+ },
+ "91-hdrs-outside-package": {
+  "codes": [
+   "BOB-E-1028"
+  ],
+  "exit": 3,
+  "messages": [
+   "\"../mathx/include\" leaves the package directory libs/pack/"
+  ]
+ },
+ "92-slot-unbound": {
+  "codes": [
+   "BOB-E-1020"
+  ],
+  "exit": 3,
+  "messages": [
+   "is not bound; bind it with"
+  ]
+ },
  "ok-cold": {
   "codes": [],
   "exit": 0

@@ -43,7 +43,7 @@ Checked end to end for this documentation, with a bob built from the current sou
 | `bob gen --check` | `BOB-E-9008` | `bob status` and `bob check` |
 | `bob check` on generated code directories | not checked | `bob status` shows `edited` |
 | `bob pipeline run --remote` | `BOB-E-9008` | start pipelines from a forge, the web UI or `BuildService/CreateBuild` |
-| lock change lines for some sections (`+ cc cc`, `~ go go →`) | printed without names | read `bob.lock` in the diff |
+| lock change lines of the `cc`, `rust` and `opam` sections | one line per section (`+ rust`), without entry names | read `bob.lock` in the diff |
 | `bob doctor --repair` | not tried for this documentation | — |
 
 ### Ecosystems

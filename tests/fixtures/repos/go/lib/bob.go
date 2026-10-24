@@ -13,4 +13,4 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 })
 
 // Tests runs one test unit per package of the module.
-var Tests = bob.Define(func(p *bob.P) *golang.TestSet { return Module(p).Tests("./...", golang.TestOpts{}) })
+var Tests = bob.Define(func(p *bob.P) *golang.TestSet { return Module(p).Tests(golang.TestOpts{Recursive: true}) })

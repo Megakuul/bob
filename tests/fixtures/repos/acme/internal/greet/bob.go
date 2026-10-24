@@ -10,5 +10,5 @@ import (
 
 // Tests runs the tests of this package (unit //internal/greet:go_test).
 var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
-	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: "greet_tests"})
+	return acme.Module(p).Tests(golang.TestOpts{Name: "greet_tests"})
 })

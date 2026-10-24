@@ -13,8 +13,8 @@ index ae67fda..bac2bd3 100644
  
  // Tests runs the tests of this package (unit //internal/greet:go_test).
  var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
--	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: "greet_tests"})
-+	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: hello.Name})
+-	return acme.Module(p).Tests(golang.TestOpts{Name: "greet_tests"})
++	return acme.Module(p).Tests(golang.TestOpts{Name: hello.Name})
  })
 diff --git a/internal/hello/bob.go b/internal/hello/bob.go
 new file mode 100644

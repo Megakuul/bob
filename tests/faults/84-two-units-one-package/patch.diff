@@ -1,0 +1,16 @@
+diff --git a/libs/mathx/bob.go b/libs/mathx/bob.go
+--- a/libs/mathx/bob.go
++++ b/libs/mathx/bob.go
+@@ -12,6 +12,12 @@
+ 	return cc.StaticLibrary(p, "mathx", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: bob.IncludeDir("include"), Std: cc.C17})
+ })
+ 
++// Lib2 is a second library of the same directory (fault 84).
++var Lib2 = bob.Define(func(p *bob.P) *cc.Library {
++	//bob:fault 84-two-units-one-package
++	return cc.StaticLibrary(p, "mathx2", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Std: cc.C17})
++})
++
+ // Test runs the TAP test (label //libs/mathx:mathx_test).
+ var Test = bob.Define(func(p *bob.P) *cc.Test {
+ 	return cc.NewTest(p, "mathx_test", cc.BinaryOpts{Srcs: bob.Files("test/mathx_test.c"), Deps: []cc.Linkable{Lib(p)}})

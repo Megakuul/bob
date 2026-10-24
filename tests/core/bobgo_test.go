@@ -172,7 +172,8 @@ func runAcmeSteps(t *testing.T, c *lspClient, steps []lspStep) {
 				t.Errorf("%s: %v", where, err)
 				continue
 			}
-			want := map[string]string{"foo.": "Lib", "greet.": "Hello"}[st.Args[0]]
+			// "nixpkgs.Op" → Openssl: the generated typed nixpkgs surface (R-NIX-031, ADR 0020).
+			want := map[string]string{"foo.": "Lib", "greet.": "Hello", "nixpkgs.Op": "Openssl"}[st.Args[0]]
 			if want == "" {
 				want = st.Args[0][len(st.Args[0])-1:] // "…{\n\t\tX" → the field X
 			}
@@ -214,6 +215,11 @@ func runAcmeSteps(t *testing.T, c *lspClient, steps []lspStep) {
 			res, err := c.at("textDocument/hover", st.File, st.Args[0], 1)
 			if err != nil || len(res) == 0 || string(res) == "null" {
 				t.Errorf("%s: no hover: %v %s", where, err, res)
+				continue
+			}
+			// A generated nixpkgs handle shows its version and licence in the hover (R-NIX-031).
+			if strings.HasPrefix(st.Args[0], "nixpkgs.") && !strings.Contains(string(res), "Licence:") {
+				t.Errorf("%s: the hover of a nixpkgs handle has no \"Licence:\" line: %.400s", where, res)
 			}
 		default:
 			t.Fatalf("%s: unknown step", where)
@@ -236,6 +242,9 @@ func TestRFW002BobGoRules(t *testing.T) {
 		{"r4", []string{`lib/bob.go:8: Files is also declared at lib/lib.go:5; bob.go shares its package with that code, rename one of them`}},
 		{"r6", []string{`b/bob.go imports a, whose Go code imports b (cycle exists only for build definitions); move the definition`}},
 		{"r7", []string{`lib/bob.go: imports github.com/megakuul/bob/pkg/engine/ir, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages`}},
+		// ADR 0020: the nixpkgs extension API is bob's own (R7) and framework values are read-only (R8).
+		{"r7nixext", []string{`lib/bob.go: imports github.com/megakuul/bob/pkg/nixpkgs/nixext, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages`}},
+		{"r8", []string{`lib/bob.go:15: assigns to nixpkgs.Jq, a value of the bob framework; framework values are read-only, declare your own variable`}},
 		{"all", []string{
 			`a/bob.go: the first line must be "//go:build bob" so that go build, go vet and go test ignore it`,
 			`b/bob.go: imports github.com/megakuul/bob/pkg/engine/ir, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages`,

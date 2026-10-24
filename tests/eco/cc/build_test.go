@@ -136,7 +136,7 @@ func TestRCC002aTypedOptionsMapToFlags(t *testing.T) {
 	t.Run("flag-rejected", func(t *testing.T) {
 		dir := harness.Fixture(t, "cc")
 		replaceIn(t, filepath.Join(dir, "libs", "mathx", "bob.go"),
-			`Hdrs: "include", Std: cc.C17})`, `Hdrs: "include", Std: cc.C17, Flags: []string{"-I/nix/store/x"}})`)
+			`Hdrs: bob.IncludeDir("include"), Std: cc.C17})`, `Hdrs: bob.IncludeDir("include"), Std: cc.C17, Flags: []string{"-I/nix/store/x"}})`)
 		r := bobIn(t, dir, t.TempDir(), "build", "//libs/mathx:mathx", "--json")
 		if harness.Red(t, r) || !exitIs(t, r, 3) {
 			return

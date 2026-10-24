@@ -12,9 +12,9 @@ import (
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
 	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
 		Srcs: bob.Glob("src/*.cpp"),
-		Hdrs: "include",
+		Hdrs: bob.IncludeDir("include"),
 		Std:  cc.CXX20,
-		Deps: []cc.Linkable{nixpkgs.Lib(p, "openssl")},
+		Deps: []cc.Linkable{nixpkgs.Openssl.Lib(p)},
 	})
 })
 

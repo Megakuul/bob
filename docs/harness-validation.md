@@ -110,3 +110,28 @@ reverted before the next. Command: `go test ./tests/docs -run <test>` for the co
 On the shared tree the guardrail found a real gap on its first run: `BOB_SERVER_OUTBOUND_ALLOW`,
 added by another unit the same day, was undocumented (fixed in `06-server/03-configuration.md`).
 Unit tests of the rule: `tools/ci/stage_docs_test.go`.
+
+## 5. Typed surface and per-package modules (HARNESS.md §18, ADR 0020), Q1 2026-10-24
+
+Mutations applied to a private copy of the tree (`/var/tmp/Q1/repo`, aarch64 host, busy;
+`GOWORK=off CGO_ENABLED=0 go test ./tests/core -run <test>`), each reverted before the next.
+Baseline: `TestRFW070FixtureLocality`, `TestBoblintCatchesViolations` pass;
+`TestRFW072TypedSurface` and `TestRNIX031GeneratedSurface` are red (audited violations remain,
+no generated surface yet).
+
+| # | Mutation | Guard | Result |
+|---|---|---|---|
+| T1 | `func ByName(p *bob.P, attr string) *Package` added to `pkg/nixpkgs` | `TestRFW072TypedSurface` | caught (hard failure, not red): `pkg/nixpkgs.ByName(attr) takes a raw string; … classify the parameter in tests/core/typesafe_test.go (owner-protected, R-FW-072)` |
+| T1b | `nixpkgs.Lib(p, "zlib")` in `cc/libs/pack/bob.go` | `TestRFW070FixtureLocality` | caught: `[R-NIX-031] nixpkgs.Lib names the attribute "zlib" as a string` |
+| T2 | violation row moved into the allowlist | `protected` | by construction: `tests/core/typesafe_test.go` is a protected path (hash report); not run |
+| T3 | `bob.Glob("*.c", "../libs/mathx/src/*.c")` in `cc/app/bob.go` | `TestRFW070FixtureLocality` | caught: `[R-FW-070] … leaves the package directory` |
+| T4 | root `cc/bob.go` step over `libs/mathx/src/*.c` | `TestRFW070FixtureLocality` | caught: `[R-FW-070] … is inside libs/mathx/, which has its own bob.go` |
+| T5 | second `cc.StaticLibrary` in `libs/mathx/bob.go` | `TestRFW070FixtureLocality` | caught: `[R-CC-006] 2 cc build units in one package directory` |
+| T6 | relative `-I` accepted by `pkg/cc` | fault 85 | deferred: the fault runs live once Q3 implements R-CC-006 (today `-I../…` is accepted: audit C03, so fault 85 is red) |
+| T7 | hand edit of a doc comment in `attrs_gen.go` | `TestRNIX031GeneratedSurface` (`nixpkgsgen -check`) | deferred to Q2 (no generated file yet) |
+| T8 | `python3Packages` exclusion dropped | `TestRNIX031GeneratedSurface` | deferred to Q2 |
+| T9 | `**` descends into subpackages | `TestRFW070GlobStopsAtSubpackage` | deferred to Q2/Q3 (the test is red until `bob.Run` sources and the new API evaluate) |
+| T10 | string nixpkgs attribute in a documented `bob.go` | `TestDocsPackageLocality` | deferred: the test skips until `pkg/nixpkgs/attrs_gen.go` exists (docs migrate in the same change) |
+
+The linter's own negative and positive cases are the unit test `TestBoblintCatchesViolations`
+(8 violation classes reported, a valid repository not reported).

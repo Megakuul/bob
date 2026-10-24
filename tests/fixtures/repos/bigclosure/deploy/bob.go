@@ -13,7 +13,7 @@ import (
 // (label //deploy:big-image).
 var Image = bob.Define(func(p *bob.P) *oci.Image {
 	return oci.NewImage(p, "big-image", oci.ImageOpts{
-		Program: bigclosure.Big(p),
+		Program: bigclosure.Big.Get(p),
 		Extra:   []bob.Package{bigclosure.Bulk(p)},
 	})
 })
@@ -21,7 +21,7 @@ var Image = bob.Define(func(p *bob.P) *oci.Image {
 // Release is the release "big" (label //deploy:big).
 var Release = bob.Define(func(p *bob.P) *release.Release {
 	return release.New(p, "big", release.ReleaseOpts{
-		Closures: []bob.Executable{bigclosure.Big(p)},
+		Closures: []bob.Executable{bigclosure.Big.Get(p)},
 		Images:   []*oci.Image{Image(p)},
 	})
 })

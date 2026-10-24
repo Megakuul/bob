@@ -1,0 +1,11 @@
+diff --git a/libs/foo/bob.go b/libs/foo/bob.go
+--- a/libs/foo/bob.go
++++ b/libs/foo/bob.go
+@@ -14,6 +14,6 @@
+ 		Srcs: bob.Glob("src/*.cpp"),
+ 		Hdrs: bob.IncludeDir("include"),
+ 		Std:  cc.CXX20,
+-		Deps: []cc.Linkable{nixpkgs.Openssl.Lib(p, nixpkgs.Modules("libcrypto"))},
++		Deps: []cc.Linkable{nixpkgs.Opensll.Lib(p, nixpkgs.Modules("libcrypto"))},
+ 	})
+ })

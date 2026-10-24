@@ -1,0 +1,21 @@
+{
+ "id": "83-source-in-subpackage",
+ "title": "root bob.go lists the sources of subpackages (R-FW-070)",
+ "source": "HARNESS.md \u00a75.1 added fault (ADR 0020, D71/D72, Q1 2026-10-24)",
+ "fixture": "cc",
+ "inject": {
+  "kind": "patch",
+  "describe": "the root bob.go defines a binary from the files of app/ and libs/mathx/, which have their own bob.go"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1028",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

@@ -18,6 +18,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/engine/nixidx"
 	"github.com/megakuul/bob/pkg/engine/store"
+	"github.com/megakuul/bob/pkg/engine/translate"
 )
 
 // evalGoRoot is the Go toolchain of the evaluator (R-FW-043.5, ADR 0003): Options.GoRoot;
@@ -97,8 +98,15 @@ func (r *runner) nixpkgsGo(ctx context.Context, st *store.Store, f fetch.Fetcher
 		return "", err
 	} else if len(missing) > 0 {
 		c := st.Command(ctx, "nix-store", "--realise", e.DrvPath)
+		var stderr headTail
+		c.Stderr = &stderr
 		if err := c.Run(); err != nil {
-			return "", internalf("nixpkgs:go", "realising go: %v", err)
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			// Nix failed to download or build go: a host, network or store problem, not a bob
+			// bug (A471). The diagnosis names the cause; -v shows Nix's own text.
+			return "", translate.RealiseFailure("nixpkgs:go", stderr.String())
 		}
 	}
 	writeGoMemo(memo, out)
@@ -199,4 +207,32 @@ func writePinMemo(home, decl string, p lock.NixpkgsPin) {
 	if werr != nil || cerr != nil || os.Rename(tmp.Name(), dst) != nil {
 		_ = os.Remove(tmp.Name())
 	}
+}
+
+// headTail keeps the first and the last 32 KiB of a Nix stderr: the cache warnings that explain
+// a failure come first, the failing step last, and a build log in between can be large.
+type headTail struct{ head, tail []byte }
+
+const headTailMax = 32 << 10
+
+func (h *headTail) Write(p []byte) (int, error) {
+	n := len(p)
+	if room := headTailMax - len(h.head); room > 0 {
+		k := min(room, len(p))
+		h.head = append(h.head, p[:k]...)
+		p = p[k:]
+	}
+	h.tail = append(h.tail, p...)
+	if len(h.tail) > 2*headTailMax {
+		h.tail = append([]byte(nil), h.tail[len(h.tail)-headTailMax:]...)
+	}
+	return n, nil
+}
+
+func (h *headTail) String() string {
+	t := h.tail
+	if len(t) > headTailMax {
+		t = t[len(t)-headTailMax:]
+	}
+	return string(h.head) + string(t)
 }

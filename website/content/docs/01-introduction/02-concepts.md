@@ -74,8 +74,10 @@ With no pattern, `bob build` and `bob test` use every package below the current 
 ## The repository root and bob.lock
 
 The repository root is the nearest directory that contains `bob.lock`. Every command finds it
-by walking up from the current directory, like git finds `.git`. In a new repository without
-`bob.lock`, `bob lock` uses the nearest directory with `.git` and creates `bob.lock` there.
+by walking up from the current directory, like git finds `.git`. `bob init` starts a new
+project with its `bob.lock`. In a repository without `bob.lock`, `bob lock` uses the nearest
+directory with `.git`, else the current directory when it holds `bob.go`, and creates
+`bob.lock` there. An empty `bob.lock` marks the root and pins nothing yet.
 
 `bob.lock` pins everything that comes from outside your repository:
 

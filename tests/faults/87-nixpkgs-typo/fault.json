@@ -1,0 +1,21 @@
+{
+ "id": "87-nixpkgs-typo",
+ "title": "misspelt nixpkgs handle (R-NIX-031)",
+ "source": "HARNESS.md \u00a75.1 added fault (ADR 0020, D71/D72, Q1 2026-10-24)",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "libs/foo/bob.go writes nixpkgs.Opensll"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1020",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

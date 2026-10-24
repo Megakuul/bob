@@ -306,7 +306,7 @@ func TestRNIX025SystemNixCoexistence(t *testing.T) {
 		t.Fatalf("harness: R-NIX-025 needs a host with a system Nix store at /nix: %v", err)
 	}
 	e := newBobEnv(t)
-	p, r := e.buildPath(t, "cpp-lib", "//:ringtool")
+	p, r := e.buildPath(t, "cpp-lib", "//tool:ringtool")
 	if harness.Red(t, r) {
 		return
 	}

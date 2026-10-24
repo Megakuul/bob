@@ -1,0 +1,14 @@
+diff --git a/app/bob.go b/app/bob.go
+--- a/app/bob.go
++++ b/app/bob.go
+@@ -12,8 +12,9 @@
+ 
+ // App is bin/app (label //app:app).
+ var App = bob.Define(func(p *bob.P) *cc.Binary {
++	//bob:fault 82-source-outside-package
+ 	return cc.NewBinary(p, "app", cc.BinaryOpts{
+-		Srcs: bob.Glob("*.c"),
++		Srcs: bob.Glob("*.c", "../libs/mathx/src/*.c"),
+ 		Std:  cc.C17,
+ 		Deps: []cc.Linkable{mathx.Lib(p), pack.Lib(p), zstd.Zstd(p)},
+ 	})

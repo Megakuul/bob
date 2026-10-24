@@ -9,7 +9,7 @@ import (
 
 // Lib is libmathx.a (label //libs/mathx:mathx).
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
-	return cc.StaticLibrary(p, "mathx", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: "include", Std: cc.C17})
+	return cc.StaticLibrary(p, "mathx", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: bob.IncludeDir("include"), Std: cc.C17})
 })
 
 // Test runs the TAP test (label //libs/mathx:mathx_test).

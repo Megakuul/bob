@@ -224,7 +224,8 @@ func lockFile(t testing.TB, dir string) map[string]json.RawMessage {
 	return m
 }
 
-// TestRNIX005NixpkgsPin: a fresh repo with Nixpkgs "nixos-26.05@cd4ea8d5…": `bob lock` writes the
+// TestRNIX005NixpkgsPin: a fresh repo with Nixpkgs bob.NixOS2605 and NixpkgsRev "cd4ea8d5…" (typed
+// channel, ADR 0020): `bob lock` writes the
 // pinned entry; a tampered narHash gives 3001 for nixpkgs.
 func TestRNIX005NixpkgsPin(t *testing.T) {
 	parity.Covers(t, "R-NIX-005")
@@ -233,10 +234,10 @@ func TestRNIX005NixpkgsPin(t *testing.T) {
 	dir := e.dir(t, "cpp-lib")
 	bobgo := filepath.Join(dir, "bob.go")
 	src := string(mustRead(t, bobgo))
-	if !strings.Contains(src, `Nixpkgs: "nixos-26.05"`) {
-		t.Fatal("harness: the cpp-lib fixture no longer declares Nixpkgs: \"nixos-26.05\"")
+	if !strings.Contains(src, `Nixpkgs: bob.NixOS2605`) {
+		t.Fatal("harness: the cpp-lib fixture no longer declares Nixpkgs: bob.NixOS2605")
 	}
-	mustWrite(t, bobgo, []byte(strings.Replace(src, `Nixpkgs: "nixos-26.05"`, `Nixpkgs: "nixos-26.05@`+rev+`"`, 1)), 0o644)
+	mustWrite(t, bobgo, []byte(strings.Replace(src, `Nixpkgs: bob.NixOS2605`, `Nixpkgs: bob.NixOS2605, NixpkgsRev: "`+rev+`"`, 1)), 0o644)
 	mustWrite(t, filepath.Join(dir, "bob.lock"), []byte("{\n  \"lockVersion\": 1\n}\n"), 0o644)
 	r := e.run(t, "cpp-lib", "lock")
 	if harness.Red(t, r) {
@@ -337,7 +338,7 @@ func TestRNIX002NixpkgsStaysUsable(t *testing.T) {
 	dir := e.dir(t, "polyglot")
 	bobgo := filepath.Join(dir, "bob.go")
 	s := string(mustRead(t, bobgo))
-	edited := strings.Replace(s, `Nixpkgs: "nixos-26.05"`, `Nixpkgs: "nixos-25.11@`+sha+`"`, 1)
+	edited := strings.Replace(s, `Nixpkgs: bob.NixOS2605`, `Nixpkgs: "nixos-25.11@`+sha+`"`, 1)
 	edited = strings.Replace(edited, `Go:   "1.26"`, `Go:   "1.25"`, 1)
 	if strings.Count(edited, "nixos-25.11@") != 1 || !strings.Contains(edited, `Go:   "1.25"`) {
 		t.Fatal("harness: the polyglot fixture no longer has the Nixpkgs and Go lines this test edits")

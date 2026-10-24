@@ -11,37 +11,65 @@ resolves the npm packages, pins them in `bob.lock`, and writes `package.json`,
 
 You need [bob installed](../02-install/02-install-bob.md). You do not need Node.js installed.
 
-## The project
-
-```tree
-📁 hello-ts/
-  📄 bob.go
-  📁 src/
-    📄 main.ts
-    📄 greeting.ts
-    📄 greeting.test.ts
-```
+## Start the project
 
 ```bash
 mkdir hello-ts && cd hello-ts
 git init
 ```
 
-## Write the code
+Let bob write the project, lock it and write the files it generates (it never overwrites a
+file):
 
-```ts file=src/greeting.ts
+```bash run
+bob init --lang npm
+```
+
+```text expect
+bob init: npm project in …
+  + bob.go
+  + src/greeting.test.ts
+  + src/greeting.ts
+  + src/main.ts
+bob.lock: … changes
+…
+next: bob build && bob test && bob run //:hello
+```
+
+`bob init` also resolved vitest and everything it needs from the npm registry and pinned
+each package with its integrity hash in `bob.lock`.
+
+```tree
+📁 hello-ts/
+  📄 bob.go
+  📄 bob.lock
+  📁 src/
+    📄 main.ts
+    📄 greeting.ts
+    📄 greeting.test.ts
+```
+
+## The code
+
+`src/greeting.ts`:
+
+```ts
 export function greeting(name: string): string {
   return `hello, ${name}`;
 }
 ```
 
-```ts file=src/main.ts
+`src/main.ts` is the entry point:
+
+```ts
 import { greeting } from "./greeting.js";
 
 console.log(greeting("bob"));
 ```
 
-```ts file=src/greeting.test.ts
+`src/greeting.test.ts` is a vitest test:
+
+```ts
 import { expect, test } from "vitest";
 import { greeting } from "./greeting.js";
 
@@ -50,9 +78,9 @@ test("greeting", () => {
 });
 ```
 
-## Describe the build
+## The build description
 
-```go file=bob.go
+```go verify
 //go:build bob
 
 package hellots
@@ -80,21 +108,7 @@ var Test = bob.Define(func(p *bob.P) *npm.Test {
 `npm.Dev()` marks a tool: tests and builds see it, the program's runtime does not. bob
 bundles the program with esbuild and wraps it in `bin/hello`, which runs the pinned Node.
 
-## Lock, build, test, run
-
-`bob lock` resolves vitest and everything it needs from the npm registry and pins each
-package with its integrity hash:
-
-```bash run
-bob lock
-```
-
-```text expect
-bob.lock: … changes
-  + nixpkgs  nixpkgs   …
-…
-  + npm      vitest   3.…
-```
+## Build, test, run
 
 ```bash run
 bob build

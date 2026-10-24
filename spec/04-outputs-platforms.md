@@ -21,7 +21,7 @@ images, AppImages, tarballs, closures as outputs, releases as built objects, the
   **Required from §01:** the derivation layer supports `__structuredAttrs` with
   `unsafeDiscardReferences` (R-OUT-011). No experimental feature is needed: `discard-references`
   is stable in Nix 2.34 (enabling it only warns `unknown experimental feature`; §01 R-NIX-024).
-- **§01 provides** `nixpkgs.Lib(p, attr)` / `nixpkgs.Tool(p, attr)` typing (this section
+- **§01 provides** `nixpkgs.<Name>.Lib(p)` / `nixpkgs.<Name>.Tool(p)` typing (generated handles, R-NIX-031; this section
   defines the semantics, R-FW-032) and the nixpkgs index lookup (`cached on cache.nixos.org?`).
 - **§02 provides** CLI syntax for `--platform`, `--variant`, `bob install|upgrade|rollback|uninstall|list`,
   `bob exec`, JSON event output, the error template (`✗ <title>` + position + hint).
@@ -101,29 +101,31 @@ images, AppImages, tarballs, closures as outputs, releases as built objects, the
 ## 4.2 Toolchains and dependencies
 
 #### R-FW-032 Typed nixpkgs dependencies
-- **Statement:** nixpkgs dependencies are typed: `nixpkgs.Tool(p, attr)` (runs at build time:
-  always taken from the host's package set) and `nixpkgs.Lib(p, attr)` (linked into or shipped
-  with the output: taken from the target set per R-FW-036). A `Tool` is not a `cc.Linkable`;
-  a `Lib` is not a `bob.Tool` (compile-time type error).
+- **Statement:** nixpkgs dependencies are typed twice: the package is a generated handle
+  (`nixpkgs.Protobuf`, R-NIX-031, no strings) and the role is a method: `.Tool(p)` (runs at build
+  time: always taken from the host's package set) and `.Lib(p)` (linked into or shipped with the
+  output: taken from the target set per R-FW-036). A `*nixpkgs.ToolPackage` is not a
+  `cc.Linkable`; a `*nixpkgs.Package` from `.Lib` is not a `bob.Tool` (compile-time type error).
+  [amended 2026-10-24, D71]
 - **Acceptance:** Golden test: `//api:api@linux-amd64` on arm64 references
-  `legacyPackages.aarch64-linux.protobuf` for `Tool("protobuf")` and
-  `legacyPackages.x86_64-linux.openssl` for `Lib("openssl")`. A `bob.go` passing
-  `nixpkgs.Tool(p,"openssl")` in `cc.LibraryOpts.Deps` fails `go build` (example program in the
+  `legacyPackages.aarch64-linux.protobuf` for `nixpkgs.Protobuf.Tool(p)` and
+  `legacyPackages.x86_64-linux.openssl` for `nixpkgs.Openssl.Lib(p)`. A `bob.go` passing
+  `nixpkgs.Openssl.Tool(p)` in `cc.LibraryOpts.Deps` fails `go build` (example program in the
   error-quality suite asserts the bob-translated compile error).
 - **Source:** S7 §3.2 "untyped nixpkgs deps", STATUS findings (S7).
 
 ```go
 package nixpkgs // pkg/nixpkgs
 
-// Lib is a nixpkgs package used as a target library: linked into, or shipped with, an
-// output. For a cross target it comes from the target system's package set (default) or
-// the pkgsCross set (cc.CrossLibs). Lib values satisfy cc.Linkable and bob.Package.
-func Lib(p *bob.P, attr string) *Package
+// Lib uses the package as a target library: linked into, or shipped with, an output. For a
+// cross target it comes from the target system's package set (default) or the pkgsCross set
+// (cc.CrossLibs). Lib values satisfy cc.Linkable and bob.Package.
+func (a Attr) Lib(p *bob.P, opts ...Option) *Package
 
-// Tool is a nixpkgs package that only runs during a build (code generators, compilers,
-// build-time utilities). It always comes from the host's package set and never enters an
-// output's closure unless the build output references it.
-func Tool(p *bob.P, attr string) *ToolPackage
+// Tool uses the package only during a build (code generators, compilers, build-time
+// utilities). It always comes from the host's package set and never enters an output's
+// closure unless the build output references it.
+func (a Attr) Tool(p *bob.P, opts ...Option) *ToolPackage
 ```
 
 Example:
@@ -131,7 +133,7 @@ Example:
 ```go
 var Gen = bob.Define(func(p *bob.P) *bob.RunStep {
 	return bob.Run(p, "schema", bob.RunOpts{
-		Tools: []bob.Tool{nixpkgs.Tool(p, "protobuf")},
+		Tools: []bob.Tool{nixpkgs.Protobuf.Tool(p)},
 		Cmd:   []string{"protoc", "--descriptor_set_out=$out/schema.pb", "schema.proto"},
 		Srcs:  bob.Glob("schema.proto"),
 	})
@@ -164,9 +166,13 @@ package bob
 type Toolchain struct {
 	Host, Target Platform
 	Triple       string        // "x86_64-unknown-linux-gnu"; empty for native
-	CC           drv.Ref       // C compiler wrapper derivation
 	Prefix       string        // "x86_64-unknown-linux-gnu-" for cross, "" for native
+	EmulatorCmd  string        // command of the user-mode emulator in its bin/ (R-FW-039); "" natively
 }
+
+// The packages of the toolchain are typed nixpkgs handles, provided to bob's ecosystem
+// packages by nixext.Toolchain(p) (CC, Bintools, CCLib, Emulator nixpkgs.Attr) [D71, ADR 0020]:
+// bob.Toolchain carries no attribute strings.
 
 // Toolchain returns the C/C++ toolchain for the package's target. Example:
 //   tc := p.Toolchain()          // inside a bob.Define body
@@ -664,14 +670,16 @@ type ReleaseOpts struct {
 }
 
 // New declares a release. The release name is the label's name; artifact names must be
-// unique within it. Example:
+// unique within it. Example, in deploy/bob.go; the Go binary of cmd/api is reached through the
+// typed slot acme.API, which cmd/api/bob.go binds (a main package's bob.go cannot be imported,
+// R-FW-071, §1.4 bob.Slot):
 //
 //	var API = bob.Define(func(p *bob.P) *release.Release {
 //		return release.New(p, "api", release.ReleaseOpts{
 //			Public:    true,
-//			Closures:  []bob.Executable{api.Binary(p)},
-//			Images:    []*oci.Image{deploy.Image(p)},
-//			AppImages: []*appimage.Bundle{deploy.Bundle(p)},
+//			Closures:  []bob.Executable{acme.API.Get(p)},
+//			Images:    []*oci.Image{Image(p)},
+//			AppImages: []*appimage.Bundle{Bundle(p)},
 //		})
 //	})
 func New(p *bob.P, name string, opts ReleaseOpts) *Release

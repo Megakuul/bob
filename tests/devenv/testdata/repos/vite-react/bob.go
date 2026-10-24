@@ -7,7 +7,7 @@ import (
 	"github.com/megakuul/bob/pkg/npm"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 // Site is a Vite + React app (label //:web); its dev server runs under bob dev (R-DEV-002).
 var Site = bob.Define(func(p *bob.P) *npm.Site {

@@ -10,7 +10,7 @@ import (
 // Lib is the dependency's package (label example.com/dep//libs/bar:lib).
 var Lib = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "lib", bob.RunOpts{
-		Tools:   []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
+		Tools:   []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)},
 		Cmd:     []string{"bash", "-c", `echo lib > "$BOB_OUT/lib.txt"`},
 		Outputs: []string{"lib.txt"},
 	})

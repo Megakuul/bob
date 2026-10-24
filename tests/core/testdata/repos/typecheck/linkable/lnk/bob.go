@@ -13,7 +13,7 @@ var mod = bob.Define(func(p *bob.P) *golang.Module {
 
 // Bad passes a Go binary where a native library (bob.Linkable) is expected.
 var Bad = bob.Define(func(p *bob.P) *bob.Step {
-	var l bob.Linkable = mod(p).Binary("./cmd/x", golang.BinaryOpts{})
+	var l bob.Linkable = mod(p).Binary(golang.BinaryOpts{})
 	_ = l
 	return bob.Run(p, "bad", bob.RunOpts{Cmd: []string{"true"}})
 })

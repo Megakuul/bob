@@ -1,0 +1,15 @@
+diff --git a/libs/pack/bob.go b/libs/pack/bob.go
+--- a/libs/pack/bob.go
++++ b/libs/pack/bob.go
+@@ -10,9 +10,10 @@
+ 
+ // Lib is libpack.so, linking nixpkgs zlib and libcrypto (label //libs/pack:pack).
+ var Lib = bob.Define(func(p *bob.P) *cc.Library {
++	//bob:fault 91-hdrs-outside-package
+ 	return cc.SharedLibrary(p, "pack", cc.LibraryOpts{
+ 		Srcs: bob.Glob("src/*.cpp"),
+-		Hdrs: bob.IncludeDir("include"),
++		Hdrs: bob.IncludeDir("../mathx/include"),
+ 		Std:  cc.CXX20,
+ 		PrivDeps: []cc.Linkable{
+ 			nixpkgs.Zlib.Lib(p),

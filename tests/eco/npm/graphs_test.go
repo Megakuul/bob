@@ -100,7 +100,7 @@ func writeGraph(t *testing.T, g graph) string {
 	w := func(rel, body string) { ecotest.WriteFile(t, filepath.Join(dir, filepath.FromSlash(rel)), body) }
 	w("go.mod", "module example.com/"+strings.ReplaceAll(g.name, "-", "")+"\n\ngo 1.26\n")
 	w("bob.lock", "{\n  \"lockVersion\": 1\n}\n")
-	rootDecl := "var _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n"
+	rootDecl := "var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n"
 	for _, im := range g.importers {
 		pkg := filepath.Base(im.dir) // SPEC R2: the package of a directory without Go files is its name
 		body := ""

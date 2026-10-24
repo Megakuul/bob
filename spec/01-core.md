@@ -14,8 +14,12 @@ Provided by §01 (names used by other sections):
 - `bob.P`, `bob.Define`, `bob.Package`, `bob.Label`, `bob.Position`, `bob.Sources`, `bob.Glob`,
   `bob.Files`, `bob.Dir`, `bob.Output`, `bob.Tree`, `bob.Tool`, `bob.Executable` (`MainProgram()`),
   `bob.Linkable` + `bob.LinkInfo`, `bob.Run`, `bob.Service`, `bob.Pipeline` (registration only),
-  `bob.Repo`, `bob.Platform`, `bob.Variant`, `bob.NamedVariant` (§1.4–§1.9). Host platform:
-  `p.Host().Platform()`.
+  `bob.Repo`, `bob.Channel`, `bob.Platform`, `bob.Variant`, `bob.NamedVariant`, `bob.Include` +
+  `bob.IncludeDir`, `bob.Slot` + `bob.NewSlot` (§1.4–§1.9, §1.4.5). Host platform: `p.Host().Platform()`.
+- The generated typed nixpkgs surface `pkg/nixpkgs` (`nixpkgs.<Name>` handles of type
+  `nixpkgs.Attr`) and its extension API `pkg/nixpkgs/nixext` (§1.7, R-NIX-031, ADR 0020).
+- The package-locality and one-unit-per-package rules (R-FW-070, R-FW-071) that every ecosystem
+  constructor applies, and the typed-surface rule for every public API (R-FW-072).
 - `ext` package (`pkg/bob/ext`): `ext.New`, `ext.Kind`, `ext.Config`, `ext.Axis`
   — the only way ecosystem packages (§03, §04) create graph nodes (§1.5).
 - Graph IR v1 JSON (§1.6); the `engine.Ecosystem` registration interface (§1.6.1; it lives in
@@ -124,6 +128,8 @@ Expected from other sections:
 - **Statement:** Definitions live in files named exactly `bob.go`, at most one per directory, next
   to the code they describe. Rules R1–R7 below are checked before compiling; all violations are
   reported together, sorted by path; any violation stops evaluation (exit class *definition*).
+  Rules R1–R8 are syntactic (checked on the files, BOB-E-1024); the package-locality and
+  one-unit-per-package rules (R-FW-070, R-FW-071) are checked when the constructors run.
 
 | Rule | Check | Error text (first line) |
 |---|---|---|
@@ -133,7 +139,8 @@ Expected from other sections:
 | R4 | no top-level identifier of `bob.go` is declared in another file of the package | `<dir>/bob.go:<line>: <Name> is also declared at <file>:<line>; bob.go shares its package with that code, rename one of them` |
 | R5 | dir has `.c .cc .cpp .cxx .m .f .F .f90 .swig .swigcxx` files next to `bob.go` | not an error: bob materialises `<dir>/zz_bob_cgo.go` (gitignored): `//go:build bob && cgo` / `package <x>` / `import "C"` |
 | R6 | no import cycle that exists only under the tag (bob.go import graph ∪ real Go import graph) | `<dir>/bob.go imports <dir2>, whose Go code imports <dir> (cycle exists only for build definitions); move the definition` |
-| R7 | `bob.go` imports no `github.com/megakuul/bob/pkg/engine/...`, `.../pkg/builder/...`, `.../pkg/cli/...`, and no package outside the std library, the framework L0–L3 packages, and `bob.go` packages (own repo or bob-repo Go modules; a `bob.go` package in the directory of a Go module of this repository whose go.mod bob generates may be imported by that module's path, e.g. `example.com/tools`, as well as by the root module's path of its directory) | `<dir>/bob.go: imports <path>, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages` |
+| R7 | `bob.go` imports no `github.com/megakuul/bob/pkg/engine/...`, `.../pkg/builder/...`, `.../pkg/cli/...`, `.../pkg/nixpkgs/nixext` (the extension API of bob's ecosystem packages, ADR 0020) [D71], and no package outside the std library, the framework L0–L3 packages, and `bob.go` packages (own repo or bob-repo Go modules; a `bob.go` package in the directory of a Go module of this repository whose go.mod bob generates may be imported by that module's path, e.g. `example.com/tools`, as well as by the root module's path of its directory) | `<dir>/bob.go: imports <path>, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages` |
+| R8 | no statement of a `bob.go` assigns to, takes the address of, or increments a package-level variable of a framework package (`nixpkgs.Openssl = nixpkgs.Zlib`, `p := &nixpkgs.Openssl`); framework values are read-only [D71] | `<dir>/bob.go:<line>: assigns to <pkg>.<Name>, a value of the bob framework; framework values are read-only, declare your own variable` |
 
 - Repo root = the nearest ancestor directory that contains `bob.lock` (§02 `FindRoot`, error
   0002); the bob-generated root `go.mod` lives in the same directory.
@@ -362,12 +369,17 @@ func (p Position) String() string // "libs/foo/bob.go:12"
 ```
 
 #### R-FW-010 Values, not strings
-- **Statement:** Packages are passed as typed values; the only strings naming packages are the
-  constructor's own name argument and nixpkgs attribute names (R-NIX-013).
+- **Statement:** Packages are passed as typed values. The only strings that name packages are
+  the constructor's own name argument (the label name of the package being defined), label
+  patterns in their CLI form (`bob.Pattern`, R-FW-015), and the declaration of an external
+  registry dependency (R-FW-072 category `registry-declaration`). nixpkgs packages are generated
+  typed handles (R-NIX-031); there is no string form of a nixpkgs attribute in the public API.
+  [amended 2026-10-24, D71, ADR 0020]
 - **Acceptance:** `bobtest/typecheck/`: passing `golang.Binary` where `bob.Linkable` is expected
   fails `go vet -tags=bob` with `missing method LinkInfo`; the example programs (R-FW-013)
-  contain no label string literals except constructor names.
-- **Source:** R-FW-010.
+  contain no label string literals except constructor names and pipeline patterns; R-FW-072's
+  lint passes.
+- **Source:** R-FW-010, D71.
 
 #### R-FW-011 Memoised constructors
 - **Statement:** `Define` memoises per (definition, `*P`). Calling a defined constructor outside
@@ -392,8 +404,8 @@ import (
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
 	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
 		Srcs: bob.Glob("src/*.cpp"),
-		Hdrs: bob.Dir("include"),
-		Deps: []bob.Linkable{nixpkgs.Lib(p, "openssl")},
+		Hdrs: bob.IncludeDir("include"),
+		Deps: []bob.Linkable{nixpkgs.Openssl.Lib(p)},
 	})
 })
 ```
@@ -425,7 +437,10 @@ var Lib = bob.Define(func(p *bob.P) *cc.Library {
 ### 1.4.1 Sources
 
 ```go
-// Sources is a set of files from the repo, relative to the directory of the calling bob.go.
+// Sources is a set of files of the calling bob.go's package: relative to its directory, inside
+// its region (the directory and every descendant directory without a bob.go of its own,
+// R-FW-070). "..", absolute paths and files of a subpackage are definition errors (BOB-E-1028);
+// "**" never descends into a subpackage.
 type Sources struct{ /* unexported */ }
 
 // Glob selects files by patterns: "*" and "?" do not cross "/", "**" matches any depth,
@@ -438,6 +453,17 @@ func Files(paths ...string) Sources
 func Dir(path string) Sources
 // Union combines sources.
 func (s Sources) Union(o ...Sources) Sources
+
+// Include is a public include tree of a native library (C/C++ headers, the C header of a Rust
+// staticlib): consumers get its directory on their include path through the library's typed
+// handle (bob.LinkInfo), never through a path string of their own [D72].
+type Include struct{ /* unexported */ }
+
+// IncludeDir declares dir (relative to the bob.go directory, inside the package region; "." =
+// the package directory itself, its subpackages excluded) as a public include root:
+// consumers write #include <path below dir>.
+//   Hdrs: bob.IncludeDir("include")
+func IncludeDir(dir string) Include
 
 // FetchOpts declares one external file or archive [proposal, added at integration].
 type FetchOpts struct {
@@ -464,8 +490,9 @@ func Fetch(p *P, o FetchOpts) Tree
   implemented in Go, no git binary), `.git/info/exclude` patterns, and paths in the
   materialisation manifest (§03). Each package's source set becomes one content-addressed store
   path named `<store-name>-src` whose tree keeps repo-relative paths (§1.11).
-- Errors: pattern escaping the module root (`..`, absolute) → `<pos>: source pattern "<p>" leaves
-  the repository`; a pattern that matches nothing → `<pos>: bob.Glob("<p>") matches no files`;
+- Errors: pattern escaping the module root (`..` beyond the root, absolute) → `<pos>: source pattern "<p>" leaves
+  the repository` (BOB-E-1025); a pattern that stays in the repository but leaves the package
+  region → BOB-E-1028 (R-FW-070); a pattern that matches nothing → `<pos>: bob.Glob("<p>") matches no files`;
   a symlink pointing outside the repo → `<file>: symlink points outside the repository`.
 - **Acceptance:** (a) Adding a gitignored file or editing `bob.go` changes no source store path.
   (b) Changing one `.cpp` file changes exactly the source path of the package(s) whose `Sources`
@@ -488,7 +515,7 @@ type RunOpts struct {
 
 // Run creates a sandboxed, cached build step. Its output tree is the Step (a Tree).
 //   gen := bob.Run(p, "version-file", bob.RunOpts{
-//       Tools:   []bob.Tool{nixpkgs.Tool(p, "coreutils")},
+//       Tools:   []bob.Tool{nixpkgs.Coreutils.Tool(p)},
 //       Cmd:     []string{"sh", "-c", "…"}, // only if a shell is declared as a Tool
 //       Outputs: []string{"version.txt"},
 //   })
@@ -554,14 +581,26 @@ func ServiceFrom(bin Tool, o ServiceOptions) Service
 
 ```go
 // Repo declares repository-wide settings. It is allowed only in the root bob.go, at most once.
-//   var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+//   var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 func Repo(o RepoOpts) struct{}
 type RepoOpts struct {
-	// Nixpkgs is a channel name ("nixos-26.05") or "<channel>@<40-hex rev>". bob.lock pins the
-	// revision; `bob lock --update nixpkgs` moves it to the channel's current revision.
-	Nixpkgs string
-	Variants []Named // see §1.9
+	// Nixpkgs is the nixpkgs channel; the zero value is the channel bob was released with
+	// (NixOS2605). bob.lock pins the revision: a new lock pins the revision bob's typed nixpkgs
+	// surface was generated from (R-NIX-032); `bob lock --update nixpkgs` moves it to the
+	// channel's current revision.
+	Nixpkgs Channel
+	// NixpkgsRev pins a revision of the channel (40 hex digits); "" = as above.
+	NixpkgsRev string
+	Variants   []Named // see §1.9
 }
+
+// Channel is a nixpkgs release channel [D71: typed, no channel-name strings].
+type Channel int
+const (
+	NixOS2605 Channel = iota + 1 // "nixos-26.05", bob's default (zero value)
+	NixOS2511                    // "nixos-25.11"
+	NixpkgsUnstable              // "nixpkgs-unstable"
+)
 
 // Pipeline registers a pipeline (R-FW-040). Trigger semantics on the server are SPEC §06.
 func Pipeline(name string, o PipelineOpts) struct{}
@@ -573,7 +612,10 @@ type PipelineOpts struct {
 	Concurrency Concurrency // unset = the per-ref default of §05.6.2
 	Targets     []Pattern   // packages to build
 	Tests       []Pattern   // packages to test
-	Releases    []string    // release names to publish; non-empty = release pipeline (proto releases=true)
+	// Releases are label patterns of release packages (release.New) to publish; non-empty =
+	// release pipeline (proto releases=true). A pattern that matches no release package is a
+	// definition error (BOB-E-1020) at the pipeline's position [D71: no release-name strings].
+	Releases    []Pattern
 }
 
 // Trigger says when a pipeline starts.
@@ -589,6 +631,108 @@ const ( Queue Concurrency = iota + 1; Supersede; Parallel ) // zero value = per-
 
 - Repo errors: `Repo` outside the root `bob.go` or twice → definition error; missing →
   default `Nixpkgs` = the channel bob was released with (recorded in bob's build info).
+- The IR keeps the resolved release *names* of `Releases` (the server publishes by name,
+  §06), so the proto `Pipeline` is unchanged.
+
+### 1.4.5 Per-package build modules and the typed surface (ADR 0020) [D71, D72]
+
+A **package** is a directory with its own `bob.go`. Its **region** is that directory plus every
+descendant directory that has no `bob.go` of its own. Packages form a tree; the root `bob.go` is
+one package among others and never describes its subdirectories.
+
+#### R-FW-070 Package locality
+- **Statement:** Every path a constructor receives from a `bob.go` (`bob.Glob`, `bob.Files`,
+  `bob.Dir`, `bob.IncludeDir`, and every ecosystem path option: Rust `Root`/`BuildScript`, npm
+  `Entry`/`Config`, `openapi.NewSpec` file, OCaml stubs, codegen output `Dir`) is relative to the
+  `bob.go` directory and resolves inside its region: no `..` segment, no absolute path, no file
+  in a directory that has its own `bob.go`. `**` and `bob.Dir` never descend into a subpackage
+  (excluded from the match, not an error). Constructors that used to take a directory or package
+  path naming another directory (Go `Module.Binary/CArchive/CShared/Cgo/Tests`) declare the
+  package of the calling `bob.go`'s directory instead (§03.2.1). Cross-package use goes only
+  through typed handles (constructor results, `bob.Include` of a library, `bob.Linkable`).
+- Errors (BOB-E-1028, definition class, exit 3, all violations of a run listed):
+  - variant `outside`: `{pos}: {label}: "{pattern}" leaves the package directory {dir}/` —
+    hint `each bob.go builds only the files below its own directory; give the other directory its
+    own bob.go and depend on its package`;
+  - variant `subpackage`: `{pos}: {label}: "{pattern}" is inside {sub}/, which has its own
+    bob.go` — hint `use the package defined in {sub}/bob.go through its handle`.
+  A pattern that leaves the repository stays BOB-E-1025 (checked first).
+- **Acceptance:** (a) faults 82 (`../` into a sibling package), 83 (root `bob.go` globbing a
+  subpackage's sources), 91 (`IncludeDir("../x/include")`) exit 3 with BOB-E-1028, the
+  position of the call (column included) and the hint; no Nix process starts. (b) Given the cc
+  fixture, `bob.Glob("**/*.c")` in the root `bob.go` matches no file of `libs/mathx/` (graph
+  test in tests/core). (c) `TestRFW070FixtureLocality` passes over every fixture and test
+  repository; `TestDocsPackageLocality` over every documented `bob.go`.
+- **Source:** R-FW-017, D72, ADR 0020 §6.
+
+#### R-FW-071 One build unit per package
+- **Statement:** A package defines at most one build *unit* per ecosystem: C/C++ one of
+  `cc.StaticLibrary`, `cc.SharedLibrary`, `cc.NewBinary`, `cc.External` (R-CC-006); Rust one crate
+  (`Library`, `ProcMacro`, `StaticLib`, `CDylib`, `Binary`); npm one importer (`Library`, `NewApp`,
+  `Vite`); OCaml one `Library` or `Executable`; Go one `Binary`, `CArchive` or `CShared` (of the
+  directory's main package) and one `Cgo` declaration; proto one `NewLibrary`; GraphQL one
+  `NewSchema`; OpenAPI one `NewSpec`. Tests, checks, codegen recipes, `bob.Run` steps, shells,
+  services and outputs (images, AppImages, tarballs, releases) are not units and may be declared
+  any number of times. A Go main package's `bob.go` cannot be imported (R-FW-002 R3); other
+  packages reach its binary through a typed `bob.Slot` (below) that an importable `bob.go`
+  declares and the main package's `bob.go` binds — never through a directory string.
+- Error (BOB-E-1029, definition class, exit 3): `{pos}: {label}: {dir}/bob.go already defines the
+  {ecosystem} {kind} {other} at {pos2}; one library or binary per directory package` — hint
+  `move {label} into its own directory with its own bob.go and depend on it through its handle`.
+- **Acceptance:** fault 84 (a second `cc.StaticLibrary` in `libs/mathx/bob.go`) exits 3 with
+  BOB-E-1029 naming both positions; the fixture linter (R-FW-070 c) counts units per `bob.go`.
+- **Source:** R-FW-017, R-CC-006, D72.
+
+```go
+// Slot is a typed forward declaration for values of packages that cannot be imported (the
+// bob.go of a Go main package, R-FW-002 R3). An importable bob.go declares it, the leaf
+// package's bob.go binds its constructor, every other package gets the bound value [D72].
+//
+//	// acme/bob.go (importable):        var API = bob.NewSlot[*golang.Binary]()
+//	// acme/cmd/api/bob.go (main):      var _ = acme.API.Bind(Binary)
+//	// acme/deploy/bob.go:              oci.ImageOpts{Program: acme.API.Get(p)}
+type Slot[T any] struct{ /* unexported */ }
+
+// NewSlot declares a slot; only in a package-level var declaration of a bob.go.
+func NewSlot[T any]() *Slot[T]
+
+// Bind binds a defined constructor (a bob.Define result) to s; only in a package-level var
+// declaration of a bob.go. A slot is bound exactly once.
+func (s *Slot[T]) Bind(fn func(p *P) T) struct{}
+
+// Get returns the bound constructor's value for p (memoised like the constructor itself).
+func (s *Slot[T]) Get(p *P) T
+```
+
+- Slot errors (BOB-E-1020, definition class, at the position of the call): `Get` of an unbound
+  slot → `{pos}: the slot declared at {pos2} is not bound; bind it with <pkg>.<Var>.Bind(<constructor>)
+  in the bob.go of the package that defines the value`; a second `Bind` → `{pos}: the slot
+  declared at {pos2} is already bound at {pos3}`; `NewSlot`/`Bind` inside a constructor → the
+  R-FW-011 `bob.Define must be used in a package-level var declaration` error with the slot's
+  name. Acceptance: tests/core `TestRFW071Slots` (repo `define/slot`: bound, unbound, twice;
+  `Get(p) == Get(p)`, the label and `definedAt` are the binding constructor's).
+
+#### R-FW-072 Typed public surface
+- **Statement:** No exported function, method parameter or struct field of an L0–L3 package
+  (R-ARCH-003) has a raw string type (`string`, `[]string`, `...string`, `map[string]T`) that
+  names a package, nixpkgs attribute, target, tool or library defined elsewhere. Every raw-string
+  parameter and field is classified in the protected allowlist of `TestRFW072TypedSurface` with
+  one category and a reason: `own-name` (label name of the package being defined), `local-path`
+  (inside the calling package, R-FW-070), `output-path` (inside the package's own output),
+  `version`, `hash`, `url`, `glob`, `command`, `env`, `flag`, `text`, `label-pattern` (CLI form,
+  R-FW-015), `registry-declaration` (the one place an external registry name is written:
+  `golang.Require`, `golang.GeneratorRuntime` path, `rust.Crate`, `rust.Indirect`, `npm.Dep`,
+  `npm.Alias`, `npm.Indirect`, `ocaml.Opam`, `ocaml.Indirect`, `bob.Import`),
+  `resolved-namespace` (names inside a resolved package that are only known after resolution,
+  validated at lock/plan with the position: crate features, findlib sub-libraries, pkg-config
+  modules), `target-language` (identifiers of the generated code's language, validated by the
+  generator: gqlgen models, TS scalars), `value` (fields of values bob returns: `Label`,
+  `Position`, `LinkInfo`), `extension` (fields filled by bob's own packages, never by users).
+  Enum-like options use named types with constants. A new raw-string parameter fails CI until the
+  owner-protected allowlist classifies it; a stale allowlist row fails too.
+- **Acceptance:** `TestRFW072TypedSurface` (tests/core) passes; mutation check (HARNESS §10.3 row
+  T1): adding `func Tool(p *bob.P, attr string)` to `pkg/nixpkgs` makes it fail.
+- **Source:** R-FW-010 (amended), R-FW-018, D71, ADR 0020 §1, §5.
 
 ---
 
@@ -746,38 +890,112 @@ type Resolved struct {
 
 ---
 
-## 1.7 nixpkgs as package source (`pkg/nixpkgs`)
+## 1.7 nixpkgs as package source (`pkg/nixpkgs`) — generated typed surface (ADR 0020) [D71]
 
 ```go
-package nixpkgs
+package nixpkgs // github.com/megakuul/bob/pkg/nixpkgs
 
-// Tool is a nixpkgs package used at build time (always from the host package set).
-//   nixpkgs.Tool(p, "protobuf")
-func Tool(p *bob.P, attr string, opts ...Option) *Package
-// Lib is a nixpkgs library linked into target code (target package set; see Cross).
-//   nixpkgs.Lib(p, "openssl", nixpkgs.Modules("libcrypto"))
-func Lib(p *bob.P, attr string, opts ...Option) *Package
-// Pkg is any other nixpkgs package needed at run time (data, services, runtime tools).
-func Pkg(p *bob.P, attr string, opts ...Option) *Package
+// Attr is one nixpkgs package. Values exist only as the generated handles below (and inside
+// bob's own ecosystem packages, through nixext): no string converts to an Attr.
+type Attr = nixext.Attr
 
-type Option func(*options)
-func Outputs(names ...string) Option        // default: the package's default outputs
-func Modules(names ...string) Option        // pkg-config modules a Lib links; default: all modules of its dev output
-func Cross() Option                         // take a target library from pkgsCross (A19); default: the target system's own set
-func AllowInsecure(ids ...string) Option    // accept these knownVulnerabilities entries
+// The role is chosen by the method (R-FW-032): Tool runs at build time (host package set);
+// Lib is linked into or shipped with the output (target set, see Cross); Pkg is needed at run
+// time; Exe is a Pkg whose main program is run (meta.mainProgram, or the MainProgram option).
+func (a Attr) Tool(p *bob.P, opts ...Option) *ToolPackage // bob.Tool, bob.Tree; not a Linkable
+func (a Attr) Lib(p *bob.P, opts ...Option) *Package      // bob.Linkable, bob.Tree; not a bob.Tool
+func (a Attr) Pkg(p *bob.P, opts ...Option) *Package
+func (a Attr) Exe(p *bob.P, opts ...Option) *Program      // bob.Executable
+func (a Attr) Name() string                               // the attribute ("openssl"), for messages
+
+type Option = nixext.Option
+func Outputs(names ...Output) Option      // default: the package's default outputs
+func Modules(names ...string) Option      // pkg-config modules a Lib links; default: all of its dev output
+func Cross() Option                       // take a target library from pkgsCross (A19)
+func AllowInsecure(ids ...string) Option  // accept these knownVulnerabilities entries
 func AllowUnfree() Option
+func MainProgram(path string) Option      // Exe: program path in the package's bin (else out) output
 
-// Package implements bob.Tool, bob.Linkable and bob.Tree (nixpkgs.Package of §03).
-type Package struct{ bob.Node }
+// Output names a store output of a nixpkgs package.
+type Output = nixext.Output
+const ( Out Output = "out"; OutBin Output = "bin"; OutDev Output = "dev"; OutLib Output = "lib"; OutMan Output = "man"; OutDoc Output = "doc"; OutDebug Output = "debug"; OutStatic Output = "static" )
+// (Not Lib/Bin/…: those names would shadow the role methods' names in messages and invite
+// nixpkgs.Lib(p, …) confusion; the old string functions must give "undefined: nixpkgs.Lib".)
+
+type Package = nixext.Package; type ToolPackage = nixext.ToolPackage; type Program = nixext.Program
+
+// Generated (attrs_gen.go, one variable per attribute; excerpt):
+// Openssl is openssl 3.6.1: A cryptographic library that implements the SSL and TLS protocols. Licence: Apache-2.0.
+var Openssl Attr
+// Protobuf is protobuf 33.1: Google's data interchange format. Licence: BSD-3-Clause.
+var Protobuf Attr
 ```
 
+Usage: `nixpkgs.Protobuf.Tool(p)`, `nixpkgs.Openssl.Lib(p, nixpkgs.Modules("libcrypto"))`,
+`nixpkgs.Tzdata.Pkg(p)`, `nixpkgs.Curl.Exe(p)`. The former `nixpkgs.Tool/Lib/Pkg/Exe(p, attr
+string)` functions do not exist (R-FW-014: one way).
+
+Compile errors of the typed surface are translated with a hint (ADR 0017 amendment, BOB-E-1020):
+`undefined: nixpkgs.Opensll` → hint `did you mean nixpkgs.Openssl?` (up to 3 generated names by
+edit distance ≤ 2 or same prefix); `undefined: nixpkgs.Lib` (or `Tool`, `Pkg`, `Exe`) on a line
+that passes a string literal → hint `nixpkgs packages are typed: write nixpkgs.<Name>.Lib(p)`
+with `<Name>` the generated handle of that literal when one exists (`nixpkgs.Openssl.Lib(p)`).
+
+`pkg/nixpkgs/nixext` (layer L1, R-ARCH-003) holds the type, the methods and the options, plus
+`func New(name string) Attr` and `func Toolchain(p *bob.P) Toolchain` (`CC`, `Bintools`,
+`CCLib`, `Emulator Attr`; the string fields of `bob.Toolchain` with these meanings are removed)
+for bob's own ecosystem packages, which need computed attributes (cross compilers, `go_1_26`
+from `Go: "1.26"`, `ocamlPackages.*`). `bob.go` cannot import `nixext` (R-FW-002 R7).
+`nixext.SurfaceRev` is the nixpkgs revision the handles were generated from.
+
 #### R-NIX-013 Only `Nixpkgs` leaks
-- **Statement:** The only Nix concept in the public API is nixpkgs attribute names (and the
-  channel name in `RepoOpts`). No public identifier contains `Derivation`, `Drv`, `StorePath`,
-  `Flake` or `Expr`; users never see a `.nix` file.
-- **Acceptance:** `TestAPISurface` greps exported identifiers of L0–L3 for those words → none;
-  `find examples -name '*.nix'` → none, also after `bob dev`.
-- **Source:** R-NIX-013, D6.
+- **Statement:** The only Nix concept in the public API is nixpkgs package *names*, and only as
+  the generated Go identifiers and their doc comments (R-NIX-031) plus `bob.Channel`. No public
+  identifier contains `Derivation`, `Drv`, `StorePath`, `Flake` or `Expr`; users never see a
+  `.nix` file. [amended 2026-10-24, D71]
+- **Acceptance:** `TestAPISurface` greps exported identifiers of L0–L3 for those words → none
+  (the generated `attrs_gen.go` is exempt from the word check, its identifiers are package
+  names); `find examples -name '*.nix'` → none, also after `bob dev`.
+- **Source:** R-NIX-013, D6, D71.
+
+#### R-NIX-031 Generated typed nixpkgs surface
+- **Statement:** `pkg/nixpkgs/attrs_gen.go` is generated by `cmd/nixpkgsgen` (ADR 0020 §2):
+  `go generate ./pkg/nixpkgs` regenerates it offline from the committed snapshot
+  `cmd/nixpkgsgen/snapshot/<rev>.json.zst`; `go run ./cmd/nixpkgsgen -check` fails on
+  any byte difference, on a snapshot revision other than `lock.DefaultRev`, and on any generated
+  attribute missing from the snapshot or from the pinned index's names list
+  (`pkg/engine/nixidx`). It holds one exported `Attr` variable per top-level attribute of the pin
+  that is a derivation available on `aarch64-linux` or `x86_64-linux`, minus the exclusions of
+  `cmd/nixpkgsgen/exclude.json` (language package sets and scopes, aliases, broken, insecure,
+  evaluation failures), plus the nested attributes of `cmd/nixpkgsgen/include.json` (initially
+  `rust_1_97.packages.stable.rustc` → `nixpkgs.Rust1_97PackagesStableRustc`, which R-RS-004a needs). Each
+  variable has a doc comment `// <Name> is <attr> <version>: <description>. Licence: <spdx>.`
+  (and the unfree / platform notes); names follow ADR 0020 §2 (collision list in the header).
+  bob.go files may not import `nixext` (R7) or assign to the handles (R8).
+- **Acceptance:** `TestRNIX031GeneratedSurface` (tests/core): the file exists with the generated
+  header and a `//go:generate` directive in `pkg/nixpkgs`; `-check` passes offline (network
+  namespace without routes); it defines `Openssl`, `Zlib`, `Protobuf`, `Jq`, `Tzdata`, `Curl`,
+  `Bash`, `Coreutils`, `Patchelf`, `Gcc`, `Go1_26`, `Rustc`, `Nodejs`, `Postgresql` and none of
+  `Python3Packages`, `OcamlPackages`, `HaskellPackages`, `PerlPackages`, `NodePackages`,
+  `PkgsCross`; every variable has a doc comment with a version and `Licence:`; `pkg/nixpkgs` has
+  no exported function taking a string attribute; `go vet -tags=bob` of a `bob.go` passing
+  `nixpkgs.Openssl.Tool(p)` where a `cc.Linkable` is expected fails (R-FW-032). gopls completion
+  of `nixpkgs.Op` lists `Openssl` with its doc (S1 LSP script step added to
+  `bobtest/lsp/acme.steps`). Budgets B-098…B-103 (§Appendix B) are measured and recorded.
+- **Source:** R-FW-018, D71, ADR 0020 §2.
+
+#### R-NIX-032 Typed surface and the user's pin
+- **Statement:** The surface is generated for bob's default pin (`lock.DefaultChannel`,
+  `lock.DefaultRev`). A new `bob.lock` pins `DefaultRev`. Whatever the pin, every attribute used
+  by the graph is checked against the pinned index before any build (R-NIX-011); an attribute the
+  pin lacks fails with BOB-E-1001 variant `pin`: `{pos}: nixpkgs at the pinned revision {rev} has
+  no package "{attr}" (nixpkgs.{name})`, hint `bob's typed nixpkgs packages come from {surface};
+  move the pin with bob lock --update nixpkgs, or use another package`. `bob version --json`
+  reports `nixpkgsSurface`.
+- **Acceptance:** fault 90 (test hook `BOB_TEST_NIXPKGS_MISSING=openssl`, which makes the index
+  report the attribute missing) exits 3 with BOB-E-1001, the `pin` wording, the position of the
+  `nixpkgs.Openssl.Lib(p)` call and the hint; no Nix build starts.
+- **Source:** R-FW-018, D71, ADR 0020 §3.
 
 Typing and set selection (`Tool` = host set, `Lib` = target set, `Cross()`) are specified by
 §04 R-FW-032/R-FW-036; §01 implements them in `resolve.nix` calls (`system` argument) and the IR
@@ -874,12 +1092,15 @@ func (f *File) Write(path string) error // canonical, atomic, only if bytes chan
 - **Source:** R-FW-004.
 
 #### R-NIX-005 nixpkgs pin
-- **Statement:** `nixpkgs.rev` comes from `https://channels.nixos.org/<channel>/git-revision`
-  (verified for `nixos-26.05`, returns `cd4ea8d5…`), or from the `@rev` in `RepoOpts.Nixpkgs`.
+- **Statement:** A new lock pins `lock.DefaultRev` (the revision bob's typed surface was generated
+  from, R-NIX-032) when `RepoOpts.Nixpkgs` is bob's default channel and `NixpkgsRev` is empty;
+  `bob lock --update nixpkgs` and other channels take `nixpkgs.rev` from
+  `https://channels.nixos.org/<channel>/git-revision`
+  (verified for `nixos-26.05`, returns `cd4ea8d5…`); `RepoOpts.NixpkgsRev` pins an explicit revision. [amended 2026-10-24, D71]
   The source is fetched by bob's fetcher from `url` (GitHub archive tarball), unpacked with
   `strip=1`, and verified against `narHash`. A changed `rev` is the only way nixpkgs changes.
-- **Acceptance:** fresh repo with `Nixpkgs: "nixos-26.05@cd4ea8d5…"`: `bob lock` writes the pinned
-  entry; a tampered `narHash` → 3001 for `nixpkgs`.
+- **Acceptance:** fresh repo with `Nixpkgs: bob.NixOS2605, NixpkgsRev: "cd4ea8d5…"`: `bob lock` writes the pinned
+  entry; a fresh repo without `NixpkgsRev` pins `lock.DefaultRev`; a tampered `narHash` → 3001 for `nixpkgs`.
 - **Source:** R-NIX-002, A3, gen-b §4 (first fetch 16.5 s).
 
 ---
@@ -1328,7 +1549,7 @@ warn-dirty = false
 
 #### R-NIX-011 Pre-checks in Go
 - **Statement:** Before any derivation is built, bob checks with index data: attribute exists
-  (1001, with up to 3 suggestions by edit distance over the top-level names list, ≤ 2 edits or
+  (1001; for a typed handle the pin lacks: variant `pin`, R-NIX-032; with up to 3 suggestions by edit distance over the top-level names list, ≤ 2 edits or
   same prefix), broken (1002), insecure without `AllowInsecure` (1003), unfree without
   `AllowUnfree` (1004), unavailable on the system (1005), dependency cycle (1006, Go topo sort),
   unknown dependency (1007), toolchain version constraints (1008, §03 provides the rules), missing
@@ -1361,8 +1582,8 @@ warn-dirty = false
 9999 bug with a regression test.
 
 #### R-NIX-002 nixpkgs stays usable
-- **Statement:** Any attribute that evaluates to a derivation at the pin can be used through
-  `nixpkgs.Tool/Lib/Pkg`; uncached ones are built by Nix from the nixpkgs recipe (upstream
+- **Statement:** Any attribute of the typed surface (R-NIX-031) that evaluates to a derivation at the
+  pin can be used through its handle's `Tool/Lib/Pkg/Exe`; uncached ones are built by Nix from the nixpkgs recipe (upstream
   failures → 5001).
 - **Acceptance:** `examples/polyglot` built against nixos-25.11 (`b6018f87`) after lowering the
   Go version: no builder code changes; only real version constraints fail, with 1008/2006.

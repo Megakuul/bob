@@ -26,7 +26,7 @@ import (
 var Tools = bob.Define(func(p *bob.P) *oci.Image {
 	return oci.NewImage(p, "tools", oci.ImageOpts{
 		Program: polyglot.API(p),
-		Extra:   []bob.Package{nixpkgs.Pkg(p, "coreutils"), nixpkgs.Pkg(p, "curl")},
+		Extra:   []bob.Package{nixpkgs.Coreutils.Pkg(p), nixpkgs.Curl.Pkg(p)},
 	})
 })
 
@@ -59,10 +59,10 @@ var Tools = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "tools", appimage.BundleOpts{
 		Program: polyglot.API(p),
 		Entries: map[string]bob.Executable{
-			"curl":  nixpkgs.Exe(p, "curl", "bin/curl"),
-			"sleep": nixpkgs.Exe(p, "coreutils", "bin/sleep"),
-			"date":  nixpkgs.Exe(p, "coreutils", "bin/date"),
-			"iconv": nixpkgs.Exe(p, "glibc", "bin/iconv"),
+			"curl":  nixpkgs.Curl.Exe(p, nixpkgs.MainProgram("bin/curl")),
+			"sleep": nixpkgs.Coreutils.Exe(p, nixpkgs.MainProgram("bin/sleep")),
+			"date":  nixpkgs.Coreutils.Exe(p, nixpkgs.MainProgram("bin/date")),
+			"iconv": nixpkgs.Glibc.Exe(p, nixpkgs.MainProgram("bin/iconv")),
 		},
 		Locales: []string{"C.UTF-8", "en_US.UTF-8"},
 	})
@@ -83,7 +83,7 @@ var BadPrune = bob.Define(func(p *bob.P) *appimage.Bundle {
 
 var script = bob.Define(func(p *bob.P) bob.Executable {
 	step := bob.Run(p, "deploy-script", bob.RunOpts{
-		Tools: []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
+		Tools: []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)},
 		Cmd:   []string{"sh", "-c", "mkdir -p $out/bin && printf '#!/bin/sh\necho deploy\n' > $out/bin/deploy && chmod +x $out/bin/deploy"},
 	})
 	return bob.Exe(step, "bin/deploy")
@@ -108,7 +108,7 @@ var ScriptUserns = bob.Define(func(p *bob.P) *appimage.Bundle {
 // Graphics runs vulkaninfo with the host's GPU libraries appended (R-OUT-020).
 var Graphics = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "graphics", appimage.BundleOpts{
-		Program:      nixpkgs.Exe(p, "vulkan-tools", "bin/vulkaninfo"),
+		Program:      nixpkgs.VulkanTools.Exe(p, nixpkgs.MainProgram("bin/vulkaninfo")),
 		HostGraphics: true,
 	})
 })

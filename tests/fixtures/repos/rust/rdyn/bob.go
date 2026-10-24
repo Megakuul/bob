@@ -8,4 +8,4 @@ import (
 )
 
 // Lib is librdyn.so (label //rdyn:rdyn).
-var Lib = bob.Define(func(p *bob.P) *rust.CLib { return rust.CDylib(p, rust.LibOpts{Headers: "include"}) })
+var Lib = bob.Define(func(p *bob.P) *rust.CLib { return rust.CDylib(p, rust.LibOpts{Headers: bob.IncludeDir("include")}) })

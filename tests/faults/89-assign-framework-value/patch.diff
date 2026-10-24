@@ -1,0 +1,16 @@
+diff --git a/internal/greet/bob.go b/internal/greet/bob.go
+--- a/internal/greet/bob.go
++++ b/internal/greet/bob.go
+@@ -6,8 +6,12 @@
+ 	"example.com/acme"
+ 	"github.com/megakuul/bob/pkg/bob"
+ 	"github.com/megakuul/bob/pkg/golang"
++	"github.com/megakuul/bob/pkg/nixpkgs"
+ )
+ 
++// swap overwrites a typed handle of the framework (fault 89).
++var swap = func() bool { nixpkgs.Jq = nixpkgs.Zlib; return true }()
++
+ // Tests runs the tests of this package (unit //internal/greet:go_test).
+ var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+ 	return acme.Module(p).Tests(golang.TestOpts{Name: "greet_tests"})

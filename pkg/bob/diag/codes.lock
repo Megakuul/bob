@@ -103,3 +103,8 @@
 0011 usage - args=ecosystem,host,label,platform hint=-
 1026 definition - args=what hint=hint
 2016 build - args=label,reason hint=-
+1001 definition pin args=attr,name,pos,rev hint=surface
+1024 definition R8 args=dir,line,name hint=-
+1028 definition outside args=dir,label,pattern,pos hint=-
+1028 definition subpackage args=label,pattern,pos,sub hint=sub
+1029 definition - args=dir,ecosystem,kind,label,other,pos,pos2 hint=label

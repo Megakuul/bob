@@ -68,10 +68,13 @@ func corpusRepo(t *testing.T, reqs []corpusModule) string {
 	}
 	files := map[string]string{
 		"go.mod": "module example.com/corproot\n\ngo 1.26.0\n",
-		"bob.go": "//go:build bob\n\npackage corproot\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go": "//go:build bob\n\npackage corproot\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"corpus/bob.go": "//go:build bob\n\npackage corpus\n\nimport (\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/golang\"\n)\n\n" +
 			"// Module is example.com/corpus (label //corpus:module).\nvar Module = bob.Define(func(p *bob.P) *golang.Module {\n\treturn golang.NewModule(p, golang.ModuleOpts{\n\t\tPath: \"example.com/corpus\", Go: \"1.26\",\n\t\tRequire: []golang.Requirement{\n" +
-			requires.String() + "\t\t},\n\t})\n})\n\n// Main is the binary (label //corpus/cmd/corpus:corpus).\nvar Main = bob.Define(func(p *bob.P) *golang.Binary {\n\treturn Module(p).Binary(\"./cmd/corpus\", golang.BinaryOpts{})\n})\n",
+			requires.String() + "\t\t},\n\t})\n})\n",
+		// The binary is declared in its main package's own bob.go (R-FW-070, ADR 0020).
+		"corpus/cmd/corpus/bob.go": "//go:build bob\n\npackage main\n\nimport (\n\t\"example.com/corproot/corpus\"\n\t\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/golang\"\n)\n\n" +
+			"// Main is the binary (label //corpus/cmd/corpus:corpus).\nvar Main = bob.Define(func(p *bob.P) *golang.Binary {\n\treturn corpus.Module(p).Binary(golang.BinaryOpts{})\n})\n",
 		"corpus/cmd/corpus/main.go": "package main\n\nimport (\n" + imports.String() + ")\n\nfunc main() {}\n",
 	}
 	for rel, body := range files {
