@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,18 +138,64 @@ func (t *Translator) testFailure(drv string, lines []string) *diag.Error {
 		}
 		e := t.pkgErr(cTestsFailed, drv, nil)
 		e.Cause = "test " + m[1] + " failed"
+		var cases []string
 		for _, x := range lines[i:] {
 			if strings.HasPrefix(x, "ok ") || strings.HasPrefix(x, "?") || reBobBuilder().MatchString(x) {
 				continue
 			}
-			e.Excerpt = append(e.Excerpt, x)
-			if len(e.Excerpt) == 10 {
-				break
+			if rest, ok := strings.CutPrefix(x, "bob:: "); ok {
+				// bob-builder's test-result line is protocol, not output (A458); the output of
+				// the failed cases it carries (the t.Error messages) is what the developer needs.
+				cases = append(cases, failedCaseOutput(rest)...)
+				continue
 			}
+			e.Excerpt = append(e.Excerpt, x)
+		}
+		var extra []string
+		for _, c := range cases {
+			if !slices.Contains(e.Excerpt, c) && !slices.Contains(extra, c) {
+				extra = append(extra, c)
+			}
+		}
+		if len(extra) > 0 { // after the first "--- FAIL:" line, where go test prints them
+			e.Excerpt = slices.Concat(e.Excerpt[:1], extra, e.Excerpt[1:])
+		}
+		if len(e.Excerpt) > 10 {
+			e.Excerpt = e.Excerpt[:10]
 		}
 		return e
 	}
 	return nil
+}
+
+// failedCaseOutput returns the output lines of the failed cases of a bob-builder test-result
+// line (`bob:: {"type":"test-result","result":{"cases":[…]}}` without its prefix), nil for any
+// other line.
+func failedCaseOutput(line string) []string {
+	var r struct {
+		Type   string `json:"type"`
+		Result struct {
+			Cases []struct {
+				Result string `json:"result"`
+				Output string `json:"output"`
+			} `json:"cases"`
+		} `json:"result"`
+	}
+	if json.Unmarshal([]byte(line), &r) != nil || r.Type != "test-result" {
+		return nil
+	}
+	var out []string
+	for _, c := range r.Result.Cases {
+		if c.Result != "fail" {
+			continue
+		}
+		for _, l := range strings.Split(strings.TrimRight(c.Output, "\n"), "\n") {
+			if strings.TrimSpace(l) != "" {
+				out = append(out, l)
+			}
+		}
+	}
+	return out
 }
 
 func (t *Translator) compileError(drv string, p Pkg, lines []string) *diag.Error {

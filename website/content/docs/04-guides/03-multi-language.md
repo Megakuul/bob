@@ -18,7 +18,6 @@ protobuf code generation and a Svelte frontend to the example below.
 
 ```tree
 📁 polyglot/
-  📄 go.mod
   📄 bob.go
   📁 libs/
     📁 foo/
@@ -231,12 +230,6 @@ var API = bob.Define(func(p *bob.P) *golang.Binary {
 	FFI(p)
 	return Module(p).Binary("./cmd/api", golang.BinaryOpts{})
 })
-```
-
-```text file=go.mod
-module example.com/polyglot
-
-go 1.26.0
 ```
 
 > [!NOTE]

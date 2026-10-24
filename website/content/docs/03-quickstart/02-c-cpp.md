@@ -15,7 +15,6 @@ uses GCC from nixpkgs.
 
 ```tree
 📁 hello-cc/
-  📄 go.mod
   📄 bob.go
   📄 main.cpp
   📄 test.cpp
@@ -82,25 +81,12 @@ var Test = bob.Define(func(p *bob.P) *cc.Test {
 		Deps: []cc.Linkable{nixpkgs.Lib(p, "zlib")},
 	})
 })
-
-var Dev = bob.Define(func(p *bob.P) *bob.Shell {
-	return bob.NewShell(p, bob.DevShell{
-		Packages: []bob.Tool{nixpkgs.Tool(p, "gcc"), nixpkgs.Tool(p, "clang-tools")},
-	})
-})
 ```
 
 - `nixpkgs.Lib(p, "zlib")` is zlib from your nixpkgs pin. bob adds its headers and links it.
-- `Dev` is the dev shell. It lists GCC and the clang tools (clangd, clang-format) because the
-  dev shell does not add a C toolchain by itself yet.
 
-And the `go.mod` that every bob repository needs today:
-
-```text file=go.mod
-module example.com/hellocc
-
-go 1.26.0
-```
+bob generates the repository's `go.mod` itself (the `bob.go` files are Go code); you do not
+write one.
 
 ## Lock, build, test, run
 
@@ -157,7 +143,8 @@ grep -c '"file"' compile_commands.json
 2
 ```
 
-GCC and clangd are on `PATH` inside the dev shell:
+GCC and the clang tools (clangd, clang-format) of your nixpkgs pin are on `PATH` inside the
+dev shell, without declaring anything:
 
 ```bash run
 bob dev -- sh -c 'gcc --version | head -1'

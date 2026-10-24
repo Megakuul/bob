@@ -16,7 +16,6 @@ You need [bob installed](../02-install/02-install-bob.md). You do not need `prot
 
 ```tree
 📁 hello-proto/
-  📄 go.mod
   📄 bob.go
   📁 proto/
     📁 greet/
@@ -110,12 +109,6 @@ func main() {
 	g := &greetv1.Greeting{Name: "bob"}
 	fmt.Println("hello,", g.GetName())
 }
-```
-
-```text file=go.mod
-module example.com/hello
-
-go 1.26.0
 ```
 
 ## Lock, build, run

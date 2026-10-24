@@ -14,7 +14,6 @@ You need [bob installed](../02-install/02-install-bob.md). You do not need OCaml
 
 ```tree
 📁 hello-ocaml/
-  📄 go.mod
   📄 bob.go
   🐫 hello.ml
   🐫 main.ml
@@ -75,12 +74,6 @@ var Hello = bob.Define(func(p *bob.P) *ocaml.Exe {
 var Test = bob.Define(func(p *bob.P) *ocaml.Test {
 	return ocaml.NewTest(p, ocaml.ExeOpts{Name: "hello_test", Main: "test", Srcs: bob.Files("test.ml"), Deps: []ocaml.Dep{Greet(p)}})
 })
-```
-
-```text file=go.mod
-module example.com/helloml
-
-go 1.26.0
 ```
 
 ## Lock, build, test, run

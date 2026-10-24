@@ -15,7 +15,6 @@ You need [bob installed](../02-install/02-install-bob.md). You do not need Node.
 
 ```tree
 📁 hello-ts/
-  📄 go.mod
   📄 bob.go
   📁 src/
     📄 main.ts
@@ -81,12 +80,6 @@ var Test = bob.Define(func(p *bob.P) *npm.Test {
 `npm.Dev()` marks a tool: tests and builds see it, the program's runtime does not. bob
 bundles the program with esbuild and wraps it in `bin/hello`, which runs the pinned Node.
 
-```text file=go.mod
-module example.com/hellots
-
-go 1.26.0
-```
-
 ## Lock, build, test, run
 
 `bob lock` resolves vitest and everything it needs from the npm registry and pins each
@@ -137,7 +130,7 @@ vitest/3.…
 
 - `npm.Library` builds a TypeScript library that other importers depend on by value.
 - `npm.Vite` builds a static site with `vite build`. Run its dev server inside the dev shell
-  (`bob dev -- sh -c 'vite'`); `bob dev` does not start dev servers by itself yet.
+  (`bob dev -- vite`); `bob dev` does not start dev servers by itself yet.
 - Packages with install scripts must be allowed: `npm.AllowScripts("esbuild")` (otherwise
   `BOB-E-2013`).
 

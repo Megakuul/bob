@@ -432,8 +432,9 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 	}
 	old := *lf
 	var f fetch.Fetcher = fetch.New(st, fetch.Policy{})
+	// --offline: what the store holds and the pins bob.lock has, nothing else (A456).
 	var channelRev func(context.Context, string) (string, error) // nil: lock.ChannelRev
-	if o.Offline { // --offline: what the store holds and the pins bob.lock has, nothing else (A456)
+	if o.Offline {
 		f = offlineFetcher{st: st}
 		channelRev = func(context.Context, string) (string, error) {
 			return "", fmt.Errorf("the channel's current revision: %w", errOffline)

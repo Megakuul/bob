@@ -14,7 +14,6 @@ You need [bob installed](../02-install/02-install-bob.md). You do not need Rust 
 
 ```tree
 📁 hello-rust/
-  📄 go.mod
   📄 bob.go
   📁 src/
     🦀 main.rs
@@ -71,12 +70,6 @@ var Test = bob.Define(func(p *bob.P) *rust.TestSet {
 The crate root is `src/main.rs` by default. Without `Name`, the crate is named after its
 directory.
 
-```text file=go.mod
-module example.com/hellorust
-
-go 1.26.0
-```
-
 ## Lock, build, test, run
 
 ```bash run
@@ -128,7 +121,7 @@ bob writes `Cargo.toml`, `Cargo.lock` and `.cargo/config.toml` for tooling. Do n
 bob never runs Cargo to build. `cargo` and rust-analyzer are in the dev shell:
 
 ```bash run
-bob dev -- sh -c 'cargo --version'
+bob dev -- cargo --version
 ```
 
 ```text expect

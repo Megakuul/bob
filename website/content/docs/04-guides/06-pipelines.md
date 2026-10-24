@@ -67,12 +67,6 @@ func TestHello(t *testing.T) {
 }
 ```
 
-```text file=go.mod
-module example.com/hello
-
-go 1.26.0
-```
-
 | Field | Meaning |
 |---|---|
 | `Targets` | patterns to build (the `build` step) |

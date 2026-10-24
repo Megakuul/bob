@@ -22,8 +22,11 @@ bob [global flags] <command> [subcommand] [flags] [args] [-- passthrough args]
 - An unknown command or flag is `BOB-E-0001` (exit 2), with a suggestion when one is close.
 
 Patterns select packages: `//...` (everything), `//dir/...` (below a directory),
-`//dir:all` (one `bob.go`), `//dir:name` (one package), `//dir` (`//dir:dir`). Without a
-pattern, `build` and `test` use every package below the current directory.
+`//dir:all` (one `bob.go`), `//dir:name` (one package), `//dir` (`//dir:dir`). Relative
+forms start from the current directory: `:name` (a package of this directory), `.` (all of
+them; for `bob run`, the package named like the directory), `./...` (everything below) and
+`./sub/dir:name`. Without a pattern, `build` and `test` use every package below the current
+directory.
 
 ## Global flags
 
@@ -120,8 +123,7 @@ Starts `$SHELL` (or the command after `--`) in the dev environment: toolchains o
 | `--servers-only` | run only the dev servers, in the foreground |
 
 > [!WARNING]
-> Dev servers are not started yet, and a toolchain command directly after `--`
-> (`bob dev -- go version`) fails with `BOB-E-0005`; use `bob dev -- sh -c 'go version'`.
+> Dev servers are not started yet; start them inside the dev shell (`bob dev -- vite`).
 
 ### bob env
 

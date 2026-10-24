@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -479,8 +480,14 @@ func TestSnippetsTypeCheck(t *testing.T) {
 			continue
 		}
 		module := modulePath(files["go.mod"])
+		if _, ok := files["go.mod"]; !ok {
+			// No go.mod on the page: bob writes the root go.mod of a new repository itself
+			// (A451, test correction 97), with the module path its bob.go files import each
+			// other by, else the directory name.
+			module = newRepoModule(bobFiles)
+		}
 		if module == "" {
-			t.Errorf("%s: the page's project has bob.go files but no file=go.mod block with a module line", p.rel)
+			t.Errorf("%s: the page's file=go.mod block has no module line", p.rel)
 			continue
 		}
 		t.Run(p.rel, func(t *testing.T) {
@@ -490,6 +497,32 @@ func TestSnippetsTypeCheck(t *testing.T) {
 	if len(snippets) > 0 {
 		t.Run("verify-blocks", func(t *testing.T) { vet(t, t.TempDir(), "example.com/snippets", snippets) })
 	}
+}
+
+// newRepoModule is the module path bob gives a repository without a root go.mod
+// (pkg/engine/eval newRepoModule): an import of one bob.go file that names another bob.go
+// directory as "<module>/<dir>" gives <module>; otherwise any path (bob takes the directory
+// name, which a page does not have).
+func newRepoModule(bobFiles map[string]string) string {
+	dirs := map[string]bool{}
+	for name := range bobFiles {
+		dirs[path.Dir(name)] = true
+	}
+	for _, name := range slices.Sorted(maps.Keys(bobFiles)) {
+		f, err := parser.ParseFile(token.NewFileSet(), name, bobFiles[name], parser.ImportsOnly)
+		if err != nil {
+			continue
+		}
+		for _, imp := range f.Imports {
+			p, _ := strconv.Unquote(imp.Path.Value)
+			for d := range dirs {
+				if prefix, ok := strings.CutSuffix(p, "/"+d); ok && d != "." && prefix != "" {
+					return prefix
+				}
+			}
+		}
+	}
+	return "example.com/docsproject"
 }
 
 func modulePath(gomod string) string {

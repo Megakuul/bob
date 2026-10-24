@@ -16,7 +16,6 @@ The Go program of the [Go quickstart](01-go.md), with the outputs declared in `b
 
 ```tree
 📁 hello-ship/
-  📄 go.mod
   📄 bob.go
   📁 cmd/
     📁 hello/
@@ -34,12 +33,6 @@ package main
 import "fmt"
 
 func main() { fmt.Println("hello, bob") }
-```
-
-```text file=go.mod
-module example.com/hello
-
-go 1.26.0
 ```
 
 Each output takes the program by value (`Hello(p)`), so the image, the tarball and the

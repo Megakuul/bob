@@ -17,6 +17,7 @@ toolchains of the ecosystems the project uses, at the versions of its nixpkgs pi
 | Ecosystem | Tools |
 |---|---|
 | Go | `go`, `gofmt`, `gopls` (always present) |
+| C/C++ | `gcc`, `g++`, `cc`, `c++`, `clangd`, `clang-format` |
 | Rust | `rustc`, `cargo`, `rust-analyzer`, the standard library sources |
 | npm | `node`, `npm`, `npx`, `tsc`/`tsserver`, plus the commands of each importer's direct dependencies (`vite`, `vitest`, …) |
 | OCaml | the compiler and tools of the pin |
@@ -36,7 +37,7 @@ import (
 // Dev is the default dev shell.
 var Dev = bob.Define(func(p *bob.P) *bob.Shell {
 	return bob.NewShell(p, bob.DevShell{
-		Packages: []bob.Tool{nixpkgs.Tool(p, "gcc"), nixpkgs.Tool(p, "clang-tools"), nixpkgs.Tool(p, "jq")},
+		Packages: []bob.Tool{nixpkgs.Tool(p, "jq"), nixpkgs.Tool(p, "postgresql")},
 		Env:      map[string]string{"ACME_ENV": "dev"},
 		Hooks:    []string{"mkdir -p .cache"},
 	})
@@ -44,8 +45,8 @@ var Dev = bob.Define(func(p *bob.P) *bob.Shell {
 ```
 
 > [!NOTE]
-> C and C++ projects get no compiler in the dev shell automatically yet. Add
-> `nixpkgs.Tool(p, "gcc")` and `nixpkgs.Tool(p, "clang-tools")` (for clangd) as above.
+> The toolchains in the table above are added without declaring them; `Packages` is for
+> extra tools.
 
 Several shells are allowed; give each a `Name` and pick one with `--shell <name>`. A shell
 name that does not exist is `BOB-E-1014`.
@@ -70,17 +71,17 @@ its status.
 Run one command instead of a shell after `--`:
 
 ```bash
+bob dev -- go test ./...
 bob dev -- sh -c 'go vet ./... && go test ./...'
 ```
 
-> [!WARNING]
-> Put toolchain commands inside `sh -c '…'`. `bob dev -- go version` fails with
-> `BOB-E-0005: go is not runnable`, because bob looks the first word up outside the dev
-> environment. Programs installed on your machine (an editor, for example) work directly.
+The command is looked up in the dev shell first (its toolchains and tools), then on your own
+`PATH`, so an editor installed on your machine works too (`bob dev -- code .`).
 
 Dev servers: `bob.DevShell{Servers: …}` is accepted, but `bob dev` does not start servers
 yet (`--servers-only` reports `dev shell default has no dev servers`). Start them inside the
-shell yourself, for example `bob dev -- sh -c 'cd web && vite'`.
+shell yourself, for example `bob dev -- sh -c 'cd web && vite'`. (Dev servers are part of the
+Vite live-reload work that is not finished yet; see [Limitations](../07-reference/03-status.md).)
 
 ## bob exec and the .bob/bin shims
 

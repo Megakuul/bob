@@ -95,13 +95,11 @@ bob.lock: 1 change
 To pin nixpkgs to a specific revision, use `bob lock --nixpkgs <40-hex revision>`, or write
 it into `bob.go` as `Nixpkgs: "nixos-26.05@<revision>"`.
 
-For Go, the version in `golang.Require` is the version: change it in `bob.go` and run
-`bob lock`.
-
-> [!WARNING]
-> `bob lock --update <go module>` currently moves that module to its newest version even
-> though `golang.Require` names an exact one, and a later `bob lock --update` moves it back.
-> For Go modules, edit the version in `bob.go` instead.
+For Go, `golang.Require` names the version `bob lock` starts from, and Go's minimal
+version selection may pick a higher one that another module requires. `bob lock --update
+<module>` moves that module (and what it requires) to its newest release, and `bob lock
+--update` does so for every module `bob.go` requires; `bob.lock` and the generated `go.mod`
+record the result. To go back to the versions written in `bob.go`, run `bob lock --rebuild`.
 
 ## Remove a dependency
 
@@ -132,9 +130,9 @@ nixpkgs revision and resolves every section again from `bob.go`.
 After everything is downloaded, `--offline` (a global flag) turns off the binary caches, so
 builds use only what is in the store.
 
-> [!WARNING]
-> `bob lock --offline` is meant to fail with `BOB-E-3002` when it would need the network. At
-> the time of writing, the Go resolver still downloads new modules with `--offline`.
+`bob lock --offline` keeps every lock section that still matches `bob.go` and changes
+nothing that would need the network: a declaration that is not pinned yet, or `--update`,
+stops it with `BOB-E-3002`.
 
 ## Mirrors and private registries
 

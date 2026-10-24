@@ -33,28 +33,17 @@ Checked end to end for this documentation, with a bob built from the current sou
 | Item | Status | Workaround |
 |---|---|---|
 | Nix profile, NixOS and AppImage installs | new; being verified | build from source (Install, "For contributors") |
-| `scripts/bootstrap.sh` self-build | fails with `BOB-E-9003` (bob-builder reference) | use `.bob/bootstrap/bob` or `go build ./cmd/bob` |
 
 ### Projects and the CLI
 
 | Item | Status | Workaround |
 |---|---|---|
-| a new repository needs a hand-written `go.mod` | `BOB-E-9005 … the repository has no go.mod` without it | create `go.mod` with `module <path>` and `go 1.26.0` |
-| `go.mod` with `go 1.26` (two parts) | reported as a hand edit (`BOB-E-1011`) | write `go 1.26.0`, or run `bob gen --force` |
-| a root `bob.go` in package `main` | does not evaluate | keep `main` packages in subdirectories (`cmd/<name>`) |
-| relative labels (`:name`, `.`, `./...`) | refused | write labels from the root (`//dir:name`) |
-| `bob run //dir` (short label) | `BOB-E-0003` | `bob run //dir:name` |
-| `bob dev -- <toolchain command>` | `BOB-E-0005` | `bob dev -- sh -c '<command>'`, or `bob exec -- <command>` |
-| dev servers (`DevShell.Servers`, `--servers-only`) | not started | start them inside `bob dev` (`bob dev -- sh -c 'vite'`) |
-| C/C++ compiler in the dev shell | not added automatically | add `nixpkgs.Tool(p, "gcc")`, `nixpkgs.Tool(p, "clang-tools")` |
+| dev servers (`DevShell.Servers`, `--servers-only`) and Vite live reload | not implemented yet | start the server inside the dev shell (`bob dev -- vite`) |
 | `bob gc` | `BOB-E-9008` | delete `~/.local/share/bob` when no bob command runs |
 | `bob gen --check` | `BOB-E-9008` | `bob status` and `bob check` |
 | `bob check` on generated code directories | not checked | `bob status` shows `edited` |
 | `bob pipeline run --remote` | `BOB-E-9008` | start pipelines from a forge, the web UI or `BuildService/CreateBuild` |
-| `bob lock --update <go module>` | moves the module to its newest version despite `golang.Require` | change the version in `bob.go` and run `bob lock` |
-| `bob lock --offline` | the Go resolver still downloads | — |
 | lock change lines for some sections (`+ cc cc`, `~ go go →`) | printed without names | read `bob.lock` in the diff |
-| test failure excerpts | may include a raw `bob:: {"type":"test-result",…}` line | ignore it; `bob log <label>` has the full log |
 | `bob doctor --repair` | not tried for this documentation | — |
 
 ### Ecosystems

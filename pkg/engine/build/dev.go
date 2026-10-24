@@ -306,7 +306,13 @@ func prepareDev(ctx context.Context, dp engine.DevPreparer, name string, req eng
 
 // add merges one ecosystem's share and writes its working-tree files.
 func (res *DevResult) add(root string, prep engine.DevPrep) error {
-	res.Packages = append(res.Packages, prep.Packages...)
+	for _, p := range prep.Packages {
+		// A tool the dev shell lists itself (nixpkgs.Tool(p, "gcc")) and an ecosystem adds
+		// too is on PATH once, at the shell's position (A459).
+		if !slices.ContainsFunc(res.Packages, func(q engine.DevPackage) bool { return q.Path == p.Path }) {
+			res.Packages = append(res.Packages, p)
+		}
+	}
 	for k, v := range prep.Env {
 		res.Env[k] = v
 	}

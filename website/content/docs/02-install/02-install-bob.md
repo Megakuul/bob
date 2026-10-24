@@ -10,14 +10,17 @@ of three methods.
 
 | Method | Good for | Nix that bob uses |
 |---|---|---|
-| [Nix profile](#with-nix) | machines that already have Nix | the Nix that installed bob |
-| [NixOS flake](#on-nixos) | NixOS systems configured with flakes | the system's Nix |
-| [AppImage](#as-an-appimage) | any Linux machine, no Nix needed | the static Nix embedded in bob |
+| [Nix profile](#with-nix) | machines that already have Nix | static Nix 2.34.9, installed with bob from its flake |
+| [NixOS flake](#on-nixos) | NixOS systems configured with flakes | static Nix 2.34.9, installed with bob from its flake |
+| [AppImage](#as-an-appimage) | any Linux machine, no Nix needed | static Nix 2.34.9, embedded in bob |
+
+Your own Nix only installs bob; it needs flakes (see below) and its version does not matter for
+builds. The `nix profile add` command is the current name; Nix releases from before the rename
+call it `nix profile install`. The Nix methods were tested with Nix 2.34.
 
 > [!NOTE]
-> The Nix and NixOS methods depend on the bob flake and the AppImage on the release files.
-> Both are new; this page will be finalised once they are verified. The minimum Nix version
-> for the first two methods will be listed here.
+> The AppImage files are produced by the release workflow on the first tagged release; until
+> then the download links below return 404.
 
 ## With Nix
 
@@ -32,6 +35,9 @@ Without flakes enabled in your Nix configuration, add the flag:
 ```bash
 nix --extra-experimental-features 'nix-command flakes' profile add github:megakuul/bob
 ```
+
+The flake supports `x86_64-linux` and `aarch64-linux`. It also has `packages.bob-server`, an
+overlay (`overlays.default`) and a dev shell for working on bob.
 
 To try bob without installing it:
 
@@ -60,7 +66,13 @@ Add bob as a flake input and install its package:
 }
 ```
 
-Then run `sudo nixos-rebuild switch`.
+Then run `sudo nixos-rebuild switch`. On current nixpkgs, `pkgs.system` prints a rename
+warning; `pkgs.stdenv.hostPlatform.system` is the same value without it.
+
+> [!WARNING]
+> Do not set `inputs.bob.inputs.nixpkgs.follows` (or `nixpkgs-nix.follows`). bob's flake pins the
+> Go that reproduces bob's builder bit for bit and the Nix bob is tested with; with another
+> nixpkgs the build fails, or bob refuses its Nix with `BOB-E-1026`.
 
 ## As an AppImage
 
@@ -74,16 +86,28 @@ chmod +x ~/.local/bin/bob
 ```
 
 On arm64 machines, download `bob-aarch64.AppImage` instead. Make sure `~/.local/bin` is on
-your `PATH`.
+your `PATH`. Each release also has `bob-x86_64.AppImage.sha256` and
+`bob-aarch64.AppImage.sha256`:
+
+```bash
+cd ~/.local/bin
+curl -fLO https://github.com/megakuul/bob/releases/latest/download/bob-x86_64.AppImage.sha256
+sed 's/bob-x86_64.AppImage/bob/' bob-x86_64.AppImage.sha256 | sha256sum -c
+```
 
 ## Which Nix bob uses
 
 bob always keeps its own store in `~/.local/share/bob` (or `$BOB_HOME`) and its own
 configuration, so a bob build never changes your system's Nix store.
 
-- **Nix profile and NixOS installs** run the Nix that installed bob.
-- **The AppImage and source builds** run a static Nix (2.34.9) embedded in the bob binary and
-  unpacked on first use. A system Nix, if there is one, is hidden from bob.
+- **Nix profile and NixOS installs** contain no Nix inside the bob binary. bob's flake pins
+  nixpkgs' static Nix 2.34.9 and installs it with bob as part of bob's closure; on first use bob
+  copies that binary into its state directory and runs it there. Your system Nix and its daemon
+  are never used by builds.
+- **The AppImage and source builds** run the same static Nix (2.34.9), embedded in the bob binary
+  and unpacked on first use.
+- In both cases a system Nix, if there is one, is hidden from bob, and bob accepts only Nix 2.34
+  (from 2.34.0): a bob built against another Nix stops with `BOB-E-1026` and the fix.
 
 ## Check the installation
 
@@ -168,11 +192,6 @@ CGO_ENABLED=0 go build -trimpath -o ~/.local/bin/bob ./cmd/bob
 
 The first command fetches the pinned static Nix that bob embeds. `scripts/bootstrap.sh` does
 both steps and then lets bob build itself (`bob build //cmd/bob:bob`).
-
-> [!WARNING]
-> The self-build step of `scripts/bootstrap.sh` currently fails with
-> `BOB-E-9003: //cmd/bob:bob refers to nixpkgs bob-builder-17, which it must not reference`.
-> The bob it built with Go before that step works: it is in `.bob/bootstrap/bob`.
 
 ## Next steps
 
