@@ -95,7 +95,7 @@ func (pl *planner) defaultNatives(ctx context.Context, d *NativeDefault, target 
 		e, ok := es[a]
 		switch {
 		case !ok || e.Missing || e.DrvPath == "":
-			return nil, engine.Resolved{}, diag.New(1001, "attr", a, "suggest", "rust.Uses(\""+d.Crate+"\", nixpkgs.Lib(p, \"<attr>\"))")
+			return nil, engine.Resolved{}, diag.New(1001, "attr", a, "suggest", "rust.Uses(rust.Indirect(\""+d.Crate+"\"), nixpkgs.<Name>.Lib(p))")
 		case e.Broken:
 			return nil, engine.Resolved{}, diag.New(1002, "attr", a, "version", e.Version)
 		case e.Insecure:

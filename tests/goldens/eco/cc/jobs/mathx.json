@@ -1,0 +1,65 @@
+{
+  "args": {
+    "compile": [
+      {
+        "argv": [
+          "gcc",
+          "-std=c17",
+          "-O2",
+          "-fPIC",
+          "-ffile-prefix-map=/nix/store/442awqzxq8b57s44vl1wv01r5jr6d32i-libs-mathx-mathx-src=.",
+          "-Ilibs/mathx/include",
+          "-c",
+          "libs/mathx/src/mathx.c",
+          "-o",
+          "/build/obj/libs/mathx/src/mathx.c.o"
+        ],
+        "out": "/build/obj/libs/mathx/src/mathx.c.o"
+      }
+    ],
+    "headers": [
+      {
+        "from": "/nix/store/442awqzxq8b57s44vl1wv01r5jr6d32i-libs-mathx-mathx-src/libs/mathx/include",
+        "to": "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/include"
+      }
+    ],
+    "link": {
+      "argv": [
+        "ar",
+        "rcsD",
+        "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/lib/libmathx.a",
+        "/build/obj/libs/mathx/src/mathx.c.o"
+      ],
+      "out": "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/lib/libmathx.a"
+    },
+    "path": [
+      "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0/bin",
+      "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46/bin"
+    ],
+    "pkgConfig": [],
+    "src": "/nix/store/442awqzxq8b57s44vl1wv01r5jr6d32i-libs-mathx-mathx-src"
+  },
+  "fixup": {
+    "debugOut": false,
+    "forbidden": [
+      "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0",
+      "/nix/store/442awqzxq8b57s44vl1wv01r5jr6d32i-libs-mathx-mathx-src",
+      "/nix/store/5lpg8a0vjws6pvnw19kia252za631b0f-bob-builder-18",
+      "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2",
+      "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46"
+    ],
+    "shrinkRpath": false,
+    "strip": true,
+    "tools": {
+      "objcopy": "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46/bin/objcopy",
+      "patchelf": "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2/bin/patchelf",
+      "strip": "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46/bin/strip"
+    }
+  },
+  "kind": "cc-compile-link",
+  "label": "//libs/mathx:mathx",
+  "outputs": [
+    "out"
+  ],
+  "v": 1
+}

@@ -2,7 +2,6 @@ package proto
 
 import (
 	"fmt"
-	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -15,14 +14,15 @@ import (
 
 // A library is the same for every configuration (its .proto files); checks run on the host.
 func init() {
-	ext.Register(ext.Kind{Name: protospec.KindLibrary})
+	ext.Register(ext.Kind{Name: protospec.KindLibrary, Unit: "proto"})
 	ext.Register(ext.Kind{Name: protospec.KindCheck, Axes: []ext.Axis{ext.AxisPlatform}, Host: true})
 }
 
 // LibraryOpts configures a protobuf library: the *.proto files of the calling bob.go's directory.
+// The import root is derived (SPEC §03.6.1): the nearest ancestor directory named "proto"
+// (the library's own directory included), else the repository root.
 type LibraryOpts struct {
 	Deps []*Library // imported libraries
-	Root string     // import root, repo-relative; default: nearest ancestor directory named "proto", else repo root
 }
 
 // Library is one proto package (one directory, label //<dir>:proto). .proto files need no
@@ -76,20 +76,9 @@ var revision = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(
 //	})
 func NewLibrary(p *bob.P, o LibraryOpts) *Library {
 	dir, _ := ext.CallerDir()
-	root := o.Root
-	if root == "" {
-		root = defaultRoot(dir)
-	} else {
-		root = path.Clean(root)
-		if root == "." {
-			root = ""
-		}
-	}
+	root := defaultRoot(dir)
 	l := &Library{root: root, dir: dir}
 	var problems []string
-	if root != "" && dir != root && !strings.HasPrefix(dir, root+"/") {
-		problems = append(problems, fmt.Sprintf("proto.LibraryOpts.Root %q does not contain the library directory %s", o.Root, dir))
-	}
 	var deps []bob.Package
 	for i, d := range o.Deps {
 		if d == nil {
@@ -149,5 +138,5 @@ func check(p *bob.P, lib *Library, spec protospec.Check, name string) *Check {
 		ext.Errorf("proto.%s: the library is nil", strings.ToUpper(name[:1])+name[1:])
 		return &Check{}
 	}
-	return &Check{Node: ext.New(p, protospec.KindCheck, name, []bob.Package{lib, nixpkgs.Tool(p, "buf")}, nil, spec)}
+	return &Check{Node: ext.New(p, protospec.KindCheck, name, []bob.Package{lib, nixpkgs.Buf.Tool(p)}, nil, spec)}
 }

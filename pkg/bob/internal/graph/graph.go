@@ -25,6 +25,7 @@ type Kind struct {
 	Name string
 	Axes []int
 	Host bool
+	Unit string // ecosystem whose build unit the kind is ("" = not a unit), R-FW-071
 }
 
 var kindName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9]+(\.[a-z0-9]+)*$`) })
@@ -57,7 +58,7 @@ func Register(k Kind) {
 	}
 	k.Axes = axes
 	if old, ok := kinds[k.Name]; ok {
-		if old.Host != k.Host || !slices.Equal(old.Axes, k.Axes) {
+		if old.Host != k.Host || old.Unit != k.Unit || !slices.Equal(old.Axes, k.Axes) {
 			problems = append(problems, fmt.Sprintf("ext.Register: kind %s is registered twice with different axes", k.Name))
 		}
 		return

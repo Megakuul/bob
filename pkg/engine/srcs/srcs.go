@@ -223,7 +223,20 @@ feed:
 // bob.go, zz_bob_cgo.go and .gitignore (VCS metadata: editing an ignore list must not change a
 // source path, R-FW-021 (a)), files ignored by a .gitignore on the path or by .git/info/exclude,
 // and the repo-relative paths for which skip returns true (the materialisation manifest, §03).
+//
+// Package locality (R-FW-070, ADR 0020 §6): a pattern with a ".." segment is BOB-E-1028
+// `outside` (after the BOB-E-1025 check for leaving the repository), a pattern whose literal
+// directory prefix is a subpackage (a directory below s.Dir with its own bob.go) is BOB-E-1028
+// `subpackage`, and "**" and directory patterns never descend into a subpackage.
 func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]string, error) {
+	return ResolveFor(repo, s, pos, "", skip)
+}
+
+// ResolveFor is Resolve for the package label (named in BOB-E-1028 messages).
+func ResolveFor(repo string, s ir.Srcs, pos, label string, skip func(rel string) bool) ([]string, error) {
+	if label == "" {
+		label = "sources"
+	}
 	dir := path.Clean("/" + filepath.ToSlash(s.Dir))[1:]
 	if want := path.Clean(filepath.ToSlash(s.Dir)); s.Dir != "" && want != "." && (path.IsAbs(s.Dir) || dir != want) {
 		return nil, diag.New(1025, "variant", "outside", "pos", pos, "pattern", s.Dir)
@@ -243,6 +256,12 @@ func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]
 		}
 		if _, err := path.Match(body, ""); err != nil {
 			return nil, diag.New(1025, "variant", "noglob", "pos", pos, "pattern", p)
+		}
+		if slices.Contains(strings.Split(filepath.ToSlash(body), "/"), "..") {
+			return nil, diag.New(1028, "variant", "outside", "pos", pos, "label", label, "pattern", p, "dir", shownDir(dir))
+		}
+		if sub := literalSubpackage(repo, dir, body); sub != "" {
+			return nil, diag.New(1028, "variant", "subpackage", "pos", pos, "label", label, "pattern", p, "sub", sub)
 		}
 		if clean == "." {
 			clean = "**"
@@ -314,6 +333,9 @@ func Resolve(repo string, s ir.Srcs, pos string, skip func(rel string) bool) ([]
 				continue
 			}
 			if isDir {
+				if isPackage(repo, child) {
+					continue // a subpackage: its files belong to its own bob.go (R-FW-070)
+				}
 				if err := walk(child, rules); err != nil {
 					return err
 				}
@@ -434,6 +456,36 @@ func linkInside(repo, rel string) (bool, error) {
 	}
 }
 
+// isPackage reports whether the repo-relative directory rel has its own bob.go.
+func isPackage(repo, rel string) bool {
+	fi, err := os.Lstat(filepath.Join(repo, filepath.FromSlash(rel), "bob.go"))
+	return err == nil && !fi.IsDir()
+}
+
+// literalSubpackage returns the first directory on the literal (glob-free) prefix of pattern
+// body, relative to dir, that has its own bob.go ("" = none); the result is repo-relative.
+func literalSubpackage(repo, dir, body string) string {
+	cur := dir
+	for _, seg := range strings.Split(path.Clean(filepath.ToSlash(body)), "/") {
+		if seg == "." || seg == "**" || strings.ContainsAny(seg, `*?[\`) {
+			return ""
+		}
+		cur = path.Join(cur, seg)
+		if isPackage(repo, cur) {
+			return cur
+		}
+	}
+	return ""
+}
+
+// shownDir is a package directory in messages ("." for the repository root).
+func shownDir(dir string) string {
+	if dir == "" {
+		return "."
+	}
+	return dir
+}
+
 func splitNonEmpty(p string) []string {
 	if p == "" || p == "." {
 		return nil
@@ -444,10 +496,28 @@ func splitNonEmpty(p string) []string {
 // ResolveAll is the union of Resolve over all Sources values of one package: the files of its
 // single source path (R-FW-021), sorted and without duplicates.
 func ResolveAll(repo string, all []ir.Srcs, pos string, skip func(rel string) bool) ([]string, error) {
+	return ResolveAllFor(repo, all, pos, "", skip)
+}
+
+// ResolveNode resolves the sources of IR node n (ResolveAllFor with its label and position)
+// and attributes an error to n: BOB-E-1025/1028 carry n's label and definedAt (with column),
+// so the error block names the bob.go position of the package (R-FW-016, R-FW-070).
+func ResolveNode(repo string, n *ir.Node, skip func(rel string) bool) ([]string, error) {
+	files, err := ResolveAllFor(repo, n.Srcs, n.DefinedAt.String(), n.Label, skip)
+	var d *diag.Error
+	if errors.As(err, &d) && d.DefinedAt.File == "" {
+		d.Label = n.Label
+		d.DefinedAt = diag.Pos{File: n.DefinedAt.File, Line: n.DefinedAt.Line, Col: n.DefinedAt.Col}
+	}
+	return files, err
+}
+
+// ResolveAllFor is ResolveAll for the package label (named in BOB-E-1028 messages).
+func ResolveAllFor(repo string, all []ir.Srcs, pos, label string, skip func(rel string) bool) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	for _, s := range all {
-		files, err := Resolve(repo, s, pos, skip)
+		files, err := ResolveFor(repo, s, pos, label, skip)
 		if err != nil {
 			return nil, err
 		}

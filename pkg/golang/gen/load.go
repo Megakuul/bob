@@ -461,7 +461,7 @@ func (pl *planner) load(c buildCtx, roots []string, tests map[string]bool) (*clo
 			return pl.loadError(ip, from, err)
 		}
 		if len(bp.CgoPkgConfig) > 0 {
-			return pl.defError(from, fmt.Sprintf("%s uses #cgo pkg-config, which bob does not support; give the package its C dependencies with Module.Cgo(dir, golang.CgoOpts{Deps: …nixpkgs.Lib(…)})", ip))
+			return pl.defError(from, fmt.Sprintf("%s uses #cgo pkg-config, which bob does not support; give the package its C dependencies with Module(p).Cgo(golang.CgoOpts{Deps: …nixpkgs.<Name>.Lib(p)}) in its own bob.go", ip))
 		}
 		if len(bp.CXXFiles)+len(bp.MFiles)+len(bp.FFiles)+len(bp.SwigFiles)+len(bp.SwigCXXFiles) > 0 {
 			return pl.defError(from, fmt.Sprintf("%s has C++, Objective-C, Fortran or SWIG files, which bob does not compile in Go packages; put that code in a cc.Library and give it to Module.Cgo", ip))

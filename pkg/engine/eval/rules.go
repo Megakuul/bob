@@ -185,6 +185,7 @@ func (c *ruleCheck) check() (ir.Errors, []string) {
 		for _, imp := range f.imports {
 			c.checkImport(f, dir, imp, realOf, func(es ir.Errors) { add(f.shown, imp.pos.Line, es) })
 		}
+		checkR8(f, dir, func(line int, es ir.Errors) { add(f.shown, line, es) })
 	}
 	sort.SliceStable(vs, func(i, j int) bool {
 		if vs[i].path != vs[j].path {
@@ -206,7 +207,9 @@ func (c *ruleCheck) checkImport(f *bobFile, d string, imp bobImport, realOf func
 	case isStd(p):
 		return
 	case p == frameworkModule || strings.HasPrefix(p, frameworkModule+"/"):
-		if !c.fwPkgs[p] {
+		// nixext is the extension API of bob's own ecosystem packages (ADR 0020 §2): part of
+		// the framework the evaluator compiles, but not for build definitions.
+		if !c.fwPkgs[p] || p == nixextPkg {
 			add(ir.Errors{ir.RuleError("R7", "dir", d, "path", p)})
 		}
 		return
@@ -239,6 +242,82 @@ func (c *ruleCheck) checkImport(f *bobFile, d string, imp bobImport, realOf func
 		return
 	}
 	add(ir.Errors{ir.RuleError("R7", "dir", d, "path", p)})
+}
+
+// nixextPkg is refused by R7 although the evaluator compiles it (pkg/nixpkgs uses it).
+const nixextPkg = frameworkModule + "/pkg/nixpkgs/nixext"
+
+// checkR8 reports assignments to package-level values of framework packages (R-FW-002 R8,
+// ADR 0020 §2): "nixpkgs.Openssl = nixpkgs.Zlib", op-assignments, ++/-- and taking the
+// address (&nixpkgs.Openssl), which would let a build definition change what every other
+// bob.go sees.
+func checkR8(f *bobFile, dir string, add func(int, ir.Errors)) {
+	if f.file == nil {
+		return
+	}
+	fw := map[string]bool{} // local names of imported framework packages
+	for _, imp := range f.file.Imports {
+		p, err := strconv.Unquote(imp.Path.Value)
+		if err != nil || !(p == frameworkModule || strings.HasPrefix(p, frameworkModule+"/")) {
+			continue
+		}
+		name := path.Base(p)
+		if imp.Name != nil {
+			name = imp.Name.Name
+		}
+		if name != "_" && name != "." {
+			fw[name] = true
+		}
+	}
+	if len(fw) == 0 {
+		return
+	}
+	target := func(e ast.Expr) (string, bool) {
+		for {
+			switch x := e.(type) {
+			case *ast.ParenExpr:
+				e = x.X
+				continue
+			case *ast.IndexExpr:
+				e = x.X
+				continue
+			case *ast.SelectorExpr:
+				if id, ok := x.X.(*ast.Ident); ok && fw[id.Name] {
+					return id.Name + "." + x.Sel.Name, true
+				}
+				e = x.X
+				continue
+			}
+			return "", false
+		}
+	}
+	report := func(pos token.Pos, name string) {
+		add(f.fset.Position(pos).Line, ir.Errors{ir.RuleError("R8", "dir", dir, "line", strconv.Itoa(f.fset.Position(pos).Line), "name", name)})
+	}
+	ast.Inspect(f.file, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.AssignStmt:
+			if x.Tok == token.DEFINE {
+				return true
+			}
+			for _, l := range x.Lhs {
+				if name, ok := target(l); ok {
+					report(l.Pos(), name)
+				}
+			}
+		case *ast.IncDecStmt:
+			if name, ok := target(x.X); ok {
+				report(x.X.Pos(), name)
+			}
+		case *ast.UnaryExpr:
+			if x.Op == token.AND {
+				if name, ok := target(x.X); ok {
+					report(x.X.Pos(), name)
+				}
+			}
+		}
+		return true
+	})
 }
 
 // ownDir maps an import path of this repository to its directory: a path of the root module,

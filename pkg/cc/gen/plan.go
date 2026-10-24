@@ -243,7 +243,7 @@ func (pl *planner) sourceFiles(n *ir.Node) ([]string, error) {
 	if !strings.HasPrefix(n.Label, "//") {
 		return nil, diag.NotImplemented("C/C++ packages of dependency repositories (" + n.Label + ")")
 	}
-	return srcs.ResolveAll(pl.req.Root, n.Srcs, n.DefinedAt.String(), nil)
+	return srcs.ResolveNode(pl.req.Root, n, nil)
 }
 
 // labelDir is the repository-relative directory of a label ("//libs/foo:foo" → "libs/foo").

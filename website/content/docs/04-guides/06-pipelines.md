@@ -23,14 +23,15 @@ import (
 	"github.com/megakuul/bob/pkg/golang"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Module = bob.Define(func(p *bob.P) *golang.Module {
 	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/hello", Go: "1.26"})
 })
 
+// Tests runs the tests of every Go package below the root that has no bob.go of its own.
 var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./...", golang.TestOpts{})
+	return Module(p).Tests(golang.TestOpts{Recursive: true})
 })
 
 // Pipeline ci builds and tests everything on pushes to main and on pull requests.
@@ -38,13 +39,6 @@ var _ = bob.Pipeline("ci", bob.PipelineOpts{
 	Triggers: []bob.Trigger{bob.OnPush("main"), bob.OnPullRequest()},
 	Targets:  []bob.Pattern{"//..."},
 	Tests:    []bob.Pattern{"//..."},
-})
-
-// Pipeline release publishes the release "hello" when a tag v* is pushed.
-var _ = bob.Pipeline("release", bob.PipelineOpts{
-	Triggers:    []bob.Trigger{bob.OnTag("v*")},
-	Concurrency: bob.Queue,
-	Releases:    []string{"hello"},
 })
 ```
 
@@ -71,7 +65,7 @@ func TestHello(t *testing.T) {
 |---|---|
 | `Targets` | patterns to build (the `build` step) |
 | `Tests` | patterns to test (the `test` step) |
-| `Releases` | names of `release.New` packages to publish; makes it a release pipeline |
+| `Releases` | label patterns of `release.New` packages to publish (`[]bob.Pattern{"//deploy:hello"}`); makes it a release pipeline |
 | `Triggers` | `bob.OnPush(branchGlob)`, `bob.OnPullRequest()`, `bob.OnTag(glob)`; none means manual runs only |
 | `Concurrency` | what happens to a running build of the same ref: `bob.Queue` (wait), `bob.Supersede` (cancel the older one), `bob.Parallel`; unset means queue for the default branch and tags, supersede for other branches and pull requests |
 
@@ -97,11 +91,24 @@ bob: 1 passed, 0 failed, 0 cached
 This is exactly what a CI system needs: `bob pipeline run ci` in any CI runner that has bob
 and user namespaces. An unknown pipeline name exits 2 with `BOB-E-0001`.
 
+A release pipeline lists the releases it publishes by label pattern, like the targets and
+tests, for example in a repository whose `deploy/bob.go` declares `release.New(p, "hello", …)`:
+
+```go
+// Pipeline release publishes the release //deploy:hello when a tag v* is pushed.
+var _ = bob.Pipeline("release", bob.PipelineOpts{
+	Triggers:    []bob.Trigger{bob.OnTag("v*")},
+	Concurrency: bob.Queue,
+	Releases:    []bob.Pattern{"//deploy:hello"},
+})
+```
+
+A pattern that matches no `release.New` package fails every command with `BOB-E-1020` at the
+pipeline's line, so a typo never silently publishes nothing.
+
 Locally, only the build and test steps run. Publishing releases is the server's job: a
-pipeline that only lists `Releases` (like `release` above) does nothing on your machine. To
-build a release locally, build its package with a version, as in
-[Releases](07-releases.md#build-a-release-locally). The release `hello` named here must exist
-as a `release.New` package for the server to publish it.
+pipeline that only lists `Releases` does nothing on your machine. To build a release locally,
+build its package with a version, as in [Releases](07-releases.md#build-a-release-locally).
 
 ## Run it on a bob server
 

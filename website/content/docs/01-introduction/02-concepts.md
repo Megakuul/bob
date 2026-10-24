@@ -30,10 +30,15 @@ A `bob.go` file declares packages with `bob.Define`:
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
 	return cc.StaticLibrary(p, "greet", cc.LibraryOpts{
 		Srcs: bob.Glob("src/*.cpp"),
-		Hdrs: "include",
+		Hdrs: bob.IncludeDir("include"),
 	})
 })
 ```
+
+Each directory that builds something has its own `bob.go`, and that file describes only its
+own directory: its paths are relative to it, never `..`, never into a subdirectory with its own
+`bob.go`. A directory holds at most one library or program per ecosystem; a larger project is a
+tree of such packages that use each other through typed values.
 
 `bob.Define` turns a constructor into a memoised function. Other `bob.go` files call it to get
 the same value (`greet.Lib(p)`), so dependencies are typed values, not strings. You cannot

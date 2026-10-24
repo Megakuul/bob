@@ -37,7 +37,7 @@ import (
 // Dev is the default dev shell.
 var Dev = bob.Define(func(p *bob.P) *bob.Shell {
 	return bob.NewShell(p, bob.DevShell{
-		Packages: []bob.Tool{nixpkgs.Tool(p, "jq"), nixpkgs.Tool(p, "postgresql")},
+		Packages: []bob.Tool{nixpkgs.Jq.Tool(p), nixpkgs.Postgresql.Tool(p)},
 		Env:      map[string]string{"ACME_ENV": "dev"},
 		Hooks:    []string{"mkdir -p .cache"},
 	})

@@ -75,7 +75,7 @@ import (
 	"github.com/megakuul/bob/pkg/rust"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Hello = bob.Define(func(p *bob.P) *rust.Bin {
 	return rust.Binary(p, rust.BinOpts{Name: "hello"})

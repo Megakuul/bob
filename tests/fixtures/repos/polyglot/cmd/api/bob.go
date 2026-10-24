@@ -28,5 +28,5 @@ var _ = polyglot.API.Bind(API)
 
 // Tests runs this package's tests (unit //cmd/api:go_test).
 var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
-	return polyglot.Module(p).Tests(golang.TestOpts{Name: "api_tests"})
+	return polyglot.Module(p).Tests(golang.TestOpts{})
 })

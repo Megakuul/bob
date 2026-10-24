@@ -14,7 +14,7 @@ func ExampleLibrary() {
 			Deps:     []rust.Dep{rust.Crate("serde", "1", rust.Features("derive")), rust.Crate("openssl", "0.10")},
 			Features: map[string][]string{"fast": {}, "json": {"dep:serde_json"}},
 			Default:  []string{"fast"},
-			Options:  []rust.Option{rust.Uses("openssl-sys", nixpkgs.Lib(p, "openssl"))},
+			Options:  []rust.Option{rust.Uses(rust.Indirect("openssl-sys"), nixpkgs.Openssl.Lib(p))},
 		})
 	})
 }
@@ -29,13 +29,15 @@ func ExampleProcMacro() {
 // A static library for C and cgo consumers, with its header directory.
 func ExampleStaticLib() {
 	_ = bob.Define(func(p *bob.P) *rust.CLib {
-		return rust.StaticLib(p, rust.LibOpts{Name: "rcore", Headers: "include"})
+		return rust.StaticLib(p, rust.LibOpts{Name: "rcore", Headers: bob.IncludeDir("include")})
 	})
 }
 
 // A shared library for C consumers.
 func ExampleCDylib() {
-	_ = bob.Define(func(p *bob.P) *rust.CLib { return rust.CDylib(p, rust.LibOpts{Name: "plugin", Headers: "include"}) })
+	_ = bob.Define(func(p *bob.P) *rust.CLib {
+		return rust.CDylib(p, rust.LibOpts{Name: "plugin", Headers: bob.IncludeDir("include")})
+	})
 }
 
 // A program using a local library with one of its features enabled.

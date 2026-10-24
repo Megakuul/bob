@@ -10,13 +10,16 @@ Every `bob.go` file declares packages with `bob.Define`. bob evaluates them into
 and builds each node in a sandbox.
 
 ```go
+// cmd/api/bob.go: the binary of this directory's main package, bound to the slot acme.API.
 var API = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/api", golang.BinaryOpts{})
+	return acme.Module(p).Binary(golang.BinaryOpts{})
 })
 
-// The image takes the binary's closure, one layer per package.
+var _ = acme.API.Bind(API)
+
+// deploy/bob.go: the image takes the binary's closure, one layer per package.
 var Image = bob.Define(func(p *bob.P) *oci.Image {
-	return oci.NewImage(p, "api", oci.ImageOpts{Program: API(p), Ports: []int{8080}})
+	return oci.NewImage(p, "api", oci.ImageOpts{Program: acme.API.Get(p), Ports: []int{8080}})
 })
 ```
 

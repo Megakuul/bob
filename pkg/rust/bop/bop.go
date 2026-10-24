@@ -348,7 +348,7 @@ func buildRunKind(c *builder.Ctx, raw json.RawMessage) error {
 		name := a.Env["CARGO_PKG_NAME"]
 		msg := "the build script of " + name + " failed"
 		if strings.HasSuffix(name, "-sys") && a.Env["PKG_CONFIG_PATH"] == "" {
-			msg += fmt.Sprintf("; hint: give it its native library with rust.Uses(%q, nixpkgs.Lib(p, \"<attr>\"))", name)
+			msg += fmt.Sprintf("; hint: give it its native library with rust.Uses(rust.Indirect(%q), nixpkgs.<Name>.Lib(p))", name)
 		}
 		c.Diag("error", "", 0, 0, msg)
 		var ee *exec.ExitError

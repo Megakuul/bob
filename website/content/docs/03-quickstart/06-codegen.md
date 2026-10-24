@@ -24,6 +24,7 @@ You need [bob installed](../02-install/02-install-bob.md). You do not need `prot
         📄 greet.proto
   📁 cmd/
     📁 hello/
+      📄 bob.go
       🐹 main.go
 ```
 
@@ -79,7 +80,7 @@ import (
 	"github.com/megakuul/bob/pkg/golang"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Module = bob.Define(func(p *bob.P) *golang.Module {
 	return golang.NewModule(p, golang.ModuleOpts{
@@ -88,9 +89,23 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 		Generated: []golang.Generated{connect.Go(greetv1.Greet(p), connect.GoOpts{})},
 	})
 })
+```
+
+The program is declared in its own directory's `bob.go`:
+
+```go file=cmd/hello/bob.go
+//go:build bob
+
+package main
+
+import (
+	"example.com/hello"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+)
 
 var Hello = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/hello", golang.BinaryOpts{})
+	return hello.Module(p).Binary(golang.BinaryOpts{})
 })
 ```
 

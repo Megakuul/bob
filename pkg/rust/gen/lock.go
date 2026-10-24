@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -151,6 +152,9 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 		}
 	}
 	if prev != nil && prev.Inputs == st.inputs && len(req.Update) == 0 {
+		if err := checkIndirect(st.ws, prev.Crates); err != nil {
+			return nil, err
+		}
 		return lock.EncodeSection(lock.SectionRust, prev)
 	}
 	sec := &lock.RustSection{Inputs: st.inputs, Index: resolve.IndexURL, Crates: []lock.Crate{}}
@@ -212,8 +216,43 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}
+	if err := checkIndirect(st.ws, crates); err != nil {
+		return nil, err
+	}
 	sec.Crates = crates
 	return lock.EncodeSection(lock.SectionRust, sec)
+}
+
+// checkIndirect is BOB-E-1015 for a rust.Indirect handle whose crate is not in the resolved
+// graph (SPEC §03.0.7): the option that names it would apply to nothing.
+func checkIndirect(ws *workspace, crates []lock.Crate) error {
+	have := map[string]bool{}
+	for _, c := range crates {
+		have[c.Name] = true
+	}
+	for _, name := range ws.names {
+		m := ws.members[name]
+		for _, u := range m.spec.Uses {
+			if u.Indirect == "" || have[u.Crate] {
+				continue
+			}
+			reason := fmt.Sprintf("%s is declared with rust.Indirect at %s but is not in the resolved graph", u.Crate, u.Indirect)
+			e := diag.New(1015, "ecosystem", "Rust", "root", m.node.Label, "reason", reason, "label", m.node.Label)
+			e.DefinedAt = handlePos(u.Indirect, m.node.DefinedAt)
+			return e
+		}
+	}
+	return nil
+}
+
+// handlePos parses a "<file>:<line>" handle position, falling back to def.
+func handlePos(pos string, def ir.Pos) diag.Pos {
+	if i := strings.LastIndexByte(pos, ':'); i > 0 {
+		if line, err := strconv.Atoi(pos[i+1:]); err == nil && line > 0 {
+			return diag.Pos{File: pos[:i], Line: line}
+		}
+	}
+	return diag.Pos{File: def.File, Line: def.Line}
 }
 
 // keptPins are the locked crates a re-resolution prefers (R-CLI-010: bob lock never moves an

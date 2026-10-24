@@ -41,4 +41,10 @@ var Benches = map[string]string{
 	"B-087": "go run ./tools/budgetbench appimage",
 	"B-088": "go run ./tools/budgetbench fleet-jobs",
 	"B-097": "go run ./tools/budgetbench ui",
+	"B-098": "go run ./tools/budgetbench nixpkgs",
+	"B-099": "go run ./tools/budgetbench nixpkgs",
+	"B-100": "go run ./tools/budgetbench nixpkgs",
+	"B-101": "go run ./tools/budgetbench nixpkgs",
+	"B-102": "go run ./tools/budgetbench nixpkgs",
+	"B-103": "go run ./tools/budgetbench nixpkgs",
 }

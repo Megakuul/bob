@@ -98,6 +98,7 @@ type site struct {
 	pos  Position // module-relative
 	ok   bool     // a bob.go frame of a known module was found
 	file string   // the compiled file name, for messages when !ok
+	fn   string   // the function the bob.go frame called (runtime name)
 }
 
 // bobSite returns the first frame in a bob.go file above the caller of bobSite (R-FW-016,
@@ -116,7 +117,7 @@ func bobSite() site {
 			if ev := active; ev != nil && ok && mod == "" {
 				ev.noteCall(pos, callee)
 			}
-			return site{mod: mod, dir: dir, pos: pos, ok: ok, file: f.File}
+			return site{mod: mod, dir: dir, pos: pos, ok: ok, file: f.File, fn: callee}
 		}
 		callee = f.Function
 		if !more {

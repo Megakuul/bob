@@ -90,7 +90,7 @@ import (
 	"github.com/megakuul/bob/pkg/npm"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Hello = bob.Define(func(p *bob.P) *npm.App {
 	return npm.NewApp(p, npm.AppOpts{
@@ -145,8 +145,10 @@ vitest/3.…
 - `npm.Library` builds a TypeScript library that other importers depend on by value.
 - `npm.Vite` builds a static site with `vite build`. Run its dev server inside the dev shell
   (`bob dev -- vite`); `bob dev` does not start dev servers by itself yet.
-- Packages with install scripts must be allowed: `npm.AllowScripts("esbuild")` (otherwise
-  `BOB-E-2013`).
+- Packages with install scripts must be allowed by handle: `npm.AllowScripts(sqlite)` for a
+  dependency `sqlite := npm.Dep("better-sqlite3", "^11.0.0")`, or
+  `npm.AllowScripts(npm.Indirect("esbuild"))` for a package that is not a direct dependency
+  (otherwise `BOB-E-2013`).
 
 See the [bob.go reference](../04-guides/01-bob-go-reference.md#typescript-and-npm).
 

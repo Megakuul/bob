@@ -34,7 +34,16 @@ type Extend struct {
 type Options struct {
 	AllowScripts []string `json:"allowScripts"` // sorted, unique
 	Extend       []Extend `json:"extend"`       // in declaration order
-	Hoisted      bool     `json:"hoisted,omitempty"`
+	// Indirect are the npm.Indirect handles the options name, sorted: bob lock fails with
+	// BOB-E-1015 at Pos when the resolved graph lacks one.
+	Indirect []Indirect `json:"indirect,omitempty"`
+	Hoisted  bool       `json:"hoisted,omitempty"`
+}
+
+// Indirect is one npm.Indirect handle: the package name and its bob.go position.
+type Indirect struct {
+	Name string `json:"name"`
+	Pos  string `json:"pos"`
 }
 
 // TSConfig is npm.TSConfig with the constructor's defaults applied.

@@ -67,6 +67,9 @@ type Opam struct {
 type Conf struct {
 	Opam string `json:"opam"`
 	Libs []int  `json:"libs"` // dep indices of the nixpkgs (or other Linkable) packages
+	// Indirect is the bob.go position of the ocaml.Indirect handle ("" for the shipped table and
+	// ocaml.Opam handles): bob lock fails with BOB-E-1015 there when the solution lacks it.
+	Indirect string `json:"indirect,omitempty"`
 }
 
 // Target is the spec of opam.library, opam.executable and opam.test nodes. The node's sources

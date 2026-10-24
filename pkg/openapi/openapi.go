@@ -10,13 +10,16 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/golang"
+	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/npm"
 	"github.com/megakuul/bob/pkg/openapi/internal/oaspec"
 )
 
 // Kinds of the OpenAPI generators. Generated code is the same for every platform.
 func init() {
-	for _, k := range []string{oaspec.KindSpec, oaspec.KindGo, oaspec.KindTS} {
+	ext.Register(ext.Kind{Name: oaspec.KindSpec, Unit: "openapi"}) // one spec per package (R-FW-071)
+	for _, k := range []string{oaspec.KindGo, oaspec.KindTS} {
 		ext.Register(ext.Kind{Name: k})
 	}
 }
@@ -39,8 +42,10 @@ func NewSpec(p *bob.P, file string) *Spec {
 	dir, _ := ext.CallerDir()
 	clean := path.Clean(file)
 	var problem string
-	if file == "" || path.IsAbs(file) || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
-		problem = fmt.Sprintf("openapi.NewSpec(%q): the file must be a path inside the bob.go's directory", file)
+	// A file outside the package is reported by the region rule of its sources (R-FW-070,
+	// BOB-E-1028, the package named).
+	if file == "" || clean == "." {
+		problem = fmt.Sprintf("openapi.NewSpec(%q): name the spec file of this package", file)
 		clean = "openapi.yaml"
 	}
 	base := strings.ToLower(strings.TrimSuffix(path.Base(clean), path.Ext(clean)))
@@ -108,7 +113,7 @@ func Go(s *Spec, o GoOpts) golang.Generated {
 	}
 	spec.Dir = dir
 	return golang.Generated{Kind: oaspec.KindGo, Dir: dir, Spec: spec, At: ext.Here(),
-		Deps: []bob.Package{s}, Tools: []string{"oapi-codegen"},
+		Deps: []bob.Package{s}, Tools: []nixext.Attr{nixpkgs.OapiCodegen},
 		Require: []golang.Requirement{golang.Require(oaspec.RuntimeModule, oaspec.RuntimeVersion)}}
 }
 
@@ -128,6 +133,6 @@ func TS(s *Spec, o TSOpts) npm.Generated {
 	if dir == "" {
 		dir = "gen/openapi"
 	}
-	return npm.Generated{Kind: oaspec.KindTS, Dir: dir, Deps: []bob.Package{s}, Tools: []string{"nodejs", "bash"},
+	return npm.Generated{Kind: oaspec.KindTS, Dir: dir, Deps: []bob.Package{s}, Tools: []nixext.Attr{nixpkgs.Nodejs, nixpkgs.Bash},
 		Spec: oaspec.TS{Dir: dir, Spec: 0, Node: 1, Bash: 2}, At: ext.Here()}
 }

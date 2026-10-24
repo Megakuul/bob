@@ -1,0 +1,3 @@
+[
+  {"attr": "rust_1_97.packages.stable.rustc", "why": "R-RS-004a needs a second rustc; nixpkgs has no top-level versioned rustc"}
+]

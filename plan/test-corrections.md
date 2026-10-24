@@ -1007,3 +1007,47 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
    pre-existing failure on nondet's `Targets: []bob.Pattern{"//:nonce"}`. Every other label
    literal still fails.
 
+107. APPLIED 2026-10-24 Q2 (A507), owner approved ADR 0020 test changes, chat 2026-10-24.
+   tests/budgets/budgets.json regenerated (`go test ./tools/internal/budgets -update`): rows
+   B-098…B-103 get their benchmark command `go run ./tools/budgetbench nixpkgs` (new group,
+   tools/budgetbench/nixpkgs.go). Budgets, limits and statistics unchanged; measured values in
+   plan/progress/Q2.md.
+108. APPLIED 2026-10-24 Q2 (TEST PROBLEM 1), owner approved ADR 0020 test changes, chat
+   2026-10-24. tests/faults/83-source-in-subpackage/patch.diff: the injected binary is named
+   "central" instead of "all". "all" is reserved for the pattern //dir:all (R-FW-015), so the
+   fault produced `package name "all" is reserved` (BOB-E-1020) instead of the region error it
+   is about. Same line, same marker, same expectation (BOB-E-1028 `"app/*.c" is inside app/`).
+109. APPLIED 2026-10-24 Q2 (TEST PROBLEM 2), owner approved ADR 0020 test changes, chat
+   2026-10-24. tests/errors/run.go markLines gains "BOB-E-1020": the human output writes every
+   BOB-E-1020 as a `✗ <message>` line without an `error[BOB-E-1020]:` head
+   (pkg/engine/translate/render.go definitionLine, case 1020, as SPEC writes definition errors,
+   R-FW-043 (c), R-FW-011, R-FW-015), so the runner counted 0 for faults 85, 86, 87 and 92 although
+   bob reported the code (the --json stream carries it). Same mechanism as 2013/2014/2015/7005:
+   counted once when a `✗ ` line is printed and the JSON stream reports the code.
+
+## Q3 (2026-10-24, evidence-based test and fixture corrections; numbers 130+, 107–129 left to Q2;
+## evidence plan/progress/Q3.md TEST PROBLEM)
+130. APPLIED 2026-10-24 Q3 (TP1), owner approved all ADR 0020 test changes, chat 2026-10-24.
+   tests/eco/rust/resolve_test.go TestRRS002aCfgTablesEqualRustc imports `bobrust` from
+   github.com/megakuul/bob/pkg/rust/resolve instead of pkg/rust: TestRFW072TypedSurface (protected
+   violation V20) requires `rust.CfgTable` to leave the build-definition API, and
+   `resolve.CfgTable` has the same signature and reads the same cfgtab data. The comparison with
+   `rustc --print cfg` is unchanged.
+131. APPLIED 2026-10-24 Q3 (TP2, A521), owner approved all, chat 2026-10-24.
+   tests/fixtures/repos/polyglot/cmd/api/bob.go: `Tests(golang.TestOpts{})` instead of
+   `TestOpts{Name: "api_tests"}`, so the test unit is //cmd/api:go_test as the fixture's own
+   comment says and tests/core/platform_test.go TestRFW039 runs it. A one-package test set is
+   one unit labelled by Name (tests/core/testdata/repos/svc/it needs //it:it, //it:it2 and
+   //it:never as three units in one directory, tests/core/steps_test.go:368, :398).
+132. APPLIED 2026-10-24 Q3 (TP4), owner approved all, chat 2026-10-24.
+   tests/outputs/overlays_test.go: the apptest overlay bob.go calls `polyglot.API.Get(p)` (9
+   places) instead of `polyglot.API(p)`: polyglot.API is the typed slot of correction 98, so the
+   overlay did not compile (`cannot call polyglot.API (variable of type *bob.Slot[*golang.Binary])`,
+   tests/outputs TestROUT007/015/016/019 exit 3). Same programs, same assertions.
+133. APPLIED 2026-10-24 Q3 (A523), owner approved all golden changes, chat 2026-10-24.
+   New goldens tests/goldens/ir/polyglot.json and acme.json (TestRFW047GoldenIR; never committed
+   before, Q1 README): written as candidates to out/golden-candidates/q3/ and copied into place.
+134. APPLIED 2026-10-24 Q3 (A523), owner approved all golden changes, chat 2026-10-24.
+   New goldens tests/goldens/eco/cc/jobs/{app,pack,mathx,mathx_test}.json (TestRCC002a) and
+   tests/goldens/eco/rust/jobs/rcore-alt-toolchain.json (TestRRS004a), candidates in
+   out/golden-candidates/q3/ (README there), copied into place.

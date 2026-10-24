@@ -41,6 +41,7 @@ type evaluation struct {
 	diags        []diagnostic
 	calls        map[Position]string // bob.go position → function called there (column.go)
 	lines        map[string][][]byte // bob.go file → its lines, read for columns
+	units        map[string]*node    // "<dir>\x00<ecosystem>" → the first build unit of that package (R-FW-071)
 }
 
 type frame struct {
@@ -53,6 +54,8 @@ type frame struct {
 type diagnostic struct {
 	code  diag.Code // 0 = no code of the SPEC table
 	pos   Position
+	col   int    // 1-based column of pos when known (shown as file:line:col)
+	hint  string // a hint of its own (BOB-E-1020 "{hint}"), "" = the code's default
 	label string
 	msg   string
 	chain []string // labels from a requested package to the one the error is about
@@ -234,9 +237,15 @@ func writeDiags(w io.Writer, diags []diagnostic) {
 		}
 		if d.pos.File != "" {
 			line["file"], line["line"] = d.pos.File, d.pos.Line
+			if d.col > 0 {
+				line["col"] = d.col
+			}
 		}
 		if len(d.chain) > 0 {
 			line["chain"] = d.chain
+		}
+		if d.hint != "" {
+			line["hint"] = d.hint
 		}
 		b, err := json.Marshal(line)
 		if err != nil {
@@ -301,6 +310,7 @@ func run(r *registry, e *environment, req request) ([]byte, []diagnostic) {
 		}
 	}
 	ev.finishCycles()
+	global = append(global, ev.resolveReleases(r, pipes)...)
 
 	roots, relevant, errs := ev.selectRoots(targets, defs)
 	global = append(global, errs...)
@@ -511,23 +521,39 @@ var varLine = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`
 
 // varName reads the variable name of a definition from its bob.go line ("var Lib = bob.Define(").
 func varName(d *definition) string {
-	if d.mod != "" || d.pos.File == "" {
+	if d.mod != "" {
 		return ""
+	}
+	name, _ := varAt(d.pos)
+	return name
+}
+
+// varAt returns the variable declared on the line pos of a main-module bob.go and the Go
+// package name of that file ("" when the source cannot be read).
+func varAt(pos Position) (name, pkg string) {
+	if pos.File == "" {
+		return "", ""
 	}
 	root := "."
 	if active != nil {
 		root = active.root
 	}
-	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(d.pos.File)))
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(pos.File)))
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	lines := bytes.Split(b, []byte("\n"))
-	if d.pos.Line < 1 || d.pos.Line > len(lines) {
-		return ""
+	for _, l := range lines {
+		if f := bytes.Fields(l); len(f) == 2 && string(f[0]) == "package" {
+			pkg = string(f[1])
+			break
+		}
 	}
-	if m := varLine().FindSubmatch(lines[d.pos.Line-1]); m != nil {
-		return string(m[1])
+	if pos.Line < 1 || pos.Line > len(lines) {
+		return "", pkg
 	}
-	return ""
+	if m := varLine().FindSubmatch(lines[pos.Line-1]); m != nil {
+		return string(m[1]), pkg
+	}
+	return "", pkg
 }

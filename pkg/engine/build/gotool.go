@@ -47,11 +47,20 @@ func (r *runner) evalGoRoot(ctx context.Context, st *store.Store, f fetch.Fetche
 	}
 	pin := lf.Nixpkgs
 	if pin.Rev == "" {
-		// The channel's current revision is asked every time (update = true); the
-		// remembered pin only spares the download that records the narHash when the
-		// revision did not move (A292).
+		// Other channels: the channel's current revision is asked every time (update =
+		// true); the remembered pin only spares the download that records the narHash when
+		// the revision did not move (A292).
 		known := readPinMemo(st.Home(), decl)
-		if pin, err = lock.PinNixpkgs(ctx, f, decl, known, known.Rev != "", nil); err != nil {
+		update := known.Rev != ""
+		if spec, err := lock.ParseNixpkgs(decl); err == nil && spec.Rev == "" && spec.Channel == lock.DefaultChannel {
+			// bob's default channel is pinned at the surface revision (R-NIX-032), never at
+			// the channel head: no channel query, the memo only spares the narHash download.
+			update = false
+			if known.Rev != lock.DefaultRev {
+				known = lock.NixpkgsPin{}
+			}
+		}
+		if pin, err = lock.PinNixpkgs(ctx, f, decl, known, update, nil); err != nil {
 			return "", err
 		}
 		writePinMemo(st.Home(), decl, pin)

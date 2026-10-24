@@ -13,12 +13,15 @@ import (
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/golang"
 	"github.com/megakuul/bob/pkg/graphql/internal/gqlspec"
+	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/npm"
 )
 
 // Kinds of the GraphQL generators. Generated code is the same for every platform.
 func init() {
-	for _, k := range []string{gqlspec.KindSchema, gqlspec.KindDocuments, gqlspec.KindGqlgen, gqlspec.KindTS} {
+	ext.Register(ext.Kind{Name: gqlspec.KindSchema, Unit: "graphql"}) // one schema per package (R-FW-071)
+	for _, k := range []string{gqlspec.KindDocuments, gqlspec.KindGqlgen, gqlspec.KindTS} {
 		ext.Register(ext.Kind{Name: k})
 	}
 }
@@ -82,10 +85,10 @@ func Gqlgen(s *Schema, o GqlgenOpts) golang.Generated {
 		dir = "gen/graph"
 	}
 	return golang.Generated{Kind: gqlspec.KindGqlgen, Dir: dir, At: ext.Here(),
-		Deps: []bob.Package{s}, Tools: []string{"gqlgen", "go"},
+		Deps: []bob.Package{s}, Tools: []nixext.Attr{nixpkgs.Gqlgen, nixpkgs.Go},
 		Spec: gqlspec.Gqlgen{Dir: dir, Schema: 0, Tool: 1, Go: 2, Models: models, Autobind: slices.Compact(auto)},
 		Require: []golang.Requirement{
-			golang.GeneratorRuntime(gqlspec.GqlgenModule, "gqlgen", true),
+			golang.GeneratorRuntime(gqlspec.GqlgenModule, nixpkgs.Gqlgen, true),
 			golang.Require(gqlspec.GqlparserModule, gqlspec.GqlparserVersion),
 		}}
 }
@@ -134,7 +137,7 @@ func TS(s *Schema, o TSOpts) npm.Generated {
 		dir = "gen/graphql"
 	}
 	spec.Dir = dir
-	return npm.Generated{Kind: gqlspec.KindTS, Dir: dir, Deps: deps, Tools: []string{"nodejs", "bash"}, Spec: spec, At: ext.Here()}
+	return npm.Generated{Kind: gqlspec.KindTS, Dir: dir, Deps: deps, Tools: []nixext.Attr{nixpkgs.Nodejs, nixpkgs.Bash}, Spec: spec, At: ext.Here()}
 }
 
 // documents are the operation documents of a TS recipe.

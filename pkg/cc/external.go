@@ -10,6 +10,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/cc/internal/ccspec"
 	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
 // BuildSystem selects how an External is built inside its derivation.
@@ -27,17 +28,18 @@ const (
 // compiler, binutils, bash, coreutils and the other basic tools every External gets).
 var buildSystems = map[BuildSystem]struct {
 	name  string
-	tools []string
+	tools []nixext.Attr
 }{
-	CMake:     {ccspec.BuildCMake, []string{"cmake", "ninja"}},
-	Autotools: {ccspec.BuildAutotools, []string{"gnumake", "autoconf", "automake", "libtool", "m4", "perl"}},
-	Meson:     {ccspec.BuildMeson, []string{"meson", "ninja"}},
-	Make:      {ccspec.BuildMake, []string{"gnumake"}},
+	CMake:     {ccspec.BuildCMake, []nixext.Attr{nixpkgs.Cmake, nixpkgs.Ninja}},
+	Autotools: {ccspec.BuildAutotools, []nixext.Attr{nixpkgs.Gnumake, nixpkgs.Autoconf, nixpkgs.Automake, nixpkgs.Libtool, nixpkgs.M4, nixpkgs.Perl}},
+	Meson:     {ccspec.BuildMeson, []nixext.Attr{nixpkgs.Meson, nixpkgs.Ninja}},
+	Make:      {ccspec.BuildMake, []nixext.Attr{nixpkgs.Gnumake}},
 }
 
 // baseTools are the host tools of every External build: the shell its scripts run with and
 // the programs build scripts expect on PATH.
-var baseTools = []string{"bash", "coreutils", "findutils", "diffutils", "gnused", "gnugrep", "gawk", "pkg-config"}
+var baseTools = []nixext.Attr{nixpkgs.Bash, nixpkgs.Coreutils, nixpkgs.Findutils, nixpkgs.Diffutils,
+	nixpkgs.Gnused, nixpkgs.Gnugrep, nixpkgs.Gawk, nixpkgs.PkgConfig}
 
 // ExternalOpts describes a third-party C/C++ project with its own build system.
 type ExternalOpts struct {
@@ -46,7 +48,7 @@ type ExternalOpts struct {
 	Build   BuildSystem // required
 	Args    []string    // extra configure args (-DFOO=ON, --disable-x, -Dfoo=false)
 	Deps    []Linkable  // available to the build (CMAKE_PREFIX_PATH, PKG_CONFIG_PATH, CFLAGS/LDFLAGS)
-	Tools   []bob.Tool  // extra host tools (nixpkgs.Tool(p, "perl"))
+	Tools   []bob.Tool  // extra host tools (nixpkgs.Perl.Tool(p))
 	Libs    []string    // link names exported to consumers; default: from installed .pc files, else all lib*.so/lib*.a
 	Include string      // include dir under $out; default "include"
 }
@@ -105,9 +107,9 @@ func External(p *bob.P, name string, o ExternalOpts) *ExternalLib {
 	s := ccspec.External{Name: name, URL: o.URL, Strip: strip, Build: bs.name, Args: list(o.Args),
 		Libs: list(o.Libs), Include: include, Tools: []int{}}
 	deps := tools(p, &s.CC)
-	for _, t := range append(append([]string{}, baseTools...), bs.tools...) {
+	for _, t := range append(append([]nixext.Attr{}, baseTools...), bs.tools...) {
 		s.Tools = append(s.Tools, len(deps))
-		deps = append(deps, nixpkgs.Tool(p, t))
+		deps = append(deps, t.Tool(p))
 	}
 	for _, t := range o.Tools {
 		if t == nil {

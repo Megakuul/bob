@@ -1,0 +1,57 @@
+Q2 steps 1-2 done (2026-10-24): `go build ./pkg/nixpkgs/... ./pkg/bob/...` passes. Q3 may start.
+Final exported names (differences from plan/progress/Q1-impl-plan.md marked [!]):
+
+pkg/nixpkgs/nixext (layer L1; bob.go may not import it, R7):
+  type Attr struct{ /* unexported */ }      comparable; zero value = no package (== nixext.Attr{})
+  func New(name string) Attr                computed attributes ("go_1_26", "pkgsCross.gnu64.stdenv.cc", "ocamlPackages.findlib")
+  func (a Attr) Name() string
+  func (a Attr) Tool(p *bob.P, opts ...Option) *ToolPackage
+  func (a Attr) Lib(p *bob.P, opts ...Option) *Package
+  func (a Attr) Pkg(p *bob.P, opts ...Option) *Package
+  func (a Attr) Exe(p *bob.P, opts ...Option) *Program   main program: MainProgram option, else "bin/"+meta.mainProgram, else BOB-E-1020
+  type Option func(*options)
+  type Output string; const Out, OutBin, OutDev, OutLib, OutMan, OutDoc, OutDebug, OutStatic
+  func Outputs(names ...Output) Option      e.g. nixext.Outputs(nixext.OutLib)  (was Outputs("lib"))
+  func Modules(names ...string) Option
+  func Cross() Option
+  func AllowInsecure(ids ...string) Option
+  func AllowUnfree() Option
+  func MainProgram(path string) Option      "bin/curl"
+  type Package struct{ bob.Node; … }         Outputs(), LinkInfo(), CrossSet(p) *Package (unchanged)
+  type ToolPackage struct{ bob.Node; … }     Outputs()
+  type Program struct{ *Package; … }         MainProgram() string
+  [!] type ToolchainAttrs struct{ CC, Bintools, CCLib, Emulator Attr }   (a type and a func cannot both be named Toolchain)
+  func Toolchain(p *bob.P) ToolchainAttrs   CCLib/Emulator are nixext.Attr{} natively
+  func ToolchainFor(host, target bob.Platform) ToolchainAttrs
+  const SurfaceRev = "da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36"   (generated)
+
+pkg/nixpkgs: aliases of all the above types (Attr, Option, Output, Package, ToolPackage, Program),
+  constants Out…OutStatic, functions Outputs/Modules/Cross/AllowInsecure/AllowUnfree/MainProgram,
+  and 22 427 generated handles in attrs_gen.go: nixpkgs.Openssl, Zlib, Protobuf, Jq, Tzdata, Curl,
+  Bash, Coreutils, Patchelf, Gcc, Go1_26, Rustc, Nodejs, Postgresql, Postgresql17, Buf, SquashfsTools,
+  Glibc, QemuUser, Binutils, ProtocGenGo, ProtocGenConnectGo, ProtocGenEs, Gqlgen, OapiCodegen,
+  Rust1_97PackagesStableRustc (include.json). Names: ADR 0020 §2 (`go run ./cmd/nixpkgsgen` GoName).
+  nixpkgs.Tool/Lib/Pkg/Exe(p, attr string) are gone.
+
+pkg/bob:
+  bob.Toolchain{Host, Target Platform; Triple, Prefix, EmulatorCmd string}  (CC/Bintools/CCLib/Emulator removed → nixext.Toolchain(p))
+  type Include struct{ /* unexported */ }; func IncludeDir(dir string) Include
+    func (i Include) Dir() string      root relative to the declaring bob.go dir ("." = itself, "" = zero Include) → LinkInfo include path
+    func (i Include) Sources() Sources the include tree as sources of the declaring package (region rule: "../x" → BOB-E-1028 naming the raw dir)
+  type Channel int; const NixOS2605, NixOS2511, NixpkgsUnstable; func (Channel) String() string
+  RepoOpts{Nixpkgs Channel; NixpkgsRev string; Variants []Named}
+  PipelineOpts.Releases []Pattern   (IR keeps resolved release names)
+  type Slot[T any]; func NewSlot[T any]() *Slot[T]; (*Slot[T]).Bind(fn func(*P) T) struct{}; (*Slot[T]).Get(p *P) T
+
+pkg/engine/srcs (region rule, R-FW-070): Resolve/ResolveAll unchanged signatures; new
+  ResolveFor / ResolveAllFor(repo, srcs, pos, label, skip) name the package label in BOB-E-1028.
+  Q3: please switch cc/gen/plan.go:246 and ocaml/gen/plan.go:485 to srcs.ResolveAllFor(..., n.Label, nil).
+  "**" and directory patterns no longer descend into directories with their own bob.go.
+
+pkg/engine/lock: const DefaultRev = "da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36"
+Unit counting (ext.Kind.Unit, BOB-E-1029) is not in yet; Q2 adds it next and notes it in plan/progress/Q2.md.
+Update: ext.Kind has `Unit string` now (ecosystem name; BOB-E-1029 on a second unit of one
+ecosystem in one package). Q3: set Unit on the unit kinds per plan (cc library/binary/external
+"cc", rust crates "rust", npm importers "npm", ocaml lib/exe "ocaml", go binary/C libs "go",
+go cgo "go-cgo", proto "proto", graphql "graphql", openapi "openapi"). The 1029 kind word is the
+part of the kind name after the last '.' (cc.library → "library").

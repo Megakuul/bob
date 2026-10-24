@@ -13,6 +13,10 @@ type Kind struct {
 	Name string // "<ecosystem>.<kind>", [a-z0-9.]+
 	Axes []Axis // variant axes this kind's derivation depends on
 	Host bool   // always built for p.Host() (codegen tools, proc-macros)
+	// Unit names the ecosystem ("cc", "rust", "go", …) when a node of this kind is a build unit:
+	// a package (directory with its own bob.go) defines at most one unit per ecosystem
+	// (R-FW-071, BOB-E-1029). Tests, recipes, steps and outputs leave it empty.
+	Unit string
 }
 
 // Axis is one variant axis a kind may read.
@@ -36,7 +40,7 @@ func Register(k Kind) {
 	for i, a := range k.Axes {
 		axes[i] = int(a)
 	}
-	graph.Register(graph.Kind{Name: k.Name, Axes: axes, Host: k.Host})
+	graph.Register(graph.Kind{Name: k.Name, Axes: axes, Host: k.Host, Unit: k.Unit})
 }
 
 // Lookup returns the kind registered under name in this binary: the core kinds of package bob
@@ -46,7 +50,7 @@ func Lookup(name string) (Kind, bool) {
 	if !ok {
 		return Kind{}, false
 	}
-	k := Kind{Name: gk.Name, Host: gk.Host}
+	k := Kind{Name: gk.Name, Host: gk.Host, Unit: gk.Unit}
 	for _, a := range gk.Axes {
 		k.Axes = append(k.Axes, Axis(a))
 	}

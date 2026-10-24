@@ -93,7 +93,10 @@ bob.lock: 1 change
 ```
 
 To pin nixpkgs to a specific revision, use `bob lock --nixpkgs <40-hex revision>`, or write
-it into `bob.go` as `Nixpkgs: "nixos-26.05@<revision>"`.
+it into `bob.go` as `bob.RepoOpts{Nixpkgs: bob.NixOS2605, NixpkgsRev: "<revision>"}`. A new
+`bob.lock` pins the revision bob's typed nixpkgs packages were generated from, so every `nixpkgs.<Name>` you can write exists at the pin. After moving the pin, a
+package the new revision lacks fails before anything builds (`BOB-E-1001`, with the line of
+the call).
 
 For Go, `golang.Require` names the version `bob lock` starts from, and Go's minimal
 version selection may pick a higher one that another module requires. `bob lock --update

@@ -18,13 +18,28 @@ func ExampleLibrary() {
 }
 
 // A Node server bundled with esbuild; better-sqlite3's install script is allowed to build its
-// native addon.
+// native addon. The package is named once, in npm.Dep; the option takes the handle.
 func ExampleNewApp() {
 	_ = bob.Define(func(p *bob.P) *npm.App {
+		sqlite := npm.Dep("better-sqlite3", "^12.2.0")
 		return npm.NewApp(p, npm.AppOpts{
 			Entry:   "src/server.ts",
-			Deps:    []npm.Dependency{npm.Dep("fastify", "^5"), npm.Dep("better-sqlite3", "^12.2.0")},
-			Options: []npm.Option{npm.AllowScripts("better-sqlite3")},
+			Deps:    []npm.Dependency{npm.Dep("fastify", "^5"), sqlite},
+			Options: []npm.Option{npm.AllowScripts(sqlite)},
+		})
+	})
+}
+
+// A package of the resolved graph that is not a direct dependency is declared with Indirect
+// so that an option can refer to it; Extend adds a dependency a package uses without declaring
+// it.
+func ExampleIndirect() {
+	_ = bob.Define(func(p *bob.P) *npm.App {
+		fastify := npm.Dep("fastify", "^5")
+		return npm.NewApp(p, npm.AppOpts{
+			Entry:   "src/server.ts",
+			Deps:    []npm.Dependency{fastify, npm.Dep("@fastify/cors", "^11")},
+			Options: []npm.Option{npm.Extend(npm.Indirect("@fastify/cors-utils"), npm.Peer(fastify))},
 		})
 	})
 }

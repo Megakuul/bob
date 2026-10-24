@@ -5,10 +5,21 @@ import (
 	"errors"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/engine/lock"
+	"github.com/megakuul/bob/pkg/engine/nixidx/goname"
 )
+
+// shortRev is a nixpkgs revision in messages (12 hex digits, like bob lock's change lines).
+func shortRev(rev string) string {
+	if len(rev) > 12 {
+		return rev[:12]
+	}
+	return rev
+}
 
 // Need is one use of a nixpkgs package in the graph (an IR node with a "nix" object).
 type Need struct {
@@ -44,7 +55,20 @@ func (i *Index) Check(ctx context.Context, needs []Need) (map[string]Entry, erro
 			continue // reported by Lookup (1017)
 		}
 		var d *diag.Error
+		pinned := testMissing(n.Attr)
 		switch {
+		case pinned || e.Missing && i.cfg.Rev != lock.DefaultRev && !strings.Contains(n.Attr, "."):
+			// A typed handle of bob's surface (generated at lock.DefaultRev) that the pinned
+			// revision lacks (R-NIX-032, ADR 0020 §3).
+			pos := n.DefinedAt.File
+			if n.DefinedAt.Line > 0 {
+				pos += ":" + strconv.Itoa(n.DefinedAt.Line)
+				if n.DefinedAt.Col > 0 {
+					pos += ":" + strconv.Itoa(n.DefinedAt.Col)
+				}
+			}
+			d = diag.New(1001, "variant", "pin", "pos", pos, "rev", shortRev(i.cfg.Rev), "attr", n.Attr,
+				"name", goname.Of(n.Attr), "surface", "nixpkgs "+shortRev(lock.DefaultRev))
 		case e.Missing:
 			if names == nil {
 				all, err := i.Names(ctx)

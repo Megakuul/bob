@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
-	bobrust "github.com/megakuul/bob/pkg/rust"
+	bobrust "github.com/megakuul/bob/pkg/rust/resolve"
 	"github.com/megakuul/bob/tests/harness"
 	"github.com/megakuul/bob/tests/parity"
 )

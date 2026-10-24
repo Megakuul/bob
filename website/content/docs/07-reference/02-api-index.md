@@ -28,9 +28,11 @@ Functions:
 - `func Files(paths ...string) Sources`
 - `func Glob(patterns ...string) Sources`
 - `func Import(module, version string) struct{}`
+- `func IncludeDir(dir string) Include`
 - `func Main()`
 - `func NamedVariant(name string, mods ...VariantMod) Named`
 - `func NewShell(p *P, s DevShell) *Shell`
+- `func NewSlot[T any]() *Slot[T]`
 - `func OnPullRequest() Trigger`
 - `func OnPush(branchGlob string) Trigger`
 - `func OnTag(glob string) Trigger`
@@ -51,12 +53,17 @@ Functions:
 
 Types and methods:
 
+- `bob.Channel`: Channel is a nixpkgs release channel (typed: no channel-name strings, ADR 0020 §3).
+  - `func (c Channel) String() string`
 - `bob.Concurrency`: Concurrency says what happens to a run of the same pipeline and ref while one is active.
 - `bob.Configured`: Configured is a configured label: a label, a platform and a variant (R-FW-050).
   - `func (c Configured) String() string`
 - `bob.DevShell`: DevShell declares one development environment for bob dev, bob env, bob exec and the shell hook (SPEC §02.7.0).
 - `bob.Executable`: Executable is a package with one main program, e.g.
 - `bob.FetchOpts`: FetchOpts declares one external file or archive.
+- `bob.Include`: Include is a public include tree of a native library (C/C++ headers, the C header of a Rust staticlib): consumers get its directory on their include path through the library's typed handle (bob.LinkInfo), never through a path string of their own (ADR 0020 §6).
+  - `func (i Include) Dir() string`
+  - `func (i Include) Sources() Sources`
 - `bob.Label`: Label identifies a package, e.g.
   - `func (l Label) String() string`
 - `bob.LinkInfo`: LinkInfo is what a Linkable gives its consumers (cgo, Rust Native, OCaml Native, cc Deps).
@@ -98,6 +105,9 @@ Types and methods:
 - `bob.ServiceOptions`: ServiceOptions configures ServiceFrom.
 - `bob.ServiceSpec`: ServiceSpec describes one service.
 - `bob.Shell`: Shell is the graph node of a DevShell.
+- `bob.Slot`: Slot is a typed forward declaration for values of packages that cannot be imported (the bob.go of a Go main package, R-FW-002 R3).
+  - `func (s *Slot[T]) Bind(fn func(p *P) T) struct{}`
+  - `func (s *Slot[T]) Get(p *P) T`
 - `bob.Sources`: Sources is a set of files from the repo, relative to the directory of the calling bob.go.
   - `func (s Sources) Union(o ...Sources) Sources`
 - `bob.Step`: Step is the result of Run; it implements Tree.
@@ -121,24 +131,18 @@ Functions:
 - `func AllowInsecure(ids ...string) Option`
 - `func AllowUnfree() Option`
 - `func Cross() Option`
-- `func Exe(p *bob.P, attr, mainProgram string, opts ...Option) *Program`
-- `func Lib(p *bob.P, attr string, opts ...Option) *Package`
+- `func MainProgram(path string) Option`
 - `func Modules(names ...string) Option`
-- `func Outputs(names ...string) Option`
-- `func Pkg(p *bob.P, attr string, opts ...Option) *Package`
-- `func Tool(p *bob.P, attr string, opts ...Option) *ToolPackage`
+- `func Outputs(names ...Output) Option`
 
 Types and methods:
 
+- `nixpkgs.Attr`: Attr is one nixpkgs package.
 - `nixpkgs.Option`: Option changes how a nixpkgs package is used.
-- `nixpkgs.Package`: Package is a nixpkgs package of the target set (Lib, Pkg).
-  - `func (pk *Package) CrossSet(p *bob.P) *Package`
-  - `func (p *Package) LinkInfo() bob.LinkInfo`
-  - `func (p *Package) Outputs() []bob.Output`
-- `nixpkgs.Program`: Program is a nixpkgs package of the target set used as an Executable (Exe).
-  - `func (x *Program) MainProgram() string`
-- `nixpkgs.ToolPackage`: ToolPackage is a nixpkgs package of the host set used at build time (Tool).
-  - `func (t *ToolPackage) Outputs() []bob.Output`
+- `nixpkgs.Output`: Output names a store output of a nixpkgs package (Outputs).
+- `nixpkgs.Package`: Package is a nixpkgs package of the target set (Lib, Pkg): a bob.Tool, a bob.Tree and, for linking, a bob.Linkable (cc.Linkable).
+- `nixpkgs.Program`: Program is a nixpkgs package used as a bob.Executable (Exe).
+- `nixpkgs.ToolPackage`: ToolPackage is a nixpkgs package of the host set used at build time (Tool): a bob.Tool and a bob.Tree, not a library (R-FW-032).
 
 ## golang
 
@@ -146,8 +150,7 @@ Types and methods:
 
 Functions:
 
-- `func GenLabel(dir string) string`
-- `func GeneratorRuntime(path, attr string, exact bool) Requirement`
+- `func GeneratorRuntime(path string, gen nixext.Attr, exact bool) Requirement`
 - `func NewModule(p *bob.P, o ModuleOpts) *Module`
 - `func Require(path, version string) Requirement`
 
@@ -162,11 +165,11 @@ Types and methods:
 - `golang.CgoOpts`: CgoOpts gives a cgo package its typed C/C++/Rust dependencies (R-GO-001, R-RS-001).
 - `golang.Generated`: Generated is a codegen recipe for a Go module (connect.Go, graphql.Gqlgen, openapi.Go): the module realises it as the package //<module dir>:gen-<dir without a leading "gen/", '/'→'-'> whose output is the Go package tree in Dir.
 - `golang.Module`: Module is one Go module (label //<dir>:module).
-  - `func (m *Module) Binary(dir string, o BinaryOpts) *Binary`
-  - `func (m *Module) CArchive(dir string, o BinaryOpts) *CLib`
-  - `func (m *Module) CShared(dir string, o BinaryOpts) *CLib`
-  - `func (m *Module) Cgo(dir string, o CgoOpts) *Package`
-  - `func (m *Module) Tests(pattern string, o TestOpts) *TestSet`
+  - `func (m *Module) Binary(o BinaryOpts) *Binary`
+  - `func (m *Module) CArchive(o BinaryOpts) *CLib`
+  - `func (m *Module) CShared(o BinaryOpts) *CLib`
+  - `func (m *Module) Cgo(o CgoOpts) *Package`
+  - `func (m *Module) Tests(o TestOpts) *TestSet`
 - `golang.ModuleAware`: ModuleAware is implemented by a Generated.Spec that needs its consuming module (the Go import path of the generated code): NewModule stores spec.WithModule(<module path>) as the codegen package's spec.
 - `golang.ModuleOpts`: ModuleOpts describes one Go module; its go.mod/go.sum are generated from it (R-GO-003).
 - `golang.Package`: Package is a Go package with a declaration of its own (a cgo package and its C dependencies).
@@ -211,16 +214,16 @@ Functions:
 
 - `func Binary(p *bob.P, o BinOpts) *Bin`
 - `func CDylib(p *bob.P, o LibOpts) *CLib`
-- `func CfgTable(triple string) ([]string, error)`
-- `func Crate(name, req string, opts ...DepOpt) Dep`
+- `func Crate(name, req string, opts ...DepOpt) *CrateDep`
 - `func Features(fs ...string) DepOpt`
+- `func Indirect(name string) *CrateDep`
 - `func Library(p *bob.P, o LibOpts) *Lib`
 - `func NoDefaultFeatures() DepOpt`
 - `func ProcMacro(p *bob.P, o LibOpts) *Lib`
 - `func Rename(codeName string) DepOpt`
 - `func StaticLib(p *bob.P, o LibOpts) *CLib`
 - `func Test(p *bob.P, o TestOpts) *TestSet`
-- `func Uses(crate string, libs ...bob.Linkable) Option`
+- `func Uses(crate *CrateDep, libs ...bob.Linkable) Option`
 
 Types and methods:
 
@@ -229,6 +232,7 @@ Types and methods:
 - `rust.BinOpts`: BinOpts configures Binary.
 - `rust.CLib`: CLib is a Rust staticlib or cdylib (label //<dir>:<Name>): lib<name>.a or lib<name>.so plus the Headers as include/.
   - `func (*CLib) LinkInfo() bob.LinkInfo`
+- `rust.CrateDep`: CrateDep is a declared crates.io crate (Crate, Indirect): the one place its name is written (R-FW-072).
 - `rust.Dep`: Dep is a dependency of a crate: a crates.io crate (Crate) or a local crate (*Lib, (*Lib).With).
 - `rust.DepOpt`: DepOpt modifies a crates.io dependency.
 - `rust.Edition`: Edition is a Rust edition.
@@ -245,18 +249,19 @@ Types and methods:
 
 Functions:
 
-- `func Alias(as, name, req string) Dependency`
-- `func AllowScripts(pkgs ...string) Option`
+- `func Alias(as, name, req string) *Pkg`
+- `func AllowScripts(pkgs ...*Pkg) Option`
 - `func CheckQuirks(table []Quirk) error`
-- `func Dep(name, req string, opts ...DepOpt) Dependency`
+- `func Dep(name, req string, opts ...DepOpt) *Pkg`
 - `func Dev() DepOpt`
-- `func Extend(pkg string, deps ...Dependency) Option`
+- `func Extend(pkg *Pkg, deps ...Dependency) Option`
 - `func Hoisted() Option`
+- `func Indirect(name string) *Pkg`
 - `func Library(p *bob.P, o LibOpts) *Lib`
 - `func NewApp(p *bob.P, o AppOpts) *App`
 - `func NewTest(p *bob.P, o TestOpts) *Test`
 - `func Optional() DepOpt`
-- `func Peer(name string) Dependency`
+- `func Peer(pkg *Pkg) Dependency`
 - `func Quirks() ([]Quirk, error)`
 - `func Vite(p *bob.P, o ViteOpts) *Site`
 
@@ -268,12 +273,17 @@ Types and methods:
 - `npm.DepOpt`: DepOpt modifies a Dependency.
 - `npm.Dependency`: Dependency is a registry package, an alias, a peer, or a local *Lib.
 - `npm.DevServer`: DevServer configures `bob dev`.
-- `npm.GenRuntime`: GenRuntime is an npm package generated code imports, at the version of the generator program Generator (a nixpkgs attribute) in bob's nixpkgs pin: bob lock adds it to the importer at exactly that version (@bufbuild/protobuf = protoc-gen-es).
+- `npm.ESTarget`: ESTarget is tsconfig's compilerOptions.target.
+- `npm.GenRuntime`: GenRuntime is an npm package generated code imports, at the version of the generator program Generator in bob's nixpkgs pin: bob lock adds it to the importer at exactly that version (@bufbuild/protobuf = protoc-gen-es).
 - `npm.Generated`: Generated is a codegen recipe for an importer (connect.TS, graphql.TS, openapi.TS): the importer realises it as the package //<importer dir>:gen-<dir without a leading "gen/", '/'→'-'> whose output is the content of Dir.
+- `npm.JSX`: JSX is tsconfig's compilerOptions.jsx.
 - `npm.Lib`: Lib is a TypeScript library importer.
 - `npm.LibOpts`: LibOpts configures Library.
+- `npm.ModuleKind`: ModuleKind is tsconfig's compilerOptions.module.
 - `npm.Option`: Option is a package-level fix declared by the user (not a quirk).
+- `npm.Pkg`: Pkg is a declared registry package (Dep, Alias, Indirect): the one place its name is written (R-FW-072).
 - `npm.Quirk`: Quirk is one curated entry; the table is Go data shipped with bob (D32).
+- `npm.Resolution`: Resolution is tsconfig's compilerOptions.moduleResolution.
 - `npm.Runner`: Runner selects the test runner.
 - `npm.Runtime`: Runtime selects the runtime of an App.
 - `npm.Site`: Site is a Vite importer; its output is the static site directory.
@@ -288,8 +298,9 @@ Types and methods:
 
 Functions:
 
-- `func Conf(opamName string, libs ...cc.Linkable) Option`
+- `func Conf(pkg *OpamPkg, libs ...cc.Linkable) Option`
 - `func Executable(p *bob.P, o ExeOpts) *Exe`
+- `func Indirect(name string) *OpamPkg`
 - `func Library(p *bob.P, o LibOpts) *Lib`
 - `func NewTest(p *bob.P, o ExeOpts) *Test`
 - `func Opam(name, req string) *OpamPkg`

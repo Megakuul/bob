@@ -59,7 +59,7 @@ package core
 
 import "github.com/megakuul/bob/pkg/bob"
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 `,
 		"lib/lib.go": "// Package lib is ordinary Go code.\npackage lib\n\n// Answer is 42.\nconst Answer = 42\n",
 		"lib/bob.go": `//go:build bob

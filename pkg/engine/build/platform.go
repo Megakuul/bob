@@ -186,9 +186,13 @@ func versionAttrs(c crossNeed) (tattrs, hattrs []string) {
 	return tattrs, hattrs
 }
 
-// crossLibc is the host-set attribute of the cross toolchain's C library for t.
+// crossLibc is the host-set attribute of the cross toolchain's C library for t (the compiler
+// of nixext.ToolchainFor, SPEC R-FW-033; the engine cannot import the L1 package).
 func crossLibc(t bob.Platform) string {
-	return bob.ToolchainFor(engine.HostPlatform(), t).CC + ".libc"
+	if !bob.ToolchainFor(engine.HostPlatform(), t).Cross() {
+		return "gcc.libc"
+	}
+	return "pkgsCross." + t.CrossSet() + ".stdenv.cc.libc"
 }
 
 // crossTargets returns the platforms other than the host's that nodes of g are built for.

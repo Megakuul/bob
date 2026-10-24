@@ -7,30 +7,36 @@ import (
 	"github.com/megakuul/bob/pkg/nixpkgs"
 )
 
-func ExampleTool() {
+func ExampleAttr_Tool() {
 	_ = bob.Define(func(p *bob.P) *bob.Step {
 		return bob.Run(p, "schema", bob.RunOpts{
-			Tools:   []bob.Tool{nixpkgs.Tool(p, "protobuf")},
+			Tools:   []bob.Tool{nixpkgs.Protobuf.Tool(p)},
 			Cmd:     []string{"protoc", "--version"},
 			Outputs: []string{"version.txt"},
 		})
 	})
 }
 
-func ExampleLib() {
+func ExampleAttr_Lib() {
 	_ = bob.Define(func(p *bob.P) *nixpkgs.Package {
-		return nixpkgs.Lib(p, "openssl", nixpkgs.Modules("libcrypto"))
+		return nixpkgs.Openssl.Lib(p, nixpkgs.Modules("libcrypto"))
 	})
 }
 
-func ExamplePkg() {
+func ExampleAttr_Pkg() {
 	_ = bob.Define(func(p *bob.P) *nixpkgs.Package {
-		return nixpkgs.Pkg(p, "tzdata")
+		return nixpkgs.Tzdata.Pkg(p)
 	})
 }
 
-func ExampleExe() {
+func ExampleAttr_Exe() {
 	_ = bob.Define(func(p *bob.P) bob.Executable {
-		return nixpkgs.Exe(p, "curl", "bin/curl")
+		return nixpkgs.Curl.Exe(p)
+	})
+}
+
+func ExampleOutputs() {
+	_ = bob.Define(func(p *bob.P) *nixpkgs.Package {
+		return nixpkgs.Openssl.Lib(p, nixpkgs.Outputs(nixpkgs.Out, nixpkgs.OutDev))
 	})
 }

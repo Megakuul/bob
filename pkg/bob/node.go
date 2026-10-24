@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/bob/internal/graph"
 )
 
@@ -19,8 +20,9 @@ type node struct {
 	kind  graph.Kind
 	label Label
 	pos   Position
-	p     *P // configuration the node is built for (p.Host() for host kinds)
-	evalP *P // configuration whose evaluation created it
+	fn    string // the constructor the bob.go called (runtime name), for its column
+	p     *P     // configuration the node is built for (p.Host() for host kinds)
+	evalP *P     // configuration whose evaluation created it
 	deps  []*node
 	srcs  []srcGroup
 	spec  json.RawMessage
@@ -157,7 +159,7 @@ func newNodeAt(p *P, kindName string, dir *string, name string, deps []Package, 
 	if len(at) > 0 && at[0].ok && at[0].mod == s.mod {
 		pos = at[0].pos
 	}
-	n := &node{kind: k, label: l, pos: pos, p: pk, evalP: p, evals: map[*P]bool{}}
+	n := &node{kind: k, label: l, pos: pos, fn: s.fn, p: pk, evalP: p, evals: map[*P]bool{}}
 	for i, dep := range deps {
 		dn := nodeOf(dep)
 		if dn == nil {
@@ -205,7 +207,37 @@ func newNodeAt(p *P, kindName string, dir *string, name string, deps []Package, 
 	n.evals[p] = true
 	n.addDef(ev)
 	ev.nodes[n.id] = n
+	ev.checkUnit(n)
 	return Node{n: n}
+}
+
+// checkUnit enforces one build unit per ecosystem and package (R-FW-071, R-CC-006): a second
+// unit node of the same ecosystem with another label in the same bob.go directory is
+// BOB-E-1029. Dependency repositories are not checked (their authors' concern).
+func (ev *evaluation) checkUnit(n *node) {
+	if n.kind.Unit == "" || n.label.Module != "" || n.label.Nix != "" {
+		return
+	}
+	if ev.units == nil {
+		ev.units = map[string]*node{}
+	}
+	key := n.label.Dir + "\x00" + n.kind.Unit
+	first, ok := ev.units[key]
+	if !ok {
+		ev.units[key] = n
+		return
+	}
+	if first.label == n.label {
+		return
+	}
+	dir := n.label.Dir
+	if dir == "" {
+		dir = "."
+	}
+	kind := first.kind.Name[strings.LastIndexByte(first.kind.Name, '.')+1:]
+	ev.coded(diag.New(1029, "pos", n.pos.String(), "label", n.label.String(), "dir", dir, "ecosystem", n.kind.Unit,
+		"kind", kind, "other", first.label.String(), "pos2", first.pos.String()), n.label.String(), n.pos)
+	ev.diags[len(ev.diags)-1].col = ev.nodeColumn(n)
 }
 
 // restrict is ext.Restrict: it records the platforms n allows. Unknown platforms are a

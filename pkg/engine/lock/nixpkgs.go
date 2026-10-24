@@ -93,8 +93,9 @@ func ChannelRev(ctx context.Context, channel string) (string, error) {
 
 // PinNixpkgs returns the nixpkgs pin for the declaration decl (RepoOpts.Nixpkgs), R-NIX-005.
 // The revision is decl's "@rev", else old's revision when old is a pin of the same channel and
-// update is false (pins move only with bob lock --update nixpkgs), else the channel's current
-// revision from channelRev (nil = ChannelRev). The source is downloaded once by f to record its
+// update is false (pins move only with bob lock --update nixpkgs), else DefaultRev for the
+// default channel when update is false, else the channel's current revision from channelRev
+// (nil = ChannelRev). The source is downloaded once by f to record its
 // narHash, unless old already pins that revision.
 func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPin, update bool,
 	channelRev func(context.Context, string) (string, error)) (NixpkgsPin, error) {
@@ -109,6 +110,11 @@ func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPi
 	rev := spec.Rev
 	if rev == "" && !update && old.Channel == spec.Channel && hex40Re().MatchString(old.Rev) {
 		rev = old.Rev
+	}
+	if rev == "" && !update && spec.Channel == DefaultChannel {
+		// A new pin of bob's default channel takes the revision the typed nixpkgs surface was
+		// generated from (R-NIX-005, R-NIX-032): handles and pin agree without a channel query.
+		rev = DefaultRev
 	}
 	if rev == "" {
 		if channelRev == nil {

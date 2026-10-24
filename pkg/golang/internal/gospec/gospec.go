@@ -3,14 +3,18 @@
 // into the node's deps.
 package gospec
 
-import "github.com/megakuul/bob/pkg/bob/ext"
+import (
+	"strings"
+
+	"github.com/megakuul/bob/pkg/bob/ext"
+)
 
 // Node kinds of the Go ecosystem; "go" is also the bob.lock section key.
 const (
 	KindModule  = "go.module"  // one Go module (go.mod is generated from it)
 	KindBinary  = "go.binary"  // a main package linked into a program or a C library
 	KindPackage = "go.package" // a cgo package with typed C dependencies (Module.Cgo)
-	KindTests   = "go.tests"   // a set of test units (Module.Tests with a "..." pattern)
+	KindTests   = "go.tests"   // a set of test units (Module.Tests with Recursive)
 	KindTest    = "go.test"    // one test unit: the tests of one package
 )
 
@@ -93,4 +97,11 @@ type Test struct {
 // Tests is the spec of a go.tests node; its deps are its units.
 type Tests struct {
 	Pattern string `json:"pattern"`
+}
+
+// GenLabel is the label name of the codegen package realised into dir (relative to its
+// consumer): "gen-" + dir without a leading "gen/", '/' → '-' (SPEC §03.6.1:
+// gen/proto/greet/v1 → gen-proto-greet-v1).
+func GenLabel(dir string) string {
+	return "gen-" + strings.ReplaceAll(strings.TrimPrefix(dir, "gen/"), "/", "-")
 }

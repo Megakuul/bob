@@ -15,6 +15,7 @@ import (
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/srcs"
 	"github.com/megakuul/bob/pkg/engine/store"
+	"github.com/megakuul/bob/pkg/nixpkgs"
 	"github.com/megakuul/bob/pkg/services/postgres"
 )
 
@@ -335,7 +336,7 @@ func TestPostgresServiceInNix(t *testing.T) {
 		t.Fatal(err)
 	}
 	prog := importProgram(t, s)
-	sp := bob.SpecOf(postgres.Service(nil, postgres.Options{Version: "17", Databases: []string{"app"}}))
+	sp := bob.SpecOf(postgres.Service(nil, postgres.Options{Server: nixpkgs.Postgresql17, Databases: []string{"app"}}))
 	path := []any{pg + "/bin", bash + "/bin", coreutils + "/bin"}
 	svc := map[string]any{"name": sp.Name, "argv": sp.Start, "path": path, "env": sp.Env,
 		"ready": map[string]any{"argv": sp.Ready.Argv()}, "timeoutMs": sp.Timeout.Milliseconds()}

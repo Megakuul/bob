@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/nixpkgs"
 	"github.com/megakuul/bob/pkg/services/postgres"
 )
 
@@ -9,6 +10,6 @@ import (
 // its ecosystem's TestOpts.Services; the test reads DATABASE_URL.
 func ExampleService() {
 	_ = bob.Define(func(p *bob.P) []bob.Service {
-		return []bob.Service{postgres.Service(p, postgres.Options{Version: "17", Databases: []string{"app"}})}
+		return []bob.Service{postgres.Service(p, postgres.Options{Server: nixpkgs.Postgresql17, Databases: []string{"app"}})}
 	})
 }

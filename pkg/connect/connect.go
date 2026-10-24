@@ -5,6 +5,8 @@ import (
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/connect/internal/connspec"
 	"github.com/megakuul/bob/pkg/golang"
+	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/npm"
 	"github.com/megakuul/bob/pkg/proto"
 )
@@ -17,7 +19,7 @@ func init() {
 
 // GoOpts configures connect.Go.
 type GoOpts struct {
-	Dir    string // owned dir relative to the module; default "gen/proto/<proto dir relative to Root>"
+	Dir    string // owned dir relative to the module; default "gen/proto/<proto dir relative to its import root>"
 	Simple bool   // connect-go simple API
 }
 
@@ -48,11 +50,11 @@ func goRecipe(lib *proto.Library, o GoOpts, at ext.Site) golang.Generated {
 		Kind:  connspec.KindGo,
 		Dir:   dir,
 		Deps:  []bob.Package{lib},
-		Tools: []string{"buf", "protoc-gen-go", "protoc-gen-connect-go"},
+		Tools: []nixext.Attr{nixpkgs.Buf, nixpkgs.ProtocGenGo, nixpkgs.ProtocGenConnectGo},
 		Spec:  connspec.Gen{Dir: dir, Simple: o.Simple, Imports: imports},
 		Require: []golang.Requirement{
-			golang.GeneratorRuntime("google.golang.org/protobuf", "protoc-gen-go", false),
-			golang.GeneratorRuntime("connectrpc.com/connect", "protoc-gen-connect-go", false),
+			golang.GeneratorRuntime("google.golang.org/protobuf", nixpkgs.ProtocGenGo, false),
+			golang.GeneratorRuntime("connectrpc.com/connect", nixpkgs.ProtocGenConnectGo, false),
 		},
 		At: at,
 	}
@@ -87,9 +89,9 @@ func tsRecipe(lib *proto.Library, o TSOpts, at ext.Site) npm.Generated {
 		Kind:    connspec.KindTS,
 		Dir:     dir,
 		Deps:    []bob.Package{lib},
-		Tools:   []string{"buf", "protoc-gen-es"},
+		Tools:   []nixext.Attr{nixpkgs.Buf, nixpkgs.ProtocGenEs},
 		Spec:    connspec.Gen{Dir: dir},
-		Runtime: []npm.GenRuntime{{Name: "@bufbuild/protobuf", Generator: "protoc-gen-es"}},
+		Runtime: []npm.GenRuntime{{Name: "@bufbuild/protobuf", Generator: nixpkgs.ProtocGenEs}},
 		At:      at,
 	}
 	for _, d := range lib.Imports() {

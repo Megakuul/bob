@@ -138,7 +138,7 @@ func demoRepo(t *testing.T) string {
 	files := map[string]string{
 		"go.mod":   "module example.com/demo\n\ngo 1.26.0\n",
 		"bob.lock": "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":   "//go:build bob\n\npackage demo\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":   "//go:build bob\n\npackage demo\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"d/bob.go": `//go:build bob
 
 package d
@@ -323,7 +323,7 @@ func TestRunStepsWithNixpkgsTools(t *testing.T) {
 	dir := writeRepo(t, map[string]string{
 		"go.mod":        "module example.com/st\n\ngo 1.26.0\n",
 		"bob.lock":      "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":        "//go:build bob\n\npackage st\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":        "//go:build bob\n\npackage st\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"s/data/in.txt": "hello from the source tree\n",
 		"s/bob.go": `//go:build bob
 
@@ -336,7 +336,7 @@ import (
 	"github.com/megakuul/bob/pkg/nixpkgs"
 )
 
-func tools(p *bob.P) []bob.Tool { return []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")} }
+func tools(p *bob.P) []bob.Tool { return []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)} }
 
 var First = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "first", bob.RunOpts{
@@ -436,13 +436,13 @@ func TestRunChainOf100Steps(t *testing.T) {
 		if i > 0 {
 			in = fmt.Sprintf("map[string]bob.Tree{\"prev\": s%03d(p)}", i-1)
 		}
-		fmt.Fprintf(&b, "var s%03d = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"s%03d\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, \"coreutils\")}, Cmd: []string{\"true\"}, Inputs: %s, Env: map[string]string{\"N\": \"%s-%d\"}})\n})\n\n", i, i, in, salt, i)
+		fmt.Fprintf(&b, "var s%03d = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"s%03d\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Coreutils.Tool(p)}, Cmd: []string{\"true\"}, Inputs: %s, Env: map[string]string{\"N\": \"%s-%d\"}})\n})\n\n", i, i, in, salt, i)
 	}
-	fmt.Fprintf(&b, "var warm = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"warm\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, \"coreutils\")}, Cmd: []string{\"true\"}, Env: map[string]string{\"N\": \"%s-warm\"}})\n})\n", salt)
+	fmt.Fprintf(&b, "var warm = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"warm\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Coreutils.Tool(p)}, Cmd: []string{\"true\"}, Env: map[string]string{\"N\": \"%s-warm\"}})\n})\n", salt)
 	dir := writeRepo(t, map[string]string{
 		"go.mod":       "module example.com/chain\n\ngo 1.26.0\n",
 		"bob.lock":     "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":       "//go:build bob\n\npackage chain\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":       "//go:build bob\n\npackage chain\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"chain/bob.go": b.String(),
 	})
 	if res, _ := runBuild(t, Options{Root: dir, Patterns: []string{"//chain:warm"}, Store: st}); res.ExitCode != 0 {
@@ -476,7 +476,7 @@ func TestRunTests(t *testing.T) {
 	dir := writeRepo(t, map[string]string{
 		"go.mod":   "module example.com/tt\n\ngo 1.26.0\n",
 		"bob.lock": "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":   "//go:build bob\n\npackage tt\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":   "//go:build bob\n\npackage tt\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"t/bob.go": `//go:build bob
 
 package t
@@ -494,7 +494,7 @@ type spec struct {
 }
 
 func test(p *bob.P, name, cmd string) bob.Node {
-	return ext.New(p, "demo.test", name, []bob.Package{nixpkgs.Tool(p, "bash")}, nil, spec{Cmd: cmd})
+	return ext.New(p, "demo.test", name, []bob.Package{nixpkgs.Bash.Tool(p)}, nil, spec{Cmd: cmd})
 }
 
 var Ok = bob.Define(func(p *bob.P) bob.Node { return test(p, "ok", "echo ok ` + salt + `") })
@@ -567,7 +567,7 @@ func TestSourcePaths(t *testing.T) {
 	dir := writeRepo(t, map[string]string{
 		"go.mod":       "module example.com/sp\n\ngo 1.26.0\n",
 		"bob.lock":     "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":       "//go:build bob\n\npackage sp\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":       "//go:build bob\n\npackage sp\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"a/.gitignore": "ignored.txt\n",
 		"a/x.txt":      "x\n",
 		"a/bob.go": `//go:build bob

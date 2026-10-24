@@ -48,6 +48,7 @@ func TestResolve(t *testing.T) {
 		"libs/foo/include/d/e.h":    "e",
 		"libs/foo/build/x.cpp":      "not ignored: /build/ is anchored at the root",
 		"build/y.cpp":               "y",
+		"docs/readme.txt":           "r",
 	})
 	if err := os.Symlink("a.cpp", filepath.Join(repo, "libs/foo/src/link.cpp")); err != nil {
 		t.Fatal(err)
@@ -73,15 +74,48 @@ func TestResolve(t *testing.T) {
 			t.Errorf("%v:\n got %v\nwant %v", c.patterns, got, c.want)
 		}
 	}
-	// The whole repository: nothing ignored, generated or bob-owned appears.
+	// The root package's region: nothing ignored, generated or bob-owned appears, and "**" does
+	// not descend into libs/foo, which has its own bob.go (R-FW-070).
 	all, err := Resolve(repo, ir.Srcs{Patterns: []string{"**"}}, "bob.go:1", func(rel string) bool { return rel == "libs/foo/src/b.cpp" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"docs/readme.txt"}; !reflect.DeepEqual(all, want) {
+		t.Errorf("root region:\n got %v\nwant %v", all, want)
+	}
+	// libs/foo's own region, minus the skipped file.
+	foo, err := Resolve(repo, ir.Srcs{Dir: "libs/foo", Patterns: []string{"**"}}, "libs/foo/bob.go:1", func(rel string) bool { return rel == "libs/foo/src/b.cpp" })
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"libs/foo/build/x.cpp", "libs/foo/include/d/e.h", "libs/foo/include/foo.h", "libs/foo/src/a.cpp",
 		"libs/foo/src/keep.o", "libs/foo/src/legacy/c.cpp", "libs/foo/src/link.cpp"}
-	if !reflect.DeepEqual(all, want) {
-		t.Errorf("whole repo:\n got %v\nwant %v", all, want)
+	if !reflect.DeepEqual(foo, want) {
+		t.Errorf("libs/foo region:\n got %v\nwant %v", foo, want)
+	}
+}
+
+// TestResolveLocality: ".." and files of a subpackage are BOB-E-1028 (R-FW-070), a pattern
+// leaving the repository stays BOB-E-1025.
+func TestResolveLocality(t *testing.T) {
+	repo := t.TempDir()
+	write(t, repo, map[string]string{"bob.go": "x", "app/bob.go": "x", "app/main.c": "m", "lib/bob.go": "x", "lib/l.c": "l"})
+	for _, c := range []struct {
+		dir, pattern string
+		code         diag.Code
+		msg          string
+	}{
+		{"app", "../lib/*.c", 1028, `app/bob.go:3: //app:app: "../lib/*.c" leaves the package directory app/`},
+		{"", "app/*.c", 1028, `bob.go:3: //:all-c: "app/*.c" is inside app/, which has its own bob.go`},
+		{"", "lib", 1028, `bob.go:3: //:all-c: "lib" is inside lib/, which has its own bob.go`},
+		{"app", "../../x.c", 1025, ""},
+	} {
+		label := map[string]string{"app": "//app:app", "": "//:all-c"}[c.dir]
+		_, err := ResolveFor(repo, ir.Srcs{Dir: c.dir, Patterns: []string{c.pattern}}, c.dir+map[bool]string{true: "/", false: ""}[c.dir != ""]+"bob.go:3", label, nil)
+		var d *diag.Error
+		if !errors.As(err, &d) || d.Code != c.code || c.msg != "" && d.Error() != c.msg {
+			t.Errorf("%s %q: %v", c.dir, c.pattern, err)
+		}
 	}
 }
 

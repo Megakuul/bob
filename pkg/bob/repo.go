@@ -23,7 +23,7 @@ type pipelineDecl struct {
 
 // Repo declares repository-wide settings. It is allowed only in the root bob.go, at most once.
 //
-//	var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+//	var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 func Repo(o RepoOpts) struct{} {
 	s := bobSite()
 	reg.repos = append(reg.repos, repoDecl{pos: s.pos, dir: s.dir, mod: s.mod, opts: o})
@@ -32,10 +32,52 @@ func Repo(o RepoOpts) struct{} {
 
 // RepoOpts are the repository-wide settings.
 type RepoOpts struct {
-	// Nixpkgs is a channel name ("nixos-26.05") or "<channel>@<40-hex rev>". bob.lock pins the
-	// revision; `bob lock --update nixpkgs` moves it to the channel's current revision.
-	Nixpkgs  string
-	Variants []Named // see SPEC §1.9
+	// Nixpkgs is the nixpkgs channel; the zero value is the channel bob was released with
+	// (NixOS2605). bob.lock pins the revision: a new lock pins the revision bob's typed nixpkgs
+	// surface was generated from (R-NIX-032); `bob lock --update nixpkgs` moves it to the
+	// channel's current revision.
+	Nixpkgs Channel
+	// NixpkgsRev pins a revision of the channel (40 hex digits); "" = as above.
+	NixpkgsRev string
+	Variants   []Named // see SPEC §1.9
+}
+
+// Channel is a nixpkgs release channel (typed: no channel-name strings, ADR 0020 §3).
+type Channel int
+
+// The channels bob knows. The zero value is bob's default channel (NixOS2605).
+const (
+	NixOS2605       Channel = iota + 1 // "nixos-26.05", bob's default
+	NixOS2511                          // "nixos-25.11"
+	NixpkgsUnstable                    // "nixpkgs-unstable"
+)
+
+// String returns the channel's name ("nixos-26.05"); "" for the zero value and unknown values.
+func (c Channel) String() string {
+	switch c {
+	case NixOS2605:
+		return "nixos-26.05"
+	case NixOS2511:
+		return "nixos-25.11"
+	case NixpkgsUnstable:
+		return "nixpkgs-unstable"
+	}
+	return ""
+}
+
+var hexRev = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9a-f]{40}$`) })
+
+// nixpkgsDecl is the IR form of the nixpkgs declaration (SPEC §1.6 repo.nixpkgs): "" (bob's
+// default), "<channel>" or "<channel>@<rev>", which the engine pins (R-NIX-005).
+func (o RepoOpts) nixpkgsDecl() string {
+	ch := o.Nixpkgs.String()
+	if o.NixpkgsRev == "" {
+		return ch
+	}
+	if ch == "" {
+		ch = NixOS2605.String()
+	}
+	return ch + "@" + o.NixpkgsRev
 }
 
 // checkRepo validates the Repo declarations of the main module and returns the effective one
@@ -55,6 +97,10 @@ func checkRepo(r *registry) (RepoOpts, map[string]Named, []diagnostic) {
 			errs = append(errs, diagnostic{pos: d.pos, msg: fmt.Sprintf("%s: bob.Repo is allowed only in the root bob.go", d.pos)})
 		case i > 0:
 			errs = append(errs, diagnostic{pos: d.pos, msg: fmt.Sprintf("%s: bob.Repo is already declared at %s", d.pos, own[0].pos)})
+		case d.opts.Nixpkgs != 0 && d.opts.Nixpkgs.String() == "":
+			errs = append(errs, diagnostic{pos: d.pos, msg: fmt.Sprintf("%s: bob.Repo: unknown Nixpkgs channel %d (use bob.NixOS2605, bob.NixOS2511 or bob.NixpkgsUnstable)", d.pos, int(d.opts.Nixpkgs))})
+		case d.opts.NixpkgsRev != "" && !hexRev().MatchString(d.opts.NixpkgsRev):
+			errs = append(errs, diagnostic{pos: d.pos, msg: fmt.Sprintf("%s: bob.Repo: NixpkgsRev %q is not a 40-digit nixpkgs commit id", d.pos, clipText(d.opts.NixpkgsRev))})
 		default:
 			opts = d.opts
 		}
@@ -89,7 +135,10 @@ type PipelineOpts struct {
 	Concurrency Concurrency // unset = the per-ref default of SPEC §05.6.2
 	Targets     []Pattern   // packages to build
 	Tests       []Pattern   // packages to test
-	Releases    []string    // release names to publish; non-empty = release pipeline (proto releases=true)
+	// Releases are label patterns of release packages (release.New) to publish; non-empty =
+	// release pipeline (proto releases=true). A pattern that matches no release package is a
+	// definition error at the pipeline's position.
+	Releases []Pattern
 }
 
 var pipelineName = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`) })
@@ -101,7 +150,7 @@ type pipelineJSON struct {
 	Concurrency string   `json:"concurrency"` // "" = per-ref default
 	Targets     []string `json:"targets"`
 	Tests       []string `json:"tests"`
-	Releases    []string `json:"releases"`
+	Releases    []string `json:"releases"` // resolved release names (the server publishes by name)
 }
 
 func checkPipelines(r *registry) ([]pipelineJSON, []diagnostic) {
@@ -121,7 +170,7 @@ func checkPipelines(r *registry) ([]pipelineJSON, []diagnostic) {
 			continue
 		}
 		seen[d.name] = d.pos
-		pj := pipelineJSON{Name: d.name, Triggers: []string{}, Targets: []string{}, Tests: []string{}, Releases: nonNil(slices.Clone(d.opts.Releases))}
+		pj := pipelineJSON{Name: d.name, Triggers: []string{}, Targets: []string{}, Tests: []string{}, Releases: []string{}}
 		for _, t := range d.opts.Triggers {
 			if t.human == "" {
 				bad("a trigger was not made by bob.OnPush, bob.OnPullRequest or bob.OnTag")
@@ -156,6 +205,54 @@ func checkPipelines(r *registry) ([]pipelineJSON, []diagnostic) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, errs
+}
+
+// resolveReleases replaces the release patterns of the pipelines by the names of the release
+// packages they match (kind release.release); a pattern that matches none is an error at the
+// pipeline's position (R-FW-040, ADR 0020 §6).
+func (ev *evaluation) resolveReleases(r *registry, pipes []pipelineJSON) []diagnostic {
+	pos := map[string]Position{}
+	for _, d := range r.pipelines {
+		if _, ok := pos[d.name]; !ok {
+			pos[d.name] = d.pos
+		}
+	}
+	var releases []*node
+	for _, n := range ev.nodes {
+		if n.kind.Name == releaseKind && n.label.Module == "" {
+			releases = append(releases, n)
+		}
+	}
+	var errs []diagnostic
+	for i := range pipes {
+		var names []string
+		for _, pat := range pipes[i].Releases {
+			found := false
+			for _, n := range releases {
+				if Pattern(pat).Match(n.label) {
+					names, found = append(names, n.label.Name), true
+				}
+			}
+			if !found {
+				p := pos[pipes[i].Name]
+				errs = append(errs, diagnostic{pos: p, msg: fmt.Sprintf("%s: pipeline %q: release pattern %q matches no release package (release.New)", p, pipes[i].Name, pat)})
+			}
+		}
+		sort.Strings(names)
+		pipes[i].Releases = nonNil(slices.Compact(names))
+	}
+	return errs
+}
+
+// releaseKind is the node kind of release.New (pkg/release cannot be imported here).
+const releaseKind = "release.release"
+
+// clipText shortens a user value for a message.
+func clipText(s string) string {
+	if len(s) > 64 {
+		return s[:64] + "…"
+	}
+	return s
 }
 
 // Trigger says when a pipeline starts.

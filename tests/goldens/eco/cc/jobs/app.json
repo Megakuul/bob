@@ -1,0 +1,68 @@
+{
+  "args": {
+    "compile": [
+      {
+        "argv": [
+          "gcc",
+          "-std=c17",
+          "-O2",
+          "-ffile-prefix-map=/nix/store/bi39a27ykprjqgrxp7ls2fg5py225zg3-app-app-src=.",
+          "-I/nix/store/fzdahm7v8x29xzh676ccc7mbkcsc548c-cc-mathx/include",
+          "-I/nix/store/2mjrfjf5npvm9946ag413x0b0pcqww3k-cc-pack/include",
+          "-I/nix/store/va7cmygwzcj89diqhlhrd281r37bk7pw-ccx-zstd/include",
+          "-c",
+          "app/main.c",
+          "-o",
+          "/build/obj/app/main.c.o"
+        ],
+        "out": "/build/obj/app/main.c.o"
+      }
+    ],
+    "headers": [],
+    "link": {
+      "argv": [
+        "gcc",
+        "-o",
+        "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/bin/app",
+        "/build/obj/app/main.c.o",
+        "/nix/store/fzdahm7v8x29xzh676ccc7mbkcsc548c-cc-mathx/lib/libmathx.a",
+        "-L/nix/store/2mjrfjf5npvm9946ag413x0b0pcqww3k-cc-pack/lib",
+        "-lpack",
+        "-Wl,-rpath,/nix/store/2mjrfjf5npvm9946ag413x0b0pcqww3k-cc-pack/lib",
+        "-L/nix/store/va7cmygwzcj89diqhlhrd281r37bk7pw-ccx-zstd/lib",
+        "-lzstd",
+        "-Wl,-rpath,/nix/store/va7cmygwzcj89diqhlhrd281r37bk7pw-ccx-zstd/lib"
+      ],
+      "out": "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/bin/app"
+    },
+    "path": [
+      "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0/bin",
+      "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46/bin"
+    ],
+    "pkgConfig": [],
+    "src": "/nix/store/bi39a27ykprjqgrxp7ls2fg5py225zg3-app-app-src"
+  },
+  "fixup": {
+    "debugOut": false,
+    "forbidden": [
+      "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0",
+      "/nix/store/5lpg8a0vjws6pvnw19kia252za631b0f-bob-builder-18",
+      "/nix/store/bi39a27ykprjqgrxp7ls2fg5py225zg3-app-app-src",
+      "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2",
+      "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46"
+    ],
+    "shrinkRpath": true,
+    "strip": true,
+    "tools": {
+      "objcopy": "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46/bin/objcopy",
+      "patchelf": "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2/bin/patchelf",
+      "strip": "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46/bin/strip"
+    }
+  },
+  "kind": "cc-compile-link",
+  "label": "//app:app",
+  "outputs": [
+    "out"
+  ],
+  "v": 1
+}

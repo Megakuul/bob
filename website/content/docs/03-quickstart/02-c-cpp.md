@@ -84,24 +84,27 @@ import (
 	"github.com/megakuul/bob/pkg/nixpkgs"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Hello = bob.Define(func(p *bob.P) *cc.Binary {
 	return cc.NewBinary(p, "hello", cc.BinaryOpts{
 		Srcs: bob.Files("main.cpp"),
-		Deps: []cc.Linkable{nixpkgs.Lib(p, "zlib")},
+		Deps: []cc.Linkable{nixpkgs.Zlib.Lib(p)},
 	})
 })
 
 var Test = bob.Define(func(p *bob.P) *cc.Test {
 	return cc.NewTest(p, "hello_test", cc.BinaryOpts{
 		Srcs: bob.Files("test.cpp"),
-		Deps: []cc.Linkable{nixpkgs.Lib(p, "zlib")},
+		Deps: []cc.Linkable{nixpkgs.Zlib.Lib(p)},
 	})
 })
 ```
 
-- `nixpkgs.Lib(p, "zlib")` is zlib from your nixpkgs pin. bob adds its headers and links it.
+- `nixpkgs.Zlib.Lib(p)` is zlib from your nixpkgs pin, linked into the program. Every nixpkgs
+  package is a typed Go value (`nixpkgs.Zlib`, `nixpkgs.Openssl`, …): your editor completes the
+  names and shows each package's version and licence, and a misspelt name does not compile.
+  bob adds its headers and links it.
 
 bob generates the repository's `go.mod` itself (the `bob.go` files are Go code); you do not
 write one.
@@ -165,9 +168,11 @@ gcc (GCC) 15.3.0
 
 ## Libraries of your own
 
-A real project splits code into libraries: `cc.StaticLibrary` and `cc.SharedLibrary` build
-`lib<name>.a`/`.so` with a public include directory (`Hdrs: "include"`), and other packages
-list them in `Deps`. Third-party projects with their own build system (CMake, Autotools, Meson,
+A real project splits code into libraries, one per directory, each with its own `bob.go`:
+`cc.StaticLibrary` and `cc.SharedLibrary` build `lib<name>.a`/`.so` with a public include
+directory (`Hdrs: bob.IncludeDir("include")`), and other packages list them in `Deps`. A
+`bob.go` names only files of its own directory; headers of another library reach you only
+through `Deps`. Third-party projects with their own build system (CMake, Autotools, Meson,
 Make) come in through `cc.External`. See the
 [bob.go reference](../04-guides/01-bob-go-reference.md#c-and-c).
 

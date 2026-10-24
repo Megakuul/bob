@@ -294,7 +294,7 @@ func (pl *planner) opamPackage(t *target, tc *toolchain, system, name string) (*
 		m, ok := pl.confOf(t, c)
 		if !ok {
 			return nil, diag.New(1023, "package", "opam:"+c+"."+pl.sec.Packages[c].Version,
-				"reason", fmt.Sprintf("no nixpkgs mapping for this system package (add ocaml.Conf(%q, nixpkgs.Lib(p, \"<attr>\")) or extend bob's table)", c))
+				"reason", confHint(c))
 		}
 		for _, rv := range m.rvs {
 			in.AddAll(rv)
@@ -482,7 +482,7 @@ func (pl *planner) sourceFiles(n *ir.Node) ([]string, error) {
 	if !strings.HasPrefix(n.Label, "//") {
 		return nil, diag.NotImplemented("OCaml packages of dependency repositories (" + n.Label + ")")
 	}
-	return srcs.ResolveAll(pl.req.Root, n.Srcs, n.DefinedAt.String(), nil)
+	return srcs.ResolveNode(pl.req.Root, n, nil)
 }
 
 // split sorts a target's files into modules and C stubs, relative to its directory.

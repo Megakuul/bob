@@ -11,7 +11,6 @@ import (
 
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
-	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/engine/translate"
 )
 
@@ -193,7 +192,7 @@ func bobGoHead(pkg string, imports ...string) string {
 	for _, i := range imports {
 		b.WriteString("\t\"github.com/megakuul/bob/pkg/" + i + "\"\n")
 	}
-	b.WriteString(")\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"" + lock.DefaultChannel + "\"})\n")
+	b.WriteString(")\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n")
 	return b.String()
 }
 
@@ -206,13 +205,23 @@ var initTemplates = map[string]func(module, pkg string) map[string]string{
 var Module = bob.Define(func(p *bob.P) *golang.Module {
 	return golang.NewModule(p, golang.ModuleOpts{Path: "` + module + `", Go: "1.26"})
 })
+`,
+			"cmd/hello/bob.go": `//go:build bob
+
+package main
+
+import (
+	"` + module + `"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+)
 
 var Hello = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/hello", golang.BinaryOpts{})
+	return ` + pkg + `.Module(p).Binary(golang.BinaryOpts{})
 })
 
 var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./...", golang.TestOpts{})
+	return ` + pkg + `.Module(p).Tests(golang.TestOpts{})
 })
 `,
 			"cmd/hello/main.go": `package main
@@ -241,14 +250,14 @@ func TestGreeting(t *testing.T) {
 var Hello = bob.Define(func(p *bob.P) *cc.Binary {
 	return cc.NewBinary(p, "hello", cc.BinaryOpts{
 		Srcs: bob.Files("main.cpp"),
-		Deps: []cc.Linkable{nixpkgs.Lib(p, "zlib")},
+		Deps: []cc.Linkable{nixpkgs.Zlib.Lib(p)},
 	})
 })
 
 var Test = bob.Define(func(p *bob.P) *cc.Test {
 	return cc.NewTest(p, "hello_test", cc.BinaryOpts{
 		Srcs: bob.Files("test.cpp"),
-		Deps: []cc.Linkable{nixpkgs.Lib(p, "zlib")},
+		Deps: []cc.Linkable{nixpkgs.Zlib.Lib(p)},
 	})
 })
 `,
@@ -329,23 +338,33 @@ test("greeting", () => {
 `,
 		}
 	},
-	"ocaml": func(_, pkg string) map[string]string {
+	"ocaml": func(module, pkg string) map[string]string {
+		head := strings.Replace(bobGoHead(pkg, "bob", "ocaml"), "import (\n", "import (\n\t\""+module+"/greet\"\n", 1)
 		return map[string]string{
-			"bob.go": bobGoHead(pkg, "bob", "ocaml") + `
-var Greet = bob.Define(func(p *bob.P) *ocaml.Lib {
-	return ocaml.Library(p, ocaml.LibOpts{Name: "greet", Srcs: bob.Files("hello.ml")})
-})
-
+			"bob.go": head + `
 var Hello = bob.Define(func(p *bob.P) *ocaml.Exe {
-	return ocaml.Executable(p, ocaml.ExeOpts{Name: "hello", Srcs: bob.Files("main.ml"), Deps: []ocaml.Dep{Greet(p)}})
+	return ocaml.Executable(p, ocaml.ExeOpts{Name: "hello", Srcs: bob.Files("main.ml"), Deps: []ocaml.Dep{greet.Lib(p)}})
 })
 
 var Test = bob.Define(func(p *bob.P) *ocaml.Test {
-	return ocaml.NewTest(p, ocaml.ExeOpts{Name: "hello_test", Main: "test", Srcs: bob.Files("test.ml"), Deps: []ocaml.Dep{Greet(p)}})
+	return ocaml.NewTest(p, ocaml.ExeOpts{Name: "hello_test", Main: "test", Srcs: bob.Files("test.ml"), Deps: []ocaml.Dep{greet.Lib(p)}})
 })
 `,
-			"hello.ml": "let greeting name = \"hello, \" ^ name\n",
-			"main.ml":  "let () = print_endline (Greet.Hello.greeting \"bob\")\n",
+			"greet/bob.go": `//go:build bob
+
+package greet
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/ocaml"
+)
+
+var Lib = bob.Define(func(p *bob.P) *ocaml.Lib {
+	return ocaml.Library(p, ocaml.LibOpts{Name: "greet", Srcs: bob.Files("hello.ml")})
+})
+`,
+			"greet/hello.ml": "let greeting name = \"hello, \" ^ name\n",
+			"main.ml":        "let () = print_endline (Greet.Hello.greeting \"bob\")\n",
 			"test.ml": `let () =
   let ok = Greet.Hello.greeting "bob" = "hello, bob" in
   Printf.printf "TAP version 14\n1..1\n%s 1 - greeting\n" (if ok then "ok" else "not ok");

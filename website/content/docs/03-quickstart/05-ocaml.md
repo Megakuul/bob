@@ -27,7 +27,8 @@ bob init --lang ocaml
 ```text expect
 bob init: ocaml project in …
   + bob.go
-  + hello.ml
+  + greet/bob.go
+  + greet/hello.ml
   + main.ml
   + test.ml
 bob.lock: 2 changes
@@ -39,14 +40,16 @@ next: bob build && bob test && bob run //:hello
 📁 hello-ocaml/
   📄 bob.go
   📄 bob.lock
-  🐫 hello.ml
+  📁 greet/
+    📄 bob.go
+    🐫 hello.ml
   🐫 main.ml
   🐫 test.ml
 ```
 
 ## The code
 
-`hello.ml` is the library. Its module is wrapped in the library's namespace, as dune does, so
+`greet/hello.ml` is the library. Its module is wrapped in the library's namespace, as dune does, so
 other code calls it `Greet.Hello`:
 
 ```ocaml
@@ -70,30 +73,47 @@ let () =
 
 ## The build description
 
-All three share one directory, so each package names its files:
+A library and a program are two build units, so each lives in its own directory with its own
+`bob.go` (one library or executable per directory; a `bob.go` names only files of its own
+directory). `greet/bob.go` declares the library:
 
 ```go verify
 //go:build bob
 
-package helloocaml
+package greet
 
 import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/ocaml"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
-
-var Greet = bob.Define(func(p *bob.P) *ocaml.Lib {
+var Lib = bob.Define(func(p *bob.P) *ocaml.Lib {
 	return ocaml.Library(p, ocaml.LibOpts{Name: "greet", Srcs: bob.Files("hello.ml")})
 })
+```
+
+The root `bob.go` declares the program and its test, and uses the library through its typed
+handle `greet.Lib(p)` (a test is not a build unit, so it sits next to the program):
+
+```go
+//go:build bob
+
+package helloocaml
+
+import (
+	"example.com/hello-ocaml/greet"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/ocaml"
+)
+
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Hello = bob.Define(func(p *bob.P) *ocaml.Exe {
-	return ocaml.Executable(p, ocaml.ExeOpts{Name: "hello", Srcs: bob.Files("main.ml"), Deps: []ocaml.Dep{Greet(p)}})
+	return ocaml.Executable(p, ocaml.ExeOpts{Name: "hello", Srcs: bob.Files("main.ml"), Deps: []ocaml.Dep{greet.Lib(p)}})
 })
 
 var Test = bob.Define(func(p *bob.P) *ocaml.Test {
-	return ocaml.NewTest(p, ocaml.ExeOpts{Name: "hello_test", Main: "test", Srcs: bob.Files("test.ml"), Deps: []ocaml.Dep{Greet(p)}})
+	return ocaml.NewTest(p, ocaml.ExeOpts{Name: "hello_test", Main: "test", Srcs: bob.Files("test.ml"), Deps: []ocaml.Dep{greet.Lib(p)}})
 })
 ```
 
@@ -124,6 +144,7 @@ Add an opam package with a version formula and run `bob lock`. bob solves the co
 against opam-repository at a pinned commit and pins every source archive in `bob.lock`:
 
 ```go
+// greet/bob.go
 ocaml.Library(p, ocaml.LibOpts{
 	Name: "greet",
 	Srcs: bob.Files("hello.ml"),

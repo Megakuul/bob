@@ -35,11 +35,14 @@ protobuf code generation and a Svelte frontend to the example below.
         🦀 lib.rs
   📁 cmd/
     📁 api/
+      📄 bob.go
       🐹 main.go
 ```
 
-The root `bob.go` declares the Go module, the cgo package and the binary; `libs/foo` is a C++
-library (`libfoo.so`, using OpenSSL) and `crates/rcore` a Rust static library (`librcore.a`).
+Every directory that builds something has its own `bob.go`: the root declares the Go module,
+`cmd/api` the cgo package and the binary, `libs/foo` a C++ library (`libfoo.so`, using OpenSSL)
+and `crates/rcore` a Rust static library (`librcore.a`). No `bob.go` names a file of another
+directory; they use each other through typed values.
 
 ```bash
 mkdir polyglot && cd polyglot
@@ -92,16 +95,17 @@ import (
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
 	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
 		Srcs: bob.Glob("src/*.cpp"),
-		Hdrs: "include",
+		Hdrs: bob.IncludeDir("include"),
 		Std:  cc.CXX20,
-		Deps: []cc.Linkable{nixpkgs.Lib(p, "openssl")},
+		Deps: []cc.Linkable{nixpkgs.Openssl.Lib(p)},
 	})
 })
 ```
 
 ## The Rust static library
 
-`rust.StaticLib` builds `librcore.a` and exports the `Headers` directory to C consumers:
+`rust.StaticLib` builds `librcore.a` and exports the `Headers` directory
+(`bob.IncludeDir("include")`) to C consumers:
 
 ```c file=crates/rcore/include/rcore.h
 #pragma once
@@ -145,7 +149,7 @@ import (
 var Crate = bob.Define(func(p *bob.P) *rust.CLib {
 	return rust.StaticLib(p, rust.LibOpts{
 		Name:    "rcore",
-		Headers: "include",
+		Headers: bob.IncludeDir("include"),
 		Deps:    []rust.Dep{rust.Crate("itoa", "1"), rust.Crate("hex", "0.4")},
 	})
 })
@@ -195,9 +199,7 @@ func main() {
 }
 ```
 
-`Module.Cgo` gives the cgo package its libraries. They are typed: `foo.Lib(p)` and
-`rcore.Crate(p)` are both `cc.Linkable`, and passing something that is not a library does not
-compile:
+The root `bob.go` declares the Go module:
 
 ```go file=bob.go
 //go:build bob
@@ -205,6 +207,29 @@ compile:
 package polyglot
 
 import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+)
+
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
+
+// Module is the Go module example.com/polyglot (label //:module).
+var Module = bob.Define(func(p *bob.P) *golang.Module {
+	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/polyglot", Go: "1.26"})
+})
+```
+
+`cmd/api/bob.go` declares the cgo package and the binary of its own directory. `Module.Cgo`
+gives the cgo package its libraries. They are typed: `foo.Lib(p)` and `rcore.Crate(p)` are both
+`cc.Linkable`, and passing something that is not a library does not compile:
+
+```go file=cmd/api/bob.go
+//go:build bob
+
+package main
+
+import (
+	"example.com/polyglot"
 	"example.com/polyglot/crates/rcore"
 	"example.com/polyglot/libs/foo"
 	"github.com/megakuul/bob/pkg/bob"
@@ -212,31 +237,26 @@ import (
 	"github.com/megakuul/bob/pkg/golang"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
-
-// Module is the Go module example.com/polyglot (label //:module).
-var Module = bob.Define(func(p *bob.P) *golang.Module {
-	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/polyglot", Go: "1.26"})
-})
-
-// FFI gives the cgo code of cmd/api its C++ and Rust libraries.
+// FFI gives the cgo code of this package its C++ and Rust libraries.
 var FFI = bob.Define(func(p *bob.P) *golang.Package {
-	return Module(p).Cgo("./cmd/api", golang.CgoOpts{Deps: []cc.Linkable{foo.Lib(p), rcore.Crate(p)}})
+	return polyglot.Module(p).Cgo(golang.CgoOpts{Deps: []cc.Linkable{foo.Lib(p), rcore.Crate(p)}})
 })
 
 // API is the cgo binary (label //cmd/api:api). It calls FFI first: a binary picks up the
 // cgo declarations evaluated before it.
 var API = bob.Define(func(p *bob.P) *golang.Binary {
 	FFI(p)
-	return Module(p).Binary("./cmd/api", golang.BinaryOpts{})
+	return polyglot.Module(p).Binary(golang.BinaryOpts{})
 })
 ```
 
 > [!NOTE]
-> The binary is declared in the root `bob.go`, not in `cmd/api/bob.go`, because `cmd/api` is
-> a `main` package: other `bob.go` files (for example one that builds an image of the binary)
-> could not import it. Calling `FFI(p)` inside `API` makes sure the cgo declaration is part of
-> every build of the binary.
+> `cmd/api` is a `main` package, so no other `bob.go` can import `cmd/api/bob.go`. A package
+> that needs the binary (for example one that builds an image of it) gets it through a typed
+> slot that an importable `bob.go` declares and `cmd/api/bob.go` binds
+> (`var _ = polyglot.API.Bind(API)`); see
+> [One package per directory](01-bob-go-reference.md#one-package-per-directory). Calling `FFI(p)`
+> inside `API` makes sure the cgo declaration is part of every build of the binary.
 
 ## Build and run
 
@@ -268,8 +288,8 @@ bob graph --why //cmd/api:api nixpkgs:openssl
 ```
 
 ```text expect
-//cmd/api:api                   bob.go:…
-└─ //cmd/api:go                 bob.go:…
+//cmd/api:api                   cmd/api/bob.go:…
+└─ //cmd/api:go                 cmd/api/bob.go:…
    └─ //libs/foo:foo            libs/foo/bob.go:…
       └─ nixpkgs:openssl        libs/foo/bob.go:…
 ```

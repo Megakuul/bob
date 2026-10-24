@@ -11,8 +11,8 @@ import (
 func ExampleNewBundle() {
 	_ = bob.Define(func(p *bob.P) *appimage.Bundle {
 		return appimage.NewBundle(p, "tools", appimage.BundleOpts{
-			Program: nixpkgs.Exe(p, "curl", "bin/curl"),
-			Entries: map[string]bob.Executable{"date": nixpkgs.Exe(p, "coreutils", "bin/date")},
+			Program: nixpkgs.Curl.Exe(p),
+			Entries: map[string]bob.Executable{"date": nixpkgs.Coreutils.Exe(p, nixpkgs.MainProgram("bin/date"))},
 			Locales: []string{"C.UTF-8", "en_US.UTF-8"},
 		})
 	})

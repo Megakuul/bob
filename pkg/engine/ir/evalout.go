@@ -54,6 +54,8 @@ type diagLine struct {
 	Label    string `json:"label"`
 	File     string `json:"file"`
 	Line     int    `json:"line"`
+	Col      int    `json:"col,omitempty"`
+	Hint     string `json:"hint,omitempty"` // a hint of the error's own (BOB-E-1020 "{hint}")
 	Msg      string `json:"msg"`
 	// Chain is the path from a requested package to the one the error is about (BOB-E-0006).
 	Chain []string `json:"chain"`
@@ -82,7 +84,7 @@ func Diagnostics(stderr []byte, file func(string) string) (Errors, []string) {
 			}
 			continue
 		}
-		pos := diag.Pos{Line: d.Line}
+		pos := diag.Pos{Line: d.Line, Col: max(d.Col, 0)}
 		if d.File != "" {
 			pos.File = file(d.File)
 		}
@@ -103,6 +105,9 @@ func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
 		if args, ok := templateArgs(diag.Code(n), d.Msg); ok {
 			if d.Label != "" && args["label"] == "" {
 				args["label"] = d.Label
+			}
+			if d.Hint != "" && len(d.Hint) <= 500 {
+				args["hint"] = d.Hint
 			}
 			e := &diag.Error{Code: diag.Code(n), Severity: diag.SeverityError, Label: args["label"], Args: args}
 			if pos.File != "" {
