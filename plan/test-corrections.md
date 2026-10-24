@@ -931,3 +931,14 @@ explained), T9 (polyglot has no nixpkgs.Tool("protobuf"): fixture decision), RFW
    with column, hint, exit 1. Result: TestRNIX017BuilderExitCodesInRealRuns/54 PASS (with 94b, 95).
 Not applied: fault 74 capture (needs an owner-approved golden; candidate in
 out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixture design, I-B45.md).
+97. APPLIED 2026-10-24 N2 (A451). tests/docs/docs_test.go TestSnippetsTypeCheck: a page whose
+   project has bob.go files but no `file=go.mod` block is type-checked with the module path bob
+   gives a new repository (helper newRepoModule: an import "<module>/<dir>" of another bob.go
+   directory, else any path) instead of failing "no file=go.mod block with a module line". The
+   test encoded the documented workaround of the first-run blocker "a new repository needs a
+   hand-written go.mod" (W2 status page; SPEC R-FW-002 "the bob-generated root go.mod",
+   §03.2.5, R-FW-022, §02 open item 11: bob writes the root go.mod). N2 fixed the blocker
+   (pkg/engine/eval: no root go.mod → evaluation with the inferred module, an overlay go.mod for
+   go build -modfile) and removed the hand-written go.mod blocks from the quickstarts and
+   guides 03/06. A page that has a go.mod block is checked as before (a block without a module
+   line still fails). Result: tests/docs PASS.
