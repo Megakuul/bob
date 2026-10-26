@@ -69,6 +69,9 @@ type PlanRequest struct {
 	// trees it selected itself, realising pinned inputs it must read (planstore.go). nil in
 	// Native and wherever the caller has no store.
 	Store PlanStore
+	// FrameworkSum holds the go.sum lines of the framework module that bob serves at its own
+	// version (Native only; the root go.mod requires the framework, R-FW-043.4).
+	FrameworkSum string
 	// Version is the release version of this build (bob build --version, "0.0.0-dev" without
 	// one). Only release-related derivations may depend on it (R-OUT-022): the release manifest
 	// and the versioned image a release publishes; every other package must ignore it.

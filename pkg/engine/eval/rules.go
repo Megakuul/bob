@@ -206,6 +206,9 @@ func (c *ruleCheck) checkImport(f *bobFile, d string, imp bobImport, realOf func
 	switch {
 	case isStd(p):
 		return
+	case selfBobImport(c.module, c.own, p):
+		// bob's own repository: its root module is the framework module, and a bob.go package
+		// of the repository is imported by that path (cmd/bob/bob.go imports the root's), A545.
 	case p == frameworkModule || strings.HasPrefix(p, frameworkModule+"/"):
 		// nixext is the extension API of bob's own ecosystem packages (ADR 0020 §2): part of
 		// the framework the evaluator compiles, but not for build definitions.
@@ -242,6 +245,27 @@ func (c *ruleCheck) checkImport(f *bobFile, d string, imp bobImport, realOf func
 		return
 	}
 	add(ir.Errors{ir.RuleError("R7", "dir", d, "path", p)})
+}
+
+// selfBobImport reports whether p names a bob.go package of bob's own repository (root module
+// = the framework module) rather than a framework package: framework packages have no bob.go.
+func selfBobImport(module string, own map[string]*bobFile, p string) bool {
+	if module != frameworkModule {
+		return false
+	}
+	_, ok := own[selfDir(p)]
+	return ok
+}
+
+// selfDir is the repo-relative directory of p below the framework module ("" if outside).
+func selfDir(p string) string {
+	switch {
+	case p == frameworkModule:
+		return "."
+	case strings.HasPrefix(p, frameworkModule+"/"):
+		return strings.TrimPrefix(p, frameworkModule+"/")
+	}
+	return ""
 }
 
 // nixextPkg is refused by R7 although the evaluator compiles it (pkg/nixpkgs uses it).

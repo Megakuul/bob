@@ -49,7 +49,7 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-1017 | definition | 3 | `nixpkgs package "{attr}" cannot be evaluated on {system}` | `pin another nixpkgs revision or use another package` |
 | BOB-E-1018 | definition | 3 | `evaluating bob.go is not deterministic: {label}` | `bob.go must not depend on time, randomness, environment or map order` |
 | BOB-E-1019 | definition | 3 | `bob.lock cannot be read: {reason} (line {line})` | `resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go` |
-| BOB-E-1020 | definition | 3 | `{label}: invalid {option}: {reason}` | — |
+| BOB-E-1020 | definition | 3 | `{label}: invalid {option}: {reason}` | `{hint}` |
 | BOB-E-1021 | definition | 3 | `{label}: toolchain mismatch: {reason}` | `align the versions named above` |
 | BOB-E-1022 | definition | 3 | `{label} is not a static binary (it needs {deps})` | `use tarball.Closure` |
 | BOB-E-1023 | definition | 3 | `{package} cannot be pinned: {reason}` | — |

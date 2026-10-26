@@ -143,7 +143,7 @@ import (
 )
 
 var Static = bob.Define(func(p *bob.P) *tarball.Tarball {
-	return tarball.New(p, "stamp", tarball.TarballOpts{Program: tools.Stamp(p), Kind: tarball.Static})
+	return tarball.New(p, "stamp", tarball.TarballOpts{Program: tools.Stamp.Get(p), Kind: tarball.Static})
 })
 `
 

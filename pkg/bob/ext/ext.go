@@ -194,7 +194,12 @@ func ConfigOf(n *bob.Node) Config {
 
 // Errorf records a definition error of the running constructor, for example an invalid option
 // of an ecosystem constructor. Evaluation goes on; it fails at the end with every error. Start
-// the message with the position it concerns ("api/bob.go:12: …", from Node.DefinedAt).
+// the message with the position it concerns ("api/bob.go:12: …", from Node.DefinedAt), followed
+// by the package's label ("//api:api: …") when it concerns a package: the error then shows the
+// package's constructor call with its column. A last line "hint: <text>" becomes the error's
+// hint:
+//
+//	ext.Errorf("%s: %s: flag %q is not allowed\nhint: %s", n.DefinedAt(), n.Label(), f, fix)
 func Errorf(format string, a ...any) {
 	if graph.Misuse != nil {
 		graph.Misuse(fmt.Sprintf(format, a...))

@@ -460,7 +460,8 @@ Checks the namespace, the embedded builder, the store and the configuration file
 bob version [--json]
 ```
 
-Prints bob's version, the Nix version and the default nixpkgs channel.
+Prints bob's version, the Nix version, the default nixpkgs channel and the nixpkgs revision the
+typed nixpkgs packages were generated from (`nixpkgsSurface` in `--json`).
 
 ## Exit codes
 
@@ -502,7 +503,7 @@ has `"v":1`, `"event"` and `"time"`:
 ```text
 $ bob version --json
 {"v":1,"event":"run.start","time":"…","command":"version","args":["--json"],"requested":[],"bob":"v0.0.0-dev","nix":"2.34.9"}
-{"v":1,"event":"result","time":"…","command":"version","data":{"bob":"v0.0.0-dev","nix":"2.34.9","nixpkgs":"nixos-26.05"}}
+{"v":1,"event":"result","time":"…","command":"version","data":{"bob":"v0.0.0-dev","nix":"2.34.9","nixpkgs":"nixos-26.05","nixpkgsSurface":"da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36"}}
 {"v":1,"event":"run.finish","time":"…","exitCode":0,"counts":{"built":0,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0},"drift":[],"durationMs":0}
 ```
 

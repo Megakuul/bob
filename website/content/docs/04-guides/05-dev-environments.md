@@ -105,7 +105,8 @@ Language servers (`gopls`, `clangd`, `rust-analyzer`, `typescript-language-serve
 `ocamllsp` and a few more) get `bob exec --lsp`. The LSP proxy rewrites `/nix/store/…` paths
 in the messages to their location in bob's store on your disk, so "go to definition" into the
 standard library or a dependency opens a real file in an editor that runs outside the
-namespace.
+namespace. `bob env` also fetches the headers of the nixpkgs libraries your C/C++ packages use,
+so `clangd` resolves every include of `compile_commands.json` before the first build.
 
 If you move the bob binary, set `BOB` to its new path, or let bob rewrite the shims (any
 evaluating command does). A shim of a project whose `.bob/` was deleted fails with

@@ -193,7 +193,7 @@ added by §02.
 | 1017 **new** | definition | `nixpkgs package "{attr}" cannot be evaluated on {system}` | pin another nixpkgs revision or use another package |
 | 1018 **new** | definition | `evaluating bob.go is not deterministic: {label}` | bob.go must not depend on time, randomness, environment or map order |
 | 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go |
-| 1020 **new** | definition | `{label}: invalid {option}: {reason}` | — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
+| 1020 **new** | definition | `{label}: invalid {option}: {reason}` | `{hint}` when the check names a fix (typed form or did-you-mean of an invalid nixpkgs package, slot binding, refused include/library path flag), else — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
 | 1021 **new** | definition | `{label}: toolchain mismatch: {reason}` | align the versions named above (Go/Rust/generator runtime/target glibc) |
 | 1022 **new** | definition | `{label} is not a static binary (it needs {deps})` | use tarball.Closure |
 | 1023 **new** | definition | `{package} cannot be pinned: {reason}` | — (no checksum; no nixpkgs mapping for an opam `conf-*` package) |

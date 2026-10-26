@@ -27,7 +27,7 @@
 1017 definition - args=attr,system hint=-
 1018 definition - args=label hint=-
 1019 definition - args=line,reason hint=-
-1020 definition - args=label,option,reason hint=-
+1020 definition - args=label,option,reason hint=hint
 1021 definition - args=label,reason hint=-
 1022 definition - args=deps,label hint=-
 1023 definition - args=package,reason hint=-

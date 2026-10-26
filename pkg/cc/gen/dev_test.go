@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/megakuul/bob/pkg/engine"
+	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/nixidx"
 )
 
@@ -24,5 +25,20 @@ func TestDevShellHasCompiler(t *testing.T) {
 	}
 	if got := devPackages(map[string]nixidx.Entry{"gcc": {Missing: true}}); len(got) != 0 {
 		t.Errorf("a missing attribute gives a package: %+v", got)
+	}
+}
+
+// The nixpkgs libraries of C/C++ packages are realised for the dev shell (R-CC-003a): clangd
+// reads their include directories from compile_commands.json after bob gen/bob env.
+func TestDevRealisesLibraries(t *testing.T) {
+	g := &ir.Graph{Nodes: []*ir.Node{
+		{ID: "a", Kind: "cc.library", Deps: []string{"ssl", "lib", "ssl"}},
+		{ID: "ssl", Kind: "nixpkgs.lib"},
+		{ID: "lib", Kind: "cc.library"},
+	}}
+	req := engine.DevRequest{PlanRequest: engine.PlanRequest{Graph: g, Nodes: g.Nodes[:1], Inputs: map[string]engine.Resolved{
+		"ssl": {Drv: "/nix/store/x-openssl.drv"}, "lib": {Drv: "/nix/store/y-cc-lib.drv"}}}}
+	if got := includeDrvs(req); len(got) != 1 || got[0] != "/nix/store/x-openssl.drv" {
+		t.Errorf("includeDrvs = %v, want only the nixpkgs library", got)
 	}
 }

@@ -68,7 +68,7 @@ var table = []Entry{
 	{1017, one(`nixpkgs package "{attr}" cannot be evaluated on {system}`, "pin another nixpkgs revision or use another package")},
 	{1018, one(`evaluating bob.go is not deterministic: {label}`, "bob.go must not depend on time, randomness, environment or map order")},
 	{1019, one(`bob.lock cannot be read: {reason} (line {line})`, "resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go")},
-	{1020, one(`{label}: invalid {option}: {reason}`)},
+	{1020, one(`{label}: invalid {option}: {reason}`, "{hint}")},
 	{1021, one(`{label}: toolchain mismatch: {reason}`, "align the versions named above")},
 	{1022, one(`{label} is not a static binary (it needs {deps})`, "use tarball.Closure")},
 	{1023, one(`{package} cannot be pinned: {reason}`)},

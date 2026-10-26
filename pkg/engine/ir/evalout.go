@@ -125,7 +125,16 @@ func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
 		msg = strings.TrimPrefix(msg, fmt.Sprintf("%s:%d: ", pos.File, pos.Line))
 		msg = strings.TrimPrefix(msg, fmt.Sprintf("%s:%d: ", d.File, pos.Line))
 	}
-	return DefinitionError(pos.File, pos.Line, 0, d.Label, msg)
+	e := DefinitionError(pos.File, pos.Line, 0, d.Label, msg)
+	if d.Hint != "" && len(d.Hint) <= 500 {
+		e.Args["hint"] = d.Hint
+	}
+	if d.Label != "" && pos.File != "" {
+		// An error of a package (ext.Errorf with its label): the package's constructor call,
+		// with the column when the evaluator found it.
+		e.DefinedAt = pos
+	}
+	return e
 }
 
 // templateArgs recovers the arguments of code's message template from a rendered message.

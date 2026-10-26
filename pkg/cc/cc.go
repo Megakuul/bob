@@ -307,6 +307,12 @@ var (
 	toolFlags    = []string{"-B", "-specs"}
 )
 
+// The reasons of refused include and library path flags (R-CC-006); report adds a hint to them.
+const (
+	useDepsIncludes  = "use Deps to add include paths"
+	useDepsLibraries = "use Deps to add libraries"
+)
+
 // flagProblem explains why flag f (after flag before) is not allowed, or returns "".
 func flagProblem(f, before string) string {
 	q := fmt.Sprintf("flag %q is not allowed; ", f)
@@ -320,9 +326,9 @@ func flagProblem(f, before string) string {
 	case strings.HasPrefix(f, "@"):
 		return q + "response files are read from outside the sources"
 	case pathFlag(f, before, includeFlags):
-		return q + "use Deps to add include paths"
+		return q + useDepsIncludes
 	case pathFlag(f, before, libraryFlags) || linkerPathFlag(f):
-		return q + "use Deps to add libraries"
+		return q + useDepsLibraries
 	case pathFlag(f, before, toolFlags) || strings.Contains(f, "/nix/store"):
 		return q + "it names a path outside the sources; use Deps"
 	}
@@ -365,6 +371,12 @@ func localDir(d string) bool {
 // report records each problem as a definition error at n's position.
 func report(n *bob.Node, problems []string) {
 	for _, pr := range problems {
+		switch {
+		case strings.HasSuffix(pr, useDepsIncludes):
+			pr += "\nhint: depend on the library that provides the headers through Deps; its Hdrs include tree joins the include path"
+		case strings.HasSuffix(pr, useDepsLibraries):
+			pr += "\nhint: depend on the library through Deps (a package of this repository, or a typed nixpkgs package such as nixpkgs.Zlib.Lib(p))"
+		}
 		ext.Errorf("%s: %s: %s", n.DefinedAt(), n.Label(), pr)
 	}
 }

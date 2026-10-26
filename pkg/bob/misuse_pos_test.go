@@ -41,3 +41,23 @@ func TestMisuseCarriesPosition(t *testing.T) {
 		}
 	}
 }
+
+// A last line "hint: <text>" of an ext.Errorf message is the diagnostic's hint, not part of its
+// message (BOB-E-1020 "{hint}", fault 85).
+func TestMisuseHint(t *testing.T) {
+	ev := &evaluation{}
+	ev.misuse("app/bob.go:16: //app:app: flag \"-I../x\" is not allowed; use Deps to add include paths\nhint: depend on the library")
+	var b bytes.Buffer
+	writeDiags(&b, ev.diags)
+	var g struct {
+		Msg, Hint, Label string
+		Line             int
+	}
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(strings.TrimSpace(b.String()), "bob:: ")), &g); err != nil {
+		t.Fatal(err)
+	}
+	if g.Msg != `app/bob.go:16: //app:app: flag "-I../x" is not allowed; use Deps to add include paths` ||
+		g.Hint != "depend on the library" || g.Label != "//app:app" || g.Line != 16 {
+		t.Errorf("diagnostic %+v", g)
+	}
+}

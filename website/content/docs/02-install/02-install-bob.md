@@ -118,8 +118,11 @@ bob version
 ```text
 bob v0.0.0-dev
 nix 2.34.9
-nixpkgs nixos-26.05
+nixpkgs nixos-26.05 (typed packages from da6dc0e7b260)
 ```
+
+The last line names the default nixpkgs channel of new projects and the revision bob's typed
+nixpkgs packages (`nixpkgs.Openssl`, …) were generated from.
 
 `bob doctor` enters bob's namespace and verifies the store and your configuration files:
 

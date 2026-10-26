@@ -358,7 +358,7 @@ func TestRFW032ToolIsNotALinkable(t *testing.T) {
 	if harness.Red(t, r) || !exitIs(t, r, 3) {
 		return
 	}
-	if !regexp.MustCompile(`nt/bob\.go:\d+:\d+: cannot use .*nixpkgs\.Tool.* as cc\.Linkable value`).MatchString(r.Stderr) {
+	if !regexp.MustCompile(`nt/bob\.go:\d+:\d+: cannot use .*nixpkgs\.\w+\.Tool.* as cc\.Linkable value`).MatchString(r.Stderr) {
 		t.Errorf("stderr lacks a translated \"nt/bob.go:<line>:<col>: cannot use … as cc.Linkable value\":\n%s", r.Stderr)
 	}
 	if strings.Contains(r.Combined(), ".bob/eval") {

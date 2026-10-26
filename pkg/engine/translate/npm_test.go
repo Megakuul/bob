@@ -46,12 +46,12 @@ func TestProgramNpmFailures(t *testing.T) {
 		hint  string
 	}{
 		{"bindings", bindings, 2013,
-			`✗ better-sqlite3 needs its install script (native addon). Add npm.AllowScripts("better-sqlite3") to //native:native`,
-			`add npm.AllowScripts("better-sqlite3") to //native:native`},
-		{"esm", esm, 2014, `✗ @scope/ui uses react without declaring it. Add npm.Extend("@scope/ui", npm.Peer("react"))`, ""},
-		{"cjs", cjs, 2014, `✗ express uses debug without declaring it. Add npm.Extend("express", npm.Peer("debug"))`, ""},
-		{"tsc", tsc, 2014, `✗ plugin uses vite without declaring it. Add npm.Extend("plugin", npm.Peer("vite"))`, ""},
-		{"mapped", mapped, 2014, `✗ plugin uses vite without declaring it. Add npm.Extend("plugin", npm.Peer("vite"))`, ""},
+			`✗ better-sqlite3 needs its install script (native addon). Add npm.AllowScripts(<handle of better-sqlite3>) to //native:native`,
+			`declare better-sqlite3 (npm.Dep or npm.Indirect("better-sqlite3")) and add npm.AllowScripts(<its handle>) to //native:native`},
+		{"esm", esm, 2014, `✗ @scope/ui uses react without declaring it. Add npm.Extend(<handle of @scope/ui>, npm.Peer(<handle of react>))`, ""},
+		{"cjs", cjs, 2014, `✗ express uses debug without declaring it. Add npm.Extend(<handle of express>, npm.Peer(<handle of debug>))`, ""},
+		{"tsc", tsc, 2014, `✗ plugin uses vite without declaring it. Add npm.Extend(<handle of plugin>, npm.Peer(<handle of vite>))`, ""},
+		{"mapped", mapped, 2014, `✗ plugin uses vite without declaring it. Add npm.Extend(<handle of plugin>, npm.Peer(<handle of vite>))`, ""},
 		{"user source", user, 0, "", ""},
 		{"relative", relative, 0, "", ""},
 		{"nothing", []string{"TypeError: x is not a function"}, 0, "", ""},

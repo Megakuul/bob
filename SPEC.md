@@ -317,12 +317,12 @@ the review view. "busy" marks numbers from a loaded host, which Stage 3 re-measu
 | §05 | R-LOG-003 GetLog per package p99, 100M lines | ≤ 500 ms | — | S10: 111 ms |
 | §06 | R-REG-151 orchestrator RSS, 10 × 1 GiB downloads | ≤ 64 MiB | — | S12 §3.4: 19–33 MiB |
 | §06 | R-UI-007 first load | JS ≤ 250 KiB gz, CSS ≤ 30 KiB gz, FCP ≤ 1.0 / 2.0 s | [8c/15G] / [2c/4G] | not measured |
-| §01 §1.7 (R-NIX-031, ADR 0020) | R-NIX-031 generated `attrs_gen.go` source size (attribute count recorded) | ≤ 8 MiB | — | not measured (27 258 top-level names in the index of pin `da6dc0e7`, before exclusions; Q2) |
-| §01 §1.7 (R-NIX-031) | R-NIX-031 cold `go build ./pkg/nixpkgs` | ≤ 15 s | [8c/15G] | not measured (Q2) |
-| §01 §1.7 (R-NIX-031) | R-NIX-031 evaluator cold compile of polyglot, delta vs. the string API (warm delta 0) | ≤ 5 s | [8c/15G] | not measured (Q2) |
-| §01 §1.7 (R-NIX-031) | R-NIX-031 gopls first workspace load of acme, delta | ≤ 3 s | [8c/15G] | not measured (Q2) |
-| §01 §1.7 (R-NIX-031) | R-NIX-031 gopls completion `nixpkgs.Op` (first item `Openssl`) | p95 ≤ 500 ms | [8c/15G] | not measured (Q2) |
-| §01 §1.7 (R-NIX-031) | R-NIX-031 evaluator binary size delta (unused handles removed by the linker) | ≤ 2 MiB | — | not measured (Q2) |
+| §01 §1.7 (R-NIX-031, ADR 0020) | R-NIX-031 generated `attrs_gen.go` source size (attribute count recorded) | ≤ 8 MiB | — | 3.20 MiB, 22 427 handles (27 259 top-level names of pin `da6dc0e7` before exclusions; vibe-engine 8c/15G arm64, load 9–12 (busy), Q2 2026-10-24) |
+| §01 §1.7 (R-NIX-031) | R-NIX-031 cold `go build ./pkg/nixpkgs` | ≤ 15 s | [8c/15G] | median 9.5 s (11.1, 9.4, 9.8, 9.3, 9.5); generated package alone 1.9–2.4 s (vibe-engine 8c/15G arm64, load 9–12 (busy), Q2 2026-10-24) |
+| §01 §1.7 (R-NIX-031) | R-NIX-031 evaluator cold compile of polyglot, delta vs. the string API (warm delta 0) | ≤ 5 s | [8c/15G] | median 2.4 s (2.4, 3.0, 2.2, 4.1, 0.9); warm delta ~0 (vibe-engine 8c/15G arm64, load 9–12 (busy), Q2 2026-10-24) |
+| §01 §1.7 (R-NIX-031) | R-NIX-031 gopls first workspace load of acme, delta | ≤ 3 s | [8c/15G] | median 0.27 s (first completion, bob.go importing nixpkgs vs not; vibe-engine 8c/15G arm64, load 9–12 (busy), Q2 2026-10-24) |
+| §01 §1.7 (R-NIX-031) | R-NIX-031 gopls completion `nixpkgs.Op` (first item `Openssl`) | p95 ≤ 500 ms | [8c/15G] | p95 159 ms at load ~12 (507 ms at load 21.7); `Openssl` offered (rank 243 of 443 for "Op", first for "Opens"; gopls orders equal prefix matches) (Q2 2026-10-24, busy) |
+| §01 §1.7 (R-NIX-031) | R-NIX-031 evaluator binary size delta (unused handles removed by the linker) | ≤ 2 MiB | — | 184 bytes unstripped (symbol table), 0 stripped; +263 KiB when `Exe` is used (vibe-engine 8c/15G arm64, load 9–12 (busy), Q2 2026-10-24) |
 
 <!-- SECTIONS -->
 
@@ -2203,7 +2203,7 @@ added by §02.
 | 1017 **new** | definition | `nixpkgs package "{attr}" cannot be evaluated on {system}` | pin another nixpkgs revision or use another package |
 | 1018 **new** | definition | `evaluating bob.go is not deterministic: {label}` | bob.go must not depend on time, randomness, environment or map order |
 | 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go |
-| 1020 **new** | definition | `{label}: invalid {option}: {reason}` | — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
+| 1020 **new** | definition | `{label}: invalid {option}: {reason}` | `{hint}` when the check names a fix (typed form or did-you-mean of an invalid nixpkgs package, slot binding, refused include/library path flag), else — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
 | 1021 **new** | definition | `{label}: toolchain mismatch: {reason}` | align the versions named above (Go/Rust/generator runtime/target glibc) |
 | 1022 **new** | definition | `{label} is not a static binary (it needs {deps})` | use tarball.Closure |
 | 1023 **new** | definition | `{package} cannot be pinned: {reason}` | — (no checksum; no nixpkgs mapping for an opam `conf-*` package) |

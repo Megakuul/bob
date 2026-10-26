@@ -124,6 +124,7 @@ BOB-E-1019 definition - exit=3
 
 BOB-E-1020 definition - exit=3
   message: {label}: invalid {option}: {reason}
+  hint:    {hint}
 
 BOB-E-1021 definition - exit=3
   message: {label}: toolchain mismatch: {reason}

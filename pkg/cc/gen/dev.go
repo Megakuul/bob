@@ -3,8 +3,11 @@ package gen
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/megakuul/bob/pkg/engine"
+	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/nixidx"
 )
 
@@ -32,7 +35,38 @@ func (Ecosystem) PrepareDev(ctx context.Context, req engine.DevRequest) (prep en
 		return prep, err
 	}
 	prep.Packages = devPackages(entries)
+	prep.Realise = includeDrvs(req)
 	return prep, nil
+}
+
+// includeDrvs are the nixpkgs derivations the C/C++ packages depend on directly (libraries such
+// as nixpkgs.Openssl.Lib(p)): compile_commands.json names their dev outputs' include
+// directories, so clangd needs them in bob's store after bob gen/bob env (R-CC-003a), not only
+// after a build that happened to realise them.
+func includeDrvs(req engine.DevRequest) []string {
+	if req.Graph == nil {
+		return nil
+	}
+	byID := map[string]*ir.Node{}
+	for _, n := range req.Graph.Nodes {
+		byID[n.ID] = n
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, n := range req.Nodes {
+		for _, d := range n.Deps {
+			dn := byID[d]
+			if dn == nil || !strings.HasPrefix(dn.Kind, "nixpkgs.") {
+				continue
+			}
+			if r, ok := req.Inputs[d]; ok && r.Drv != "" && !seen[r.Drv] {
+				seen[r.Drv] = true
+				out = append(out, r.Drv)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // devPackages are the dev shell packages of the looked-up devTools, in devTools order; a tool

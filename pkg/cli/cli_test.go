@@ -11,6 +11,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
 func TestParse(t *testing.T) {
@@ -69,7 +70,8 @@ func TestMainUsage(t *testing.T) {
 		}
 	}
 	so.Reset()
-	if got := Main([]string{"version", "--json"}, &so, &se); got != 0 || !strings.Contains(so.String(), `"event":"result","time"`) || !strings.Contains(so.String(), `"nixpkgs":"nixos-`) {
+	if got := Main([]string{"version", "--json"}, &so, &se); got != 0 || !strings.Contains(so.String(), `"event":"result","time"`) || !strings.Contains(so.String(), `"nixpkgs":"nixos-`) ||
+		!strings.Contains(so.String(), `"nixpkgsSurface":"`+nixext.SurfaceRev+`"`) {
 		t.Errorf("version --json: exit %d\n%s", got, so.String())
 	}
 }

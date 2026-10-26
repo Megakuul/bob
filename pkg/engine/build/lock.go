@@ -245,8 +245,14 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		if missing := missingSections(g, lf); len(missing) > 0 {
 			return nil, diag.New(1012, "what", missing[0]+" is not locked and --offline forbids locking it")
 		}
-	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, r.o.Offline, nil, lazyIndex(st, f, g, lf)); err != nil {
-		return nil, err
+	} else if r.o.Lock || len(missingSections(g, lf)) > 0 {
+		lg, err := r.lockGraph(ctx, st, g)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := lockEcosystems(ctx, f, lg, lf, r.o.Root, nil, false, !r.o.Lock, r.o.Offline, nil, lazyIndex(st, f, g, lf)); err != nil {
+			return nil, err
+		}
 	}
 	after, err := lf.Encode()
 	if err != nil {
@@ -263,6 +269,41 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		}
 	}
 	return lf, nil
+}
+
+// lockGraph is the graph the lock stage resolves ecosystem sections with. A section describes
+// the whole repository (bob lock resolves it from every declaration): for a build of some
+// patterns it would otherwise miss the workspace modules, crates or importers that only other
+// packages declare (a Go binary importing another workspace module of the repository, whose
+// module node is not in the target's closure). So for patterns other than the whole repository
+// it is the whole repository's graph, limited to the ecosystems g uses (a Go target does not
+// lock the repository's Rust crates).
+func (r *runner) lockGraph(ctx context.Context, st *store.Store, g *ir.Graph) (*ir.Graph, error) {
+	if wholeRepo(r.o.Patterns) {
+		return g, nil
+	}
+	o := r.o
+	o.Patterns = nil
+	whole, _, err := (&runner{o: o, transientPin: r.transientPin}).evaluate(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	used := map[string]bool{}
+	for _, n := range g.Nodes {
+		if !isCoreKind(n.Kind) {
+			name, _, _ := strings.Cut(n.Kind, ".")
+			used[name] = true
+		}
+	}
+	view := *whole
+	view.Nodes = nil
+	for _, n := range whole.Nodes {
+		name, _, _ := strings.Cut(n.Kind, ".")
+		if isCoreKind(n.Kind) || used[name] {
+			view.Nodes = append(view.Nodes, n)
+		}
+	}
+	return &view, nil
 }
 
 // ecosystemsOf returns the registered ecosystems that own nodes of g, sorted by name.

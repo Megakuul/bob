@@ -80,14 +80,33 @@ func (ev *evaluation) errorf(d *definition, format string, args ...any) {
 
 // misuse records an error of the constructor that is running. A message that starts with
 // "<file>:<line>: " (ext.Errorf's convention, from Node.DefinedAt) carries that position, and
-// a following "//<label>: " that label.
+// a following "//<label>: " that label; the column is then that package's constructor call. A
+// last line "hint: <text>" is the error's hint (BOB-E-1020 "{hint}").
 func (ev *evaluation) misuse(msg string) {
 	dg := diagnostic{msg: msg}
+	if i := strings.LastIndex(msg, "\nhint: "); i >= 0 {
+		dg.msg, dg.hint = msg[:i], strings.TrimSpace(msg[i+len("\nhint: "):])
+	}
 	if top := ev.top(); top != nil {
 		dg.defs = []*definition{top.def}
 	}
-	dg.pos, dg.label = misusePos(msg)
+	dg.pos, dg.label = misusePos(dg.msg)
+	if dg.label != "" {
+		if n := ev.nodeAt(dg.label, dg.pos); n != nil {
+			dg.col = ev.nodeColumn(n)
+		}
+	}
 	ev.diags = append(ev.diags, dg)
+}
+
+// nodeAt returns a node labelled label that was defined at pos, or nil.
+func (ev *evaluation) nodeAt(label string, pos Position) *node {
+	for _, n := range ev.nodes {
+		if n.pos == pos && n.label.String() == label {
+			return n
+		}
+	}
+	return nil
 }
 
 // misusePosRe matches the "<file>.go:<line>: " position and the optional "//<dir>:<name>: "

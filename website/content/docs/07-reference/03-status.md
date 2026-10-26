@@ -59,7 +59,8 @@ Checked end to end for this documentation, with a bob built from the current sou
 ### nixpkgs packages
 
 The typed nixpkgs packages (`nixpkgs.Openssl`, …) are generated for the nixpkgs revision bob
-was released with (`da6dc0e7b260` of `nixos-26.05` for this bob).
+was released with (`da6dc0e7b260` of `nixos-26.05` for this bob; `bob version` prints it, `bob
+version --json` as `nixpkgsSurface`).
 
 | Item | Status | Workaround |
 |---|---|---|
@@ -67,7 +68,6 @@ was released with (`da6dc0e7b260` of `nixos-26.05` for this bob).
 | package sets, aliases, broken and insecure packages, packages that fail to evaluate or exist on neither Linux system | excluded (`cmd/nixpkgsgen/exclude.json`) | use the package an alias points to; broken, insecure and failing packages have no typed handle |
 | a package newer than bob's revision | cannot be named until a newer bob | a newer bob, or an `include.json` entry |
 | another pin than bob's revision (`bob lock --update nixpkgs`, `NixpkgsRev`) | every used package is checked against the pin; a missing one is `BOB-E-1001` | move the pin back (`bob lock --nixpkgs da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36`) or use another package |
-| `bob version` printing the revision of the typed packages | not implemented yet | it is `da6dc0e7b260` (above) |
 
 ### Server
 

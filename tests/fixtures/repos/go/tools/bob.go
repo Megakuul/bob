@@ -16,6 +16,10 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 	})
 })
 
+// Stamp is the slot through which other bob.go files use the stamp binary, which is defined in
+// cmd/stamp/bob.go (a main package cannot be imported).
+var Stamp = bob.NewSlot[*golang.Binary]()
+
 // Tests runs one test unit per Go package of the module region; cmd/stamp has its own bob.go.
 var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
 	return Module(p).Tests(golang.TestOpts{Recursive: true})

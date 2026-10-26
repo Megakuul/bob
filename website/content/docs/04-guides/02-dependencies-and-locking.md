@@ -32,6 +32,9 @@ declaration, only that section becomes stale.
   versions your declarations allow.
 - `bob build` and `bob test` never change the lock. With a stale section they stop with
   `BOB-E-1012` and make no network request; `--lock` re-resolves the stale sections first.
+  A section `bob.lock` does not have yet (a new project, a first package of a language) is
+  added as `bob lock` would add it, from the declarations of the whole repository, also when
+  you build a single package.
 - Workers of a bob server and `bob install` never re-resolve: they build exactly what the
   lock says.
 
