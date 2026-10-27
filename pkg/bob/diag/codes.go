@@ -160,6 +160,7 @@ var table = []Entry{
 	{7008, one(`{bucket} bucket policy is too permissive: {reason}`, "apply the shipped policy")},
 	{7009, one(`the worker must run as root; builds themselves never run as root`, "start bob-server worker as root")},
 	{7010, one(`worker cannot isolate builds: {reason}`, "see the worker host requirements")},
+	{7011, one(`{program} cannot be started in bob's dev environment: {reason}`, "{hint}")},
 
 	// 8xxx interrupt
 	{8001, one(`build cancelled`)},

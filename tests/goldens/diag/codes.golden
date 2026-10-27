@@ -373,6 +373,10 @@ BOB-E-7010 store - exit=7
   hint:    see the worker host requirements
 
 BOB-E-8001 interrupt - exit=130
+BOB-E-7011 store - exit=7
+  message: {program} cannot be started in bob's dev environment: {reason}
+  hint:    {hint}
+
   message: build cancelled
 
 BOB-E-9001 internal - exit=70

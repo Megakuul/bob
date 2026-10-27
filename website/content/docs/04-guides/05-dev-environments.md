@@ -78,6 +78,20 @@ bob dev -- sh -c 'go vet ./... && go test ./...'
 The command is looked up in the dev shell first (its toolchains and tools), then on your own
 `PATH`, so an editor installed on your machine works too (`bob dev -- code .`).
 
+### NixOS and other hosts with a Nix store
+
+bob keeps its own `/nix` and hides your system's. On NixOS, with home-manager or with a
+`nix profile`, your shell is a link into the system's store (`/run/current-system/sw/bin/fish`,
+`~/.nix-profile/bin/zsh`), and so are `/bin/sh` and `/usr/bin/env`. So that they still work,
+`bob dev` runs your shell, the command after `--`, hooks and dev servers with the system's store
+shown read-only below bob's store. The tools of the dev shell (`go`, `gcc`, `gopls`) always
+come from bob's store, and builds never see the system's store; neither do `bob build`,
+`bob test` and the shims, even when you run them inside the dev shell.
+
+If a program still cannot be started, bob says why (`BOB-E-7011`), for example that `$SHELL`
+links into a store bob cannot show. Set `SHELL` to another program for one session:
+`SHELL=$(command -v bash) bob dev`.
+
 Dev servers: `bob.DevShell{Servers: …}` is accepted, but `bob dev` does not start servers
 yet (`--servers-only` reports `dev shell default has no dev servers`). Start them inside the
 shell yourself, for example `bob dev -- sh -c 'cd web && vite'`. (Dev servers are part of the

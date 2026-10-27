@@ -1093,3 +1093,20 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
    `nixpkgs\.\w+\.Tool` (the repository says `nixpkgs.Openssl.Tool(p)` since correction 99) instead of
    the removed `nixpkgs.Tool`. bob's output was already right: `✗ nt/bob.go:15:23: cannot use
    nixpkgs.Openssl.Tool(p) (value of type *nixext.ToolPackage) as cc.Linkable value …`. PASS.
+
+141. APPLIED 2026-10-27 E1, owner request (chat 2026-10-27: bob init's go.mod pointed at the non-existent
+   v0.0.0-dev, so gopls without bob's shim resolved nothing; "this is a clear issue of the init command"),
+   covered by the owner's blanket approval of ADR 0020-era test/fixture/golden rewrites ("by force I approve
+   everything"). SPEC §01 R-FW-043.4 and §02.7.6 amended (A550). Test changes:
+   pkg/golang/gen/root_test.go TestRootGoMod: the root go.mod now ends with
+   `replace github.com/megakuul/bob => ./.bob/framework`; new TestFrameworkTree.
+   pkg/engine/build native_root_test.go TestRootGoSumHasFramework: the root files include the framework
+   tree below .bob/framework/ (ignored when counting go.mod/go.sum). No golden changed.
+
+142. APPLIED 2026-10-27 E2, owner bug report (chat 2026-10-27: `bob dev` on NixOS, "/run/current-system/sw/bin/fish is not runnable"),
+   covered by the owner's blanket approval of golden rewrites. New diagnostic BOB-E-7011 ("{program} cannot be started in bob's
+   dev environment: {reason}", hint "{hint}", class store, exit 7): tests/goldens/diag/codes.golden gains the entry
+   (go test ./pkg/bob/diag -update; pkg/bob/diag/codes.lock +1 line), the generated error table of
+   website/content/docs/05-cli/02-errors.md gains the row (BOB_DOCS_UPDATE=1). BOB-E-0005 keeps its meaning (bob run of a package
+   that is not a binary); the old misleading use for dev start failures is gone. No existing golden line changed.
+

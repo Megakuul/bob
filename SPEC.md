@@ -2260,6 +2260,7 @@ added by §02.
 | 7008 **new** | host | `{bucket} bucket policy is too permissive: {reason}` | apply the shipped policy (§05.2.3) |
 | 7009 **new** | host | `the worker must run as root; builds themselves never run as root` | start bob-server worker as root (D56) |
 | 7010 **new** | host | `worker cannot isolate builds: {reason}` | see the worker host requirements (§05.8) |
+| 7011 **new** | host | `{program} cannot be started in bob's dev environment: {reason}` | {hint}: the program does not exist, is not executable, or links into the host's Nix store when the host store view (§02.7.7 step 6) is unavailable (A551) |
 | 8001 | interrupt | `build cancelled` | — |
 | 9001 | internal | `bob's builder for {label} is broken: {reason}` | this is a bob bug; please report it with bob log {label} |
 | 9002 | internal | `{label} did not produce its output` | this is a bob bug; please report it with bob log {label} |
@@ -3080,6 +3081,13 @@ Steps:
      atomically, and restart the affected servers;
    - if `inside` changed, print once: `bob: dev environment changed; exit and run bob dev again
      to use it`.
+   The shell, the command, the hooks and the dev servers run in a second mount namespace in which
+   `/nix/store` is a read-only overlay of bob's store over the host's own (A551): on NixOS,
+   home-manager and nix-profile hosts `$SHELL`, `/bin/sh`, `/usr/bin/env` and the profile links
+   are links into the host's store, which bob's namespace otherwise hides. The dev shell's tools
+   still come from bob's store (it wins in the overlay). Builds, Nix and shims never see the
+   host store, and a `bob` started in the dev shell enters its own clean namespace. A program that
+   cannot be started is `BOB-E-7011` with the cause.
    A server that exits on its own → `BOB-E-2012` warning on stderr; it is not restarted.
 8. When the shell or command exits: stop the servers (SIGTERM, then SIGKILL after 5 s) and exit
    with the shell's/command's exit status.
