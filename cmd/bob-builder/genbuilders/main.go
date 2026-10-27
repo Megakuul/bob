@@ -77,6 +77,9 @@ func run(check bool, base string) error {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("go build bob-builder (%s): %w: %s", s.goarch, err, out)
 		}
+		if err := scrubFile(bin); err != nil {
+			return err
+		}
 		if err := os.Chmod(bin, 0o755); err != nil {
 			return err
 		}
@@ -121,6 +124,35 @@ func run(check bool, base string) error {
 		}
 	}
 	return checkTables(string(formatted), string(working), string(committed))
+}
+
+// storeRef matches a store path with its hash, as nixpkgs' Go patches them into the binary
+// (time's zoneinfo directory in tzdata, net's services and protocols files in iana-etc).
+var storeRef = regexp.MustCompile(`/nix/store/[0-9a-df-np-sv-z]{32}-`)
+
+// scrubStoreRefs replaces the hash of every store path in b by zeros (same length). Those
+// hashes depend on the architecture of the host that built the Go toolchain, so the same
+// sources built on an aarch64 and on an x86_64 host differ only there; without the scrub the
+// table of one host never equals the table of another (a CI runner would reject the committed
+// table). The builder never opens those paths: it runs in a namespace without them.
+func scrubStoreRefs(b []byte) []byte {
+	const prefix = len("/nix/store/")
+	return storeRef.ReplaceAllFunc(b, func(m []byte) []byte {
+		out := bytes.Clone(m)
+		for i := prefix; i < prefix+32; i++ {
+			out[i] = '0'
+		}
+		return out
+	})
+}
+
+// scrubFile applies scrubStoreRefs to the file in place.
+func scrubFile(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, scrubStoreRefs(b), 0o755)
 }
 
 // tableCase is the switch case of one system. The store hash is written with a "." after its

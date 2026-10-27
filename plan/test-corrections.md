@@ -1124,3 +1124,6 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
     paragraph (A561): programs of the user's session run as the user, not as the namespace's root. No test, golden
     or protected file changed; new tests pkg/engine/store/hostview_test.go TestHostStoreView (uid/gid/file owner in the
     session) and TestExecRunsAsUser.
+144. APPLIED 2026-10-27 CI1, owner request (chat 2026-10-27: pipelines fail): BuilderVersion 18 -> 19 (A562): the four
+    tests/goldens/eco/cc/jobs/*.json hold the builder store path (aarch64 5lpg8a0v... -> 9mzv0wvh...); no test logic changed.
+    New tests: cmd/bob-builder/genbuilders/scrub_test.go, tools/ci/progress_test.go.

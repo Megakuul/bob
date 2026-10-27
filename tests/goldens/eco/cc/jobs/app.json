@@ -46,7 +46,7 @@
     "debugOut": false,
     "forbidden": [
       "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0",
-      "/nix/store/5lpg8a0vjws6pvnw19kia252za631b0f-bob-builder-18",
+      "/nix/store/9mzv0wvh53ir4jdpfa4hs6kys3bm7y9x-bob-builder-19",
       "/nix/store/bi39a27ykprjqgrxp7ls2fg5py225zg3-app-app-src",
       "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2",
       "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46"
