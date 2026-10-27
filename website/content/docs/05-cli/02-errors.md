@@ -115,6 +115,7 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-7008 | store | 7 | `{bucket} bucket policy is too permissive: {reason}` | `apply the shipped policy` |
 | BOB-E-7009 | store | 7 | `the worker must run as root; builds themselves never run as root` | `start bob-server worker as root` |
 | BOB-E-7010 | store | 7 | `worker cannot isolate builds: {reason}` | `see the worker host requirements` |
+| BOB-E-7011 | store | 7 | `{program} cannot be started in bob's dev environment: {reason}` | `{hint}` |
 | BOB-E-8001 | interrupt | 130 | `build cancelled` | — |
 | BOB-E-9001 | internal | 70 | `bob's builder for {label} is broken: {reason}` | `this is a bob bug; please report it with bob log {label}` |
 | BOB-E-9002 | internal | 70 | `{label} did not produce its output` | `this is a bob bug; please report it with bob log {label}` |

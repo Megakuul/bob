@@ -76,7 +76,7 @@ func startServer(root string, env []string, s devenv.Server, fg io.Writer, ready
 	}
 	cmd.Stdout, cmd.Stderr = pw, pw
 	d := &devServer{spec: s, root: root, cmd: cmd, log: log, done: make(chan struct{})}
-	if err := cmd.Start(); err != nil {
+	if err := startDev(cmd); err != nil {
 		pw.Close()
 		pr.Close()
 		log.Close()

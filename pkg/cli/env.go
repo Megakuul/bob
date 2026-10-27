@@ -23,6 +23,13 @@ func bobVersion() string { return eval.BobVersion() }
 
 // isTerminal reports whether w is a terminal (TCGETS succeeds on its descriptor).
 func isTerminal(w io.Writer) bool {
+	for {
+		u, ok := w.(interface{ Underlying() io.Writer })
+		if !ok {
+			break
+		}
+		w = u.Underlying()
+	}
 	f, ok := w.(*os.File)
 	if !ok {
 		return false

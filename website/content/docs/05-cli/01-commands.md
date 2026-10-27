@@ -463,6 +463,30 @@ bob version [--json]
 Prints bob's version, the Nix version, the default nixpkgs channel and the nixpkgs revision the
 typed nixpkgs packages were generated from (`nixpkgsSurface` in `--json`).
 
+## Progress line
+
+Some steps take a while: the first run unpacks Nix, a new project fetches its toolchain, and
+`bob lock` asks the registries. When such a step runs longer than about half a second and
+stderr is a terminal, bob shows one line that updates in place:
+
+```text
+⠹ fetching or building go-1.26.8 · 7s
+```
+
+The line names what bob is doing (a spinner, the step, how long it has taken), is erased before
+bob prints anything else, and is gone when the command ends. In a build it shows
+`[3/8] building //cmd/hello:hello` for the packages that are running.
+
+bob draws it only when it is useful, so scripts and logs never see it:
+
+- stderr is not a terminal (a pipe, a file, a CI log);
+- `TERM=dumb` or no `TERM`, or the `CI` variable is set;
+- `--json`, `-q` or `-vv` is given;
+- the command's output is read by a program (`bob env`, `bob hook`, `bob exec`, `bob completion`);
+- `BOB_PROGRESS=0` is set.
+
+`NO_COLOR` switches the spinner to plain ASCII (`| / - \`).
+
 ## Exit codes
 
 The exit status tells you who has to act. With several errors, the highest-priority class
@@ -519,6 +543,7 @@ Variables you set:
 | `BOB_HOME` | bob's state directory (default `~/.local/share/bob`) |
 | `BOB_COLOR` | `always` forces colour (like `--color=always`); `NO_COLOR` still wins |
 | `NO_COLOR` | any value turns colour off |
+| `BOB_PROGRESS` | `0` turns off the [progress line](#progress-line) |
 | `BOB_TOKEN` | a server token to use instead of the stored login (CI) |
 | `BOB_SERVER` | the server to use when none is given |
 | `BOB_SERVER_PROJECT` | the server project for `--remote` (default: the repository directory's name) |

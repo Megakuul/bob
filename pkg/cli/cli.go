@@ -145,6 +145,8 @@ func Main(args []string, stdout, stderr io.Writer) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	ctx, stopLive := o.attachLive(ctx, os.Getenv)
+	defer stopLive()
 	e := &env{ctx: ctx, out: o, a: a, cmd: cmd, getenv: os.Getenv}
 	cwd, err := os.Getwd()
 	if err != nil {

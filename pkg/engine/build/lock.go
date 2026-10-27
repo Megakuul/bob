@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/bob/progress"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/fetch"
@@ -339,6 +340,7 @@ func lazyIndex(st *store.Store, f fetch.Fetcher, g *ir.Graph, lf *lock.File) fun
 	return func(ctx context.Context) (*nixidx.Index, error) {
 		if !opened {
 			opened = true
+			defer progress.Phase(ctx, "indexing nixpkgs")()
 			idx, err = nativeIndex(ctx, nil, st, f, g, lf)
 		}
 		return idx, err
@@ -380,7 +382,9 @@ func lockEcosystems(ctx context.Context, f fetch.Fetcher, g *ir.Graph, lf *lock.
 				return nil, err
 			}
 		}
+		endPhase := progress.Phase(ctx, "locking %s dependencies", name)
 		sec, err := e.Lock(ctx, engine.LockRequest{Graph: g, Prev: lf.Sections[name], Update: upd, Fetch: f, Nixpkgs: idx, Root: root, Note: note})
+		endPhase()
 		if err != nil {
 			return nil, err
 		}

@@ -61,7 +61,11 @@ func runDev(e *env) int {
 		c := exec.CommandContext(e.ctx, "/bin/sh", "-c", h)
 		c.Dir, c.Env = root, env
 		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-		if err := c.Run(); err != nil {
+		err := startDev(c)
+		if err == nil {
+			err = c.Wait()
+		}
+		if err != nil {
 			status := "failed"
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
@@ -226,10 +230,8 @@ func (s *session) run(argv []string) int {
 	sigs := make(chan os.Signal, 2)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(sigs)
-	if err := c.Start(); err != nil {
-		d := diag.New(5, "label", argv[0])
-		d.Raw = []string{err.Error()}
-		return s.e.out.fail(d)
+	if err := startDev(c); err != nil {
+		return s.e.out.fail(devStartError(argv[0], err))
 	}
 	s.e.out.finished = true // bob dev's status is the command's
 	waited := make(chan error, 1)

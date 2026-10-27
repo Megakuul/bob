@@ -68,6 +68,9 @@ func nsChild(a []string) {
 		fmt.Fprintf(os.Stderr, "bob: namespace setup: %v\n", err)
 		syscall.Exit(code) // the child has run no bob code yet; there is nothing to clean up
 	}
+	if len(a) >= 3 && a[2] == modeHostView {
+		hostViewChild(a) // does not return
+	}
 	if len(a) < 3 {
 		fail("setup", 126, errors.New("bad arguments"))
 	}
@@ -128,6 +131,8 @@ func setupNamespace(home string) error {
 	cwd, _ := os.Getwd()
 	store := filepath.Join(home, "nix")
 	if fi, err := os.Stat("/nix"); err == nil && fi.IsDir() {
+		// The dev shell's host store view (A551) needs the host's /nix after it is covered.
+		keepHostNix(home)
 		// /etc links into the host store (NixOS) must resolve after /nix is covered (A470).
 		if err := mirrorEtc("/etc", filepath.Join(home, "nsetc"), "/nix"); err != nil {
 			return err
@@ -224,7 +229,16 @@ func inNamespace(home string) bool {
 	if syscall.Stat("/nix", &a) != nil || syscall.Stat(filepath.Join(home, "nix"), &b) != nil {
 		return false
 	}
-	return a.Dev == b.Dev && a.Ino == b.Ino
+	if a.Dev != b.Dev || a.Ino != b.Ino {
+		return false
+	}
+	// A dev session's host store view (hostview.go) puts an overlay on /nix/store: a bob started
+	// there is not in the namespace of builds and enters its own, in which the host's store is
+	// hidden again.
+	if syscall.Stat("/nix/store", &a) == nil && syscall.Stat(filepath.Join(home, "nix", "store"), &b) == nil {
+		return a.Dev == b.Dev && a.Ino == b.Ino
+	}
+	return true
 }
 
 // prepareNamespace configures cmd to start in a new namespace for home with the child arguments
@@ -407,4 +421,39 @@ func nobodyMapped() bool {
 		}
 	}
 	return true
+}
+
+// hostViewChild is the child of StartHost: a fresh mount namespace of the dev command. It mounts
+// the overlay (a failure is only reported: the program then runs without the host store, which
+// is what it did before) and executes the program.
+func hostViewChild(a []string) {
+	status := os.NewFile(statusFD, "bob-hostview-status")
+	fail := func(err error) {
+		var errno syscall.Errno
+		errors.As(err, &errno)
+		if status != nil {
+			fmt.Fprintf(status, "!%d %v", int(errno), err)
+		}
+		syscall.Exit(127)
+	}
+	if len(a) < 5 {
+		fail(errors.New("bad arguments"))
+	}
+	home, path, argv := a[0], a[3], a[4:]
+	if err := mountHostView(home); err != nil {
+		fmt.Fprintf(os.Stderr, "bob: the host Nix store is not available here: %v\n", err)
+	}
+	syscall.CloseOnExec(statusFD)
+	if !strings.Contains(path, "/") {
+		p, err := exec.LookPath(path)
+		if err != nil {
+			fail(err)
+		}
+		path = p
+	}
+	if _, err := os.Stat(path); err != nil {
+		fail(err)
+	}
+	err := syscall.Exec(path, argv, os.Environ())
+	fail(fmt.Errorf("exec %s: %w", path, err))
 }

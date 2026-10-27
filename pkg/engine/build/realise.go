@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/megakuul/bob/pkg/bob/progress"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/build/testrun"
 	"github.com/megakuul/bob/pkg/engine/drv"
@@ -32,6 +33,7 @@ func (r *runner) substitute(ctx context.Context, st *store.Store, p *planner, ex
 	if len(r.o.Caches) == 0 || r.o.Offline {
 		return nil
 	}
+	defer progress.Phase(ctx, "checking binary caches")()
 	outs := append([]string(nil), extra...) // test results of the selected units
 	for _, d := range p.drvs {
 		for _, o := range d.Outputs {

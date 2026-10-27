@@ -108,3 +108,4 @@
 1028 definition outside args=dir,label,pattern,pos hint=-
 1028 definition subpackage args=label,pattern,pos,sub hint=sub
 1029 definition - args=dir,ecosystem,kind,label,other,pos,pos2 hint=label
+7011 store - args=program,reason hint=hint

@@ -246,6 +246,7 @@ added by §02.
 | 7004 | store | `bob's cache database is busy` | another bob process is using the same state directory |
 | 7005 **new** | host | `bob cannot create its private /nix: unprivileged user namespaces are blocked on this system` (+ `cause:` line; block of §01 R-NIX-022) | `fix (run once as an administrator):` + the exact fix of §01 R-NIX-022 / ADR 0002 Decision 4 |
 | 7006 **new** | host | `shim {shim} belongs to {root}, which has no bob environment` | run bob env in {root}, or delete {shim} |
+| 7011 **new** | host | `{program} cannot be started in bob's dev environment: {reason}` | {hint}: the program does not exist, is not executable, or links into the host's Nix store when the host store view (§02.7.7 step 6) is unavailable (A551) |
 | 7007 **new** | host | `storage backend {endpoint} is not supported: {reason}` | bob-server needs an S3 backend with conditional writes (D63) |
 | 7008 **new** | host | `{bucket} bucket policy is too permissive: {reason}` | apply the shipped policy (§05.2.3) |
 | 7009 **new** | host | `the worker must run as root; builds themselves never run as root` | start bob-server worker as root (D56) |
@@ -1066,6 +1067,13 @@ Steps:
 6. Start `$SHELL` (else `/bin/sh`) interactively, or `cmd args` after `--`. The user's rc files
    run normally; bob does not touch `PS1`. Prompt integration is left to the user (`BOB_DEV_SHELL`).
 7. While the shell runs, watch `bob.go`, `bob.lock` and the §01 eval-key inputs (inotify):
+   The shell, the command, the hooks and the dev servers run in a second mount namespace in which
+   `/nix/store` is a read-only overlay of bob's store over the host's own (A551): on NixOS,
+   home-manager and nix-profile hosts `$SHELL`, `/bin/sh`, `/usr/bin/env` and the profile links
+   are links into the host's store, which bob's namespace otherwise hides. The dev shell's tools
+   still come from bob's store (it wins in the overlay). Builds, Nix and shims never see the
+   host store, and a `bob` started in the dev shell enters its own clean namespace. A program that
+   cannot be started is `BOB-E-7011` with the cause.
    - on a dependency change, re-lock if needed, re-prepare the tree, swap `node_modules`
      atomically, and restart the affected servers;
    - if `inside` changed, print once: `bob: dev environment changed; exit and run bob dev again
