@@ -1,0 +1,63 @@
+# The full check, nightly and on demand (A563, plan/progress/CI1.md): everything ci.yml leaves
+# out to stay fast. Each architecture builds natively on its own runner.
+#
+#   nix flake check   bob, bob-server (with the web UI) and the hermetic unit tests for the
+#                     runner's system; the other system is evaluated only
+#   store tests       the flake variant against its real static Nix, then bob doctor
+#   tools/ci          every static stage, including web and website
+name: full
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    name: full (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            system: x86_64-linux
+          - runner: ubuntu-24.04-arm
+            system: aarch64-linux
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: nix flake check
+        run: nix flake check -L
+      - name: nix build .#default
+        run: nix build -L .#default && ./result/bin/bob version
+      # bob's rootless store needs unprivileged user namespaces, which Ubuntu 24.04 restricts
+      # with AppArmor (BOB-E-7005 prints this fix).
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The flake variant against its real static Nix: copy into the state home, namespace,
+      # bob's nix.conf (pkg/engine/store/nixsystem_test.go).
+      - name: Store tests of the flake variant
+        run: |
+          nix_static=$(nix build --no-link --print-out-paths .#bob.nixStatic)
+          export BOB_TEST_SYSTEM_NIX="$nix_static/bin/nix"
+          nix develop --command go test -count=1 -tags nixsystem ./pkg/engine/store \
+            -run 'TestParseNixVersion|TestSystemNix|TestNixVersion|TestOpenLayoutAndOnlyStat'
+      - name: bob doctor (flake variant)
+        run: BOB_HOME="$RUNNER_TEMP/bobhome" ./result/bin/bob doctor
+      - name: go run ./tools/ci
+        run: nix develop --command go run ./tools/ci -only docs,fmt,vet,lint,layering,licence,builder,golden,workflows,web,website

@@ -54,17 +54,18 @@ jobs:
       - name: Build the AppImage (bob build //:bob)
         env:
           BOB_HOME: ${{ runner.temp }}/bobhome
+          ARCH: ${{ matrix.arch }}
         run: |
           "$BOB" build //:bob --print-paths | tee "$RUNNER_TEMP/build.out"
           out=$(sed -n 's|^//:bob \(/.*\)$|\1|p' "$RUNNER_TEMP/build.out" | tail -n 1)
           test -n "$out"
           mkdir -p dist
-          # The output lives in bob's private store; read it from inside bob's namespace.
-          "$BOB" exec /bin/sh -c 'cp "$1/bob-$2.AppImage" "$3/"' sh "$out" "${{ matrix.arch }}" "$PWD/dist" \
-            || cp "$out/bob-${{ matrix.arch }}.AppImage" dist/
-          chmod 0755 "dist/bob-${{ matrix.arch }}.AppImage"
-          ./dist/bob-${{ matrix.arch }}.AppImage version
-          cd dist && sha256sum "bob-${{ matrix.arch }}.AppImage" > "bob-${{ matrix.arch }}.AppImage.sha256"
+          # The output lives in bob's private store, which is a plain directory of the runner.
+          cp "$out/bob-$ARCH.AppImage" dist/
+          chmod 0755 "dist/bob-$ARCH.AppImage"
+          "./dist/bob-$ARCH.AppImage" version
+          cd dist
+          sha256sum "bob-$ARCH.AppImage" > "bob-$ARCH.AppImage.sha256"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bob-${{ matrix.arch }}
