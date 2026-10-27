@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -185,10 +186,36 @@ type sink struct {
 	done    int
 	current string
 	drawn   time.Time
+	phases  map[string]func() // live status line: the running packages' phases
+	phaseMu sync.Mutex
 }
 
 func newSink(o *out) *sink {
-	return &sink{o: o, live: !o.json && !o.quiet && isTerminal(o.errw) && os.Getenv("TERM") != "dumb"}
+	return &sink{o: o, live: o.phase == nil && !o.json && !o.quiet && isTerminal(o.errw) && os.Getenv("TERM") != "dumb"}
+}
+
+// line reports the progress of packages to the live status line (liveline.go): one phase per
+// running package, "[done/total] building //label".
+func (s *sink) line(ev build.Event) {
+	s.phaseMu.Lock()
+	defer s.phaseMu.Unlock()
+	switch ev.Event {
+	case "run.start":
+		s.total = len(ev.Requested)
+	case "package.start":
+		if s.phases == nil {
+			s.phases = map[string]func(){}
+		}
+		if _, ok := s.phases[ev.Label]; !ok {
+			s.phases[ev.Label] = s.o.phase(fmt.Sprintf("[%d/%d] building %s", s.done, max(s.total, s.done+1), ev.Label), false)
+		}
+	case "package.finish":
+		s.done++
+		if end, ok := s.phases[ev.Label]; ok {
+			end()
+			delete(s.phases, ev.Label)
+		}
+	}
 }
 
 // status redraws the live status line on stderr, at most 10 times a second.
@@ -212,6 +239,12 @@ func (s *sink) status(ev build.Event) {
 
 // clear removes the live status line before other output.
 func (s *sink) clear() {
+	s.phaseMu.Lock()
+	defer s.phaseMu.Unlock()
+	for l, end := range s.phases {
+		end()
+		delete(s.phases, l)
+	}
 	if s.live && !s.drawn.IsZero() {
 		fmt.Fprint(s.o.errw, "\r\x1b[K")
 	}
@@ -230,6 +263,8 @@ func (s *sink) put(ev build.Event) {
 		}
 		if s.live {
 			s.status(ev)
+		} else if s.o.phase != nil {
+			s.line(ev)
 		}
 		return
 	}

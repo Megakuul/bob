@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/bob/progress"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/fetch"
@@ -144,6 +145,7 @@ func (p *planner) planEcosystem(ctx context.Context, name string, nodes []*ir.No
 	if !ok {
 		return internalf(nodes[0].Label, "no ecosystem plans kind %s", nodes[0].Kind)
 	}
+	defer progress.Detail(ctx, "planning %s packages", name)()
 	defer func() { // an ecosystem bug must not crash bob
 		if v := recover(); v != nil {
 			err = internalf(nodes[0].Label, "ecosystem %s panicked: %v", name, v)
@@ -540,6 +542,7 @@ func (s planStore) Ensure(ctx context.Context, r fetch.Request) (string, error) 
 	if s.f == nil {
 		return "", fmt.Errorf("fetch %s: no fetcher while planning", r.Label)
 	}
+	defer progress.Phase(ctx, "fetching %s", r.Label)()
 	return s.f.Ensure(ctx, r)
 }
 

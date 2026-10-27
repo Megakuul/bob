@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/megakuul/bob/pkg/bob/progress"
 	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 	"github.com/megakuul/bob/pkg/engine/ir"
@@ -75,12 +76,16 @@ func evaluate(ctx context.Context, st *store.Store, o Options) (*ir.Graph, *eval
 func (r *runner) evaluate(ctx context.Context, st *store.Store) (*ir.Graph, *eval.Result, error) {
 	o := r.o
 	t := time.Now()
+	endPhase := progress.Detail(ctx, "preparing the Go toolchain")
 	goRoot, err := r.evalGoRoot(ctx, st, fetch.New(st, fetch.Policy{}))
+	endPhase()
 	if err != nil {
 		return nil, nil, err
 	}
 	req := evalRequest(o, goRoot)
+	endPhase = progress.Phase(ctx, "evaluating bob.go files")
 	res, err := eval.Evaluate(ctx, req)
+	endPhase()
 	if err != nil {
 		return nil, nil, err
 	}

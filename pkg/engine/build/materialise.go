@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/bob/progress"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/ir"
 	"github.com/megakuul/bob/pkg/engine/materialise"
@@ -24,6 +25,7 @@ func (r *runner) materialise(ctx context.Context, st *store.Store, p *planner, r
 	if r.o.Untrusted || r.o.NoMaterialise {
 		return nil
 	}
+	defer progress.Phase(ctx, "writing outputs into the working tree")()
 	set := uniqueMaterialisations(p.materialise)
 	if r.o.Command == CmdGen {
 		set = r.genSet(p.g, p)

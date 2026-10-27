@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/bob/progress"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/eval"
 	"github.com/megakuul/bob/pkg/engine/fetch"
@@ -74,6 +75,7 @@ func dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 		return nil, errors.New("build: Options.Root is empty")
 	}
 	o.Patterns, o.Platform, o.Variants = nil, "", nil
+	defer progress.Detail(ctx, "preparing the dev shell")()
 	st, err := openStore(ctx, o.Store, o.Home, o.Caches)
 	if err != nil {
 		return nil, err
@@ -294,6 +296,7 @@ func prepareDev(ctx context.Context, dp engine.DevPreparer, name string, req eng
 			err = internalf("//...", "ecosystem %s panicked preparing the dev shell: %v", name, v)
 		}
 	}()
+	defer progress.Detail(ctx, "preparing %s tools", name)()
 	prep, err = dp.PrepareDev(ctx, req)
 	if err != nil {
 		if _, ok := diagErrors(err); ok {

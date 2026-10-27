@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/bob/progress"
 )
 
 // Substituter is a binary cache bob passes to Nix.
@@ -240,6 +241,7 @@ func Open(ctx context.Context, c Config) (*Store, error) {
 		if err := writeConfig(home, c.Substituters); err != nil {
 			return "", err
 		}
+		defer progress.Phase(ctx, "unpacking Nix (first run only)")()
 		return extractNix(ctx, home)
 	}()
 	if err != nil {
@@ -322,6 +324,7 @@ type Cmd struct {
 	ctx  context.Context
 	name string
 	cmd  *exec.Cmd
+	end  func() // ends the live status line's phase of a Nix command
 }
 
 // Command returns the command name with args, to be run inside bob's namespace.
@@ -357,6 +360,17 @@ func (c *Cmd) Start() error {
 	if !readOnly(c.name, c.Args) {
 		c.s.changing()
 	}
+	if !strings.Contains(c.name, "/") { // Nix itself, not a store binary of bob exec or bob dev
+		c.end = progress.Detail(c.ctx, "%s", phaseText(c.name, c.Args))
+	}
+	err := c.start(cmd, argv0)
+	if err != nil && c.end != nil {
+		c.end()
+	}
+	return err
+}
+
+func (c *Cmd) start(cmd *exec.Cmd, argv0 string) error {
 	if c.s.inside {
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("store: start %s: %w", argv0, err)
@@ -375,6 +389,9 @@ func (c *Cmd) Start() error {
 func (c *Cmd) Wait() error {
 	if c.cmd == nil {
 		return errors.New("store: command not started")
+	}
+	if c.end != nil {
+		defer c.end()
 	}
 	if err := c.cmd.Wait(); err != nil {
 		return fmt.Errorf("store: %s: %w", filepath.Base(c.name), err)
