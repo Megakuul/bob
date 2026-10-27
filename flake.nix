@@ -44,6 +44,8 @@
         fileset = fs.difference (fs.unions [
           ./go.mod
           ./go.sum
+          # The root package (bob's own build definitions): cmd/*/bob.go import it as a slot.
+          ./bob.go
           ./cmd
           ./pkg
           ./internal
