@@ -77,7 +77,15 @@ func (Ecosystem) Native(_ context.Context, req engine.PlanRequest) ([]engine.Gen
 				local = append(local, localModule{path: dp, dir: replaceDir(m.dir, d.dir)})
 			}
 		}
-		out = append(out, goModFiles(m, pl.lock, declared, local)...)
+		var bob bobRequirements
+		if m.dir == "" {
+			// The root module's go.mod is the root go.mod: it also carries the requirements of
+			// the bob.go files (R-FW-043.4, R-FW-022), as RootGoMod writes them without one.
+			if bob, err = rootBobRequirements(req.Graph, req.Root, m.spec.Path, req.FrameworkSum); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, goModFiles(m, pl.lock, declared, local, bob)...)
 	}
 	return out, nil
 }

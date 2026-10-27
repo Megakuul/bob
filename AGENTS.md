@@ -152,6 +152,14 @@ task done unless the CI command passed. Label measurements with machine and cond
   that needs no docs carries `docs-exempt: <reason>` in the commit message or its progress
   file / `plan/decisions.md` row.
 
+### 5.10 Typed surface and per-package modules are non-negotiable (owner D71/D72, ADR 0020)
+- No public API takes a string that names a package, nixpkgs attribute, target, tool or library:
+  nixpkgs is the generated typed surface (`nixpkgs.Openssl.Lib(p)`), registry names are written
+  once in a declaration constructor and referenced by handle. Every `bob.go` describes only its
+  own directory (no `..`, no subpackage files, no central source lists), one library/binary per
+  directory package. Guards: HARNESS.md §18 (`tests/core/typesafe_test.go` allowlist is
+  owner-protected; never move a violation into it).
+
 ---
 
 ## 6. Harness requirements (designed in `HARNESS.md`, built in Phase 3.1)

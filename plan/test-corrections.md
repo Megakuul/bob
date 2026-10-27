@@ -931,3 +931,165 @@ explained), T9 (polyglot has no nixpkgs.Tool("protobuf"): fixture decision), RFW
    with column, hint, exit 1. Result: TestRNIX017BuilderExitCodesInRealRuns/54 PASS (with 94b, 95).
 Not applied: fault 74 capture (needs an owner-approved golden; candidate in
 out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixture design, I-B45.md).
+97. APPLIED 2026-10-24 N2 (A451). tests/docs/docs_test.go TestSnippetsTypeCheck: a page whose
+   project has bob.go files but no `file=go.mod` block is type-checked with the module path bob
+   gives a new repository (helper newRepoModule: an import "<module>/<dir>" of another bob.go
+   directory, else any path) instead of failing "no file=go.mod block with a module line". The
+   test encoded the documented workaround of the first-run blocker "a new repository needs a
+   hand-written go.mod" (W2 status page; SPEC R-FW-002 "the bob-generated root go.mod",
+   §03.2.5, R-FW-022, §02 open item 11: bob writes the root go.mod). N2 fixed the blocker
+   (pkg/engine/eval: no root go.mod → evaluation with the inferred module, an overlay go.mod for
+   go build -modfile) and removed the hand-written go.mod blocks from the quickstarts and
+   guides 03/06. A page that has a go.mod block is checked as before (a block without a module
+   line still fails). Result: tests/docs PASS.
+98. APPLIED 2026-10-24 Q1 (A480), owner approved all, chat 2026-10-24 (D71/D72, ADR 0020).
+   tests/fixtures/repos/* migrated to the typed surface and per-package modules:
+   `Nixpkgs: bob.NixOS2605` in every root; nixpkgs handles (`nixpkgs.Openssl.Lib(p, …)`,
+   `nixpkgs.Jq.Tool(p)`, `nixpkgs.Bash/Coreutils/Zlib…`); `Hdrs`/`Headers: bob.IncludeDir("include")`;
+   Go declarations moved into the Go package's own bob.go without directory strings
+   (acme/cmd/api, polyglot/cmd/api (new), bigclosure/cmd/big (new), go/api/cmd/api (new),
+   go/api/internal/ffi (new), go/tools/cmd/stamp (new), codegen/svc/cmd/{server,client} (new));
+   module roots use `Tests(golang.TestOpts{Recursive: true})`; main-package binaries reach
+   deploy/ through `bob.Slot` (acme.API, polyglot.API, bigclosure.Big) so every label and release
+   name stays; cpp-lib's binary moved to cpp-lib/tool/bob.go (label //tool:ringtool, was
+   //:ringtool); npm native: `npm.AllowScripts(sqlite, esbuild)` with handles; pipelines
+   `Releases: []bob.Pattern{"//deploy:api"}` / `{"//deploy:polyglot"}`. acme LSP script: steps
+   `complete libs/foo/bob.go "nixpkgs.Op"` and `hover libs/foo/bob.go "nixpkgs.Openssl"`.
+   Result: TestRFW070FixtureLocality PASS; fixtures evaluate again once Q2/Q3 land (red until then).
+99. APPLIED 2026-10-24 Q1 (A481), owner approved all, chat 2026-10-24. Test repositories and
+   embedded bob.go sources migrated the same way: tests/core/testdata/repos (svc: cmd/sleeper/bob.go
+   + slot `svc.Sleeper`, `postgres.Options{Server: nixpkgs.Postgresql17}`; typecheck/linkable without
+   the dir string; nixtool keeps its intentional type error as `nixpkgs.Openssl.Tool(p)`),
+   tests/cli/testdata/repos (pipe/app/bob.go, exits/tools/<prog>/bob.go), tests/devenv/testdata/repos,
+   and the bob.go strings in tests/eco/{golang,rust,npm,cc,ocaml}, tests/core/steps_test.go,
+   tests/nix/{closure,layer,namespace}_test.go, tests/rootless, tests/outputs/overlays_test.go
+   (`nixpkgs.Curl.Exe(p, nixpkgs.MainProgram("bin/curl"))`), tests/server/srvtest,
+   tests/fixtures/evil. tests/eco/rust uses `nixpkgs.Rust1_97PackagesStableRustc` (include.json
+   entry, ADR 0020 §2); tests/eco/npm/scripts_test.go expects the handle wording of 2013;
+   tests/nix/layer_test.go TestRNIX005 writes `Nixpkgs: bob.NixOS2605, NixpkgsRev: "<rev>"`.
+100. APPLIED 2026-10-24 Q1 (A482), owner approved all, chat 2026-10-24. Fault patches refreshed
+   for the migrated fixtures (context lines only, same faults): 54, 60, 61, 62, 63, 64, 65, 66
+   (`acme.Module(p).Tests(golang.TestOpts{…})`, `bob.IncludeDir`, `nixpkgs.Openssl.Lib`,
+   `npm.AllowScripts(sqlite, esbuild)`). All 14 patch faults checked with `git apply --check`
+   against a private copy of the fixture.
+101. APPLIED 2026-10-24 Q1 (A483), owner approved all, chat 2026-10-24. New faults 82–92
+   (fault.json, patch.diff or env hook, expect.json rows; expect.json now sorted by key):
+   82 source outside package (1028), 83 root lists subpackage sources (1028), 84 two cc units in
+   one package (1029), 85 `-I` of another package (1020), 86 string nixpkgs attribute (1020 +
+   typed hint), 87 misspelt handle (1020 + did-you-mean), 88 nixext import (1024 R7), 89 assignment
+   to a framework value (1024 R8), 90 handle missing at the pin (1001 `pin`, hook
+   `BOB_TEST_NIXPKGS_MISSING`), 91 public headers outside the package (1028), 92 unbound slot (1020).
+   tests/faults/README.md range updated. Red until Q2/Q3 implement the checks.
+102. APPLIED 2026-10-24 Q1 (A484), owner approved all, chat 2026-10-24. Code table (SPEC §02.3):
+   1001 variant `pin`, 1024 variant `R8`, new 1028 (`outside`, `subpackage`) and 1029 (1027 stays
+   reserved for the I-B32 proposal); 2013/2014 hints name handles instead of strings.
+   pkg/bob/diag/codes.go (data only), codes.lock (5 lines appended), tests/goldens/diag/codes.golden
+   regenerated (`go test ./pkg/bob/diag -update`), website 05-cli/02-errors.md regenerated
+   (`BOB_DOCS_UPDATE=1`). Diffs in out/golden-candidates/q1/.
+103. APPLIED 2026-10-24 Q1 (A485), owner approved all, chat 2026-10-24. New guards:
+   tests/core/typesafe_test.go (TestRFW072TypedSurface with the protected allowlist and violation
+   list, TestRNIX031GeneratedSurface, TestRFW070FixtureLocality, TestBoblintCatchesViolations,
+   TestRFW070GlobStopsAtSubpackage, TestRFW071Slots), tests/harness/boblint (shared go/ast
+   linter), tests/docs/locality_test.go (TestDocsPackageLocality, waits for the surface),
+   tests/core/bobgo_test.go (R-FW-002 cases r7nixext and r8, LSP nixpkgs completion/hover
+   checks), test repositories define/slot, define/slot2, rules/r7nixext, rules/r8.
+104. APPLIED 2026-10-24 Q1 (A486), owner approved all, chat 2026-10-24. Budgets B-098…B-103 for
+   the generated surface (SPEC Appendix B, status proposal, no benchmark yet);
+   tests/budgets/budgets.json regenerated by tools/internal/budgets (`go test -update`), whose
+   row count check and file note moved from 97 to 103.
+105. APPLIED 2026-10-24 Q1 (A487), owner approved all, chat 2026-10-24. tests/nix/embedded_test.go
+   TestRNIX025SystemNixCoexistence builds `//tool:ringtool` (cpp-lib's binary is its own package
+   since correction 98; it was `//:ringtool`). Nothing else changes.
+106. APPLIED 2026-10-24 Q1 (A488), owner approved all, chat 2026-10-24. tests/core/api_test.go
+   TestRFW010NoLabelStringLiterals skips the elements of `[]bob.Pattern` literals: pipeline label
+   patterns are the CLI form SPEC R-FW-010 (amended, ADR 0020) allows, and pipelines now name
+   releases by pattern (`Releases: []bob.Pattern{"//deploy:api"}`). This also resolves the
+   pre-existing failure on nondet's `Targets: []bob.Pattern{"//:nonce"}`. Every other label
+   literal still fails.
+
+107. APPLIED 2026-10-24 Q2 (A507), owner approved ADR 0020 test changes, chat 2026-10-24.
+   tests/budgets/budgets.json regenerated (`go test ./tools/internal/budgets -update`): rows
+   B-098…B-103 get their benchmark command `go run ./tools/budgetbench nixpkgs` (new group,
+   tools/budgetbench/nixpkgs.go). Budgets, limits and statistics unchanged; measured values in
+   plan/progress/Q2.md.
+108. APPLIED 2026-10-24 Q2 (TEST PROBLEM 1), owner approved ADR 0020 test changes, chat
+   2026-10-24. tests/faults/83-source-in-subpackage/patch.diff: the injected binary is named
+   "central" instead of "all". "all" is reserved for the pattern //dir:all (R-FW-015), so the
+   fault produced `package name "all" is reserved` (BOB-E-1020) instead of the region error it
+   is about. Same line, same marker, same expectation (BOB-E-1028 `"app/*.c" is inside app/`).
+109. APPLIED 2026-10-24 Q2 (TEST PROBLEM 2), owner approved ADR 0020 test changes, chat
+   2026-10-24. tests/errors/run.go markLines gains "BOB-E-1020": the human output writes every
+   BOB-E-1020 as a `✗ <message>` line without an `error[BOB-E-1020]:` head
+   (pkg/engine/translate/render.go definitionLine, case 1020, as SPEC writes definition errors,
+   R-FW-043 (c), R-FW-011, R-FW-015), so the runner counted 0 for faults 85, 86, 87 and 92 although
+   bob reported the code (the --json stream carries it). Same mechanism as 2013/2014/2015/7005:
+   counted once when a `✗ ` line is printed and the JSON stream reports the code.
+
+## Q3 (2026-10-24, evidence-based test and fixture corrections; numbers 130+, 107–129 left to Q2;
+## evidence plan/progress/Q3.md TEST PROBLEM)
+130. APPLIED 2026-10-24 Q3 (TP1), owner approved all ADR 0020 test changes, chat 2026-10-24.
+   tests/eco/rust/resolve_test.go TestRRS002aCfgTablesEqualRustc imports `bobrust` from
+   github.com/megakuul/bob/pkg/rust/resolve instead of pkg/rust: TestRFW072TypedSurface (protected
+   violation V20) requires `rust.CfgTable` to leave the build-definition API, and
+   `resolve.CfgTable` has the same signature and reads the same cfgtab data. The comparison with
+   `rustc --print cfg` is unchanged.
+131. APPLIED 2026-10-24 Q3 (TP2, A521), owner approved all, chat 2026-10-24.
+   tests/fixtures/repos/polyglot/cmd/api/bob.go: `Tests(golang.TestOpts{})` instead of
+   `TestOpts{Name: "api_tests"}`, so the test unit is //cmd/api:go_test as the fixture's own
+   comment says and tests/core/platform_test.go TestRFW039 runs it. A one-package test set is
+   one unit labelled by Name (tests/core/testdata/repos/svc/it needs //it:it, //it:it2 and
+   //it:never as three units in one directory, tests/core/steps_test.go:368, :398).
+132. APPLIED 2026-10-24 Q3 (TP4), owner approved all, chat 2026-10-24.
+   tests/outputs/overlays_test.go: the apptest overlay bob.go calls `polyglot.API.Get(p)` (9
+   places) instead of `polyglot.API(p)`: polyglot.API is the typed slot of correction 98, so the
+   overlay did not compile (`cannot call polyglot.API (variable of type *bob.Slot[*golang.Binary])`,
+   tests/outputs TestROUT007/015/016/019 exit 3). Same programs, same assertions.
+133. APPLIED 2026-10-24 Q3 (A523), owner approved all golden changes, chat 2026-10-24.
+   New goldens tests/goldens/ir/polyglot.json and acme.json (TestRFW047GoldenIR; never committed
+   before, Q1 README): written as candidates to out/golden-candidates/q3/ and copied into place.
+134. APPLIED 2026-10-24 Q3 (A523), owner approved all golden changes, chat 2026-10-24.
+   New goldens tests/goldens/eco/cc/jobs/{app,pack,mathx,mathx_test}.json (TestRCC002a) and
+   tests/goldens/eco/rust/jobs/rcore-alt-toolchain.json (TestRRS004a), candidates in
+   out/golden-candidates/q3/ (README there), copied into place.
+
+## Q5 (2026-10-24, evidence-based test corrections; evidence plan/progress/Q5.md)
+135. APPLIED 2026-10-24 Q5 (task 5), owner approved ADR 0020 test changes, chat 2026-10-24.
+   pkg/engine/translate/npm_test.go TestProgramNpmFailures expects the runtime lines of SPEC
+   §03.4.4 as amended by ADR 0020 (options take handles): `Add npm.AllowScripts(<handle of
+   better-sqlite3>) to //native:native`, `Add npm.Extend(<handle of P>, npm.Peer(<handle of X>))`,
+   and the BOB-E-2013 hint of the code table (`declare better-sqlite3 (npm.Dep or
+   npm.Indirect("better-sqlite3")) and add npm.AllowScripts(<its handle>) to //native:native`).
+   It still asserted the string forms (`npm.AllowScripts("better-sqlite3")`), which the API no
+   longer accepts; tests/eco/npm/scripts_test.go denyWording (correction 99) already expects the
+   handle wording. Same cases, same assertions otherwise.
+136. APPLIED 2026-10-24 Q5 (task 6), owner approved ADR 0020 test changes, chat 2026-10-24.
+   tests/core/api_test.go TestRFW010TypedHandles: `bob gen` and `bob env` run while
+   lnk/bob.go is set aside, the ill-typed file comes back before `bob exec -- go vet -tags=bob
+   ./...`. Evidence: every evaluating command reports a bob.go that does not compile as a
+   definition error with exit 3 (SPEC R-FW-043 (c), §02 exit classes; measured: `bob gen` →
+   `✗ lnk/bob.go:16:23: cannot use mod(p).Binary(…) … (missing method LinkInfo)`, exit 3), so the
+   test never reached its go vet step (known since I-B27, A279). Measured after the change:
+   go vet exits 1 with `lnk/bob.go:16:23: … *golang.Binary does not implement bob.Linkable
+   (missing method LinkInfo)`. The R-FW-010 acceptance (go vet fails with that text) is unchanged.
+137. APPLIED 2026-10-24 Q5 (task 7), owner instruction (Q5 brief): SPEC.md Appendix B rows
+   B-098…B-103 source cells filled from Q2's measurements (plan/progress/Q2.md); tests/budgets/
+   budgets.json regenerated by `go test ./tools/internal/budgets -update`: only the six rows'
+   `source` text and `busy` flag change; budgets, limits, statistics and benches unchanged.
+138. APPLIED 2026-10-24 Q5 (ROUT004), owner approved ADR 0020 test changes, chat 2026-10-24.
+   tests/fixtures/repos/go: tools/bob.go declares the slot `var Stamp = bob.NewSlot[*golang.Binary]()`,
+   tools/cmd/stamp/bob.go binds it (`var _ = tools.Stamp.Bind(Stamp)`); tests/outputs/overlays_test.go
+   stamptarGo uses `tools.Stamp.Get(p)` instead of `tools.Stamp(p)`. Correction 98 moved the stamp
+   binary into its main package's bob.go without the slot it gave acme/polyglot/bigclosure, so the
+   overlay did not compile (`tools/tar/bob.go:12:68: undefined: tools.Stamp`, TestROUT004 exit 3).
+   Same program, label //tools/cmd/stamp:stamp unchanged, same assertions.
+139. APPLIED 2026-10-25 Q5, owner approved ADR 0020 test changes, chat 2026-10-24.
+   tests/core/testdata/repos/nondet/nondet/bob.go: the map of attribute names becomes a map of
+   typed handles (`map[string]nixpkgs.Attr{"zlib": nixpkgs.Zlib, …}`, `attr.Lib(p)`); correction 99
+   missed this repository, so it failed to compile (`nondet/bob.go:22:31: invalid nixpkgs package:
+   undefined: nixpkgs.Lib`, BOB-E-1020) instead of producing BOB-E-1018. Same 8 libraries, same
+   randomised map iteration, same assertion. TestRFW008NondeterministicBobGo PASS.
+140. APPLIED 2026-10-25 Q5, owner approved ADR 0020 test changes, chat 2026-10-24.
+   tests/core/platform_test.go TestRFW032ToolIsNotALinkable: the regexp expects the typed call
+   `nixpkgs\.\w+\.Tool` (the repository says `nixpkgs.Openssl.Tool(p)` since correction 99) instead of
+   the removed `nixpkgs.Tool`. bob's output was already right: `✗ nt/bob.go:15:23: cannot use
+   nixpkgs.Openssl.Tool(p) (value of type *nixext.ToolPackage) as cc.Linkable value …`. PASS.

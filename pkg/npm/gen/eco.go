@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -162,6 +163,9 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	}
 	prev, perr := decodeSection(req.Prev)
 	if perr == nil && prev != nil && prev.Inputs == inputs && req.Update == nil {
+		if err := checkIndirect(ims, prev); err != nil {
+			return nil, err
+		}
 		return lock.EncodeSection(lock.SectionNpm, prev)
 	}
 	opts := resolve.Options{Registry: &resolve.Registry{URL: reg, CacheDir: metaCache(), MaxAge: 24 * time.Hour},
@@ -186,6 +190,9 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 		return nil, err
 	}
 	sec.Inputs = inputs
+	if err := checkIndirect(ims, &sec); err != nil {
+		return nil, err
+	}
 	out, err := lock.EncodeSection(lock.SectionNpm, &sec)
 	if err != nil {
 		// The resolver validated every registry document; a record the lock refuses is
@@ -222,11 +229,47 @@ func scriptNotes(ims []*importer, sec *lock.NpmSection) []string {
 				continue
 			}
 			seen[id] = true
-			out = append(out, fmt.Sprintf("%s has an install script; bob does not run it. If the package needs it: npm.AllowScripts(%q)", id, p.Name))
+			out = append(out, fmt.Sprintf("%s has an install script; bob does not run it. If the package needs it: npm.AllowScripts(<handle of %s>) (declare it with npm.Dep or npm.Indirect)", id, p.Name))
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+// checkIndirect is BOB-E-1015 for an npm.Indirect handle of an importer's options whose package
+// is not in the importer's resolved graph (SPEC §03.0.7): the option would apply to nothing.
+func checkIndirect(ims []*importer, sec *lock.NpmSection) error {
+	for _, im := range ims {
+		if len(im.spec.Options.Indirect) == 0 {
+			continue
+		}
+		have := map[string]bool{}
+		if imp, ok := sec.Importers[im.dir]; ok {
+			for _, key := range closure(sec, imp.Deps) {
+				have[sec.Packages[key].Name] = true
+			}
+		}
+		for _, ind := range im.spec.Options.Indirect {
+			if have[ind.Name] {
+				continue
+			}
+			reason := fmt.Sprintf("%s is declared with npm.Indirect at %s but is not in the resolved graph", ind.Name, ind.Pos)
+			e := diag.New(1015, "ecosystem", "npm", "root", im.node.Label, "reason", reason, "label", im.node.Label)
+			e.DefinedAt = handlePos(ind.Pos, im.node.DefinedAt)
+			return e
+		}
+	}
+	return nil
+}
+
+// handlePos parses a "<file>:<line>" handle position, falling back to def.
+func handlePos(pos string, def ir.Pos) diag.Pos {
+	if i := strings.LastIndexByte(pos, ':'); i > 0 {
+		if line, err := strconv.Atoi(pos[i+1:]); err == nil && line > 0 {
+			return diag.Pos{File: pos[:i], Line: line}
+		}
+	}
+	return diag.Pos{File: def.File, Line: def.Line}
 }
 
 // closure lists the instance keys reachable from deps (links are left out), sorted.

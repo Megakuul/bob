@@ -28,7 +28,15 @@ func (ev *evaluation) noteCall(pos Position, fn string) {
 // package's name: of several calls on one line, the one naming it wins.
 func (ev *evaluation) column(pos Position, name string) int {
 	fn, ok := ev.calls[pos]
-	if !ok || pos.Line < 1 {
+	if !ok {
+		return 0
+	}
+	return ev.columnOf(pos, fn, name)
+}
+
+// columnOf is column for a known called function fn (a runtime function name).
+func (ev *evaluation) columnOf(pos Position, fn, name string) int {
+	if pos.Line < 1 || fn == "" {
 		return 0
 	}
 	if ev.lines == nil {
@@ -85,12 +93,39 @@ func callColumn(line, fn, name string) int {
 			if i+1 < len(starts) {
 				end = starts[i+1]
 			}
-			if strings.Contains(line[s:end], lit) {
+			if strings.Contains(line[s:end], lit) || handleNames(line[s:end], fn, name) {
 				return s + 1
 			}
 		}
 	}
 	return starts[0] + 1
+}
+
+// handleNames reports whether the call text ("nixpkgs.Go1_26.Tool(p)") is a role method of the
+// typed nixpkgs handle of attribute name ("go_1_26"): a qualifier segment equal to the
+// attribute when case, '-', '_' and '.' are ignored (ADR 0020 §2 names).
+func handleNames(call, fn, name string) bool {
+	i := strings.Index(call, "."+fn)
+	if i < 0 {
+		return false
+	}
+	want := fold(name)
+	for _, seg := range strings.Split(call[:i], ".") {
+		if seg = strings.TrimPrefix(seg, "A_"); fold(seg) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// fold lower-cases s and drops everything but letters and digits.
+func fold(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, s)
 }
 
 // callStarts returns the byte offsets of the calls of fn in line, qualifier included.
@@ -113,8 +148,9 @@ func callStarts(line, fn string) []int {
 		if rest == "" || rest[0] != '(' && rest[0] != '[' {
 			continue
 		}
-		// Include a qualifier: "cc.SharedLibrary" starts at "cc".
-		if start > 0 && line[start-1] == '.' {
+		// Include the qualifiers: "cc.SharedLibrary" starts at "cc", a role method of a typed
+		// nixpkgs handle "nixpkgs.Openssl.Lib" at "nixpkgs".
+		for start > 0 && line[start-1] == '.' {
 			q := start - 1
 			for q > 0 {
 				r, size := utf8.DecodeLastRuneInString(line[:q])
@@ -123,9 +159,10 @@ func callStarts(line, fn string) []int {
 				}
 				q -= size
 			}
-			if q < start-1 {
-				start = q
+			if q == start-1 {
+				break
 			}
+			start = q
 		}
 		out = append(out, start)
 	}
@@ -142,3 +179,13 @@ func boundary(line string, i int) bool {
 }
 
 func isIdent(r rune) bool { return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) }
+
+// nodeColumn is the column of the constructor call that created n: the function the bob.go
+// called to create it (a call such as bob.Glob evaluated earlier on the same line does not
+// count), else the first call recorded on its line.
+func (ev *evaluation) nodeColumn(n *node) int {
+	if c := ev.columnOf(n.pos, n.fn, n.label.Nix+n.label.Name); c > 0 {
+		return c
+	}
+	return ev.column(n.pos, n.label.Nix+n.label.Name)
+}

@@ -25,18 +25,18 @@ import (
 
 var Tools = bob.Define(func(p *bob.P) *oci.Image {
 	return oci.NewImage(p, "tools", oci.ImageOpts{
-		Program: polyglot.API(p),
-		Extra:   []bob.Package{nixpkgs.Pkg(p, "coreutils"), nixpkgs.Pkg(p, "curl")},
+		Program: polyglot.API.Get(p),
+		Extra:   []bob.Package{nixpkgs.Coreutils.Pkg(p), nixpkgs.Curl.Pkg(p)},
 	})
 })
 
 var Four = bob.Define(func(p *bob.P) *oci.Image {
-	return oci.NewImage(p, "four", oci.ImageOpts{Program: polyglot.API(p), MaxLayers: 4})
+	return oci.NewImage(p, "four", oci.ImageOpts{Program: polyglot.API.Get(p), MaxLayers: 4})
 })
 
 var Pruned = bob.Define(func(p *bob.P) *oci.Image {
 	return oci.NewImage(p, "pruned", oci.ImageOpts{
-		Program: polyglot.API(p),
+		Program: polyglot.API.Get(p),
 		Prune:   []string{"/nix/store/*-openssl-*/lib/libssl.so*"},
 	})
 })
@@ -57,12 +57,12 @@ import (
 // Tools is the bundle of the distro matrix: the api plus curl, date and iconv as entries.
 var Tools = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "tools", appimage.BundleOpts{
-		Program: polyglot.API(p),
+		Program: polyglot.API.Get(p),
 		Entries: map[string]bob.Executable{
-			"curl":  nixpkgs.Exe(p, "curl", "bin/curl"),
-			"sleep": nixpkgs.Exe(p, "coreutils", "bin/sleep"),
-			"date":  nixpkgs.Exe(p, "coreutils", "bin/date"),
-			"iconv": nixpkgs.Exe(p, "glibc", "bin/iconv"),
+			"curl":  nixpkgs.Curl.Exe(p, nixpkgs.MainProgram("bin/curl")),
+			"sleep": nixpkgs.Coreutils.Exe(p, nixpkgs.MainProgram("bin/sleep")),
+			"date":  nixpkgs.Coreutils.Exe(p, nixpkgs.MainProgram("bin/date")),
+			"iconv": nixpkgs.Glibc.Exe(p, nixpkgs.MainProgram("bin/iconv")),
 		},
 		Locales: []string{"C.UTF-8", "en_US.UTF-8"},
 	})
@@ -70,20 +70,20 @@ var Tools = bob.Define(func(p *bob.P) *appimage.Bundle {
 
 // Unpruned keeps everything of the closure.
 var Unpruned = bob.Define(func(p *bob.P) *appimage.Bundle {
-	return appimage.NewBundle(p, "unpruned", appimage.BundleOpts{Program: polyglot.API(p), Prune: []string{}})
+	return appimage.NewBundle(p, "unpruned", appimage.BundleOpts{Program: polyglot.API.Get(p), Prune: []string{}})
 })
 
 // BadPrune removes libssl, which the api needs (R-OUT-007).
 var BadPrune = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "bundle", appimage.BundleOpts{
-		Program: polyglot.API(p),
+		Program: polyglot.API.Get(p),
 		Prune:   []string{"/nix/store/*-openssl-*/lib/libssl.so*"},
 	})
 })
 
 var script = bob.Define(func(p *bob.P) bob.Executable {
 	step := bob.Run(p, "deploy-script", bob.RunOpts{
-		Tools: []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
+		Tools: []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)},
 		Cmd:   []string{"sh", "-c", "mkdir -p $out/bin && printf '#!/bin/sh\necho deploy\n' > $out/bin/deploy && chmod +x $out/bin/deploy"},
 	})
 	return bob.Exe(step, "bin/deploy")
@@ -92,14 +92,14 @@ var script = bob.Define(func(p *bob.P) bob.Executable {
 // Script has a shell-script entry in AutoMode (R-OUT-019 warns); ScriptUserns says so explicitly.
 var Script = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "script", appimage.BundleOpts{
-		Program: polyglot.API(p),
+		Program: polyglot.API.Get(p),
 		Entries: map[string]bob.Executable{"deploy": script(p)},
 	})
 })
 
 var ScriptUserns = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "script-userns", appimage.BundleOpts{
-		Program: polyglot.API(p),
+		Program: polyglot.API.Get(p),
 		Entries: map[string]bob.Executable{"deploy": script(p)},
 		Mode:    appimage.UsernsOnly,
 	})
@@ -108,7 +108,7 @@ var ScriptUserns = bob.Define(func(p *bob.P) *appimage.Bundle {
 // Graphics runs vulkaninfo with the host's GPU libraries appended (R-OUT-020).
 var Graphics = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "graphics", appimage.BundleOpts{
-		Program:      nixpkgs.Exe(p, "vulkan-tools", "bin/vulkaninfo"),
+		Program:      nixpkgs.VulkanTools.Exe(p, nixpkgs.MainProgram("bin/vulkaninfo")),
 		HostGraphics: true,
 	})
 })
@@ -126,7 +126,7 @@ import (
 )
 
 var NotStatic = bob.Define(func(p *bob.P) *tarball.Tarball {
-	return tarball.New(p, "api-static", tarball.TarballOpts{Program: polyglot.API(p), Kind: tarball.Static})
+	return tarball.New(p, "api-static", tarball.TarballOpts{Program: polyglot.API.Get(p), Kind: tarball.Static})
 })
 `
 
@@ -143,7 +143,7 @@ import (
 )
 
 var Static = bob.Define(func(p *bob.P) *tarball.Tarball {
-	return tarball.New(p, "stamp", tarball.TarballOpts{Program: tools.Stamp(p), Kind: tarball.Static})
+	return tarball.New(p, "stamp", tarball.TarballOpts{Program: tools.Stamp.Get(p), Kind: tarball.Static})
 })
 `
 

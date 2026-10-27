@@ -15,5 +15,7 @@ def cmd/api/main.go "greet.Hello"
 open libs/foo/bob.go
 diag libs/foo/bob.go
 def libs/foo/bob.go "cc.SharedLibrary"
+complete libs/foo/bob.go "nixpkgs.Op"
+hover libs/foo/bob.go "nixpkgs.Openssl"
 open internal/greet/greet_test.go
 diag internal/greet/greet_test.go

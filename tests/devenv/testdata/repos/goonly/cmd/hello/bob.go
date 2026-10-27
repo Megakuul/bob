@@ -10,5 +10,5 @@ import (
 
 // Binary is the hello command (label //cmd/hello:hello).
 var Binary = bob.Define(func(p *bob.P) *golang.Binary {
-	return goonly.Module(p).Binary("./cmd/hello", golang.BinaryOpts{})
+	return goonly.Module(p).Binary(golang.BinaryOpts{})
 })

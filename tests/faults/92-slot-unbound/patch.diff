@@ -1,0 +1,12 @@
+diff --git a/cmd/api/bob.go b/cmd/api/bob.go
+--- a/cmd/api/bob.go
++++ b/cmd/api/bob.go
+@@ -25,8 +25,6 @@
+ 	})
+ })
+ 
+-// The binary is bound to the typed slot acme.API, through which deploy/bob.go uses it.
+-var _ = acme.API.Bind(Binary)
+ 
+ // Tests runs this package's tests (unit //cmd/api:go_test).
+ var Tests = bob.Define(func(p *bob.P) *golang.TestSet {

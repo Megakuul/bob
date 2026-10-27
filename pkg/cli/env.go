@@ -36,8 +36,11 @@ func isTerminal(w io.Writer) bool {
 const lockName = "bob.lock"
 
 // findRoot returns the repository root of dir: the nearest ancestor (dir included) that holds
-// bob.lock. With orGit (bob lock only, SPEC §02 open item 11), a repository without bob.lock
-// has its root at the nearest ancestor that holds .git. Not found is BOB-E-0002.
+// bob.lock. With orGit (bob lock and bob init, SPEC §02 open item 11), a repository without
+// bob.lock has its root at the nearest ancestor that holds .git, else at dir itself when dir
+// holds a bob.go (a new project that is not a git repository yet, A473). Not found is
+// BOB-E-0002; when a bob.go is in dir or above, its cause line names the command that creates
+// the lock.
 func findRoot(dir string, orGit bool) (string, error) {
 	for d := dir; ; d = filepath.Dir(d) {
 		if _, err := os.Stat(filepath.Join(d, lockName)); err == nil {
@@ -56,8 +59,31 @@ func findRoot(dir string, orGit bool) (string, error) {
 				break
 			}
 		}
+		if isFile(filepath.Join(dir, "bob.go")) {
+			return dir, nil
+		}
 	}
-	return "", diag.New(2, "dir", dir)
+	e := diag.New(2, "dir", dir)
+	for d := dir; ; d = filepath.Dir(d) {
+		if isFile(filepath.Join(d, "bob.go")) {
+			cmd := "bob lock"
+			if d != dir {
+				cmd = "bob -C " + d + " lock"
+			}
+			e.Cause = filepath.Join(d, "bob.go") + " has no bob.lock yet: run " + cmd + " to create it"
+			break
+		}
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+	return "", e
+}
+
+// isFile reports whether p is a regular file (symlinks followed).
+func isFile(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode().IsRegular()
 }
 
 // root resolves the repository root of the command.

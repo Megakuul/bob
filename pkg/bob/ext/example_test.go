@@ -46,7 +46,7 @@ func ExampleElsewhere() {
 	ext.Register(ext.Kind{Name: "example.bundle"})
 	_ = bob.Define(func(p *bob.P) *Bundle {
 		const key = "example.bundle:jq"
-		jq := nixpkgs.Exe(p, "jq", "bin/jq")
+		jq := nixpkgs.Jq.Exe(p)
 		if ext.Nested(p) {
 			ext.Record(p, key, jq)
 			return &Bundle{}
@@ -79,7 +79,7 @@ func ExampleNested() {
 func ExampleRecord() {
 	ext.Register(ext.Kind{Name: "example.bundle"})
 	_ = bob.Define(func(p *bob.P) *Bundle {
-		curl := nixpkgs.Exe(p, "curl", "bin/curl")
+		curl := nixpkgs.Curl.Exe(p)
 		if ext.Nested(p) {
 			ext.Record(p, "example.bundle:curl", curl)
 			return &Bundle{}
@@ -93,7 +93,7 @@ func ExampleRecorded() {
 	ext.Register(ext.Kind{Name: "example.bundle"})
 	_ = bob.Define(func(p *bob.P) *Bundle {
 		const key = "example.bundle:curl-amd64"
-		curl := nixpkgs.Exe(p, "curl", "bin/curl")
+		curl := nixpkgs.Curl.Exe(p)
 		if ext.Nested(p) {
 			ext.Record(p, key, curl)
 			return &Bundle{}

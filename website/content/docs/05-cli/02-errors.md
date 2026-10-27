@@ -29,6 +29,7 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-0010 | usage | 2 | `unknown platform "{platform}" (known: {known})` | — |
 | BOB-E-0011 | usage | 2 | `{label}: {ecosystem} packages cannot be cross-compiled yet (requested {platform} on a {host} host)` | `build for the host platform, or use an ecosystem that supports cross-compilation` |
 | BOB-E-1001 | definition | 3 | `nixpkgs has no package "{attr}"` | `did you mean {suggest}?` |
+| BOB-E-1001 | definition | 3 | `{pos}: nixpkgs at the pinned revision {rev} has no package "{attr}" (nixpkgs.{name})` | `bob's typed nixpkgs packages come from {surface}; move the pin with bob lock --update nixpkgs, or use another package` |
 | BOB-E-1002 | definition | 3 | `nixpkgs package "{attr}" ({version}) is marked broken` | `pin a nixpkgs revision where it builds, or use another package` |
 | BOB-E-1003 | definition | 3 | `nixpkgs package "{attr}" ({version}) is marked insecure: {cves}` | `use a fixed version; bob refuses known-vulnerable packages unless allowed per package` |
 | BOB-E-1004 | definition | 3 | `nixpkgs package "{attr}" has an unfree licence` | `allow it explicitly for this package if your licence permits` |
@@ -48,7 +49,7 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-1017 | definition | 3 | `nixpkgs package "{attr}" cannot be evaluated on {system}` | `pin another nixpkgs revision or use another package` |
 | BOB-E-1018 | definition | 3 | `evaluating bob.go is not deterministic: {label}` | `bob.go must not depend on time, randomness, environment or map order` |
 | BOB-E-1019 | definition | 3 | `bob.lock cannot be read: {reason} (line {line})` | `resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go` |
-| BOB-E-1020 | definition | 3 | `{label}: invalid {option}: {reason}` | — |
+| BOB-E-1020 | definition | 3 | `{label}: invalid {option}: {reason}` | `{hint}` |
 | BOB-E-1021 | definition | 3 | `{label}: toolchain mismatch: {reason}` | `align the versions named above` |
 | BOB-E-1022 | definition | 3 | `{label} is not a static binary (it needs {deps})` | `use tarball.Closure` |
 | BOB-E-1023 | definition | 3 | `{package} cannot be pinned: {reason}` | — |
@@ -58,10 +59,14 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-1024 | definition | 3 | `{dir}/bob.go:{line}: {name} is also declared at {file}:{fileline}; bob.go shares its package with that code, rename one of them` | — |
 | BOB-E-1024 | definition | 3 | `{dir}/bob.go imports {dir2}, whose Go code imports {dir} (cycle exists only for build definitions); move the definition` | — |
 | BOB-E-1024 | definition | 3 | `{dir}/bob.go: imports {path}, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages` | — |
+| BOB-E-1024 | definition | 3 | `{dir}/bob.go:{line}: assigns to {name}, a value of the bob framework; framework values are read-only, declare your own variable` | — |
 | BOB-E-1025 | definition | 3 | `{pos}: source pattern "{pattern}" leaves the repository` | — |
 | BOB-E-1025 | definition | 3 | `{pos}: bob.Glob("{pattern}") matches no files` | — |
 | BOB-E-1025 | definition | 3 | `{file}: symlink points outside the repository` | — |
 | BOB-E-1026 | definition | 3 | `nixpkgs mismatch: {what}` | `{hint}` |
+| BOB-E-1028 | definition | 3 | `{pos}: {label}: "{pattern}" leaves the package directory {dir}/` | `each bob.go builds only the files below its own directory; give the other directory its own bob.go and depend on its package` |
+| BOB-E-1028 | definition | 3 | `{pos}: {label}: "{pattern}" is inside {sub}/, which has its own bob.go` | `use the package defined in {sub}/bob.go through its handle` |
+| BOB-E-1029 | definition | 3 | `{pos}: {label}: {dir}/bob.go already defines the {ecosystem} {kind} {other} at {pos2}; one library or binary per directory package` | `move {label} into its own directory with its own bob.go and depend on it through its handle` |
 | BOB-E-2000 | build | 1 | `{label} failed to build` | — |
 | BOB-E-2001 | build | 1 | `{label}: compile error in {file}` | — |
 | BOB-E-2002 | build | 1 | `{label}: undefined symbol {symbol}` | `the symbol is not provided by any linked library; a dependency is probably missing from Deps` |
@@ -75,8 +80,8 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-2010 | build | 1 | `{label}: Rust crate {crate} not found` | `add the crate to the package's dependencies` |
 | BOB-E-2011 | build | 1 | `{label} wrote more than {bytes} bytes of log output and was stopped` | `a step is printing in a loop; reduce its output or raise the log limit` |
 | BOB-E-2012 | build | 1 | `dev server {name} exited with status {status}` | `see {log}` |
-| BOB-E-2013 | build | 1 | `{label}: {package} needs its {script} script ({reason})` | `add npm.AllowScripts("{package}") to {label}` |
-| BOB-E-2014 | build | 1 | `{label}: {package} uses {dep} without declaring it` | `add npm.Extend("{package}", npm.Peer("{dep}"))` |
+| BOB-E-2013 | build | 1 | `{label}: {package} needs its {script} script ({reason})` | `declare {package} (npm.Dep or npm.Indirect("{package}")) and add npm.AllowScripts(<its handle>) to {label}` |
+| BOB-E-2014 | build | 1 | `{label}: {package} uses {dep} without declaring it` | `declare both (npm.Dep or npm.Indirect) and add npm.Extend(<handle of {package}>, npm.Peer(<handle of {dep}>))` |
 | BOB-E-2015 | build | 1 | `{label}: prune pattern "{pattern}" removes {file}, which {user} needs` | `narrow the pattern` |
 | BOB-E-2016 | build | 1 | `{label}: {reason}` | — |
 | BOB-E-3001 | fetch | 4 | `{label}: download does not match bob.lock` | `if the upstream file legitimately changed, run bob lock; otherwise the source was tampered with` |

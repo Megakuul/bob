@@ -325,7 +325,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 // Dev is the default development shell of the nested project.
 var Dev = bob.Define(func(p *bob.P) *bob.Shell {

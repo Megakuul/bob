@@ -88,7 +88,7 @@ func probeRepoFiles() map[string]string {
 	return map[string]string{
 		"go.mod":   "module example.com/synth\n\ngo 1.26.0\n",
 		"bob.lock": "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":   "//go:build bob\n\npackage synth\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":   "//go:build bob\n\npackage synth\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 		"probe/bob.go": `//go:build bob
 
 package probe
@@ -101,7 +101,7 @@ import (
 // Probe records facts about its own sandbox.
 var Probe = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "probe", bob.RunOpts{
-		Tools: []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
+		Tools: []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)},
 		Cmd: []string{"bash", "-c", "id -u > $BOB_OUT/uid; ls -A /home > $BOB_OUT/home; tail -n +3 /proc/net/dev | cut -d: -f1 | tr -d ' ' > $BOB_OUT/ifaces; if timeout 3 bash -c 'exec 3<>/dev/tcp/1.1.1.1/53'; then echo up; else echo blocked; fi > $BOB_OUT/net"},
 		Outputs: []string{"uid", "home", "ifaces", "net"},
 	})

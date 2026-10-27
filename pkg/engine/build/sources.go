@@ -123,7 +123,7 @@ func importSources(ctx context.Context, st *store.Store, root string, g *ir.Grap
 			ids[i] = append(ids[i], n.ID)
 			continue
 		}
-		files, err := srcs.ResolveAll(root, n.Srcs, n.DefinedAt.String(), nil)
+		files, err := srcs.ResolveNode(root, n, nil)
 		if err != nil {
 			return nil, err
 		}

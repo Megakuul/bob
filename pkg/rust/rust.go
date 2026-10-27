@@ -17,6 +17,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/rust/internal/rsspec"
 )
 
@@ -25,10 +26,14 @@ import (
 // planner keeps them profile-free, R-FW-035); a variant's Features of a crate are added on top
 // of its Enable list (§04).
 func init() {
-	ext.Register(ext.Kind{Name: rsspec.KindCrate, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisFeatures}})
+	ext.Register(ext.Kind{Name: rsspec.KindCrate, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisFeatures}, Unit: "rust"})
 	ext.Register(ext.Kind{Name: rsspec.KindTest, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisFeatures}})
 	ext.Register(ext.Kind{Name: rsspec.KindTests, Axes: []ext.Axis{ext.AxisPlatform}})
 }
+
+// rustcUnwrapped is the target system's own rustc: its standard library for cross builds
+// (R-FW-034).
+var rustcUnwrapped = nixext.New("rustc.unwrapped")
 
 // Edition is a Rust edition.
 type Edition string
@@ -52,26 +57,43 @@ type depOpts struct {
 	rename    string
 }
 
-// crateDep is a crates.io dependency.
-type crateDep struct {
+// CrateDep is a declared crates.io crate (Crate, Indirect): the one place its name is written
+// (R-FW-072). A Crate handle is a Dep; both are the argument of Uses. An Indirect handle is not
+// a Dep of the crate that names it (it only carries options).
+type CrateDep struct {
 	name, req string
 	o         depOpts
+	indirect  string // the bob.go position of rust.Indirect; "" for rust.Crate
 }
 
-func (crateDep) rustDep() {}
+func (*CrateDep) rustDep() {}
 
-// Crate is a crates.io dependency; req is a Cargo version requirement ("1", "^0.13",
-// "=1.38.0"). Resolved into bob.lock by `bob lock` (R-RS-002).
+// Crate declares a crates.io dependency (the one place its name is written); req is a Cargo
+// version requirement ("1", "^0.13", "=1.38.0"). Resolved into bob.lock by `bob lock`
+// (R-RS-002). The handle is a Dep and the argument of Uses.
 //
 //	rust.Crate("serde", "1", rust.Features("derive"))
-func Crate(name, req string, opts ...DepOpt) Dep {
-	d := crateDep{name: name, req: req}
+func Crate(name, req string, opts ...DepOpt) *CrateDep {
+	d := &CrateDep{name: name, req: req}
 	for _, o := range opts {
 		if o != nil {
 			o(&d.o)
 		}
 	}
 	return d
+}
+
+// Indirect declares a crates.io crate that is not a direct dependency (it is in the resolved
+// graph through another crate) so that an option can refer to it. bob lock fails with
+// BOB-E-1015 at this position when the graph does not contain it.
+//
+//	rust.Uses(rust.Indirect("openssl-sys"), nixpkgs.Openssl.Lib(p))
+func Indirect(name string) *CrateDep {
+	pos := callerPos()
+	if pos == "" {
+		pos = "rust.Indirect"
+	}
+	return &CrateDep{name: name, indirect: pos}
 }
 
 // Features enables features of the dependency.
@@ -89,17 +111,20 @@ func Rename(codeName string) DepOpt { return func(o *depOpts) { o.rename = codeN
 type Option interface{ rustOption() }
 
 type usesOption struct {
-	crate string
+	crate *CrateDep
 	libs  []bob.Linkable
 }
 
 func (usesOption) rustOption() {}
 
 // Uses gives a crates.io crate's build script native packages (PATH, PKG_CONFIG_PATH,
-// include/lib dirs). Applies to every unit of that crate in the graph.
+// include/lib dirs). Applies to every unit of that crate in the graph. The crate is a handle of
+// Crate or Indirect.
 //
-//	rust.Uses("openssl-sys", nixpkgs.Lib(p, "openssl"))
-func Uses(crate string, libs ...bob.Linkable) Option { return usesOption{crate: crate, libs: libs} }
+//	rust.Uses(rust.Indirect("openssl-sys"), nixpkgs.Openssl.Lib(p))
+func Uses(crate *CrateDep, libs ...bob.Linkable) Option {
+	return usesOption{crate: crate, libs: libs}
+}
 
 // LibOpts configures Library, ProcMacro, StaticLib and CDylib.
 type LibOpts struct {
@@ -114,8 +139,8 @@ type LibOpts struct {
 	Default     []string            // default features
 	BuildScript string              // "build.rs" or "" (default: "build.rs" if the file exists)
 	Native      []bob.Linkable      // bob C/C++ libraries, cc.External or nixpkgs.Lib linked into this crate
-	Headers     string              // StaticLib/CDylib only: include dir exported to C consumers
-	Toolchain   bob.Tool            // default nixpkgs.Tool(p, "rustc") (R-RS-004)
+	Headers     bob.Include         // StaticLib/CDylib only: bob.IncludeDir("include") exported to C consumers
+	Toolchain   bob.Tool            // default nixpkgs.Rustc.Tool(p) (R-RS-004)
 	Options     []Option
 }
 
@@ -205,7 +230,7 @@ var (
 //		return rust.Library(p, rust.LibOpts{Deps: []rust.Dep{rust.Crate("serde", "1", rust.Features("derive"))}})
 //	})
 func Library(p *bob.P, o LibOpts) *Lib {
-	c := newCrate(p, rsspec.TypeLib, libCommon(o), o.Headers)
+	c := newCrate(p, rsspec.TypeLib, libCommon(o), o.Headers.Dir())
 	return &Lib{Node: *c.node, c: c}
 }
 
@@ -215,17 +240,17 @@ func Library(p *bob.P, o LibOpts) *Lib {
 //		return rust.ProcMacro(p, rust.LibOpts{Deps: []rust.Dep{rust.Crate("syn", "2", rust.Features("full")), rust.Crate("quote", "1")}})
 //	})
 func ProcMacro(p *bob.P, o LibOpts) *Lib {
-	c := newCrate(p, rsspec.TypeProcMacro, libCommon(o), o.Headers)
+	c := newCrate(p, rsspec.TypeProcMacro, libCommon(o), o.Headers.Dir())
 	return &Lib{Node: *c.node, c: c}
 }
 
 // StaticLib builds lib<name>.a (+ Headers); implements cc.Linkable for C and cgo consumers.
 //
 //	var RCore = bob.Define(func(p *bob.P) *rust.CLib {
-//		return rust.StaticLib(p, rust.LibOpts{Name: "rcore", Headers: "include"})
+//		return rust.StaticLib(p, rust.LibOpts{Name: "rcore", Headers: bob.IncludeDir("include")})
 //	})
 func StaticLib(p *bob.P, o LibOpts) *CLib {
-	c := newCrate(p, rsspec.TypeStaticLib, libCommon(o), o.Headers)
+	c := newCrate(p, rsspec.TypeStaticLib, libCommon(o), o.Headers.Dir())
 	return &CLib{Node: *c.node, c: c}
 }
 
@@ -233,7 +258,7 @@ func StaticLib(p *bob.P, o LibOpts) *CLib {
 //
 //	var Plugin = bob.Define(func(p *bob.P) *rust.CLib { return rust.CDylib(p, rust.LibOpts{Name: "plugin"}) })
 func CDylib(p *bob.P, o LibOpts) *CLib {
-	c := newCrate(p, rsspec.TypeCDylib, libCommon(o), o.Headers)
+	c := newCrate(p, rsspec.TypeCDylib, libCommon(o), o.Headers.Dir())
 	return &CLib{Node: *c.node, c: c}
 }
 
@@ -280,11 +305,11 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 	}
 	tc := o.Toolchain
 	if tc == nil {
-		tc = nixpkgs.Tool(p, "rustc")
+		tc = nixpkgs.Rustc.Tool(p)
 	}
 	// The host's C toolchain links host units (build scripts, proc-macros) and native builds.
-	host := p.Host().Toolchain()
-	c.deps = []bob.Package{tc, nixpkgs.Tool(p, host.CC), nixpkgs.Tool(p, host.Bintools)}
+	host := nixext.Toolchain(p.Host())
+	c.deps = []bob.Package{tc, host.CC.Tool(p), host.Bintools.Tool(p)}
 	s := rsspec.Crate{Name: o.Name, Type: typ, Edition: string(ed), Root: root, Toolchain: 0, CC: 1, Binutils: 2,
 		PkgConfig: -1, Features: map[string][]string{}, Default: sortedSet(o.Default), Enable: sortedSet(o.Enable),
 		Native: []int{}, Uses: []rsspec.Use{}, Headers: path.Clean(headers)}
@@ -292,7 +317,8 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 		// R-FW-033/034: host rustc --target, the target's cross C compiler as linker, and the
 		// standard library of the target system's own rustc (same source and version).
 		s.Cross = &rsspec.Cross{Triple: xt.Triple, Prefix: xt.Prefix, CC: 3, Binutils: 4, Std: 5}
-		c.deps = append(c.deps, nixpkgs.Tool(p, xt.CC), nixpkgs.Tool(p, xt.Bintools), nixpkgs.Pkg(p, "rustc.unwrapped", nixpkgs.Outputs("out")))
+		xc := nixext.Toolchain(p)
+		c.deps = append(c.deps, xc.CC.Tool(p), xc.Bintools.Tool(p), rustcUnwrapped.Pkg(p, nixext.Outputs(nixext.Out)))
 	}
 	if headers == "" {
 		s.Headers = ""
@@ -340,11 +366,15 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 		if !ok {
 			continue
 		}
-		if !crateName().MatchString(u.crate) {
-			problems = append(problems, fmt.Sprintf("rust.Uses(%q): not a crate name", u.crate))
+		if u.crate == nil {
+			problems = append(problems, "rust.Uses: the crate is nil; pass a handle of rust.Crate or rust.Indirect")
 			continue
 		}
-		use := rsspec.Use{Crate: u.crate, Libs: []int{}}
+		if !crateName().MatchString(u.crate.name) {
+			problems = append(problems, fmt.Sprintf("rust.Uses(%q): not a crate name", u.crate.name))
+			continue
+		}
+		use := rsspec.Use{Crate: u.crate.name, Libs: []int{}, Indirect: u.crate.indirect}
 		for _, l := range u.libs {
 			if l == nil {
 				continue
@@ -356,7 +386,7 @@ func newCrate(p *bob.P, typ string, o BinOpts, headers string) *crate {
 	}
 	if len(s.Uses) > 0 {
 		s.PkgConfig = len(c.deps)
-		c.deps = append(c.deps, nixpkgs.Tool(p, "pkg-config"))
+		c.deps = append(c.deps, nixpkgs.PkgConfig.Tool(p))
 	}
 	sort.SliceStable(s.Uses, func(i, j int) bool { return s.Uses[i].Crate < s.Uses[j].Crate })
 	s.BuildScript = o.BuildScript
@@ -414,7 +444,15 @@ func (c *crate) convertDeps(ds []Dep, field string) ([]rsspec.Dep, []string) {
 	var problems []string
 	for i, d := range ds {
 		switch d := d.(type) {
-		case crateDep:
+		case *CrateDep:
+			if d == nil {
+				problems = append(problems, fmt.Sprintf("%s[%d] is nil", field, i))
+				continue
+			}
+			if d.indirect != "" {
+				problems = append(problems, fmt.Sprintf("%s: rust.Indirect(%q) declared at %s is not a dependency; declare it with rust.Crate(name, req)", field, d.name, d.indirect))
+				continue
+			}
 			name := d.name
 			if d.o.rename != "" {
 				name = d.o.rename
@@ -516,9 +554,9 @@ func (c *crate) unit(p *bob.P, name, file string, o TestOpts) *TestSet {
 	deps := []bob.Package{c.node}
 	svcs, deps := ext.Services(o.Services, deps)
 	spec := rsspec.Test{Crate: 0, File: file, Args: slices.Clone(o.Args), Services: svcs, TimeoutS: int64(o.Timeout / time.Second)}
-	if tc := p.Toolchain(); tc.Emulator != "" {
-		spec.Emulator, spec.EmulatorCmd = len(deps), tc.EmulatorCmd
-		deps = append(deps, nixpkgs.Tool(p, tc.Emulator))
+	if em := nixext.Toolchain(p).Emulator; em.Name() != "" {
+		spec.Emulator, spec.EmulatorCmd = len(deps), p.Toolchain().EmulatorCmd
+		deps = append(deps, em.Tool(p))
 	}
 	if spec.Args == nil {
 		spec.Args = []string{}
@@ -584,6 +622,30 @@ func siteDir() (dir string, ok bool) {
 		}
 		if !more {
 			return "", false
+		}
+	}
+}
+
+// callerPos is the "<dir>/bob.go:<line>" position of the running bob.go call ("" outside a
+// bob.go of this build), for messages that point at a handle's declaration.
+func callerPos() string {
+	bi, found := debug.ReadBuildInfo()
+	if !found || bi.Main.Path == "" {
+		return ""
+	}
+	var pcs [64]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		f, more := frames.Next()
+		if path.Base(f.File) == "bob.go" {
+			if rel, ok := strings.CutPrefix(f.File, bi.Main.Path+"/"); ok {
+				return fmt.Sprintf("%s:%d", rel, f.Line)
+			}
+			return fmt.Sprintf("%s:%d", f.File, f.Line)
+		}
+		if !more {
+			return ""
 		}
 	}
 }

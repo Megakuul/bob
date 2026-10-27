@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/token"
 	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -175,6 +178,13 @@ func Evaluate(ctx context.Context, r Request) (*Result, error) {
 // with the characters a module path element cannot hold removed ("repo" when nothing is left).
 // A Go module at the root names its own path in its generated go.mod; the root go.mod of
 // another repository keeps this path.
+//
+// Since every Go package declares its binaries in its own bob.go (ADR 0020 §6), a new Go
+// project's only cross-directory import is often the root package itself
+// (`import "example.com/app"` in cmd/app/bob.go). So before the directory name, the path of a
+// Go module declared in the root bob.go (golang.ModuleOpts{Path: …}) is used, then an import of
+// a bob.go that names no subdirectory, no framework package, no standard library package and no
+// bob.Import module: the root package.
 func newRepoModule(root string, own map[string]*bobFile) string {
 	dirs := slices.Sorted(maps.Keys(own))
 	for _, d := range dirs {
@@ -189,6 +199,26 @@ func newRepoModule(root string, own map[string]*bobFile) string {
 			}
 		}
 	}
+	if rf, ok := own["."]; ok {
+		if mp := rootModulePath(rf); mp != "" && checkModulePath(mp, true) == nil {
+			return mp
+		}
+		imported := map[string]string{}
+		for _, d := range dirs {
+			_ = bobImportsOf(own[d], imported)
+		}
+		for _, d := range dirs {
+			for _, imp := range own[d].imports {
+				p := imp.path
+				if isStd(p) || p == frameworkModule || strings.HasPrefix(p, frameworkModule+"/") || underAny(p, imported) {
+					continue
+				}
+				if checkModulePath(p, true) == nil {
+					return p
+				}
+			}
+		}
+	}
 	var b strings.Builder
 	for _, r := range strings.ToLower(filepath.Base(root)) {
 		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
@@ -199,6 +229,61 @@ func newRepoModule(root string, own map[string]*bobFile) string {
 		return name
 	}
 	return "repo"
+}
+
+// rootModulePath returns the Path of a golang.ModuleOpts literal in f ("" when there is none or
+// it is not a string literal).
+func rootModulePath(f *bobFile) string {
+	if f.file == nil {
+		return ""
+	}
+	golang := ""
+	for _, is := range f.file.Imports {
+		if p, _ := strconv.Unquote(is.Path.Value); p == frameworkModule+"/pkg/golang" {
+			golang = "golang"
+			if is.Name != nil {
+				golang = is.Name.Name
+			}
+		}
+	}
+	if golang == "" || golang == "_" || golang == "." {
+		return ""
+	}
+	found := ""
+	ast.Inspect(f.file, func(n ast.Node) bool {
+		cl, ok := n.(*ast.CompositeLit)
+		if !ok || found != "" {
+			return found == ""
+		}
+		sel, ok := cl.Type.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "ModuleOpts" {
+			return true
+		}
+		if id, ok := sel.X.(*ast.Ident); !ok || id.Name != golang {
+			return true
+		}
+		for _, el := range cl.Elts {
+			kv, ok := el.(*ast.KeyValueExpr)
+			if k, isID := kv.Key.(*ast.Ident); !ok || !isID || k.Name != "Path" {
+				continue
+			}
+			if lit, ok := kv.Value.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				found, _ = strconv.Unquote(lit.Value)
+			}
+		}
+		return found == ""
+	})
+	return found
+}
+
+// underAny reports whether import path p is one of the modules in mods or below one.
+func underAny(p string, mods map[string]string) bool {
+	for m := range mods {
+		if p == m || strings.HasPrefix(p, m+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // compile checks the rules, generates the evaluator's sources and compiles them in the sandbox
@@ -288,7 +373,7 @@ func compile(ctx context.Context, r Request, root string, tc toolchain, fw *fram
 	if err != nil {
 		var be *evalbox.Error
 		if errors.As(err, &be) && out != nil && strings.HasPrefix(be.Msg, "evaluating bob.go failed (exit") {
-			return compileErrors(out.Stderr, g, deps)
+			return compileErrors(out.Stderr, g, deps, root, fw)
 		}
 		return err
 	}

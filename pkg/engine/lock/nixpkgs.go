@@ -2,17 +2,27 @@ package lock
 
 import (
 	"context"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/fetch"
 )
 
 // DefaultChannel is the nixpkgs channel of a repository whose RepoOpts.Nixpkgs is empty.
 const DefaultChannel = "nixos-26.05"
+
+// DefaultRev is the nixpkgs revision of DefaultChannel that bob's typed nixpkgs surface
+// (pkg/nixpkgs, nixext.SurfaceRev) was generated from. A new bob.lock of a repository with the
+// default channel and no RepoOpts.NixpkgsRev pins it, so the typed handles and the pin agree
+// (R-NIX-005, R-NIX-032, ADR 0020 §3); bob lock --update nixpkgs moves to the channel head.
+const DefaultRev = "da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36"
 
 // NixpkgsSpec is the parsed RepoOpts.Nixpkgs: "<channel>" or "<channel>@<40-hex rev>".
 type NixpkgsSpec struct {
@@ -61,7 +71,10 @@ func ChannelRev(ctx context.Context, channel string) (string, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("nixpkgs channel %s: %w", channel, err)
+		if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+			return "", err
+		}
+		return "", channelError(channel, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -80,8 +93,9 @@ func ChannelRev(ctx context.Context, channel string) (string, error) {
 
 // PinNixpkgs returns the nixpkgs pin for the declaration decl (RepoOpts.Nixpkgs), R-NIX-005.
 // The revision is decl's "@rev", else old's revision when old is a pin of the same channel and
-// update is false (pins move only with bob lock --update nixpkgs), else the channel's current
-// revision from channelRev (nil = ChannelRev). The source is downloaded once by f to record its
+// update is false (pins move only with bob lock --update nixpkgs), else DefaultRev for the
+// default channel when update is false, else the channel's current revision from channelRev
+// (nil = ChannelRev). The source is downloaded once by f to record its
 // narHash, unless old already pins that revision.
 func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPin, update bool,
 	channelRev func(context.Context, string) (string, error)) (NixpkgsPin, error) {
@@ -96,6 +110,11 @@ func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPi
 	rev := spec.Rev
 	if rev == "" && !update && old.Channel == spec.Channel && hex40Re().MatchString(old.Rev) {
 		rev = old.Rev
+	}
+	if rev == "" && !update && spec.Channel == DefaultChannel {
+		// A new pin of bob's default channel takes the revision the typed nixpkgs surface was
+		// generated from (R-NIX-005, R-NIX-032): handles and pin agree without a channel query.
+		rev = DefaultRev
 	}
 	if rev == "" {
 		if channelRev == nil {
@@ -118,4 +137,30 @@ func PinNixpkgs(ctx context.Context, f fetch.Fetcher, decl string, old NixpkgsPi
 	}
 	pin.NarHash = narHash
 	return pin, nil
+}
+
+// channelError is a failed request for a channel's revision: a download failure (BOB-E-3002)
+// with the network cause in plain words, not an internal error (A471: a resolver that does not
+// answer was reported as "Nix stopped unexpectedly").
+func channelError(channel string, err error) error {
+	host := "channels.nixos.org"
+	reason := err.Error()
+	var dns *net.DNSError
+	var unknown x509.UnknownAuthorityError
+	var invalid x509.CertificateInvalidError
+	var hostErr x509.HostnameError
+	var op *net.OpError
+	switch {
+	case errors.As(err, &dns):
+		reason = "the name " + host + " cannot be resolved; check the network and /etc/resolv.conf"
+	case errors.As(err, &unknown), errors.As(err, &invalid), errors.As(err, &hostErr):
+		reason = "the TLS certificate of " + host + " is not trusted; check the CA bundle of this system and any proxy"
+	case errors.Is(err, context.DeadlineExceeded):
+		reason = host + " did not answer within 30 s"
+	case errors.As(err, &op):
+		reason = host + " cannot be reached (" + op.Err.Error() + ")"
+	}
+	d := diag.New(3002, "label", "nixpkgs channel "+channel, "reason", reason)
+	d.Raw = []string{err.Error()}
+	return d
 }

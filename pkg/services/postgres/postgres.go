@@ -2,12 +2,12 @@ package postgres
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
 // Port is the port PostgreSQL listens on, at the service's own loopback address.
@@ -15,27 +15,25 @@ const Port = 5432
 
 // Options configures the PostgreSQL service.
 type Options struct {
-	// Version is the major version from nixpkgs ("17" → postgresql_17); empty = nixpkgs'
+	// Server is the PostgreSQL package (nixpkgs.Postgresql17); the zero value is nixpkgs'
 	// default postgresql. bob.lock pins it with the nixpkgs revision.
-	Version string
+	Server nixext.Attr
 	// Databases are created after the server started, before the test runs.
 	Databases []string
 }
-
-var version = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[0-9]{1,3}$`) })
 
 // Service is PostgreSQL as a loopback service of a test (R-FW-025). The test sees
 // POSTGRES_ADDR, PGHOST, PGPORT, PGUSER (postgres, trust authentication) and DATABASE_URL
 // (the first database of Options.Databases, else "postgres"). The data directory is fresh for
 // every run and fsync is off.
 //
-//	golang.TestOpts{Services: []bob.Service{postgres.Service(p, postgres.Options{Version: "17", Databases: []string{"app"}})}}
+//	golang.TestOpts{Services: []bob.Service{postgres.Service(p, postgres.Options{Server: nixpkgs.Postgresql17, Databases: []string{"app"}})}}
 func Service(p *bob.P, o Options) bob.Service {
-	attr := "postgresql"
-	if version().MatchString(o.Version) {
-		attr += "_" + o.Version
+	server := o.Server
+	if server.Name() == "" {
+		server = nixpkgs.Postgresql
 	}
-	return spec(o, tools(p, attr))
+	return spec(o, tools(p, server))
 }
 
 // spec builds the service from its tools (postgresql, bash, coreutils).

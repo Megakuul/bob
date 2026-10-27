@@ -12,12 +12,14 @@ download it or install it with `bob install`. This guide walks through all three
 ## Declare a release
 
 `release.New` groups outputs under a name. The
-[outputs quickstart](../03-quickstart/07-outputs.md) declares this one:
+[outputs quickstart](../03-quickstart/07-outputs.md) declares this one in `deploy/bob.go`
+(label `//deploy:hello-release`; the program comes from the typed slot `Hello`, bound by
+`cmd/hello/bob.go`):
 
 ```go
 var Release = bob.Define(func(p *bob.P) *release.Release {
 	return release.New(p, "hello-release", release.ReleaseOpts{
-		Closures:  []bob.Executable{Hello(p)},
+		Closures:  []bob.Executable{Hello.Get(p)},
 		Images:    []*oci.Image{Image(p)},
 		Tarballs:  []*tarball.Tarball{Tar(p)},
 		AppImages: []*appimage.Bundle{Bundle(p)},
@@ -38,20 +40,21 @@ Build the release package with a version. The output is the manifest `release.js
 lists every artifact with its platform, store path, file name and SHA-256:
 
 ```bash
-bob build //:hello-release --version 1.0.0 --print-paths
+bob build //deploy:hello-release --version 1.0.0 --print-paths
 ```
 
 Without `--version`, bob uses `0.0.0-dev`. A local build publishes nothing.
 
 ## Publish it through a pipeline
 
-Publishing is the server's job. A pipeline that lists the release in `Releases` publishes it
-after its build succeeds:
+Publishing is the server's job. A pipeline that lists the release in `Releases` (by label
+pattern; one that matches no release is a definition error) publishes it after its build
+succeeds:
 
 ```go
 var _ = bob.Pipeline("release", bob.PipelineOpts{
 	Triggers: []bob.Trigger{bob.OnTag("v*")},
-	Releases: []string{"hello-release"},
+	Releases: []bob.Pattern{"//deploy:hello-release"},
 })
 ```
 

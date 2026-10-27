@@ -39,7 +39,12 @@ var table = []Entry{
 	{11, one(`{label}: {ecosystem} packages cannot be cross-compiled yet (requested {platform} on a {host} host)`, "build for the host platform, or use an ecosystem that supports cross-compilation")},
 
 	// 1xxx definition
-	{1001, one(`nixpkgs has no package "{attr}"`, "did you mean {suggest}?")},
+	{1001, []Variant{
+		{Message: `nixpkgs has no package "{attr}"`, Hints: []string{"did you mean {suggest}?"}},
+		// A typed nixpkgs handle (R-NIX-031) that the pinned revision lacks (R-NIX-032, ADR 0020).
+		{Name: "pin", Message: `{pos}: nixpkgs at the pinned revision {rev} has no package "{attr}" (nixpkgs.{name})`,
+			Hints: []string{"bob's typed nixpkgs packages come from {surface}; move the pin with bob lock --update nixpkgs, or use another package"}},
+	}},
 	{1002, one(`nixpkgs package "{attr}" ({version}) is marked broken`, "pin a nixpkgs revision where it builds, or use another package")},
 	{1003, one(`nixpkgs package "{attr}" ({version}) is marked insecure: {cves}`, "use a fixed version; bob refuses known-vulnerable packages unless allowed per package")},
 	{1004, one(`nixpkgs package "{attr}" has an unfree licence`, "allow it explicitly for this package if your licence permits")},
@@ -63,17 +68,18 @@ var table = []Entry{
 	{1017, one(`nixpkgs package "{attr}" cannot be evaluated on {system}`, "pin another nixpkgs revision or use another package")},
 	{1018, one(`evaluating bob.go is not deterministic: {label}`, "bob.go must not depend on time, randomness, environment or map order")},
 	{1019, one(`bob.lock cannot be read: {reason} (line {line})`, "resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go")},
-	{1020, one(`{label}: invalid {option}: {reason}`)},
+	{1020, one(`{label}: invalid {option}: {reason}`, "{hint}")},
 	{1021, one(`{label}: toolchain mismatch: {reason}`, "align the versions named above")},
 	{1022, one(`{label} is not a static binary (it needs {deps})`, "use tarball.Closure")},
 	{1023, one(`{package} cannot be pinned: {reason}`)},
-	{1024, []Variant{ // R-FW-002 rules R1–R7 (R5 is not an error)
+	{1024, []Variant{ // R-FW-002 rules R1–R8 (R5 is not an error)
 		{Name: "R1", Message: `{dir}/bob.go: the first line must be "//go:build bob" so that go build, go vet and go test ignore it`},
 		{Name: "R2", Message: `{dir}/bob.go: package {have}, but the Go code in this directory is package {want}; bob.go must use package {want}`},
 		{Name: "R3", Message: `{dir}/bob.go: imports the build definitions of {maindir}/, which is a main package and cannot be imported; define the shared package in a bob.go of a non-main directory`},
 		{Name: "R4", Message: `{dir}/bob.go:{line}: {name} is also declared at {file}:{fileline}; bob.go shares its package with that code, rename one of them`},
 		{Name: "R6", Message: `{dir}/bob.go imports {dir2}, whose Go code imports {dir} (cycle exists only for build definitions); move the definition`},
 		{Name: "R7", Message: `{dir}/bob.go: imports {path}, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages`},
+		{Name: "R8", Message: `{dir}/bob.go:{line}: assigns to {name}, a value of the bob framework; framework values are read-only, declare your own variable`},
 	}},
 	{1025, []Variant{ // R-FW-021
 		{Name: "outside", Message: `{pos}: source pattern "{pattern}" leaves the repository`},
@@ -82,6 +88,15 @@ var table = []Entry{
 	}},
 
 	{1026, one(`nixpkgs mismatch: {what}`, "{hint}")},
+	// 1027 is reserved (I-B32 proposal, owner decision pending).
+	{1028, []Variant{ // R-FW-070 package locality (ADR 0020, D72)
+		{Name: "outside", Message: `{pos}: {label}: "{pattern}" leaves the package directory {dir}/`,
+			Hints: []string{"each bob.go builds only the files below its own directory; give the other directory its own bob.go and depend on its package"}},
+		{Name: "subpackage", Message: `{pos}: {label}: "{pattern}" is inside {sub}/, which has its own bob.go`,
+			Hints: []string{"use the package defined in {sub}/bob.go through its handle"}},
+	}},
+	{1029, one(`{pos}: {label}: {dir}/bob.go already defines the {ecosystem} {kind} {other} at {pos2}; one library or binary per directory package`,
+		"move {label} into its own directory with its own bob.go and depend on it through its handle")}, // R-FW-071
 
 	// 2xxx build
 	{2000, one(`{label} failed to build`)},
@@ -97,8 +112,8 @@ var table = []Entry{
 	{2010, one(`{label}: Rust crate {crate} not found`, "add the crate to the package's dependencies")},
 	{2011, one(`{label} wrote more than {bytes} bytes of log output and was stopped`, "a step is printing in a loop; reduce its output or raise the log limit")},
 	{2012, one(`dev server {name} exited with status {status}`, "see {log}")},
-	{2013, one(`{label}: {package} needs its {script} script ({reason})`, `add npm.AllowScripts("{package}") to {label}`)},
-	{2014, one(`{label}: {package} uses {dep} without declaring it`, `add npm.Extend("{package}", npm.Peer("{dep}"))`)},
+	{2013, one(`{label}: {package} needs its {script} script ({reason})`, `declare {package} (npm.Dep or npm.Indirect("{package}")) and add npm.AllowScripts(<its handle>) to {label}`)},
+	{2014, one(`{label}: {package} uses {dep} without declaring it`, `declare both (npm.Dep or npm.Indirect) and add npm.Extend(<handle of {package}>, npm.Peer(<handle of {dep}>))`)},
 	{2015, one(`{label}: prune pattern "{pattern}" removes {file}, which {user} needs`, "narrow the pattern")},
 	{2016, one(`{label}: {reason}`)}, // a warning bob-builder reports on a successful build (R-OUT-019)
 

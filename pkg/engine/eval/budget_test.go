@@ -93,7 +93,7 @@ func writeWide(t *testing.T, root string, n int) {
 	files := map[string]string{
 		"go.mod":   "module example.com/wide\n\ngo 1.26.0\n",
 		"bob.lock": "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":   "//go:build bob\n\npackage wide\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n",
+		"bob.go":   "//go:build bob\n\npackage wide\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n",
 	}
 	for i := 0; i < n; i++ {
 		files[fmt.Sprintf("p%04d/bob.go", i)] = fmt.Sprintf(`//go:build bob

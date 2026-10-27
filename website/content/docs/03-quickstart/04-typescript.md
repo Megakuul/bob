@@ -11,38 +11,65 @@ resolves the npm packages, pins them in `bob.lock`, and writes `package.json`,
 
 You need [bob installed](../02-install/02-install-bob.md). You do not need Node.js installed.
 
-## The project
-
-```tree
-📁 hello-ts/
-  📄 go.mod
-  📄 bob.go
-  📁 src/
-    📄 main.ts
-    📄 greeting.ts
-    📄 greeting.test.ts
-```
+## Start the project
 
 ```bash
 mkdir hello-ts && cd hello-ts
 git init
 ```
 
-## Write the code
+Let bob write the project, lock it and write the files it generates (it never overwrites a
+file):
 
-```ts file=src/greeting.ts
+```bash run
+bob init --lang npm
+```
+
+```text expect
+bob init: npm project in …
+  + bob.go
+  + src/greeting.test.ts
+  + src/greeting.ts
+  + src/main.ts
+bob.lock: … changes
+…
+next: bob build && bob test && bob run //:hello
+```
+
+`bob init` also resolved vitest and everything it needs from the npm registry and pinned
+each package with its integrity hash in `bob.lock`.
+
+```tree
+📁 hello-ts/
+  📄 bob.go
+  📄 bob.lock
+  📁 src/
+    📄 main.ts
+    📄 greeting.ts
+    📄 greeting.test.ts
+```
+
+## The code
+
+`src/greeting.ts`:
+
+```ts
 export function greeting(name: string): string {
   return `hello, ${name}`;
 }
 ```
 
-```ts file=src/main.ts
+`src/main.ts` is the entry point:
+
+```ts
 import { greeting } from "./greeting.js";
 
 console.log(greeting("bob"));
 ```
 
-```ts file=src/greeting.test.ts
+`src/greeting.test.ts` is a vitest test:
+
+```ts
 import { expect, test } from "vitest";
 import { greeting } from "./greeting.js";
 
@@ -51,9 +78,9 @@ test("greeting", () => {
 });
 ```
 
-## Describe the build
+## The build description
 
-```go file=bob.go
+```go verify
 //go:build bob
 
 package hellots
@@ -63,7 +90,7 @@ import (
 	"github.com/megakuul/bob/pkg/npm"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 var Hello = bob.Define(func(p *bob.P) *npm.App {
 	return npm.NewApp(p, npm.AppOpts{
@@ -81,27 +108,7 @@ var Test = bob.Define(func(p *bob.P) *npm.Test {
 `npm.Dev()` marks a tool: tests and builds see it, the program's runtime does not. bob
 bundles the program with esbuild and wraps it in `bin/hello`, which runs the pinned Node.
 
-```text file=go.mod
-module example.com/hellots
-
-go 1.26.0
-```
-
-## Lock, build, test, run
-
-`bob lock` resolves vitest and everything it needs from the npm registry and pins each
-package with its integrity hash:
-
-```bash run
-bob lock
-```
-
-```text expect
-bob.lock: … changes
-  + nixpkgs  nixpkgs   …
-…
-  + npm      vitest   3.…
-```
+## Build, test, run
 
 ```bash run
 bob build
@@ -137,9 +144,11 @@ vitest/3.…
 
 - `npm.Library` builds a TypeScript library that other importers depend on by value.
 - `npm.Vite` builds a static site with `vite build`. Run its dev server inside the dev shell
-  (`bob dev -- sh -c 'vite'`); `bob dev` does not start dev servers by itself yet.
-- Packages with install scripts must be allowed: `npm.AllowScripts("esbuild")` (otherwise
-  `BOB-E-2013`).
+  (`bob dev -- vite`); `bob dev` does not start dev servers by itself yet.
+- Packages with install scripts must be allowed by handle: `npm.AllowScripts(sqlite)` for a
+  dependency `sqlite := npm.Dep("better-sqlite3", "^11.0.0")`, or
+  `npm.AllowScripts(npm.Indirect("esbuild"))` for a package that is not a direct dependency
+  (otherwise `BOB-E-2013`).
 
 See the [bob.go reference](../04-guides/01-bob-go-reference.md#typescript-and-npm).
 

@@ -165,7 +165,7 @@ func statusSrcPath(root string, seen func(files []string)) func(*ir.Node) (strin
 		if len(n.Srcs) == 0 {
 			return "", nil
 		}
-		files, err := srcs.ResolveAll(root, n.Srcs, n.DefinedAt.String(), nil)
+		files, err := srcs.ResolveNode(root, n, nil)
 		if err != nil {
 			return "", err
 		}

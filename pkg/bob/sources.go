@@ -103,6 +103,49 @@ func mergeGroups(gs []srcGroup) []srcGroup {
 	return out
 }
 
+// Include is a public include tree of a native library (C/C++ headers, the C header of a Rust
+// staticlib): consumers get its directory on their include path through the library's typed
+// handle (bob.LinkInfo), never through a path string of their own (ADR 0020 §6).
+type Include struct {
+	dir  string // the bob.go's label directory
+	path string // as declared, relative to dir
+}
+
+// IncludeDir declares dir (relative to the bob.go directory, inside the package region; "." =
+// the package directory itself, its subpackages excluded) as a public include root: consumers
+// write #include <path below dir>. A dir outside the package region fails with BOB-E-1028.
+//
+//	Hdrs: bob.IncludeDir("include")
+func IncludeDir(dir string) Include {
+	if dir == "" {
+		dir = "."
+	}
+	return Include{dir: bobSite().dir, path: dir}
+}
+
+// Dir returns the include root relative to the declaring bob.go's directory ("." for the
+// directory itself, "" for the zero Include). Ecosystem packages put it on their consumers'
+// include path.
+func (i Include) Dir() string {
+	if i.path == "" {
+		return ""
+	}
+	return path.Clean(i.path)
+}
+
+// Sources returns the files of the include tree, for the declaring package's sources (the
+// region rule R-FW-070 applies: a tree outside the package fails with BOB-E-1028 naming dir).
+func (i Include) Sources() Sources {
+	if i.path == "" {
+		return Sources{}
+	}
+	p := escapeGlob(i.path)
+	if path.Clean(i.path) == "." {
+		p = "**"
+	}
+	return Sources{groups: []srcGroup{{dir: i.dir, patterns: []string{p}}}}
+}
+
 // FetchOpts declares one external file or archive.
 type FetchOpts struct {
 	URL     string   // https (http only with a pinned hash)
@@ -183,7 +226,7 @@ func reportInvalid(n *Node, option string, problems []string) {
 
 // RunOpts declares a hermetic step. Everything the command may read is declared here.
 type RunOpts struct {
-	Tools   []Tool            // on PATH, in order (nixpkgs.Tool or bob-built tools)
+	Tools   []Tool            // on PATH, in order (nixpkgs handles' Tool or bob-built tools)
 	Srcs    Sources           // copied writable to $BOB_SRC (cwd)
 	Inputs  map[string]Tree   // read-only at $BOB_IN_<NAME> (NAME = key upper-cased, [A-Z0-9_])
 	Cmd     []string          // argv; no shell. ${VAR} expands from the step's environment only
@@ -207,7 +250,7 @@ type runSpec struct {
 // Run creates a sandboxed, cached build step. Its output tree is the Step (a Tree).
 //
 //	gen := bob.Run(p, "version-file", bob.RunOpts{
-//	    Tools:   []bob.Tool{nixpkgs.Tool(p, "coreutils")},
+//	    Tools:   []bob.Tool{nixpkgs.Coreutils.Tool(p)},
 //	    Cmd:     []string{"sh", "-c", "…"}, // only if a shell is declared as a Tool
 //	    Outputs: []string{"version.txt"},
 //	})

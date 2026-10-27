@@ -1,7 +1,7 @@
 // Package cfgtab holds bob's built-in cfg tables: `rustc --print cfg --target <triple>` of the
-// pinned toolchain (rustc 1.95.0), one line per entry. pkg/rust (CfgTable, part of the
-// evaluator's framework) and pkg/rust/resolve (lock-time and plan-time cfg filtering) share
-// them; TestRRS002aCfgTablesEqualRustc compares them with the toolchain.
+// pinned toolchain (rustc 1.95.0), one line per entry. pkg/rust/resolve (CfgTable; lock-time
+// and plan-time cfg filtering) reads them; TestRRS002aCfgTablesEqualRustc compares them with
+// the toolchain. They are not build-definition API (R-FW-072, audit V20).
 package cfgtab
 
 var tables = map[string][]string{

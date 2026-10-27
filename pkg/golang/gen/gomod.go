@@ -29,7 +29,10 @@ const localVersion = "v0.0.0"
 // module's declarations and every module of its build list that some workspace module
 // declares (declared) or that provides packages, each at its selected version, so the go
 // command selects exactly the locked build list. go.sum is left out while it would be empty.
-func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, local []localModule) []engine.GeneratedFile {
+//
+// bob holds the requirements of the bob.go files when m is the repository's root module (the
+// framework and the bob.Import modules): they join the direct block, their lines go.sum.
+func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, local []localModule, bob bobRequirements) []engine.GeneratedFile {
 	direct := directRequires(m)
 	var buildList []resolve.Module
 	packages := map[string]bool{}
@@ -79,10 +82,20 @@ func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, loca
 	goLine := goDirectiveOf(m, buildList, sec)
 	fmt.Fprintf(&b, "module %s\n\ngo %s\n", m.spec.Path, goLine)
 	withLocal := direct
-	if len(local) > 0 {
+	if len(local) > 0 || len(bob.reqs) > 0 {
 		withLocal = slices.Clone(direct)
+		have := map[string]bool{}
+		for _, r := range direct {
+			have[r.Path] = true
+		}
 		for _, l := range local {
 			withLocal = append(withLocal, gospec.Requirement{Path: l.path, Version: localVersion})
+			have[l.path] = true
+		}
+		for _, r := range bob.reqs {
+			if !have[r.Path] {
+				withLocal = append(withLocal, r)
+			}
 		}
 		sort.Slice(withLocal, func(i, j int) bool { return withLocal[i].Path < withLocal[j].Path })
 	}
@@ -107,7 +120,7 @@ func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, loca
 	files := []engine.GeneratedFile{{Path: modPath, Content: []byte(b.String()), Mode: 0o444, Owner: m.node.Label,
 		Committed: true, Explain: explainGoMod(goLine, withLocal, indirect, bobGo)}}
 
-	if sum := goSum(buildList, sec); len(sum) > 0 {
+	if sum := mergeSum(goSum(buildList, sec), bob.sum); len(sum) > 0 {
 		files = append(files, engine.GeneratedFile{Path: path.Join(m.dir, "go.sum"), Content: sum, Mode: 0o444,
 			Owner: m.node.Label, Committed: true, Explain: explainGoSum(sum)})
 	}

@@ -15,7 +15,7 @@ func newRepo(t *testing.T, files map[string]string) string {
 	dir := t.TempDir()
 	files["go.mod"] = "module example.com/npmextra\n\ngo 1.26\n"
 	files["bob.lock"] = "{\n  \"lockVersion\": 1\n}\n"
-	files["bob.go"] = "//go:build bob\n\npackage root\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n"
+	files["bob.go"] = "//go:build bob\n\npackage root\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n"
 	for rel, body := range files {
 		ecotest.WriteFile(t, filepath.Join(dir, filepath.FromSlash(rel)), body)
 	}

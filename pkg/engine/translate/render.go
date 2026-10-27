@@ -199,11 +199,11 @@ func definitionLine(e *diag.Error) (string, bool) {
 			return e.Args["label"] + ": " + e.Args["reason"], true
 		}
 		return "", false
-	case cScriptDenied: // §03.4.4 runtime translations
-		return fmt.Sprintf("%s needs its %s script (%s). Add npm.AllowScripts(%q) to %s",
+	case cScriptDenied: // §03.4.4 runtime translations; options take handles (ADR 0020)
+		return fmt.Sprintf("%s needs its %s script (%s). Add npm.AllowScripts(<handle of %s>) to %s",
 			e.Args["package"], e.Args["script"], e.Args["reason"], e.Args["package"], e.Args["label"]), true
 	case cPhantomDep:
-		return fmt.Sprintf("%s uses %s without declaring it. Add npm.Extend(%q, npm.Peer(%q))",
+		return fmt.Sprintf("%s uses %s without declaring it. Add npm.Extend(<handle of %s>, npm.Peer(<handle of %s>))",
 			e.Args["package"], e.Args["dep"], e.Args["package"], e.Args["dep"]), true
 	}
 	return "", false

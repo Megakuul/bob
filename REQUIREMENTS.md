@@ -187,6 +187,10 @@ does so through generic interfaces (substituter, remote executor) the framework 
 - **R-FW-010 (MUST)** **Values, not strings:** packages and their outputs are typed Go values
   (e.g. `Shared()` returns a linkable library type; passing a binary where a library is expected
   fails to compile). Strings appear only as CLI labels.
+  Amended 2026-10-24 [D71]: no public API parameter or field takes a string that names a package,
+  nixpkgs attribute, target, tool or library defined elsewhere; nixpkgs packages are generated
+  typed handles; registry names appear once, in a declaration constructor, and are referenced by
+  typed handles. Enforced by a CI lint over the public API.
 - **R-FW-011 (MUST)** Cross-package references use **memoised constructor functions**
   (`foo.Lib(p)` returns the same package each time it is called). [D23]
 - **R-FW-012 (MUST)** API style is **builder chaining or option structs, whichever reads more
@@ -200,6 +204,18 @@ does so through generic interfaces (substituter, remote executor) the framework 
 - **R-FW-015 (MUST)** Package labels for the CLI: `//path/to/dir:name`, with `//...` patterns.
 - **R-FW-016 (MUST)** Every package records the source position of its definition (used by
   R-NIX-012 and the UI).
+- **R-FW-017 (MUST)** **Per-package build modules [D72]:** every build target is defined in the
+  `bob.go` of the directory that contains its sources; a `bob.go` references only files of its own
+  directory tree up to the next directory with a `bob.go` (no `..`, no absolute paths, no files of a
+  subpackage); each directory package defines at most one library or binary per ecosystem; a root
+  `bob.go` never lists sources of subdirectories. Violations are bob errors with the source
+  position, and CI lints every fixture and documented project for them.
+- **R-FW-018 (MUST)** **Generated typed nixpkgs surface [D71]:** a reproducible generator, run by
+  `go generate` and checkable offline against bob's pinned nixpkgs index, emits one typed handle per
+  top-level nixpkgs package (documented exclusions: language package sets, aliases, broken,
+  insecure), with gopls-visible doc comments (version, description, licence); the handle keeps the
+  Tool/Lib distinction at compile time; a pin that lacks a used package fails with a typed error
+  and the source position.
 
 ### 6.3 Graph features
 
@@ -253,6 +269,10 @@ BOOTSTRAP §cleanroom).
   other bob packages. No CMake/Meson/Make in user projects.
 - **R-CC-002 (MUST)** Compiler, language standard, flags, defines, include paths, linking as
   typed options; per-variant flags (sanitisers, debug).
+- **R-CC-006 (MUST)** [D72] C/C++ is split into per-directory packages: one library or binary per
+  directory with its own `bob.go`; public headers declared per package; include paths derived
+  only from typed dependencies (no global include directories, no hand-written `-I` of other
+  packages, no whole-project source lists).
 - **R-CC-003 (MUST)** Generates `compile_commands.json` for clangd.
 - **R-CC-004 (SHOULD)** Granularity finer than one derivation per library (e.g. per object file)
   if Stage 2 shows a net benefit.
@@ -690,3 +710,5 @@ for the questions to answer, not commitments):
 | D68 | Protected test files: changes are reported by CI (hash manifest), not blocked; no signing key. |
 | D69 | Host setup for rootless podman/OCI tests (setuid newuidmap/newgidmap, subuid ranges) is approved. |
 | D70 | Gate H is self-reviewed by the agent against HARNESS.md (report in `docs/harness-validation.md`); no stop for the owner. Tests are protected from then on. Owner: "b)". |
+| D71 | 2026-10-24 (chat, after trying bob by hand): **typed surface everywhere.** No public API takes a string that names a package, attribute, target, tool or library of another namespace; nixpkgs is a **generated typed Go surface** (one handle per top-level attribute, language package sets excluded with a documented list) that keeps the Tool/Lib compile-time distinction; registry names (Go modules, crates, npm, opam) are written once in a declaration constructor and referenced by typed handles (ADR 0020). Owner, verbatim: "looking into bob.go i detect how you designed the interface and it is absolutely terrible.... I think in the harness I did absolutely specify that everything must be typesafe... nixpkgs.Tool(p, "gcc") for example is 100% not typesafe... stop this... there must be a generator that builds a go prop for every nixpkgs package to make it a typesafe option... this can exclude packages e.g. for python not required in other things but must be typesafe of course. Also the CPP one (the only I checked) kinda scared me... to me it looks like a cmake file just wrapped... no bro i want that cpp is also split up into modules same for other systems so you create sub 'bob' files for each package to group it not a central one where you hardcode all cpp files used... then we are just like cmake... Please rewrite the harness if it doesnt already clearly say this by force I approve everything and then start implementation fixing for this." |
+| D72 | 2026-10-24 (same message): **build modules are per package, hierarchical, never central.** Every target belongs to the directory package (its own `bob.go`) that contains its sources; a `bob.go` references only files of its own directory tree up to the next `bob.go`; one library/binary per directory package (C/C++ and every other ecosystem); cross-package use only through typed handles; public headers and include paths come from typed dependencies. The owner approved rewriting spec, harness, protected tests, fixtures and goldens for D71/D72 ("I approve everything"). |

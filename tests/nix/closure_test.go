@@ -176,10 +176,10 @@ func TestRNIX030ClosureBudgets(t *testing.T) {
 		e := newBobEnv(t)
 		foo := filepath.Join(e.dir(t, "polyglot"), "libs", "foo", "bob.go")
 		s := string(mustRead(t, foo))
-		if !strings.Contains(s, `nixpkgs.Lib(p, "openssl")`) {
+		if !strings.Contains(s, `nixpkgs.Openssl.Lib(p)`) {
 			t.Fatal("harness: polyglot libs/foo no longer links nixpkgs openssl")
 		}
-		mustWrite(t, foo, []byte(strings.Replace(s, `nixpkgs.Lib(p, "openssl")`, `nixpkgs.Lib(p, "openssl", nixpkgs.Cross())`, 1)), 0o644)
+		mustWrite(t, foo, []byte(strings.Replace(s, `nixpkgs.Openssl.Lib(p)`, `nixpkgs.Openssl.Lib(p, nixpkgs.Cross())`, 1)), 0o644)
 		p, r := e.buildPath(t, "polyglot", "//cmd/api:api@linux-amd64")
 		if harness.Red(t, r) {
 			return

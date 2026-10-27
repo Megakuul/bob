@@ -72,7 +72,7 @@ var Lib = bob.Define(func(p *bob.P) *bob.Step {
 	root := writeRepo(t, "app", map[string]string{
 		"go.mod":   "module example.com/app\n\ngo 1.26.0\n",
 		"bob.lock": "{\n  \"lockVersion\": 1\n}\n",
-		"bob.go":   "//go:build bob\n\npackage app\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n\nvar _ = bob.Import(\"example.com/dep\", \"v1.0.0\")\n",
+		"bob.go":   "//go:build bob\n\npackage app\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n\nvar _ = bob.Import(\"example.com/dep\", \"v1.0.0\")\n",
 		"use/bob.go": `//go:build bob
 
 package use

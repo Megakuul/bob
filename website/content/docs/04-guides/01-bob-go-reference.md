@@ -12,7 +12,8 @@ documentation is in the doc comments: your editor shows it on hover, and
 `go doc github.com/megakuul/bob/pkg/golang` prints it in a checkout of bob.
 
 Every example on this page is a complete `bob.go` file that type-checks against the
-framework.
+framework. The examples whose first line names a path (`libs/greet/bob.go`) belong to one
+example repository, `example.com/acme`, and use each other by import.
 
 ## How constructors look
 
@@ -20,11 +21,13 @@ All constructors follow one shape:
 
 - They take `p *bob.P` first, then a name (when the kind has one), then an options struct
   (`cc.LibraryOpts`, `golang.ModuleOpts`, …). Zero values are the defaults.
-- They return a typed value that you pass to other constructors. Strings name only the
-  package itself and nixpkgs packages.
+- They return a typed value that you pass to other constructors. Strings are data only: the
+  package's own name, paths inside its directory, versions, flags, commands. Everything defined
+  elsewhere (a library, a tool, a nixpkgs package, another package's binary) is a typed Go
+  value.
 - You call them inside `bob.Define`, assigned to a package-level variable.
 
-```go verify
+```go file=libs/greet/bob.go
 //go:build bob
 
 package greet
@@ -34,16 +37,47 @@ import (
 	"github.com/megakuul/bob/pkg/cc"
 )
 
-// Lib is libgreet.a (label //<dir>:greet).
+// Lib is libgreet.a (label //libs/greet:greet).
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
-	return cc.StaticLibrary(p, "greet", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: "include"})
+	return cc.StaticLibrary(p, "greet", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: bob.IncludeDir("include")})
 })
 
-// Tool links Lib. Calling Lib(p) again returns the same value: bob.Define memoises per P.
-var Tool = bob.Define(func(p *bob.P) *cc.Binary {
-	return cc.NewBinary(p, "tool", cc.BinaryOpts{Srcs: bob.Files("tool.c"), Deps: []cc.Linkable{Lib(p)}})
+// Test links Lib. Calling Lib(p) again returns the same value: bob.Define memoises per P.
+var Test = bob.Define(func(p *bob.P) *cc.Test {
+	return cc.NewTest(p, "greet_test", cc.BinaryOpts{Srcs: bob.Files("test/greet_test.c"), Deps: []cc.Linkable{Lib(p)}})
 })
 ```
+
+## One package per directory
+
+A **package** is a directory with its own `bob.go`; its **region** is that directory plus every
+subdirectory without a `bob.go` of its own. Packages form a tree, and the root `bob.go` is one
+package among others:
+
+- **Locality.** Every path a `bob.go` passes (`bob.Glob`, `bob.Files`, `bob.Dir`,
+  `bob.IncludeDir`, Rust `Root`, npm `Entry`, `openapi.NewSpec`, …) is relative to its
+  directory and stays in its region: no `..`, no absolute path, no file of a subdirectory with
+  its own `bob.go` (`BOB-E-1028`). `**` and `bob.Dir` skip such subdirectories.
+- **One unit per package.** A package defines at most one library or program per ecosystem: one
+  of `cc.StaticLibrary`, `cc.SharedLibrary`, `cc.NewBinary`, `cc.External`; one Rust crate; one
+  npm importer; one OCaml library or executable; one Go binary or C library (of the directory's
+  `main` package) plus one `Cgo` declaration; one protobuf library, GraphQL schema or OpenAPI
+  spec (`BOB-E-1029`). Tests, checks, code generators, `bob.Run` steps, dev shells, services and
+  outputs are not units and may appear any number of times.
+- **Typed handles across packages.** Another package's library is used by value
+  (`greet.Lib(p)`), its public headers come with it (`bob.IncludeDir` in its `bob.go`), never as
+  a path string. Go `main` packages cannot be imported, by Go or by `bob.go`; their binaries
+  reach other packages through a typed **slot**:
+
+| Function | Use |
+|---|---|
+| `bob.NewSlot[T]()` | declares a slot in an importable `bob.go` (a package-level `var`) |
+| `slot.Bind(constructor)` | binds a `bob.Define` result to it, in the `bob.go` of the package that defines the value; exactly once |
+| `slot.Get(p)` | the bound value for `p`, memoised like the constructor |
+
+An unbound slot, or one bound twice, is a definition error (`BOB-E-1020`). The [Go](#go) example
+below binds the server binary to `acme.API`, and `deploy/bob.go` builds its image from
+`acme.API.Get(p)`.
 
 ## Core (pkg/bob)
 
@@ -54,14 +88,14 @@ var Tool = bob.Define(func(p *bob.P) *cc.Binary {
 | Function | Use |
 |---|---|
 | `bob.Define(fn)` | turns a constructor into a memoised, registered constructor; only in package-level `var` declarations |
-| `bob.Repo(bob.RepoOpts{…})` | repository settings, root `bob.go` only, at most once: `Nixpkgs` (a channel such as `"nixos-26.05"`, or `"<channel>@<rev>"`) and named `Variants` |
+| `bob.Repo(bob.RepoOpts{…})` | repository settings, root `bob.go` only, at most once: `Nixpkgs` (a channel: `bob.NixOS2605`, bob's default, `bob.NixOS2511` or `bob.NixpkgsUnstable`), `NixpkgsRev` (pin a 40-digit revision of it) and named `Variants` |
 | `bob.Import(module, version)` | requires another bob repository as a Go module; its `bob.go` packages become importable and its labels are `<module>//dir:name` |
 | `bob.Main()` | the entry point of the generated evaluator; never call it |
 
 `p.Platform()`, `p.Variant()` and `p.Host()` tell a constructor what it builds for. Build
 tools use `p.Host()`: the host platform with the release profile. `p.Toolchain()` and
-`bob.ToolchainFor(host, target)` describe the C/C++ compiler for a platform pair; ecosystems
-use them, `bob.go` files rarely need them.
+`bob.ToolchainFor(host, target)` describe the C/C++ cross setup for a platform pair (target
+triple, tool prefix, emulator command); ecosystems use them, `bob.go` files rarely need them.
 
 ### Sources
 
@@ -71,10 +105,11 @@ use them, `bob.go` files rarely need them.
 | `bob.Files("a.c", "b.c")` | exact files |
 | `bob.Dir("include")` | a whole directory tree |
 | `s.Union(o…)` | several selections together |
+| `bob.IncludeDir("include")` | a library's public include tree (`Hdrs`, Rust `Headers`); consumers get it through the library |
 
-Paths are relative to the `bob.go` directory and may not leave the repository
-(`BOB-E-1025`). A pattern that matches nothing is an error. Files ignored by git, `.bob/`
-and `bob.go` files are never selected.
+Paths are relative to the `bob.go` directory and stay in its package (`BOB-E-1028`; leaving
+the repository is `BOB-E-1025`). A pattern that matches nothing is an error. Files ignored by
+git, `.bob/`, `bob.go` files and subdirectories with their own `bob.go` are never selected.
 
 ### Custom build steps and downloads
 
@@ -94,7 +129,7 @@ import (
 // File writes version.txt (label //<dir>:version-file).
 var File = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "version-file", bob.RunOpts{
-		Tools:   []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
+		Tools:   []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)},
 		Cmd:     []string{"bash", "-c", "echo 1.2.3 > $BOB_OUT/version.txt"},
 		Outputs: []string{"version.txt"},
 	})
@@ -136,7 +171,7 @@ import (
 // Dev is the default dev shell.
 var Dev = bob.Define(func(p *bob.P) *bob.Shell {
 	return bob.NewShell(p, bob.DevShell{
-		Packages: []bob.Tool{nixpkgs.Tool(p, "jq"), nixpkgs.Tool(p, "postgresql")},
+		Packages: []bob.Tool{nixpkgs.Jq.Tool(p), nixpkgs.Postgresql.Tool(p)},
 		Env:      map[string]string{"ACME_ENV": "dev"},
 		Hooks:    []string{"echo welcome"},
 	})
@@ -177,7 +212,8 @@ labels (`//api:api@linux-amd64+debug+asan`); bob uses them for the command line.
 ### Pipelines
 
 `bob.Pipeline(name, bob.PipelineOpts{…})` registers a pipeline: what to build
-(`Targets`), what to test (`Tests`), which releases to publish (`Releases`), when to run
+(`Targets`), what to test (`Tests`), which releases to publish (`Releases`, label patterns of
+`release.New` packages; a pattern that matches none is a definition error), when to run
 (`Triggers`: `bob.OnPush(branchGlob)`, `bob.OnPullRequest()`, `bob.OnTag(glob)`) and what to do
 with an older run of the same ref (`Concurrency`: `bob.Queue`, `bob.Supersede`,
 `bob.Parallel`). See [Pipelines](06-pipelines.md).
@@ -190,7 +226,7 @@ package acme
 import "github.com/megakuul/bob/pkg/bob"
 
 var _ = bob.Repo(bob.RepoOpts{
-	Nixpkgs:  "nixos-26.05",
+	Nixpkgs:  bob.NixOS2605,
 	Variants: []bob.Named{bob.NamedVariant("asan", bob.WithSanitize(bob.ASan, bob.UBSan), bob.WithProfile(bob.Debug))},
 })
 
@@ -202,7 +238,7 @@ var _ = bob.Pipeline("ci", bob.PipelineOpts{
 
 var _ = bob.Pipeline("release", bob.PipelineOpts{
 	Triggers: []bob.Trigger{bob.OnTag("v*")},
-	Releases: []string{"api"},
+	Releases: []bob.Pattern{"//deploy:api"},
 })
 ```
 
@@ -210,21 +246,58 @@ var _ = bob.Pipeline("release", bob.PipelineOpts{
 
 `import "github.com/megakuul/bob/pkg/nixpkgs"`
 
-Packages from the pinned nixpkgs revision, named by their attribute (`"zlib"`, `"openssl"`,
-`"jq"`). This is the only place a Nix concept shows up in `bob.go`.
+### Typed nixpkgs packages
 
-| Function | Use |
+Every package of nixpkgs is a typed Go value of package `nixpkgs`, generated for the nixpkgs
+revision this bob was released with: `nixpkgs.Openssl`, `nixpkgs.Zlib`, `nixpkgs.Jq`,
+`nixpkgs.Go1_26`, `nixpkgs.Postgresql17`. This is the only place a Nix concept shows up in
+`bob.go`. There is no way to name a package by a string, so a misspelt package does not compile,
+and bob's error suggests the right name (`undefined: nixpkgs.Opensll` → `did you mean
+nixpkgs.Openssl?`).
+
+**Finding a package.** Type `nixpkgs.` and let your editor complete (`nixpkgs.Op` →
+`Openssl`); hovering a name shows its version, description and licence, for example `Openssl is
+openssl 3.6.5: Cryptographic library that implements the SSL and TLS protocols. Licence:
+Apache-2.0.` In a checkout of bob, `go doc github.com/megakuul/bob/pkg/nixpkgs.Openssl` prints
+the same. The Go name is the attribute with `-`, `_` and `.` removed and each part capitalised
+(`nix-update` → `NixUpdate`, `python313` → `Python313`); a `_` stays between two numbers
+(`go_1_26` → `Go1_26`), a leading digit gets an `N` (`3proxy` → `N3proxy`). The few attributes
+whose names collide (`git-repo` and `gitRepo`) are written `nixpkgs.A_git_repo`,
+`nixpkgs.A_gitRepo`.
+
+**Roles.** The method says how the package is used, and the type it returns says where it may
+go:
+
+| Method | Use |
 |---|---|
-| `nixpkgs.Tool(p, attr, opts…)` | a build-time tool, from the host package set; for `bob.Run`, dev shells, `ExternalOpts.Tools` |
-| `nixpkgs.Lib(p, attr, opts…)` | a library linked into target code; a `cc.Linkable` |
-| `nixpkgs.Pkg(p, attr, opts…)` | a run-time package (data, services) of the target set |
-| `nixpkgs.Exe(p, attr, mainProgram, opts…)` | a run-time package used as a program, e.g. an extra AppImage entry |
+| `nixpkgs.Protobuf.Tool(p, opts…)` | a build-time tool, from the host package set; for `bob.Run`, dev shells, `ExternalOpts.Tools`; not a library |
+| `nixpkgs.Openssl.Lib(p, opts…)` | a library linked into target code; a `cc.Linkable`, not a tool |
+| `nixpkgs.Tzdata.Pkg(p, opts…)` | a run-time package (data, services) of the target set |
+| `nixpkgs.Curl.Exe(p, opts…)` | a run-time package used as a program (its `meta.mainProgram`), e.g. an extra AppImage entry |
 
-Options: `nixpkgs.Modules("libcrypto")` (pkg-config modules to link; default all),
-`nixpkgs.Outputs("dev", "lib")`, `nixpkgs.Cross()` (take a library from the cross package set
-instead of the target system's own), `nixpkgs.AllowInsecure("CVE-…")` and
-`nixpkgs.AllowUnfree()`. bob checks names, broken, insecure and unfree packages before it
-builds anything (`BOB-E-1001` to `BOB-E-1005`), with suggestions for misspelled names.
+Options: `nixpkgs.Modules("libcrypto")` (pkg-config modules to link; default all, checked when
+the build is planned), `nixpkgs.Outputs(nixpkgs.OutDev, nixpkgs.OutLib)` (outputs: `nixpkgs.Out`,
+`OutBin`, `OutDev`, `OutLib`, `OutMan`, `OutDoc`, `OutDebug`, `OutStatic`), `nixpkgs.Cross()`
+(take a library from the cross package set instead of the target system's own),
+`nixpkgs.MainProgram("bin/curl")` (the program `Exe` runs, when the package has no
+`meta.mainProgram` or you want another), `nixpkgs.AllowInsecure("CVE-…")` and
+`nixpkgs.AllowUnfree()` (the doc of an unfree package says so). bob checks broken, insecure and
+unfree packages before it builds anything (`BOB-E-1002` to `BOB-E-1005`).
+
+**Not in the list.** Package sets and scopes (`python3Packages`, `ocamlPackages`,
+`haskellPackages`, `pkgsCross`, …), aliases (use the name they point to), broken and insecure
+packages, packages that exist on neither `aarch64-linux` nor `x86_64-linux`, and packages that
+fail to evaluate. The ecosystems take what they need from the language sets themselves (OCaml's
+`findlib`, Rust's standard library, the cross compilers). A few nested packages that bob needs
+are added by name (`nixpkgs.Rust1_97PackagesStableRustc`, a second Rust compiler); ask for one
+if you need another (see the [status page](../07-reference/03-status.md#nixpkgs-packages)).
+
+**Another pin.** The list matches bob's default pin: a new `bob.lock` pins the revision the list
+was generated from (`da6dc0e7b260` for this bob). With another pin (`bob lock --update nixpkgs`,
+`RepoOpts.NixpkgsRev`), every package you use is checked against the pinned revision before
+anything builds; one the pin lacks fails with `BOB-E-1001` naming the call, for example
+`libs/foo/bob.go:17: nixpkgs at the pinned revision cd4ea8d57de1 has no package "openssl"
+(nixpkgs.Openssl)`. A package that is newer than bob's list cannot be named until a newer bob.
 
 ## Go
 
@@ -234,57 +307,110 @@ keyword).
 | Constructor | Label | Builds |
 |---|---|---|
 | `golang.NewModule(p, golang.ModuleOpts{…})` | `//<dir>:module` | the module rooted at the `bob.go` directory; library packages need no declaration |
-| `m.Binary(dir, golang.BinaryOpts{…})` | `//<dir>:<name>` | a main package |
-| `m.Tests(pattern, golang.TestOpts{…})` | `//<pkg>:go_test` | one test unit per package with `_test.go` files |
-| `m.Cgo(dir, golang.CgoOpts{Deps: …})` | `//<dir>:go` | gives a cgo package its C, C++ or Rust libraries |
-| `m.CArchive(dir, …)`, `m.CShared(dir, …)` | `//<dir>:<name>` | a main package as a C library (`-buildmode=c-archive`/`c-shared`) |
+| `m.Binary(golang.BinaryOpts{…})` | `//<dir>:<name>` | the `main` package of the calling `bob.go`'s directory |
+| `m.Tests(golang.TestOpts{…})` | `//<dir>:go_test` | the tests of the calling directory's package; with `Recursive: true` one unit per package of the directory's region (subdirectories without a `bob.go` of their own) |
+| `m.Cgo(golang.CgoOpts{Deps: …})` | `//<dir>:go` | gives the calling directory's cgo package its C, C++ or Rust libraries |
+| `m.CArchive(…)`, `m.CShared(…)` | `//<dir>:<name>` | the calling directory's `main` package as a C library (`-buildmode=c-archive`/`c-shared`) |
+
+None of these take a directory: a Go package's binary, cgo libraries and tests are declared in
+that package's own `bob.go`, which reaches the module through the module root's package
+(`acme.Module(p)`). The module stays declared once, in the module root.
 
 - `golang.Require(path, version)` adds a third-party requirement at an exact version; bob
   generates `go.mod` and `go.sum` from these and `bob.lock`.
-- `golang.GeneratorRuntime(path, attr, exact)` is the requirement code generators add for
-  their runtime library, at the version of the generator in your nixpkgs pin. You do not
-  call it yourself; `connect.Go` and friends do.
-- `golang.GenLabel(dir)` returns the label name of a generated tree (`gen/proto/greet/v1` →
-  `gen-proto-greet-v1`); it is used by the code generator packages.
+- `golang.GeneratorRuntime(path, generator, exact)` is the requirement code generators add for
+  their runtime library, at the version of the generator (a typed nixpkgs package) in your
+  nixpkgs pin. You do not call it yourself; `connect.Go` and friends do.
 - `BinaryOpts.X` sets `-ldflags -X` values, `CGo: golang.CGoOff` forces a pure Go build.
 - `ModuleOpts.Go` is the language version (`"1.26"`); the toolchain is nixpkgs' `go_1_26`
   unless you set `Toolchain`.
 
-```go verify
+The module root declares the module, the slot for the server binary and the tests of every
+package that has no `bob.go` of its own:
+
+```go file=bob.go
 //go:build bob
 
-package api
+package acme
 
 import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+)
+
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
+
+// Module is example.com/acme (label //:module).
+var Module = bob.Define(func(p *bob.P) *golang.Module {
+	return golang.NewModule(p, golang.ModuleOpts{
+		Path:    "example.com/acme",
+		Go:      "1.26",
+		Require: []golang.Requirement{golang.Require("github.com/google/uuid", "v1.6.0")},
+	})
+})
+
+// API is the server binary //cmd/api:api, bound by cmd/api/bob.go (a main package cannot be
+// imported).
+var API = bob.NewSlot[*golang.Binary]()
+
+// Tests runs the tests of every Go package below the root without a bob.go of its own.
+var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+	return Module(p).Tests(golang.TestOpts{Recursive: true})
+})
+```
+
+`internal/ffi` is a cgo package that links zlib:
+
+```go file=internal/ffi/bob.go
+//go:build bob
+
+package ffi
+
+import (
+	"example.com/acme"
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/cc"
 	"github.com/megakuul/bob/pkg/golang"
 	"github.com/megakuul/bob/pkg/nixpkgs"
 )
 
-// Module is example.com/api (label //<dir>:module).
-var Module = bob.Define(func(p *bob.P) *golang.Module {
-	return golang.NewModule(p, golang.ModuleOpts{
-		Path:    "example.com/api",
-		Go:      "1.26",
-		Require: []golang.Requirement{golang.Require("github.com/google/uuid", "v1.6.0")},
-	})
-})
-
-// FFI links the cgo package ./internal/ffi against zlib. Declare it before the binaries
-// that use the package.
+// FFI links this cgo package against zlib. Binaries that use the package call it first.
 var FFI = bob.Define(func(p *bob.P) *golang.Package {
-	return Module(p).Cgo("./internal/ffi", golang.CgoOpts{Deps: []cc.Linkable{nixpkgs.Lib(p, "zlib")}})
+	return acme.Module(p).Cgo(golang.CgoOpts{Deps: []cc.Linkable{nixpkgs.Zlib.Lib(p)}})
 })
 
-// API is the server binary with a version stamped in.
-var API = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/api", golang.BinaryOpts{X: map[string]string{"main.version": "1.0.0"}})
-})
-
-// Tests runs every package's tests.
+// Tests runs this package's tests (unit //internal/ffi:go_test).
 var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./...", golang.TestOpts{})
+	FFI(p)
+	return acme.Module(p).Tests(golang.TestOpts{})
+})
+```
+
+`cmd/api` is the server. Its `bob.go` shares the `main` package of `main.go`:
+
+```go file=cmd/api/bob.go
+//go:build bob
+
+package main
+
+import (
+	"example.com/acme"
+	"example.com/acme/internal/ffi"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/golang"
+)
+
+// Binary is the server with a version stamped in (label //cmd/api:api).
+var Binary = bob.Define(func(p *bob.P) *golang.Binary {
+	ffi.FFI(p)
+	return acme.Module(p).Binary(golang.BinaryOpts{X: map[string]string{"main.version": "1.0.0"}})
+})
+
+var _ = acme.API.Bind(Binary)
+
+// Tests runs this package's tests (unit //cmd/api:go_test).
+var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+	return acme.Module(p).Tests(golang.TestOpts{})
 })
 ```
 
@@ -304,11 +430,15 @@ var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
 | `cc.NewTest(p, name, cc.BinaryOpts{…})` | `//<dir>:<name>` | a test program, run as a test; TAP output is parsed |
 | `cc.External(p, name, cc.ExternalOpts{…})` | `//<dir>:<name>` | a third-party project built with CMake, Autotools, Meson or Make from a pinned archive |
 
-Libraries are `cc.Linkable`, as are `nixpkgs.Lib`, Rust `StaticLib`/`CDylib` and Go
-`CArchive`/`CShared`. `Deps` propagate headers to consumers; `PrivDeps` link without
-propagating. `Std` selects the language standard (`cc.C17`, `cc.CXX20`, …); `Defines`,
-`Flags` and `LinkOpts` add flags (bob refuses flags that would break hermeticity, such as
-`-I/nix/store/…`). See the [C/C++ quickstart](../03-quickstart/02-c-cpp.md) for a full project.
+One library, program or `cc.External` per directory, each with its own `bob.go`; a test sits
+next to the code it tests. Libraries are `cc.Linkable`, as are the `Lib` of a nixpkgs package,
+Rust `StaticLib`/`CDylib` and Go `CArchive`/`CShared`. A library's public headers are
+`Hdrs: bob.IncludeDir("include")` (a directory of its package, `"."` for the package directory
+itself); consumers get that include path only from `Deps` (propagated to their consumers) or
+`PrivDeps` (not propagated). There are no global include directories: `Flags` and `LinkOpts`
+refuse `-I`, `-isystem`, `-iquote`, `-L`, `-l` and similar path flags, relative or absolute (use
+`Deps`). `Std` selects the language standard (`cc.C17`, `cc.CXX20`, …); `Defines`, `Flags` and
+`LinkOpts` add other flags. See the [C/C++ quickstart](../03-quickstart/02-c-cpp.md) for a full project.
 
 ## Rust
 
@@ -331,23 +461,27 @@ Dependencies (`[]rust.Dep`):
 - a local crate value, or `lib.With("feature")` to enable features of it for this edge.
 
 `rust.Uses(crate, libs…)` (in `Options`) gives a crates.io crate's build script native
-libraries, for example `rust.Uses("openssl-sys", nixpkgs.Lib(p, "openssl"))`. `Native` links
-C libraries into your own crate. `rust.CfgTable(triple)` returns bob's built-in `cfg` table of
-a target, which bob uses to select platform-specific dependencies.
+libraries. The crate is a handle: the one from `rust.Crate`, or `rust.Indirect("openssl-sys")`
+for a crate that is not a direct dependency (bob lock fails with `BOB-E-1015` when the resolved
+graph does not contain it), for example
+`rust.Uses(rust.Indirect("openssl-sys"), nixpkgs.Openssl.Lib(p))`. `Native` links C libraries
+into your own crate. `Headers: bob.IncludeDir("include")` exports a staticlib's or cdylib's C
+header directory to its consumers.
 
-```go verify
+Each crate is a package of its own. A library with its own feature table and its tests:
+
+```go file=crates/core/bob.go
 //go:build bob
 
-package demo
+package core
 
 import (
 	"github.com/megakuul/bob/pkg/bob"
-	"github.com/megakuul/bob/pkg/nixpkgs"
 	"github.com/megakuul/bob/pkg/rust"
 )
 
-// Core is a library crate with its own feature table.
-var Core = bob.Define(func(p *bob.P) *rust.Lib {
+// Lib is a library crate with its own feature table (label //crates/core:core-lib).
+var Lib = bob.Define(func(p *bob.P) *rust.Lib {
 	return rust.Library(p, rust.LibOpts{
 		Name:     "core-lib",
 		Deps:     []rust.Dep{rust.Crate("serde", "1", rust.Features("derive")), rust.Crate("hex", "0.4")},
@@ -356,26 +490,68 @@ var Core = bob.Define(func(p *bob.P) *rust.Lib {
 	})
 })
 
-// Macros is a proc-macro crate.
-var Macros = bob.Define(func(p *bob.P) *rust.Lib {
+// Test runs the library's unit and integration tests.
+var Test = bob.Define(func(p *bob.P) *rust.TestSet { return rust.Test(p, rust.TestOpts{Crate: Lib(p)}) })
+```
+
+A proc-macro crate:
+
+```go file=crates/macros/bob.go
+//go:build bob
+
+package macros
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/rust"
+)
+
+// Lib is a proc-macro crate (label //crates/macros:macros).
+var Lib = bob.Define(func(p *bob.P) *rust.Lib {
 	return rust.ProcMacro(p, rust.LibOpts{Deps: []rust.Dep{rust.Crate("syn", "2", rust.Features("full")), rust.Crate("quote", "1")}})
 })
+```
 
-// Demo uses both, plus a crate whose build script needs OpenSSL.
-var Demo = bob.Define(func(p *bob.P) *rust.Bin {
+A program that uses both, plus a crate whose build script needs OpenSSL:
+
+```go file=crates/demo/bob.go
+//go:build bob
+
+package demo
+
+import (
+	"example.com/acme/crates/core"
+	"example.com/acme/crates/macros"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/rust"
+)
+
+// Bin is bin/demo (label //crates/demo:demo).
+var Bin = bob.Define(func(p *bob.P) *rust.Bin {
 	return rust.Binary(p, rust.BinOpts{
-		Deps:    []rust.Dep{Core(p), Macros(p), rust.Crate("openssl", "0.10")},
-		Options: []rust.Option{rust.Uses("openssl-sys", nixpkgs.Lib(p, "openssl"))},
+		Deps:    []rust.Dep{core.Lib(p), macros.Lib(p), rust.Crate("openssl", "0.10")},
+		Options: []rust.Option{rust.Uses(rust.Indirect("openssl-sys"), nixpkgs.Openssl.Lib(p))},
 	})
 })
+```
 
-// RCore is a staticlib for C consumers, with headers from include/.
-var RCore = bob.Define(func(p *bob.P) *rust.CLib {
-	return rust.StaticLib(p, rust.LibOpts{Name: "rcore", Headers: "include"})
+A staticlib for C consumers, with its header directory:
+
+```go file=crates/rcore/bob.go
+//go:build bob
+
+package rcore
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/rust"
+)
+
+// Crate is librcore.a with the headers of include/ (label //crates/rcore:rcore).
+var Crate = bob.Define(func(p *bob.P) *rust.CLib {
+	return rust.StaticLib(p, rust.LibOpts{Name: "rcore", Headers: bob.IncludeDir("include")})
 })
-
-// CoreTest runs Core's unit and integration tests.
-var CoreTest = bob.Define(func(p *bob.P) *rust.TestSet { return rust.Test(p, rust.TestOpts{Crate: Core(p)}) })
 ```
 
 ## TypeScript and npm
@@ -389,45 +565,70 @@ var CoreTest = bob.Define(func(p *bob.P) *rust.TestSet { return rust.Test(p, rus
 | `npm.Vite(p, npm.ViteOpts{…})` | `//<dir>:<name>` | a static site with `vite build`; `Kit: true` for SvelteKit with adapter-static |
 | `npm.NewTest(p, npm.TestOpts{Of: …})` | `//<dir>:test` | vitest (default), `node --test`, `svelte-check` or `eslint` over an importer |
 
-Dependencies (`[]npm.Dependency`): `npm.Dep(name, range, opts…)` with `npm.Dev()` or
+One importer (`npm.Library`, `npm.NewApp` or `npm.Vite`) per directory, each with its own
+`bob.go`. Dependencies (`[]npm.Dependency`): `npm.Dep(name, range, opts…)` with `npm.Dev()` or
 `npm.Optional()`, `npm.Alias("lodash4", "lodash", "^4")`, and local libraries by value.
+`npm.Dep` and `npm.Alias` return a handle (`*npm.Pkg`) that the options below take; a package
+that is not a direct dependency is declared with `npm.Indirect("esbuild")` (bob lock fails with
+`BOB-E-1015` when the resolved graph does not contain it).
 
 Options (`[]npm.Option`) fix packages that need help:
 
-- `npm.AllowScripts("esbuild")`: run the package's install scripts (sandboxed, offline).
-- `npm.Extend("@fastify/cors", npm.Peer("fastify"))`: declare a dependency a package uses
-  without declaring it (a phantom dependency, `BOB-E-2014`). `npm.Peer` is valid only there.
+- `npm.AllowScripts(sqlite, npm.Indirect("esbuild"))`: run these packages' install scripts
+  (sandboxed, offline).
+- `npm.Extend(npm.Indirect("@fastify/cors"), npm.Peer(fastify))`: declare a dependency a
+  package uses without declaring it (a phantom dependency, `BOB-E-2014`). `npm.Peer` is valid
+  only there.
 - `npm.Hoisted()`: an npm-style hoisted `node_modules` for tools that need one.
+
+`TSConfig` fields with a fixed set of values are typed: `Target: npm.ES2022`,
+`Module: npm.ModuleNodeNext`, `ModuleResolution: npm.Bundler`, `JSX: npm.ReactJSX`.
 
 bob ships a small table of curated fixes for well-known packages (`npm.Quirks()` returns it;
 `npm.CheckQuirks` validates entries). You do not call either from `bob.go`.
 
-```go verify
+A component library:
+
+```go file=web/ui/bob.go
 //go:build bob
 
-package web
+package ui
 
 import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/npm"
 )
 
-// UI is a component library with a peer dependency on svelte.
-var UI = bob.Define(func(p *bob.P) *npm.Lib {
+// Lib is a component library with a peer dependency on svelte (label //web/ui:ui).
+var Lib = bob.Define(func(p *bob.P) *npm.Lib {
 	return npm.Library(p, npm.LibOpts{
 		Name:  "@acme/ui",
 		Peers: []npm.Dependency{npm.Dep("svelte", "^5")},
 		Deps:  []npm.Dependency{npm.Dep("typescript", "~5.9.2", npm.Dev())},
 	})
 })
+```
 
-// Site is a Svelte site built by Vite.
+A Svelte site that uses it, checked by `svelte-check`:
+
+```go file=web/site/bob.go
+//go:build bob
+
+package site
+
+import (
+	"example.com/acme/web/ui"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/npm"
+)
+
+// Site is a Svelte site built by Vite (label //web/site:site).
 var Site = bob.Define(func(p *bob.P) *npm.Site {
 	return npm.Vite(p, npm.ViteOpts{Deps: []npm.Dependency{
 		npm.Dep("svelte", "^5"),
 		npm.Dep("vite", "^7.1.0", npm.Dev()),
 		npm.Dep("@sveltejs/vite-plugin-svelte", "^6", npm.Dev()),
-		UI(p),
+		ui.Lib(p),
 	}})
 })
 
@@ -435,13 +636,27 @@ var Site = bob.Define(func(p *bob.P) *npm.Site {
 var Check = bob.Define(func(p *bob.P) *npm.Test {
 	return npm.NewTest(p, npm.TestOpts{Of: Site(p), Runner: npm.SvelteCheck})
 })
+```
 
-// Server is a Node program; its native dependency needs its install script.
-var Server = bob.Define(func(p *bob.P) *npm.App {
+A Node program whose native dependency needs its install script:
+
+```go file=web/server/bob.go
+//go:build bob
+
+package server
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/npm"
+)
+
+// App is the server (label //web/server:server).
+var App = bob.Define(func(p *bob.P) *npm.App {
+	sqlite := npm.Dep("better-sqlite3", "^12.2.0")
 	return npm.NewApp(p, npm.AppOpts{
 		Entry:   "src/server.ts",
-		Deps:    []npm.Dependency{npm.Dep("fastify", "^5"), npm.Dep("better-sqlite3", "^12.2.0")},
-		Options: []npm.Option{npm.AllowScripts("better-sqlite3")},
+		Deps:    []npm.Dependency{npm.Dep("fastify", "^5"), sqlite},
+		Options: []npm.Option{npm.AllowScripts(sqlite)},
 	})
 })
 ```
@@ -456,12 +671,13 @@ var Server = bob.Define(func(p *bob.P) *npm.App {
 | `ocaml.Executable(p, ocaml.ExeOpts{…})` | `bin/<name>` |
 | `ocaml.NewTest(p, ocaml.ExeOpts{…})` | an executable that runs as a test |
 
-`ocaml.Opam(name, formula)` is an opam package (`""` or `">= 5.7"`); `.Lib("lwt.unix")`
-picks one of its findlib libraries. `ocaml.Conf(confPkg, libs…)` maps an opam `conf-*`
-package to nixpkgs libraries. `Stubs` and `Native` add C stubs and C libraries; `Dune: true`
+One library or executable per directory, each with its own `bob.go`; tests sit next to them.
+`ocaml.Opam(name, formula)` is an opam package (`""` or `">= 5.7"`); `.Lib("lwt.unix")` picks
+one of its findlib libraries. `ocaml.Conf(pkg, libs…)` maps an opam `conf-*` package (a handle:
+`ocaml.Indirect("conf-libcurl")` when it is not a direct dependency) to nixpkgs libraries. `Stubs` and `Native` add C stubs and C libraries; `Dune: true`
 builds a library with a generated dune file (for ppx and menhir).
 
-```go verify
+```go file=ocaml/geom/bob.go
 //go:build bob
 
 package geom
@@ -472,18 +688,30 @@ import (
 	"github.com/megakuul/bob/pkg/ocaml"
 )
 
-// Lib is a library with a C stub and an opam dependency.
+// Lib is a library with a C stub and opam dependencies (label //ocaml/geom:geom).
 var Lib = bob.Define(func(p *bob.P) *ocaml.Lib {
 	return ocaml.Library(p, ocaml.LibOpts{
 		Deps:    []ocaml.Dep{ocaml.Opam("fmt", ""), ocaml.Opam("lwt", ">= 5.7").Lib("lwt.unix")},
 		Stubs:   bob.Files("geom_stubs.c"),
-		Options: []ocaml.Option{ocaml.Conf("conf-libcurl", nixpkgs.Lib(p, "curl"))},
+		Options: []ocaml.Option{ocaml.Conf(ocaml.Indirect("conf-libcurl"), nixpkgs.Curl.Lib(p))},
 	})
 })
+```
 
-// Demo is bin/demo.
-var Demo = bob.Define(func(p *bob.P) *ocaml.Exe {
-	return ocaml.Executable(p, ocaml.ExeOpts{Name: "demo", Deps: []ocaml.Dep{ocaml.Opam("cmdliner", ""), Lib(p)}})
+```go file=ocaml/demo/bob.go
+//go:build bob
+
+package demo
+
+import (
+	"example.com/acme/ocaml/geom"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/ocaml"
+)
+
+// Exe is bin/demo (label //ocaml/demo:demo).
+var Exe = bob.Define(func(p *bob.P) *ocaml.Exe {
+	return ocaml.Executable(p, ocaml.ExeOpts{Name: "demo", Deps: []ocaml.Dep{ocaml.Opam("cmdliner", ""), geom.Lib(p)}})
 })
 ```
 
@@ -508,30 +736,28 @@ field of an npm importer. [Generated code](04-generated-code.md) shows each of t
 
 ## Services (pkg/services/postgres)
 
-`postgres.Service(p, postgres.Options{Version: "17", Databases: []string{"app"}})` runs a
-fresh PostgreSQL for a test. The test sees `PGHOST`, `PGPORT`, `PGUSER` (`postgres`, trust
+`postgres.Service(p, postgres.Options{Server: nixpkgs.Postgresql17, Databases: []string{"app"}})`
+runs a fresh PostgreSQL for a test (`Server` defaults to `nixpkgs.Postgresql`). The test sees `PGHOST`, `PGPORT`, `PGUSER` (`postgres`, trust
 authentication), `POSTGRES_ADDR` and `DATABASE_URL`
 (`postgres://postgres@127.0.0.2:5432/app?sslmode=disable` for the first service):
 
-```go verify
+```go file=db/bob.go
 //go:build bob
 
-package acme
+package db
 
 import (
+	"example.com/acme"
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/golang"
+	"github.com/megakuul/bob/pkg/nixpkgs"
 	"github.com/megakuul/bob/pkg/services/postgres"
 )
 
-var Module = bob.Define(func(p *bob.P) *golang.Module {
-	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/acme", Go: "1.26"})
-})
-
-// DBTests runs ./db's tests against PostgreSQL.
-var DBTests = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./db", golang.TestOpts{
-		Services: []bob.Service{postgres.Service(p, postgres.Options{Databases: []string{"app"}})},
+// Tests runs this package's tests against PostgreSQL 17 (unit //db:go_test).
+var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
+	return acme.Module(p).Tests(golang.TestOpts{
+		Services: []bob.Service{postgres.Service(p, postgres.Options{Server: nixpkgs.Postgresql17, Databases: []string{"app"}})},
 	})
 })
 ```
@@ -545,8 +771,37 @@ var DBTests = bob.Define(func(p *bob.P) *golang.TestSet {
 | `pkg/output/appimage` | `appimage.NewBundle(p, name, appimage.BundleOpts{Program: …})` | a self-contained AppImage for one platform |
 | `pkg/release` | `release.New(p, name, release.ReleaseOpts{…})` | a versioned release manifest over closures, images, tarballs and AppImages |
 
-`Program` is any `bob.Executable`: a Go, C/C++, Rust, OCaml or npm program, `bob.Exe(…)` or
-`nixpkgs.Exe(…)`. See [Images, tarballs and AppImages](../03-quickstart/07-outputs.md) and
+`Program` is any `bob.Executable`: a Go, C/C++, Rust, OCaml or npm program (a Go program
+through its slot, `acme.API.Get(p)`), `bob.Exe(…)` or the `Exe` of a nixpkgs package
+(`nixpkgs.Curl.Exe(p)`). Outputs are not build units: put them in a package of their own:
+
+```go file=deploy/bob.go
+//go:build bob
+
+package deploy
+
+import (
+	"example.com/acme"
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/output/oci"
+	"github.com/megakuul/bob/pkg/release"
+)
+
+// Image is the server's OCI image (label //deploy:api-image).
+var Image = bob.Define(func(p *bob.P) *oci.Image {
+	return oci.NewImage(p, "api-image", oci.ImageOpts{Program: acme.API.Get(p), Ports: []int{8080}})
+})
+
+// Release is the release api (label //deploy:api), published by the release pipeline.
+var Release = bob.Define(func(p *bob.P) *release.Release {
+	return release.New(p, "api", release.ReleaseOpts{
+		Closures: []bob.Executable{acme.API.Get(p)},
+		Images:   []*oci.Image{Image(p)},
+	})
+})
+```
+
+ See [Images, tarballs and AppImages](../03-quickstart/07-outputs.md) and
 [Releases](07-releases.md).
 
 ## Next steps

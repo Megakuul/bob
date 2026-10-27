@@ -12,6 +12,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/output/appimage/internal/aispec"
 )
 
@@ -189,12 +190,12 @@ func NewBundle(p *bob.P, name string, opts BundleOpts) *Bundle {
 	}
 	// Build tools and data come from the host set: mksquashfs and localedef run at build time,
 	// CA certificates are the same for every platform.
-	spec.Squashfs = add(nixpkgs.Tool(p.Host(), "squashfsTools"))
+	spec.Squashfs = add(nixpkgs.SquashfsTools.Tool(p.Host()))
 	if !opts.NoCACerts {
-		spec.CACert = add(nixpkgs.Pkg(p.Host(), "cacert"))
+		spec.CACert = add(nixpkgs.Cacert.Pkg(p.Host()))
 	}
 	if len(spec.Locales) > 0 {
-		spec.Glibc = add(nixpkgs.Tool(p.Host(), "glibc", nixpkgs.Outputs("bin", "out")))
+		spec.Glibc = add(nixpkgs.Glibc.Tool(p.Host(), nixext.Outputs(nixext.OutBin, nixext.Out)))
 	}
 	b := &Bundle{Node: ext.New(p, aispec.KindBundle, name, deps, srcs, spec)}
 	for _, pr := range problems {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
 // Quirk is one curated entry; the table is Go data shipped with bob (D32). An entry is admitted
@@ -19,7 +20,7 @@ type Quirk struct {
 	Range   string            // node-semver range
 	Why     string            // required justification
 	Skip    bool              // never run the script
-	Tools   []string          // extra nixpkgs attributes for the script
+	Tools   []nixext.Attr     // extra host tools of the script
 	Env     map[string]string // extra env
 	Test    string            // command run in the package dir after the build (required)
 }

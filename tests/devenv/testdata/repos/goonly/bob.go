@@ -7,7 +7,7 @@ import (
 	"github.com/megakuul/bob/pkg/golang"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 // Module is the Go module example.com/goonly (label //:module); no cgo, no other language.
 var Module = bob.Define(func(p *bob.P) *golang.Module {

@@ -22,8 +22,11 @@ bob [global flags] <command> [subcommand] [flags] [args] [-- passthrough args]
 - An unknown command or flag is `BOB-E-0001` (exit 2), with a suggestion when one is close.
 
 Patterns select packages: `//...` (everything), `//dir/...` (below a directory),
-`//dir:all` (one `bob.go`), `//dir:name` (one package), `//dir` (`//dir:dir`). Without a
-pattern, `build` and `test` use every package below the current directory.
+`//dir:all` (one `bob.go`), `//dir:name` (one package), `//dir` (`//dir:dir`). Relative
+forms start from the current directory: `:name` (a package of this directory), `.` (all of
+them; for `bob run`, the package named like the directory), `./...` (everything below) and
+`./sub/dir:name`. Without a pattern, `build` and `test` use every package below the current
+directory.
 
 ## Global flags
 
@@ -120,8 +123,7 @@ Starts `$SHELL` (or the command after `--`) in the dev environment: toolchains o
 | `--servers-only` | run only the dev servers, in the foreground |
 
 > [!WARNING]
-> Dev servers are not started yet, and a toolchain command directly after `--`
-> (`bob dev -- go version`) fails with `BOB-E-0005`; use `bob dev -- sh -c 'go version'`.
+> Dev servers are not started yet; start them inside the dev shell (`bob dev -- vite`).
 
 ### bob env
 
@@ -227,6 +229,25 @@ bob status [--json]
 Shows each generated root (`fresh`, `stale`, `missing`, `edited`, `orphan`) and whether the
 lock is fresh.
 
+### bob init
+
+```text
+bob init [dir] [--lang go|cc|rust|npm|ocaml]
+```
+
+Starts a new project in `dir` (default: the current directory, created when missing): writes
+`bob.go` and the program and test of the language's [quickstart](../03-quickstart/01-go.md),
+then locks it (`bob.lock`) and writes the files bob generates (`go.mod`, `Cargo.toml`,
+`package.json`, …). `bob build`, `bob test` and `bob run` work right after it. The Go module
+path is `example.com/<directory name>`; change it in `bob.go` and run `bob lock`.
+
+`bob init` never overwrites anything: a directory that already holds `bob.go`, `bob.lock` or
+a file of the template is refused (`BOB-E-0004`) before a file is written.
+
+| Flag | Meaning |
+|---|---|
+| `--lang` | the language of the project: `go` (default), `cc` (C++), `rust`, `npm` (TypeScript), `ocaml` |
+
 ### bob lock
 
 ```text
@@ -235,6 +256,11 @@ bob lock [--update [names…]] [--nixpkgs <rev>] [--offline]
 
 Adds missing pins and removes unused ones. Prints every change (`+`, `~`, `-`) or
 `bob.lock: no changes`. See [Dependencies and locking](../04-guides/02-dependencies-and-locking.md).
+
+In a new project without `bob.lock`, run `bob lock` in the directory that holds the root
+`bob.go`: it becomes the repository root (or the directory of the nearest `.git` above it)
+and `bob lock` creates `bob.lock` there. An empty `bob.lock` counts as "nothing locked yet".
+Every other command needs `bob.lock` to find the root and says which command creates it.
 
 | Flag | Meaning |
 |---|---|
@@ -434,7 +460,8 @@ Checks the namespace, the embedded builder, the store and the configuration file
 bob version [--json]
 ```
 
-Prints bob's version, the Nix version and the default nixpkgs channel.
+Prints bob's version, the Nix version, the default nixpkgs channel and the nixpkgs revision the
+typed nixpkgs packages were generated from (`nixpkgsSurface` in `--json`).
 
 ## Exit codes
 
@@ -476,7 +503,7 @@ has `"v":1`, `"event"` and `"time"`:
 ```text
 $ bob version --json
 {"v":1,"event":"run.start","time":"…","command":"version","args":["--json"],"requested":[],"bob":"v0.0.0-dev","nix":"2.34.9"}
-{"v":1,"event":"result","time":"…","command":"version","data":{"bob":"v0.0.0-dev","nix":"2.34.9","nixpkgs":"nixos-26.05"}}
+{"v":1,"event":"result","time":"…","command":"version","data":{"bob":"v0.0.0-dev","nix":"2.34.9","nixpkgs":"nixos-26.05","nixpkgsSurface":"da6dc0e7b26060f2f71ce3ef7088fb56ee44fa36"}}
 {"v":1,"event":"run.finish","time":"…","exitCode":0,"counts":{"built":0,"cached":0,"failed":0,"skipped":0,"cancelled":0,"upstream":0,"downloaded":0},"drift":[],"durationMs":0}
 ```
 

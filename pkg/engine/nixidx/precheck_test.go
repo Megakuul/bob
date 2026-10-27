@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
+	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/engine/store"
 )
 
@@ -58,7 +59,8 @@ func TestCheck(t *testing.T) {
 	}
 	src, _ := filepath.Abs(filepath.Join("..", "..", "..", "tests", "nix", "testdata", "fakepkgs"))
 	sys := map[string]string{"arm64": "aarch64-linux", "amd64": "x86_64-linux"}[runtime.GOARCH]
-	idx, err := Open(ctx, st, Config{Source: src, Rev: "check", System: sys})
+	// At bob's surface revision a missing attribute is the plain 1001 with suggestions.
+	idx, err := Open(ctx, st, Config{Source: src, Rev: lock.DefaultRev, System: sys})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,5 +89,16 @@ func TestCheck(t *testing.T) {
 	want := map[string]diag.Code{"helo": 1001, "broken-pkg": 1002, "insecure-pkg": 1003, "unfree-pkg": 1004, "wrong-system": 1005}
 	if !maps.Equal(got, want) {
 		t.Errorf("findings %v, want %v (err %v)", got, want, err)
+	}
+	// At another pin, a missing top-level attribute is a typed handle the pin lacks (R-NIX-032).
+	other, err := Open(ctx, st, Config{Source: src, Rev: "check", System: sys})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = other.Check(ctx, []Need{need("helo")})
+	var d *diag.Error
+	if !errors.As(err, &d) || d.Code != 1001 || d.Args["variant"] != "pin" ||
+		d.Error() != `libs/foo/bob.go:7: nixpkgs at the pinned revision check has no package "helo" (nixpkgs.Helo)` {
+		t.Errorf("pin variant: %v", err)
 	}
 }

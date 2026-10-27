@@ -370,10 +370,13 @@ func (r *Runner) check(e Entry, mode, replay, repo string, fixture bool, plain, 
 
 // markLines are the codes whose human output SPEC writes as a `✗ <message>` line without an
 // `error[CODE]:` header: BOB-E-7005 (R-NIX-022, the block tests/rootless checks line by line),
-// BOB-E-2013 and BOB-E-2014 (§03.4.4 runtime translations) and BOB-E-2015 (R-OUT-007). Such a
-// code counts once when a line of the default output starts with "✗ " followed by the head
-// given here and the --json stream of the same run reports the code in an error event.
+// BOB-E-2013 and BOB-E-2014 (§03.4.4 runtime translations), BOB-E-2015 (R-OUT-007) and
+// BOB-E-1020 (definition errors: `✗ <position>: <message>`, R-FW-043 (c), R-FW-011; the
+// typed-surface and slot faults 85–87, 92). Such a code counts once when a line of the default
+// output starts with "✗ " followed by the head given here and the --json stream of the same run
+// reports the code in an error event.
 var markLines = map[string]string{
+	"BOB-E-1020": "",
 	"BOB-E-7005": "bob cannot create its private /nix: unprivileged user namespaces are blocked on this system\n",
 	"BOB-E-2013": "",
 	"BOB-E-2014": "",

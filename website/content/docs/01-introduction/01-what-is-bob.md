@@ -16,13 +16,16 @@ and you never see a Nix error: bob reports problems in its own words, with the p
 your `bob.go`.
 
 ```go
+// cmd/hello/bob.go
 var Binary = bob.Define(func(p *bob.P) *golang.Binary {
-	return hello.Module(p).Binary("./cmd/hello", golang.BinaryOpts{})
+	return hello.Module(p).Binary(golang.BinaryOpts{})
 })
 ```
 
-That is a complete build definition for a Go program. Your editor type-checks it, offers
-completion for every option, and jumps to the definition of `hello.Module`.
+That is a complete build definition for a Go program: it sits in the program's own directory
+and builds that directory. Your editor type-checks it, offers completion for every option, and
+jumps to the definition of `hello.Module`. Nothing is named by a string: libraries, tools and
+even nixpkgs packages are typed Go values (`nixpkgs.Openssl`), so a typo does not compile.
 
 ## What bob does for you
 

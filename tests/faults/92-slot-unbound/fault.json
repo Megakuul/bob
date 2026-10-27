@@ -1,0 +1,21 @@
+{
+ "id": "92-slot-unbound",
+ "title": "typed slot of a Go binary is not bound (R-FW-071)",
+ "source": "HARNESS.md \u00a75.1 added fault (ADR 0020, D71/D72, Q1 2026-10-24)",
+ "fixture": "acme",
+ "inject": {
+  "kind": "patch",
+  "describe": "cmd/api/bob.go no longer binds the slot acme.API that deploy/bob.go uses"
+ },
+ "command": [
+  "build",
+  "//deploy:api-image"
+ ],
+ "code": "BOB-E-1020",
+ "position": "none",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

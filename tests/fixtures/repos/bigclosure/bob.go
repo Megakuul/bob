@@ -11,7 +11,7 @@ import (
 	"github.com/megakuul/bob/pkg/nixpkgs"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 // The release pipeline runs on a tag push matching v* and publishes //deploy:big. SPEC §06 does
 // not define the fields of bob.PipelineOpts, so the pipeline is registered by name only.
@@ -22,11 +22,9 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 	return golang.NewModule(p, golang.ModuleOpts{Path: "example.com/bigclosure", Go: "1.26"})
 })
 
-// Big is the small program of the release (label //cmd/big:big). It is declared here because
-// deploy/bob.go imports it and cmd/big is a main package (rule R3).
-var Big = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/big", golang.BinaryOpts{})
-})
+// Big is the small program of the release (//cmd/big:big), bound by cmd/big/bob.go (a main
+// package's bob.go cannot be imported, R-FW-002 R3).
+var Big = bob.NewSlot[*golang.Binary]()
 
 // BulkBytes is the size of bulk.bin: 1.1 GiB.
 const BulkBytes = "1181116006"
@@ -35,7 +33,7 @@ const BulkBytes = "1181116006"
 // IV, i.e. incompressible and identical on every build (label //:bulk).
 var Bulk = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "bulk", bob.RunOpts{
-		Tools: []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils"), nixpkgs.Tool(p, "openssl")},
+		Tools: []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p), nixpkgs.Openssl.Tool(p)},
 		Cmd: []string{"bash", "-c",
 			`head -c ` + BulkBytes + ` /dev/zero | openssl enc -aes-128-ctr -K 000102030405060708090a0b0c0d0e0f -iv 00000000000000000000000000000000 -nosalt > "$BOB_OUT/bulk.bin"`},
 		Outputs: []string{"bulk.bin"},

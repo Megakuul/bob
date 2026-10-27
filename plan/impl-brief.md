@@ -37,3 +37,16 @@ other units' uncommitted work (logstore rebase, two test corrections). Rules for
 - Mass rewriters (AST tools, sed over many files) touch only files you own or have just listed in your
   progress file; run them on a private copy first and diff.
 - Do not run `git` commands in the shared repo (the coordinator commits named paths).
+
+## Typed surface and per-package modules (added 2026-10-24, owner D71/D72, ADR 0020, unit Q1)
+Non-negotiable (AGENTS.md §5.10). Every new or changed public API parameter is a typed value unless
+it is data of a category of SPEC §1.4.5; `TestRFW072TypedSurface` fails on any unclassified raw
+string and its allowlist is protected (ask the owner, never extend it yourself). nixpkgs packages
+are only the generated handles (`nixpkgs.<Name>.Tool/Lib/Pkg/Exe(p)`; bob's own packages use
+`pkg/nixpkgs/nixext` for computed attributes). Every fixture, test repository and documented
+`bob.go` keeps one package per directory, sources only in its own region, Go declarations in
+the Go package's own `bob.go`, main-package binaries reached through `bob.Slot`
+(`TestRFW070FixtureLocality`, `TestDocsPackageLocality`, faults 82–92). The implementation plan is
+`plan/progress/Q1-impl-plan.md` (Q2: generator, core, nixpkgs migration, docs; Q3: cc and the
+other ecosystems).
+

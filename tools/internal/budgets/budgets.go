@@ -26,7 +26,7 @@ const (
 // Note is the header of the budgets file. It states the rule for rows that have
 // no benchmark, so a reader of the file does not need to find it in the code.
 const Note = "GENERATED from SPEC.md Appendix B by tools/internal/budgets; do not edit. " +
-	"All 97 rows are [proposal] budgets (finalised in M1.9). A row fails when its statistic is " +
+	"All 103 rows are [proposal] budgets (97 finalised in M1.9; B-098…B-103 added for ADR 0020). A row fails when its statistic is " +
 	"greater than limit x (1 + tolerance[class]). A row whose \"bench\" is empty has no benchmark " +
 	"yet: the runner reports it as \"no benchmark yet\" and does not fail. Once the feature exists, " +
 	"its task registers a benchmark command (tools/internal/budgets/benches.go) and the row counts."

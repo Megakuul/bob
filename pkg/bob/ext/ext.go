@@ -13,6 +13,10 @@ type Kind struct {
 	Name string // "<ecosystem>.<kind>", [a-z0-9.]+
 	Axes []Axis // variant axes this kind's derivation depends on
 	Host bool   // always built for p.Host() (codegen tools, proc-macros)
+	// Unit names the ecosystem ("cc", "rust", "go", …) when a node of this kind is a build unit:
+	// a package (directory with its own bob.go) defines at most one unit per ecosystem
+	// (R-FW-071, BOB-E-1029). Tests, recipes, steps and outputs leave it empty.
+	Unit string
 }
 
 // Axis is one variant axis a kind may read.
@@ -36,7 +40,7 @@ func Register(k Kind) {
 	for i, a := range k.Axes {
 		axes[i] = int(a)
 	}
-	graph.Register(graph.Kind{Name: k.Name, Axes: axes, Host: k.Host})
+	graph.Register(graph.Kind{Name: k.Name, Axes: axes, Host: k.Host, Unit: k.Unit})
 }
 
 // Lookup returns the kind registered under name in this binary: the core kinds of package bob
@@ -46,7 +50,7 @@ func Lookup(name string) (Kind, bool) {
 	if !ok {
 		return Kind{}, false
 	}
-	k := Kind{Name: gk.Name, Host: gk.Host}
+	k := Kind{Name: gk.Name, Host: gk.Host, Unit: gk.Unit}
 	for _, a := range gk.Axes {
 		k.Axes = append(k.Axes, Axis(a))
 	}
@@ -190,7 +194,12 @@ func ConfigOf(n *bob.Node) Config {
 
 // Errorf records a definition error of the running constructor, for example an invalid option
 // of an ecosystem constructor. Evaluation goes on; it fails at the end with every error. Start
-// the message with the position it concerns ("api/bob.go:12: …", from Node.DefinedAt).
+// the message with the position it concerns ("api/bob.go:12: …", from Node.DefinedAt), followed
+// by the package's label ("//api:api: …") when it concerns a package: the error then shows the
+// package's constructor call with its column. A last line "hint: <text>" becomes the error's
+// hint:
+//
+//	ext.Errorf("%s: %s: flag %q is not allowed\nhint: %s", n.DefinedAt(), n.Label(), f, fix)
 func Errorf(format string, a ...any) {
 	if graph.Misuse != nil {
 		graph.Misuse(fmt.Sprintf(format, a...))

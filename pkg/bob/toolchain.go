@@ -5,26 +5,16 @@ import "strings"
 // Toolchain describes the C/C++ compilers an ecosystem uses for one (host, target) pair (SPEC
 // R-FW-033). Builders in pkg/<ecosystem> receive it from p.Toolchain; users never construct one.
 //
-// The compiler is named by its nixpkgs attribute of the host package set, so that ecosystems
-// take it as nixpkgs.Tool(p, tc.CC): every package of one kind and target then depends on one
-// shared toolchain derivation. (SPEC §04 shows the field as a derivation reference; the
-// evaluator does not compute derivations, the attribute names the same derivation.)
+// The compiler packages themselves are typed nixpkgs handles that bob's ecosystem packages get
+// from nixext.Toolchain(p) (CC, Bintools, CCLib, Emulator; ADR 0020): Toolchain carries no
+// attribute strings.
 type Toolchain struct {
 	Host, Target Platform
 	Triple       string // "x86_64-unknown-linux-gnu"; empty for native
 	Prefix       string // "x86_64-unknown-linux-gnu-" for cross, "" for native
-	// CC is the nixpkgs attribute (host set) of the C/C++ compiler wrapper: "gcc" natively,
-	// "pkgsCross.gnu64.stdenv.cc" for linux-amd64 on a linux-arm64 host.
-	CC string
-	// Bintools is the attribute of the matching binutils (ar, strip, objcopy with Prefix).
-	Bintools string
-	// CCLib is the attribute of the unwrapped compiler whose "lib" output holds the target's
-	// libgcc_s, libstdc++ and sanitiser runtimes (R-FW-037); "" natively, where the wrapper's
-	// RUNPATH already covers them.
-	CCLib string
-	// Emulator is the attribute of the user-mode emulator (a host tool) that runs the target's
-	// test programs on the host (R-FW-039), and EmulatorCmd its command in bin/; "" natively.
-	Emulator, EmulatorCmd string
+	// EmulatorCmd is the command of the user-mode emulator in its bin/ that runs the target's
+	// test programs on the host (R-FW-039); "" natively.
+	EmulatorCmd string
 }
 
 // Cross reports whether the toolchain compiles for another platform than it runs on.
@@ -39,16 +29,14 @@ func (p *P) Toolchain() Toolchain { return ToolchainFor(p.Host().Platform(), p.P
 // ToolchainFor returns the C/C++ toolchain that runs on host and compiles for target (the
 // table of SPEC R-FW-033). An unknown platform gives the native toolchain of host.
 func ToolchainFor(host, target Platform) Toolchain {
-	t := Toolchain{Host: host, Target: target, CC: "gcc", Bintools: "binutils"}
+	t := Toolchain{Host: host, Target: target}
 	if host == target || target.CrossSet() == "" {
 		t.Target = host
 		return t
 	}
-	set := "pkgsCross." + target.CrossSet() + ".stdenv.cc"
 	t.Triple = target.Triple()
 	t.Prefix = t.Triple + "-"
-	t.CC, t.Bintools, t.CCLib = set, set+".bintools", set+".cc"
-	t.Emulator, t.EmulatorCmd = "qemu-user", "qemu-"+target.cpu()
+	t.EmulatorCmd = "qemu-" + target.cpu()
 	return t
 }
 

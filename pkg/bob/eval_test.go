@@ -280,7 +280,7 @@ func TestConstructorPanic(t *testing.T) {
 // variant and a pipeline. The IR is canonical JSON.
 func TestGoldenIR(t *testing.T) {
 	isolate(t)
-	Repo(RepoOpts{Nixpkgs: "nixos-26.05", Variants: []Named{NamedVariant("fast", WithProfile(Debug), WithSanitize(UBSan))}})
+	Repo(RepoOpts{Nixpkgs: NixOS2605, Variants: []Named{NamedVariant("fast", WithProfile(Debug), WithSanitize(UBSan))}})
 	Pipeline("ci", PipelineOpts{Triggers: []Trigger{OnPush("main"), OnPullRequest()}, Concurrency: Supersede, Targets: []Pattern{"//..."}})
 	tool := Define(func(p *P) *thing { return mk(p, "test.tool", "gen") })
 	src := Define(func(p *P) Tree {

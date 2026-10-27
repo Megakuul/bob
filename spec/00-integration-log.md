@@ -178,3 +178,19 @@ G14 derivation name precedence; G15 Rust features API (§1.9); G16 R-NIX-020/021
 G17 R-STORE-104 `sh2`; G18 R-NFR-005; G19 R-STORE-004; G20 R-LOG-102 and R-PIPE-003 follow-up notes;
 G24 FIX-C clarifications; G21 `docs/operations/worker-compromise.md`; G23 HARNESS §10 row 27.
 SPEC.md regenerated (idempotent).
+
+## 2026-10-24 — ADR 0020 typed surface and per-package modules (Q1, owner D71/D72)
+
+- §01: R-FW-010 amended; new §1.4.5 with R-FW-070 (package locality), R-FW-071 (one unit per
+  package, `bob.Slot`), R-FW-072 (typed public surface); §1.4.1 `bob.Include`/`IncludeDir`;
+  §1.4.4 `bob.Channel`, `RepoOpts.NixpkgsRev`, `PipelineOpts.Releases []Pattern`; R-FW-002 R7
+  (nixext) and R8 (framework values read-only); §1.7 rewritten as the generated typed surface
+  (R-NIX-013 amended, R-NIX-031, R-NIX-032); R-NIX-005 default pin = `lock.DefaultRev`.
+- §02: codes 1001 `pin`, 1024 `R8`, 1028, 1029 (1027 reserved); 2013/2014 hints with handles.
+- §03: §03.0.7 common rule; cc R-CC-006, `Hdrs bob.Include`, all path flags refused; Go methods
+  without directory arguments, `TestOpts.Recursive`; Rust `CrateDep`/`Indirect`/`Uses`; npm
+  `Pkg`/`Indirect`/typed `AllowScripts`/`Extend`/`Peer`, tsconfig enums; OCaml `Indirect`/`Conf`;
+  codegen tools as `nixpkgs.Attr`, proto `Root` removed; `ExternalOpts.Tools []bob.Tool`.
+- §04: R-FW-032 typed twice (handle + role method); `bob.Toolchain` without attribute strings
+  (`nixext.Toolchain`); release example through a slot.
+- Appendix B: B-098…B-103.

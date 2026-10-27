@@ -71,6 +71,9 @@ type Dep struct {
 type Use struct {
 	Crate string `json:"crate"`
 	Libs  []int  `json:"libs"` // dep indices of bob.Linkable packages
+	// Indirect is the bob.go position of the rust.Indirect handle ("" for a rust.Crate handle):
+	// bob lock fails with BOB-E-1015 there when the resolved graph lacks the crate.
+	Indirect string `json:"indirect,omitempty"`
 }
 
 // Test is the spec of a rust.test node: the unit tests of the crate (File "") or one

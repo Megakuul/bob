@@ -6,7 +6,8 @@ import (
 )
 
 // TestFlagProblem: flags that name paths outside the build's inputs, redirect outputs or load
-// plugins are refused (R-CC-002a); ordinary flags pass.
+// plugins are refused (R-CC-002a); every include or library path flag is refused, relative or
+// absolute (R-CC-006: a package gets them only from Deps); ordinary flags pass.
 func TestFlagProblem(t *testing.T) {
 	for _, c := range []struct{ flag, before, want string }{
 		{"-I/nix/store/x", "", `flag "-I/nix/store/x" is not allowed; use Deps to add include paths`},
@@ -19,7 +20,18 @@ func TestFlagProblem(t *testing.T) {
 		{"@flags.txt", "", "response files"},
 		{"-Wl,-rpath,/nix/store/y", "", "it names a path outside the sources"},
 		{"-Wall", "", ""},
-		{"-Iinclude", "", ""},
+		{"-Iinclude", "", "use Deps to add include paths"},
+		{"-I../libs/mathx/include", "", `flag "-I../libs/mathx/include" is not allowed; use Deps to add include paths`},
+		{"include", "-isystem", "use Deps to add include paths"},
+		{"-iquote", "", "use Deps to add include paths"},
+		{"-include", "", "use Deps to add include paths"},
+		{"-lz", "", "use Deps to add libraries"},
+		{"-l:libfoo.a", "", "use Deps to add libraries"},
+		{"-Llib", "", "use Deps to add libraries"},
+		{"-Wl,-L,../lib", "", "use Deps to add libraries"},
+		{"-Bbin", "", "it names a path outside the sources"},
+		{"-Wl,--as-needed", "", ""},
+		{"-std=c17", "", ""},
 		{"-DPATH=a/b", "", ""},
 		{"-O3", "", ""},
 		{"-fsanitize=address", "", ""},

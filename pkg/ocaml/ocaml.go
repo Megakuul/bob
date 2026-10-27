@@ -15,15 +15,15 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/cc"
-	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/ocaml/internal/mlspec"
 )
 
 // Kinds of the OCaml ecosystem (SPEC §03.5). Native code depends on the target platform.
 func init() {
 	axes := []ext.Axis{ext.AxisPlatform}
-	ext.Register(ext.Kind{Name: mlspec.KindLibrary, Axes: axes})
-	ext.Register(ext.Kind{Name: mlspec.KindExecutable, Axes: axes})
+	ext.Register(ext.Kind{Name: mlspec.KindLibrary, Axes: axes, Unit: "ocaml"})
+	ext.Register(ext.Kind{Name: mlspec.KindExecutable, Axes: axes, Unit: "ocaml"})
 	ext.Register(ext.Kind{Name: mlspec.KindTest, Axes: axes})
 }
 
@@ -34,6 +34,7 @@ type Dep interface{ mlDep() }
 // library of the same name.
 type OpamPkg struct {
 	name, req string
+	indirect  string // the bob.go position of ocaml.Indirect; "" for ocaml.Opam
 }
 
 func (*OpamPkg) mlDep() {}
@@ -43,6 +44,19 @@ func (*OpamPkg) mlDep() {}
 //
 //	ocaml.Opam("lwt", ">= 5.7")
 func Opam(name, req string) *OpamPkg { return &OpamPkg{name: name, req: req} }
+
+// Indirect declares an opam package that is not a direct dependency (a conf-* package pulled in
+// by another package) so that an option can refer to it; bob lock fails with BOB-E-1015 at this
+// position when the solution does not contain it. An Indirect handle is not a Dep.
+//
+//	ocaml.Conf(ocaml.Indirect("conf-libcurl"), nixpkgs.Curl.Lib(p))
+func Indirect(name string) *OpamPkg {
+	pos := callerPos()
+	if pos == "" {
+		pos = "ocaml.Indirect"
+	}
+	return &OpamPkg{name: name, indirect: pos}
+}
 
 // findlibDep is one findlib library of an opam package.
 type findlibDep struct {
@@ -59,17 +73,17 @@ func (o *OpamPkg) Lib(findlib string) Dep { return findlibDep{pkg: o, lib: findl
 type Option interface{ mlOption() }
 
 type confOption struct {
-	opam string
+	pkg  *OpamPkg
 	libs []cc.Linkable
 }
 
 func (confOption) mlOption() {}
 
-// Conf maps an opam conf-* package to nixpkgs packages for this project (added to the shipped
-// table, §03.5.5).
+// Conf maps an opam conf-* package (a handle of Opam or Indirect) to nixpkgs packages for this
+// project (added to the shipped table, §03.5.5).
 //
-//	ocaml.Conf("conf-libcurl", nixpkgs.Lib(p, "curl"))
-func Conf(opamName string, libs ...cc.Linkable) Option { return confOption{opam: opamName, libs: libs} }
+//	ocaml.Conf(ocaml.Indirect("conf-libcurl"), nixpkgs.Curl.Lib(p))
+func Conf(pkg *OpamPkg, libs ...cc.Linkable) Option { return confOption{pkg: pkg, libs: libs} }
 
 // LibOpts configures Library.
 type LibOpts struct {
@@ -209,13 +223,13 @@ func newBuilder(p *bob.P, t *mlspec.Target, name string) *builder {
 	t.Tools = map[string]int{}
 	for _, a := range mlspec.ToolAttrs {
 		t.Tools[a] = len(b.pkgs)
-		b.pkgs = append(b.pkgs, nixpkgs.Tool(p, a))
+		b.pkgs = append(b.pkgs, nixext.New(a).Tool(p))
 	}
 	for _, e := range mlspec.ConfTable {
 		c := mlspec.Conf{Opam: e.Opam, Libs: []int{}}
 		for _, a := range e.Attrs {
 			c.Libs = append(c.Libs, len(b.pkgs))
-			b.pkgs = append(b.pkgs, nixpkgs.Lib(p, a))
+			b.pkgs = append(b.pkgs, nixext.New(a).Lib(p))
 		}
 		b.confs[e.Opam] = len(t.Conf)
 		t.Conf = append(t.Conf, c)
@@ -231,10 +245,18 @@ func (b *builder) deps(ds []Dep) {
 				b.problems = append(b.problems, fmt.Sprintf("Deps[%d] is nil", i))
 				continue
 			}
+			if d.indirect != "" {
+				b.problems = append(b.problems, fmt.Sprintf("Deps[%d]: ocaml.Indirect(%q) declared at %s is not a dependency; declare it with ocaml.Opam(name, req)", i, d.name, d.indirect))
+				continue
+			}
 			b.opam(d, d.name)
 		case findlibDep:
 			if d.pkg == nil {
 				b.problems = append(b.problems, fmt.Sprintf("Deps[%d] is nil", i))
+				continue
+			}
+			if d.pkg.indirect != "" {
+				b.problems = append(b.problems, fmt.Sprintf("Deps[%d]: ocaml.Indirect(%q) declared at %s is not a dependency; declare it with ocaml.Opam(name, req)", i, d.pkg.name, d.pkg.indirect))
 				continue
 			}
 			if !findlib().MatchString(d.lib) {
@@ -287,24 +309,29 @@ func (b *builder) options(opts []Option) {
 		if !ok {
 			continue
 		}
-		if !strings.HasPrefix(c.opam, "conf-") || !opamName().MatchString(c.opam) {
-			b.problems = append(b.problems, fmt.Sprintf("Conf %q is not an opam conf-* package name", c.opam))
+		if c.pkg == nil {
+			b.problems = append(b.problems, "ocaml.Conf: the package is nil; pass a handle of ocaml.Opam or ocaml.Indirect")
 			continue
 		}
-		e := mlspec.Conf{Opam: c.opam, Libs: []int{}}
+		name := c.pkg.name
+		if !strings.HasPrefix(name, "conf-") || !opamName().MatchString(name) {
+			b.problems = append(b.problems, fmt.Sprintf("Conf %q is not an opam conf-* package name", name))
+			continue
+		}
+		e := mlspec.Conf{Opam: name, Libs: []int{}, Indirect: c.pkg.indirect}
 		for i, l := range c.libs {
 			if isNil(l) {
-				b.problems = append(b.problems, fmt.Sprintf("Conf(%q) library %d is nil", c.opam, i))
+				b.problems = append(b.problems, fmt.Sprintf("Conf(%q) library %d is nil", name, i))
 				continue
 			}
 			e.Libs = append(e.Libs, len(b.pkgs))
 			b.pkgs = append(b.pkgs, l)
 		}
-		if i, ok := b.confs[c.opam]; ok { // the project's mapping replaces the shipped one
+		if i, ok := b.confs[name]; ok { // the project's mapping replaces the shipped one
 			b.t.Conf[i] = e
 			continue
 		}
-		b.confs[c.opam] = len(b.t.Conf)
+		b.confs[name] = len(b.t.Conf)
 		b.t.Conf = append(b.t.Conf, e)
 	}
 }

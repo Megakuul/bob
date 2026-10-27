@@ -70,7 +70,7 @@ type irSrcs struct {
 // encode writes the canonical IR of the nodes reachable from roots.
 func (ev *evaluation) encode(repo RepoOpts, pipes []pipelineJSON, targets []target, roots []*node) ([]byte, error) {
 	doc := irDoc{IRVersion: irVersion, BobVersion: ev.env.bobVersion, Module: ev.env.mainModule,
-		Repo:      irRepo{Nixpkgs: repo.Nixpkgs, Variants: []irVariant{}},
+		Repo:      irRepo{Nixpkgs: repo.nixpkgsDecl(), Variants: []irVariant{}},
 		Configs:   []irConfig{},
 		Nodes:     []irNode{},
 		Roots:     nonNil(sortedIDs(roots)),
@@ -103,7 +103,7 @@ func (ev *evaluation) encode(repo RepoOpts, pipes []pipelineJSON, targets []targ
 			return
 		}
 		seen[n] = true
-		in := irNode{ID: n.id, Kind: n.kind.Name, Label: n.label.String(), DefinedAt: irPos{n.pos.File, n.pos.Line, ev.column(n.pos, n.label.Nix+n.label.Name)},
+		in := irNode{ID: n.id, Kind: n.kind.Name, Label: n.label.String(), DefinedAt: irPos{n.pos.File, n.pos.Line, ev.nodeColumn(n)},
 			Proj: n.proj.json(), Deps: []string{}, Srcs: []irSrcs{}, Spec: n.spec, Nix: n.nix}
 		for _, d := range n.deps {
 			in.Deps = append(in.Deps, d.id)

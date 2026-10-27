@@ -189,7 +189,7 @@ func TestRRS004aToolchainPerPackage(t *testing.T) {
 	parity.Covers(t, "R-RS-004a")
 	home := t.TempDir()
 	dir := harness.Fixture(t, "rust")
-	replaceIn(t, filepath.Join(dir, "rcore", "bob.go"), "\t\tHeaders: \"include\",", "\t\tHeaders:   \"include\",\n\t\tToolchain: nixpkgs.Tool(p, \"rust_1_97.packages.stable.rustc\"),")
+	replaceIn(t, filepath.Join(dir, "rcore", "bob.go"), "\t\tHeaders: bob.IncludeDir(\"include\"),", "\t\tHeaders:   bob.IncludeDir(\"include\"),\n\t\tToolchain: nixpkgs.Rust1_97PackagesStableRustc.Tool(p),")
 	replaceIn(t, filepath.Join(dir, "rcore", "bob.go"), "\"github.com/megakuul/bob/pkg/bob\"", "\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/nixpkgs\"")
 	if r := bobEnv(t, dir, registryEnv(home), "lock"); !ok(t, r) {
 		return
@@ -227,7 +227,7 @@ func TestRRS004aMixedToolchainsRejected(t *testing.T) {
 	home := t.TempDir()
 	dir := harness.Fixture(t, "rust")
 	// corelib (a dependency of demo) gets the other toolchain; demo keeps the default.
-	replaceIn(t, filepath.Join(dir, "corelib", "bob.go"), "\t\tDefault:  []string{\"fast\"},", "\t\tDefault:  []string{\"fast\"},\n\t\tToolchain: nixpkgs.Tool(p, \"rust_1_97.packages.stable.rustc\"),")
+	replaceIn(t, filepath.Join(dir, "corelib", "bob.go"), "\t\tDefault:  []string{\"fast\"},", "\t\tDefault:  []string{\"fast\"},\n\t\tToolchain: nixpkgs.Rust1_97PackagesStableRustc.Tool(p),")
 	replaceIn(t, filepath.Join(dir, "corelib", "bob.go"), "\"github.com/megakuul/bob/pkg/bob\"", "\"github.com/megakuul/bob/pkg/bob\"\n\t\"github.com/megakuul/bob/pkg/nixpkgs\"")
 	r := bobEnv(t, dir, registryEnv(home), "build", "//demo:demo", "--lock", "--json")
 	if harness.Red(t, r) || !exitIs(t, r, 3) {

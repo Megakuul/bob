@@ -25,13 +25,3 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 		},
 	})
 })
-
-// Server is //svc/cmd/server:server.
-var Server = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/server", golang.BinaryOpts{})
-})
-
-// Client is //svc/cmd/client:client.
-var Client = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/client", golang.BinaryOpts{})
-})

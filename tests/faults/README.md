@@ -13,8 +13,8 @@ One directory per fault: `tests/faults/<fault>/` (HARNESS.md §5). SPEC's
   leak patterns of `tests/errors/leakcheck`).
 - `<fault>/<nixver>/`: the S15 capture (`meta.json`, `stream.log[.gz]`, goldens), the replay
   input. bob reads it through the test hook `BOB_TEST_NIX_REPLAY=<dir>`.
-- `01`–`48` are the S15 faults with S15's numbers, `ok-*` the S15 success scenarios, `49`–`81`
-  the HARNESS.md §5.1 additions (no capture yet; they run live).
+- `01`–`48` are the S15 faults with S15's numbers, `ok-*` the S15 success scenarios, `49`–`92`
+  the HARNESS.md §5.1 additions (`82`–`92`: typed surface and per-package modules, ADR 0020) (no capture yet; they run live).
 
 Runner: `go test ./tests/errors/...` (CI stage `errors`). An entry whose feature answers
 `BOB-E-9008` (not implemented) is red: it fails in the parity catalogue, not in CI. Crashes, raw

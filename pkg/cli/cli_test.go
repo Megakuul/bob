@@ -11,6 +11,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob/diag"
 	"github.com/megakuul/bob/pkg/engine/build"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
 func TestParse(t *testing.T) {
@@ -69,7 +70,8 @@ func TestMainUsage(t *testing.T) {
 		}
 	}
 	so.Reset()
-	if got := Main([]string{"version", "--json"}, &so, &se); got != 0 || !strings.Contains(so.String(), `"event":"result","time"`) || !strings.Contains(so.String(), `"nixpkgs":"nixos-`) {
+	if got := Main([]string{"version", "--json"}, &so, &se); got != 0 || !strings.Contains(so.String(), `"event":"result","time"`) || !strings.Contains(so.String(), `"nixpkgs":"nixos-`) ||
+		!strings.Contains(so.String(), `"nixpkgsSurface":"`+nixext.SurfaceRev+`"`) {
 		t.Errorf("version --json: exit %d\n%s", got, so.String())
 	}
 }
@@ -94,6 +96,21 @@ func TestPrintChanges(t *testing.T) {
 		"  ~ go     golang.org/x/net   v0.30.0 → v0.31.0\n" +
 		"  + npm    react-dom          19.3.0\n" +
 		"  - crate  serde_derive       1.0.210\n"
+	if b.String() != want {
+		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
+	}
+	// Q4: a fresh lock printed "~ go go → " and "+ cc cc": a section without names or versions
+	// prints only its ecosystem, a workspace its go version.
+	b.Reset()
+	printChanges(o, []build.LockChange{
+		{Ecosystem: "go", Name: "example.com/hello", To: "go 1.26.0", Op: "add"},
+		{Ecosystem: "cc", Name: "cc", Op: "add"},
+		{Ecosystem: "go", Name: "go", Op: "update"},
+	})
+	want = "bob.lock: 3 changes\n" +
+		"  + go     example.com/hello   go 1.26.0\n" +
+		"  + cc\n" +
+		"  ~ go\n"
 	if b.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
 	}

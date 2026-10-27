@@ -14,16 +14,19 @@ import (
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/cc/internal/ccspec"
 	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
 // Kinds of the C/C++ ecosystem (SPEC §03.1). Objects depend on the platform, the profile
-// (-O2 / -O0 -g) and the sanitisers; an External on the platform and the profile.
+// (-O2 / -O0 -g) and the sanitisers; an External on the platform and the profile. A library,
+// binary or External is the package's one C/C++ unit (R-CC-006, BOB-E-1029); tests are not
+// units.
 func init() {
 	axes := []ext.Axis{ext.AxisPlatform, ext.AxisProfile, ext.AxisSanitizers}
-	ext.Register(ext.Kind{Name: ccspec.KindLibrary, Axes: axes})
-	ext.Register(ext.Kind{Name: ccspec.KindBinary, Axes: axes})
+	ext.Register(ext.Kind{Name: ccspec.KindLibrary, Axes: axes, Unit: "cc"})
+	ext.Register(ext.Kind{Name: ccspec.KindBinary, Axes: axes, Unit: "cc"})
 	ext.Register(ext.Kind{Name: ccspec.KindTest, Axes: axes})
-	ext.Register(ext.Kind{Name: ccspec.KindExternal, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile}})
+	ext.Register(ext.Kind{Name: ccspec.KindExternal, Axes: []ext.Axis{ext.AxisPlatform, ext.AxisProfile}, Unit: "cc"})
 }
 
 // Linkable is anything a C/C++/cgo/Rust/OCaml consumer can link: bob C/C++ libraries,
@@ -46,12 +49,12 @@ const (
 // LibraryOpts configures StaticLibrary and SharedLibrary.
 type LibraryOpts struct {
 	Srcs      bob.Sources       // .c .cc .cpp .cxx .S; required
-	Hdrs      string            // public include dir, relative to the bob.go dir ("include"); "" = none
+	Hdrs      bob.Include       // public include tree: bob.IncludeDir("include"); zero = none
 	Private   bob.Sources       // private headers (not exported to consumers)
 	Std       Std               // default C17 for .c, CXX20 for C++ sources
 	Defines   map[string]string // -DKEY=VALUE ("" value = -DKEY)
-	Flags     []string          // extra compile flags (validated: no -o, -I/nix/store, -fplugin)
-	LinkOpts  []string          // extra link flags (shared libs and binaries only)
+	Flags     []string          // extra compile flags (validated: no -o, no include path flags of any path, no -fplugin, no @file)
+	LinkOpts  []string          // extra link flags (shared libs and binaries only; no -L/-l/@file: use Deps)
 	Deps      []Linkable        // public deps: their headers propagate to consumers
 	PrivDeps  []Linkable        // private deps: linked, headers not propagated
 	Platforms []bob.Platform    // restrict; default all
@@ -109,7 +112,7 @@ type Test struct{ bob.Node }
 // StaticLibrary builds lib<name>.a. Label //<dir>:<name>.
 //
 //	var Foo = bob.Define(func(p *bob.P) *cc.Library {
-//		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.cpp"), Hdrs: "include"})
+//		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.cpp"), Hdrs: bob.IncludeDir("include")})
 //	})
 func StaticLibrary(p *bob.P, name string, o LibraryOpts) *Library {
 	return library(p, name, o, ccspec.TypeStatic)
@@ -119,8 +122,8 @@ func StaticLibrary(p *bob.P, name string, o LibraryOpts) *Library {
 //
 //	var Foo = bob.Define(func(p *bob.P) *cc.Library {
 //		return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
-//			Srcs: bob.Glob("src/*.cpp"), Hdrs: "include", Std: cc.CXX20,
-//			Deps: []cc.Linkable{nixpkgs.Lib(p, "openssl")},
+//			Srcs: bob.Glob("src/*.cpp"), Hdrs: bob.IncludeDir("include"), Std: cc.CXX20,
+//			Deps: []cc.Linkable{nixpkgs.Openssl.Lib(p)},
 //		})
 //	})
 func SharedLibrary(p *bob.P, name string, o LibraryOpts) *Library {
@@ -129,22 +132,16 @@ func SharedLibrary(p *bob.P, name string, o LibraryOpts) *Library {
 
 func library(p *bob.P, name string, o LibraryOpts, typ string) *Library {
 	var problems []string
-	hdrs := ""
-	if o.Hdrs != "" {
-		hdrs = path.Clean(o.Hdrs)
-		// "." is the bob.go directory itself (SPEC §03.4: Hdrs is relative to the bob.go dir).
-		if hdrs != "." && !localDir(hdrs) {
-			problems = append(problems, fmt.Sprintf("Hdrs %q is not a directory below the bob.go directory", o.Hdrs))
-			hdrs = ""
-		}
-	}
+	// The public include tree is the package's own (R-CC-006): its files are sources of the
+	// library (a tree outside the package region fails with BOB-E-1028 there) and its root goes
+	// only into the library's link info for consumers. "." is the package directory itself.
+	hdrs := o.Hdrs.Dir()
 	srcs := []bob.Sources{o.Srcs, o.Private}
-	switch hdrs {
-	case "":
-	case ".": // the files next to bob.go, not the packages in subdirectories
-		srcs = append(srcs, bob.Glob("*"))
-	default:
-		srcs = append(srcs, bob.Dir(hdrs))
+	if hdrs != "" {
+		srcs = append(srcs, o.Hdrs.Sources())
+		if hdrs != "." && !localDir(hdrs) {
+			hdrs = "" // reported by the region rule of the sources
+		}
 	}
 	t := ccspec.Target{Name: name, Type: typ, Std: string(o.Std), Defines: defines(o.Defines),
 		Flags: list(o.Flags), LinkOpts: list(o.LinkOpts), Hdrs: hdrs, Private: !isEmpty(o.Private)}
@@ -190,9 +187,9 @@ func program(p *bob.P, name string, o BinaryOpts, kind, typ string) (bob.Node, [
 	t := ccspec.Target{Name: name, Type: typ, Std: string(o.Std), Defines: defines(o.Defines),
 		Flags: list(o.Flags), LinkOpts: list(o.LinkOpts), PrivDeps: []int{}}
 	deps := tools(p, &t.Tools)
-	if tc := p.Toolchain(); typ == ccspec.TypeTest && tc.Emulator != "" {
+	if tc := nixext.Toolchain(p); typ == ccspec.TypeTest && tc.Emulator.Name() != "" {
 		t.Tools.Emulator = len(deps)
-		deps = append(deps, nixpkgs.Tool(p, tc.Emulator))
+		deps = append(deps, tc.Emulator.Tool(p))
 	}
 	t.Deps, deps = linkables(libsFrom(p, o.Libs, o.Deps), deps)
 	problems := check(o.Srcs, o.Std, o.Flags, o.LinkOpts, o.Defines)
@@ -204,12 +201,12 @@ func program(p *bob.P, name string, o BinaryOpts, kind, typ string) (bob.Node, [
 // and patchelf. A sanitised cross build also gets the cross compiler's lib output, whose
 // directory goes into the RUNPATH (R-FW-037).
 func tools(p *bob.P, t *ccspec.Tools) []bob.Package {
-	tc := p.Toolchain()
-	deps := []bob.Package{nixpkgs.Tool(p, tc.CC), nixpkgs.Tool(p, tc.Bintools), nixpkgs.Tool(p, "patchelf")}
+	tc := nixext.Toolchain(p)
+	deps := []bob.Package{tc.CC.Tool(p), tc.Bintools.Tool(p), nixpkgs.Patchelf.Tool(p)}
 	*t = ccspec.Tools{CC: 0, Binutils: 1, Patchelf: 2}
-	if tc.CCLib != "" && len(p.Variant().Sanitize) > 0 {
+	if tc.CCLib.Name() != "" && len(p.Variant().Sanitize) > 0 {
 		t.CCLib = len(deps)
-		deps = append(deps, nixpkgs.Tool(p, tc.CCLib, nixpkgs.Outputs("lib")))
+		deps = append(deps, tc.CCLib.Tool(p, nixext.Outputs(nixext.OutLib)))
 	}
 	return deps
 }
@@ -223,7 +220,7 @@ func libsFrom(p *bob.P, src LibSource, ls []Linkable) []Linkable {
 	out := make([]Linkable, len(ls))
 	for i, l := range ls {
 		out[i] = l
-		if nl, ok := l.(*nixpkgs.Package); ok && nl != nil {
+		if nl, ok := l.(*nixext.Package); ok && nl != nil {
 			out[i] = nl.CrossSet(p)
 		}
 	}
@@ -301,6 +298,21 @@ func prev(s []string, i int) string {
 	return s[i-1]
 }
 
+// Include and library path flags (R-CC-006): a package gets include paths and libraries only
+// from its own Hdrs/Private and the link info of its Deps, never from a path in a flag.
+var (
+	includeFlags = []string{"-I", "-isystem", "-idirafter", "-iquote", "-include", "-imacros", "--sysroot",
+		"-isysroot", "-iprefix", "-iwithprefix", "-iwithprefixbefore"}
+	libraryFlags = []string{"-L", "-l"}
+	toolFlags    = []string{"-B", "-specs"}
+)
+
+// The reasons of refused include and library path flags (R-CC-006); report adds a hint to them.
+const (
+	useDepsIncludes  = "use Deps to add include paths"
+	useDepsLibraries = "use Deps to add libraries"
+)
+
 // flagProblem explains why flag f (after flag before) is not allowed, or returns "".
 func flagProblem(f, before string) string {
 	q := fmt.Sprintf("flag %q is not allowed; ", f)
@@ -313,24 +325,38 @@ func flagProblem(f, before string) string {
 		return q + "compiler plugins are not hermetic"
 	case strings.HasPrefix(f, "@"):
 		return q + "response files are read from outside the sources"
-	case pathFlag(f, before, "-I", "-isystem", "-idirafter", "-iquote", "-include", "-imacros", "--sysroot", "-isysroot"):
-		return q + "use Deps to add include paths"
-	case pathFlag(f, before, "-L", "-l:"):
-		return q + "use Deps to add libraries"
-	case pathFlag(f, before, "-B", "-specs") || strings.Contains(f, "/nix/store"):
+	case pathFlag(f, before, includeFlags):
+		return q + useDepsIncludes
+	case pathFlag(f, before, libraryFlags) || linkerPathFlag(f):
+		return q + useDepsLibraries
+	case pathFlag(f, before, toolFlags) || strings.Contains(f, "/nix/store"):
 		return q + "it names a path outside the sources; use Deps"
 	}
 	return ""
 }
 
-// pathFlag reports whether f is one of the flags names with an absolute path, joined
-// ("-I/x", "--sysroot=/x") or as the next argument ("-I", "/x").
-func pathFlag(f, before string, names ...string) bool {
+// pathFlag reports whether f is one of the flags names, with its argument joined ("-Iinclude",
+// "--sysroot=/x") or f is the separate argument of one ("-isystem", "include"). Every path is
+// refused, relative or absolute (R-CC-006).
+func pathFlag(f, before string, names []string) bool {
 	for _, n := range names {
-		if v, ok := strings.CutPrefix(f, n); ok && strings.HasPrefix(strings.TrimPrefix(v, "="), "/") {
+		if strings.HasPrefix(f, n) || before == n {
 			return true
 		}
-		if before == n && path.IsAbs(f) {
+	}
+	return false
+}
+
+// linkerPathFlag reports whether f passes a library path or name to the linker directly
+// ("-Wl,-L,../x", "-Wl,-lfoo", "-Wl,@file").
+func linkerPathFlag(f string) bool {
+	rest, ok := strings.CutPrefix(f, "-Wl,")
+	if !ok {
+		return false
+	}
+	for _, a := range strings.Split(rest, ",") {
+		if strings.HasPrefix(a, "-L") || strings.HasPrefix(a, "-l") || strings.HasPrefix(a, "@") ||
+			strings.HasPrefix(a, "--library") {
 			return true
 		}
 	}
@@ -345,6 +371,12 @@ func localDir(d string) bool {
 // report records each problem as a definition error at n's position.
 func report(n *bob.Node, problems []string) {
 	for _, pr := range problems {
+		switch {
+		case strings.HasSuffix(pr, useDepsIncludes):
+			pr += "\nhint: depend on the library that provides the headers through Deps; its Hdrs include tree joins the include path"
+		case strings.HasSuffix(pr, useDepsLibraries):
+			pr += "\nhint: depend on the library through Deps (a package of this repository, or a typed nixpkgs package such as nixpkgs.Zlib.Lib(p))"
+		}
 		ext.Errorf("%s: %s: %s", n.DefinedAt(), n.Label(), pr)
 	}
 }

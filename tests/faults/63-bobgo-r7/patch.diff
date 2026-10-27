@@ -12,7 +12,7 @@ index ae67fda..9b7325f 100644
  )
 @@ -12,3 +13,6 @@ import (
  var Tests = bob.Define(func(p *bob.P) *golang.TestSet {
- 	return acme.Module(p).Tests("./internal/greet", golang.TestOpts{Name: "greet_tests"})
+ 	return acme.Module(p).Tests(golang.TestOpts{Name: "greet_tests"})
  })
 +
 +// ID uses a third-party module, which build definitions cannot import.

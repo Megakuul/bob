@@ -1,0 +1,20 @@
+diff --git a/bob.go b/bob.go
+--- a/bob.go
++++ b/bob.go
+@@ -2,6 +2,15 @@
+ 
+ package cc
+ 
+-import "github.com/megakuul/bob/pkg/bob"
++import (
++	"github.com/megakuul/bob/pkg/bob"
++	"github.com/megakuul/bob/pkg/cc"
++)
+ 
+ var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
++
++// All is a CMake-style central target over the sources of other packages (fault 83).
++var All = bob.Define(func(p *bob.P) *cc.Binary {
++	//bob:fault 83-source-in-subpackage
++	return cc.NewBinary(p, "central", cc.BinaryOpts{Srcs: bob.Glob("app/*.c", "libs/mathx/src/*.c")})
++})

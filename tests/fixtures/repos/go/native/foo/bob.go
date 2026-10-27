@@ -9,5 +9,5 @@ import (
 
 // Lib is libfoo.so (label //native/foo:foo).
 var Lib = bob.Define(func(p *bob.P) *cc.Library {
-	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: "include"})
+	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.c"), Hdrs: bob.IncludeDir("include")})
 })

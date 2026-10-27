@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/bob/diag"
@@ -73,6 +74,9 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	}
 	prev := decodeSection(req.Prev)
 	if prev != nil && prev.Inputs == inputs && len(req.Update) == 0 {
+		if err := checkIndirect(ts, prev.Packages); err != nil {
+			return nil, err
+		}
 		return lock.EncodeSection(lock.SectionOpam, prev)
 	}
 	commit := ""
@@ -106,6 +110,9 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 		rs = append(rs, resolve.Request{Name: r.Name, Constraint: r.Req})
 	}
 	if len(rs) == 0 {
+		if err := checkIndirect(ts, sec.Packages); err != nil {
+			return nil, err
+		}
 		return lock.EncodeSection(lock.SectionOpam, sec)
 	}
 	dir, err := opamFiles(ctx, snap)
@@ -121,11 +128,45 @@ func (Ecosystem) Lock(ctx context.Context, req engine.LockRequest) (json.RawMess
 	for _, p := range sol.Packages {
 		if strings.HasPrefix(p.Name, "conf-") && !mapped[p.Name] {
 			return nil, diag.New(1023, "package", "opam:"+p.Name+"."+p.Version,
-				"reason", fmt.Sprintf("no nixpkgs mapping for this system package (add ocaml.Conf(%q, nixpkgs.Lib(p, \"<attr>\")) or extend bob's table)", p.Name))
+				"reason", confHint(p.Name))
 		}
 		sec.Packages[p.Name] = lock.OpamPackage{Version: p.Version, URL: p.URL, Hash: p.Hash, Opam: p.Opam, Deps: p.Deps}
 	}
+	if err := checkIndirect(ts, sec.Packages); err != nil {
+		return nil, err
+	}
 	return lock.EncodeSection(lock.SectionOpam, sec)
+}
+
+// confHint is the reason of BOB-E-1023 for a conf-* package without a nixpkgs mapping (SPEC
+// §03.5.5).
+func confHint(name string) string {
+	return fmt.Sprintf("no nixpkgs mapping for this system package (add ocaml.Conf(ocaml.Indirect(%q), nixpkgs.<Name>.Lib(p)) or extend bob's table)", name)
+}
+
+// checkIndirect is BOB-E-1015 for an ocaml.Indirect handle whose package is not in the solution
+// (SPEC §03.0.7): the ocaml.Conf that names it would apply to nothing.
+func checkIndirect(ts []*target, pkgs map[string]lock.OpamPackage) error {
+	for _, t := range ts {
+		for _, c := range t.spec.Conf {
+			if c.Indirect == "" {
+				continue
+			}
+			if _, ok := pkgs[c.Opam]; ok {
+				continue
+			}
+			reason := fmt.Sprintf("%s is declared with ocaml.Indirect at %s but is not in the resolved graph", c.Opam, c.Indirect)
+			e := diag.New(1015, "ecosystem", "OCaml", "root", t.n.Label, "reason", reason, "label", t.n.Label)
+			e.DefinedAt = diag.Pos{File: t.n.DefinedAt.File, Line: t.n.DefinedAt.Line}
+			if i := strings.LastIndexByte(c.Indirect, ':'); i > 0 {
+				if line, err := strconv.Atoi(c.Indirect[i+1:]); err == nil && line > 0 {
+					e.DefinedAt = diag.Pos{File: c.Indirect[:i], Line: line}
+				}
+			}
+			return e
+		}
+	}
+	return nil
 }
 
 // confMapped is the set of conf-* packages with a nixpkgs mapping (bob's table and every

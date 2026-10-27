@@ -236,6 +236,10 @@ func nativeFilesAt(ctx context.Context, root string, g *ir.Graph, lf *lock.File,
 	if err != nil {
 		return nil, err
 	}
+	sum, err := eval.FrameworkSum()
+	if err != nil {
+		return nil, err
+	}
 	var out []engine.GeneratedFile
 	owner := map[string]string{} // path → ecosystem
 	for _, e := range ecos {
@@ -246,7 +250,7 @@ func nativeFilesAt(ctx context.Context, root string, g *ir.Graph, lf *lock.File,
 				nodes = append(nodes, n)
 			}
 		}
-		files, err := e.Native(ctx, engine.PlanRequest{Graph: g, Nodes: nodes, Lock: lf.Sections[name], Nixpkgs: idx, Root: root})
+		files, err := e.Native(ctx, engine.PlanRequest{Graph: g, Nodes: nodes, Lock: lf.Sections[name], Nixpkgs: idx, Root: root, FrameworkSum: sum})
 		if err != nil {
 			return nil, err
 		}

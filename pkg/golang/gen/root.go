@@ -93,14 +93,7 @@ func RootGoSum(g *ir.Graph, root, frameworkSum string) (f engine.GeneratedFile, 
 	if g == nil || g.Module == "" {
 		return f, false
 	}
-	var lines []string
-	if resolve.ValidVersion(g.BobVersion) {
-		for _, l := range strings.Split(frameworkSum, "\n") {
-			if fs := strings.Fields(l); len(fs) == 3 && fs[0] == frameworkModule && strings.TrimSuffix(fs[1], "/go.mod") == g.BobVersion {
-				lines = append(lines, strings.Join(fs, " "))
-			}
-		}
-	}
+	lines := frameworkSumLines(g.BobVersion, frameworkSum)
 	if imports, err := BobImports(root); err == nil {
 		lines = append(lines, importSumLines(root, imports)...)
 	}
@@ -111,6 +104,60 @@ func RootGoSum(g *ir.Graph, root, frameworkSum string) (f engine.GeneratedFile, 
 	sum := []byte(strings.Join(lines, "\n") + "\n")
 	return engine.GeneratedFile{Path: "go.sum", Content: sum, Mode: 0o444, Owner: "//:bob.go", Committed: true,
 		Explain: explainGoSum(sum)}, true
+}
+
+// frameworkSumLines are the lines of frameworkSum for the framework at version (none when
+// version is not a module version).
+func frameworkSumLines(version, frameworkSum string) []string {
+	if !resolve.ValidVersion(version) {
+		return nil
+	}
+	var lines []string
+	for _, l := range strings.Split(frameworkSum, "\n") {
+		if fs := strings.Fields(l); len(fs) == 3 && fs[0] == frameworkModule && strings.TrimSuffix(fs[1], "/go.mod") == version {
+			lines = append(lines, strings.Join(fs, " "))
+		}
+	}
+	return lines
+}
+
+// bobRequirements are the requirements of the bob.go files and their go.sum lines.
+type bobRequirements struct {
+	reqs []gospec.Requirement
+	sum  []string
+}
+
+// rootBobRequirements returns what the root go.mod needs for the bob.go files of the repository
+// at root when a Go module of the repository (module path module) owns that go.mod: the
+// framework at g.BobVersion, also for a source build (v0.0.0-dev, which bob env serves), and
+// the bob.Import modules. bob's own repository is the framework module and does not require it.
+func rootBobRequirements(g *ir.Graph, root, module, frameworkSum string) (bobRequirements, error) {
+	var out bobRequirements
+	imports, err := BobImports(root)
+	if err != nil {
+		return out, err
+	}
+	for _, m := range imports {
+		out.reqs = append(out.reqs, gospec.Requirement{Path: m.Path, Version: m.Version})
+	}
+	out.sum = importSumLines(root, imports)
+	if g != nil && module != frameworkModule && resolve.ValidVersion(g.BobVersion) {
+		out.reqs = append(out.reqs, gospec.Requirement{Path: frameworkModule, Version: g.BobVersion})
+		out.sum = append(out.sum, frameworkSumLines(g.BobVersion, frameworkSum)...)
+	}
+	return out, nil
+}
+
+// mergeSum adds lines to the go.sum content sum: sorted bytewise, each line once.
+func mergeSum(sum []byte, lines []string) []byte {
+	if len(lines) == 0 {
+		return sum
+	}
+	all := slices.Concat(strings.Split(strings.TrimSpace(string(sum)), "\n"), lines)
+	all = slices.DeleteFunc(all, func(l string) bool { return strings.TrimSpace(l) == "" })
+	sort.Strings(all)
+	all = slices.Compact(all)
+	return []byte(strings.Join(all, "\n") + "\n")
 }
 
 // importSumLines are the go.sum lines of mods: from the Go module cache's download records

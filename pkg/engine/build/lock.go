@@ -53,11 +53,26 @@ func lockPath(root string) string { return filepath.Join(root, "bob.lock") }
 
 // readLock reads bob.lock; a missing file is an empty lock.
 func readLock(root string) (*lock.File, error) {
+	if emptyLock(lockPath(root)) {
+		return &lock.File{LockVersion: lock.Version}, nil
+	}
 	f, err := lock.Read(lockPath(root))
 	if errors.Is(err, fs.ErrNotExist) {
 		return &lock.File{LockVersion: lock.Version}, nil
 	}
 	return f, err
+}
+
+// emptyLock reports whether bob.lock exists and holds nothing but white space. Such a file
+// marks the repository root (`touch bob.lock` starts a repository, SPEC §1.2) and pins nothing
+// yet: it is read like a missing lock, not as the unreadable lock of R-FW-048 (A472).
+func emptyLock(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > 4096 {
+		return false
+	}
+	b, err := os.ReadFile(path)
+	return err == nil && len(bytes.TrimSpace(b)) == 0
 }
 
 // nixpkgsDecl is RepoOpts.Nixpkgs of the graph (default channel when unset).
@@ -230,8 +245,14 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		if missing := missingSections(g, lf); len(missing) > 0 {
 			return nil, diag.New(1012, "what", missing[0]+" is not locked and --offline forbids locking it")
 		}
-	} else if _, err := lockEcosystems(ctx, f, g, lf, r.o.Root, nil, false, !r.o.Lock, r.o.Offline, nil, lazyIndex(st, f, g, lf)); err != nil {
-		return nil, err
+	} else if r.o.Lock || len(missingSections(g, lf)) > 0 {
+		lg, err := r.lockGraph(ctx, st, g)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := lockEcosystems(ctx, f, lg, lf, r.o.Root, nil, false, !r.o.Lock, r.o.Offline, nil, lazyIndex(st, f, g, lf)); err != nil {
+			return nil, err
+		}
 	}
 	after, err := lf.Encode()
 	if err != nil {
@@ -248,6 +269,41 @@ func (r *runner) lockStage(ctx context.Context, st *store.Store, f fetch.Fetcher
 		}
 	}
 	return lf, nil
+}
+
+// lockGraph is the graph the lock stage resolves ecosystem sections with. A section describes
+// the whole repository (bob lock resolves it from every declaration): for a build of some
+// patterns it would otherwise miss the workspace modules, crates or importers that only other
+// packages declare (a Go binary importing another workspace module of the repository, whose
+// module node is not in the target's closure). So for patterns other than the whole repository
+// it is the whole repository's graph, limited to the ecosystems g uses (a Go target does not
+// lock the repository's Rust crates).
+func (r *runner) lockGraph(ctx context.Context, st *store.Store, g *ir.Graph) (*ir.Graph, error) {
+	if wholeRepo(r.o.Patterns) {
+		return g, nil
+	}
+	o := r.o
+	o.Patterns = nil
+	whole, _, err := (&runner{o: o, transientPin: r.transientPin}).evaluate(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	used := map[string]bool{}
+	for _, n := range g.Nodes {
+		if !isCoreKind(n.Kind) {
+			name, _, _ := strings.Cut(n.Kind, ".")
+			used[name] = true
+		}
+	}
+	view := *whole
+	view.Nodes = nil
+	for _, n := range whole.Nodes {
+		name, _, _ := strings.Cut(n.Kind, ".")
+		if isCoreKind(n.Kind) || used[name] {
+			view.Nodes = append(view.Nodes, n)
+		}
+	}
+	return &view, nil
 }
 
 // ecosystemsOf returns the registered ecosystems that own nodes of g, sorted by name.
@@ -421,7 +477,7 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 		if rev := lock.SalvageNixpkgsRev(raw); rev != "" {
 			lf.Nixpkgs.Rev = rev
 		}
-	case errors.Is(rerr, fs.ErrNotExist):
+	case errors.Is(rerr, fs.ErrNotExist), rerr == nil && len(bytes.TrimSpace(raw)) == 0:
 		lf = &lock.File{LockVersion: lock.Version}
 	case rerr != nil:
 		return nil, rerr
@@ -432,8 +488,9 @@ func Lock(ctx context.Context, o Options, lo LockOptions) (*LockResult, error) {
 	}
 	old := *lf
 	var f fetch.Fetcher = fetch.New(st, fetch.Policy{})
+	// --offline: what the store holds and the pins bob.lock has, nothing else (A456).
 	var channelRev func(context.Context, string) (string, error) // nil: lock.ChannelRev
-	if o.Offline { // --offline: what the store holds and the pins bob.lock has, nothing else (A456)
+	if o.Offline {
 		f = offlineFetcher{st: st}
 		channelRev = func(context.Context, string) (string, error) {
 			return "", fmt.Errorf("the channel's current revision: %w", errOffline)
@@ -604,10 +661,44 @@ func goChanges(prev, next json.RawMessage) []LockChange {
 			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, From: v, Op: "remove"})
 		}
 	}
-	if len(out) == 0 { // only hashes or other details changed
-		out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: lock.SectionGo, Op: "update"})
+	if len(out) == 0 { // no module moved: name the workspaces whose go version is new or changed
+		out = goWorkspaceChanges(prev, next)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// goWorkspaceChanges lists the workspace modules of next that are new or whose go version
+// changed ("+ go example.com/hello go 1.26.0" in a fresh lock); with none, the section itself
+// (only hashes or other details changed). Q4: a fresh lock printed "~ go go → ".
+func goWorkspaceChanges(prev, next json.RawMessage) []LockChange {
+	ws := func(raw json.RawMessage) map[string]lock.GoBuildList {
+		if len(raw) == 0 {
+			return nil
+		}
+		v, err := lock.DecodeSection(lock.SectionGo, raw)
+		if err != nil {
+			return nil
+		}
+		return v.(*lock.GoSection).Workspaces
+	}
+	a, b := ws(prev), ws(next)
+	var out []LockChange
+	for p, bl := range b {
+		switch old, ok := a[p]; {
+		case !ok:
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, To: "go " + bl.Go, Op: "add"})
+		case old.Go != bl.Go:
+			out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: p, From: "go " + old.Go, To: "go " + bl.Go, Op: "update"})
+		}
+	}
+	if len(out) == 0 {
+		op := "update"
+		if len(prev) == 0 {
+			op = "add"
+		}
+		out = append(out, LockChange{Ecosystem: lock.SectionGo, Name: lock.SectionGo, Op: op})
+	}
 	return out
 }
 

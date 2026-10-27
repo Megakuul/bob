@@ -457,11 +457,11 @@ func chainRepo(t *testing.T, n int, salt string) string {
 		if i > 0 {
 			in = fmt.Sprintf("map[string]bob.Tree{\"prev\": s%03d(p)}", i-1)
 		}
-		fmt.Fprintf(&b, "var s%03d = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"s%03d\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, \"coreutils\")}, Cmd: []string{\"true\"}, Inputs: %s, Env: map[string]string{\"N\": \"%s-%d\"}})\n})\n\n", i, i, in, salt, i)
+		fmt.Fprintf(&b, "var s%03d = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"s%03d\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Coreutils.Tool(p)}, Cmd: []string{\"true\"}, Inputs: %s, Env: map[string]string{\"N\": \"%s-%d\"}})\n})\n\n", i, i, in, salt, i)
 	}
-	fmt.Fprintf(&b, "var warm = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"warm\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, \"coreutils\")}, Cmd: []string{\"true\"}, Env: map[string]string{\"N\": \"%s-warm\"}})\n})\n", salt)
+	fmt.Fprintf(&b, "var warm = bob.Define(func(p *bob.P) *bob.Step {\n\treturn bob.Run(p, \"warm\", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Coreutils.Tool(p)}, Cmd: []string{\"true\"}, Env: map[string]string{\"N\": \"%s-warm\"}})\n})\n", salt)
 	writeFile(t, filepath.Join(dir, "chain", "bob.go"), b.String())
-	writeFile(t, filepath.Join(dir, "bob.go"), "//go:build bob\n\npackage chain\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n")
+	writeFile(t, filepath.Join(dir, "bob.go"), "//go:build bob\n\npackage chain\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n")
 	writeFile(t, filepath.Join(dir, "go.mod"), "module example.com/chain\n\ngo 1.26.0\n")
 	writeFile(t, filepath.Join(dir, "bob.lock"), "{\n  \"lockVersion\": 1\n}\n")
 	gitInit(t, dir)

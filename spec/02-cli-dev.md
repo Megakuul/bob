@@ -174,7 +174,7 @@ added by §02.
 | 0009 **new** | usage | `{ref} has nothing to install (it contains: {kinds}); download its artifacts from {url}` | — |
 | 0010 **new** | usage | `unknown platform "{platform}" (known: {known})` | — |
 | 0011 **new** | usage | `{label}: {ecosystem} packages cannot be cross-compiled yet (requested {platform} on a {host} host)` | build for the host platform, or use an ecosystem that supports cross-compilation |
-| 1001 | definition | `nixpkgs has no package "{attr}"` | did you mean {suggest}? |
+| 1001 | definition | `nixpkgs has no package "{attr}"`; variant `pin` [D71]: `{pos}: nixpkgs at the pinned revision {rev} has no package "{attr}" (nixpkgs.{name})` (R-NIX-032) | did you mean {suggest}? / (`pin`) bob's typed nixpkgs packages come from {surface}; move the pin with bob lock --update nixpkgs, or use another package |
 | 1002 | definition | `nixpkgs package "{attr}" ({version}) is marked broken` | pin a nixpkgs revision where it builds, or use another package |
 | 1003 | definition | `nixpkgs package "{attr}" ({version}) is marked insecure: {cves}` | use a fixed version; bob refuses known-vulnerable packages unless allowed per package |
 | 1004 | definition | `nixpkgs package "{attr}" has an unfree licence` | allow it explicitly for this package if your licence permits |
@@ -193,13 +193,16 @@ added by §02.
 | 1017 **new** | definition | `nixpkgs package "{attr}" cannot be evaluated on {system}` | pin another nixpkgs revision or use another package |
 | 1018 **new** | definition | `evaluating bob.go is not deterministic: {label}` | bob.go must not depend on time, randomness, environment or map order |
 | 1019 **new** | definition | `bob.lock cannot be read: {reason} (line {line})` | resolve the merge conflict, or run bob lock --rebuild to resolve everything again from bob.go |
-| 1020 **new** | definition | `{label}: invalid {option}: {reason}` | — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
+| 1020 **new** | definition | `{label}: invalid {option}: {reason}` | `{hint}` when the check names a fix (typed form or did-you-mean of an invalid nixpkgs package, slot binding, refused include/library path flag), else — (option validation: image `MaxLayers`, forbidden compiler flags, release version, unsupported cross target) |
 | 1021 **new** | definition | `{label}: toolchain mismatch: {reason}` | align the versions named above (Go/Rust/generator runtime/target glibc) |
 | 1022 **new** | definition | `{label} is not a static binary (it needs {deps})` | use tarball.Closure |
 | 1023 **new** | definition | `{package} cannot be pinned: {reason}` | — (no checksum; no nixpkgs mapping for an opam `conf-*` package) |
-| 1024 **new** | definition | the rule's text from §01 R-FW-002 (R1–R7), e.g. `{dir}/bob.go: the first line must be "//go:build bob" …` | — (all violations are listed, sorted by path) |
+| 1024 **new** | definition | the rule's text from §01 R-FW-002 (R1–R8; R8 [D71]: `{dir}/bob.go:{line}: assigns to {name}, a value of the bob framework; framework values are read-only, declare your own variable`), e.g. `{dir}/bob.go: the first line must be "//go:build bob" …` | — (all violations are listed, sorted by path) |
 | 1025 **new** | definition | `{pos}: source pattern "{pattern}" leaves the repository` / `{pos}: bob.Glob("{pattern}") matches no files` / `{file}: symlink points outside the repository` | — |
 | 1026 **new** | definition | `nixpkgs mismatch: {what}` | the fix named by the check (set Libs: cc.CrossLibs on the packages that link the library, or move the nixpkgs pin; R-PLAT-007) |
+| 1027 | — | reserved (proposal I-B32: code-less definition errors; owner decision pending) | — |
+| 1028 **new** [D72] | definition | variant `outside`: `{pos}: {label}: "{pattern}" leaves the package directory {dir}/`; variant `subpackage`: `{pos}: {label}: "{pattern}" is inside {sub}/, which has its own bob.go` (R-FW-070) | (`outside`) each bob.go builds only the files below its own directory; give the other directory its own bob.go and depend on its package / (`subpackage`) use the package defined in {sub}/bob.go through its handle |
+| 1029 **new** [D72] | definition | `{pos}: {label}: {dir}/bob.go already defines the {ecosystem} {kind} {other} at {pos2}; one library or binary per directory package` (R-FW-071) | move {label} into its own directory with its own bob.go and depend on it through its handle |
 | 2000 | build | `{label} failed to build` | — (excerpt = last 10 log lines) |
 | 2001 | build | `{label}: compile error in {file}` | — |
 | 2002 | build | `{label}: undefined symbol {symbol}` | the symbol is not provided by any linked library; a dependency is probably missing from Deps |
@@ -213,8 +216,8 @@ added by §02.
 | 2010 | build | `{label}: Rust crate {crate} not found` | add the crate to the package's dependencies |
 | 2011 | build | `{label} wrote more than {bytes} bytes of log output and was stopped` | a step is printing in a loop; reduce its output or raise the log limit |
 | 2012 **new** | build | `dev server {name} exited with status {status}` | see {log} |
-| 2013 **new** | build | `{label}: {package} needs its {script} script ({reason})` | add npm.AllowScripts("{package}") to {label} |
-| 2014 **new** | build | `{label}: {package} uses {dep} without declaring it` | add npm.Extend("{package}", npm.Peer("{dep}")) |
+| 2013 **new** | build | `{label}: {package} needs its {script} script ({reason})` | declare {package} (npm.Dep or npm.Indirect("{package}")) and add npm.AllowScripts(<its handle>) to {label} |
+| 2014 **new** | build | `{label}: {package} uses {dep} without declaring it` | declare both (npm.Dep or npm.Indirect) and add npm.Extend(<handle of {package}>, npm.Peer(<handle of {dep}>)) |
 | 2015 **new** | build | `{label}: prune pattern "{pattern}" removes {file}, which {user} needs` | narrow the pattern |
 | 2016 **new** | build | `{label}: {reason}` (a warning bob-builder reports on a successful build, rendered `warning: <label>: <reason>`, R-OUT-019) | |
 | 3001 | fetch | `{label}: download does not match bob.lock` | if the upstream file legitimately changed, run bob lock; otherwise the source was tampered with |
@@ -286,6 +289,11 @@ aliases only in this table.
 | §01 nixpkgs attribute cannot be evaluated | 1017 |
 | §01 R1–R7 `bob.go` rule violations (R-FW-002) | 1024 |
 | §01 source pattern leaves the repository / matches no files / symlink outside the repo (R-FW-021) | 1025 |
+| §01 path leaves the package directory / reaches into a subpackage (R-FW-070) | 1028 |
+| §01 second build unit in one package (R-FW-071, R-CC-006) | 1029 |
+| §01 typed nixpkgs handle missing at the pinned revision (R-NIX-032) | 1001 (`pin`) |
+| §01 pipeline release pattern matches no release (R-FW-040); unbound or twice-bound `bob.Slot` (R-FW-071) | 1020 |
+| §03 `Indirect` package not in the resolved graph; unknown crate feature / findlib library | 1015 |
 | §02 duplicate dev-shell names | 1020 |
 | §01 non-deterministic evaluation | 1018 |
 | §01 unreadable bob.lock | 1019 |
@@ -698,7 +706,7 @@ type DevShell struct {
 //
 //	var Dev = bob.Define(func(p *bob.P) *bob.Shell {
 //		return bob.NewShell(p, bob.DevShell{
-//			Packages: []bob.Tool{nixpkgs.Tool(p, "postgresql"), nixpkgs.Tool(p, "jq")},
+//			Packages: []bob.Tool{nixpkgs.Postgresql.Tool(p), nixpkgs.Jq.Tool(p)},
 //			Env:      map[string]string{"DATABASE_URL": "postgres://127.0.0.1/acme"},
 //			Servers:  []bob.Package{web.Site(p)}, // web.Site: a bob.Define'd npm.Vite package
 //		})

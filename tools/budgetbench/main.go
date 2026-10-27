@@ -26,6 +26,9 @@
 //	               B-068 (narinfo p50 with a warm visibility cache; p99 ≤ 20 ms checked)
 //	fleet-jobs     B-057, B-088 (requests per job with wake-ups, 300 jobs, 20 workers; 0 LIST)
 //	fleet-idle     B-058 (requests per idle worker and second, 20 workers, 60 s window)
+//	nixpkgs        B-098…B-103 (typed nixpkgs surface: attrs_gen.go size, cold go build
+//	               ./pkg/nixpkgs, cold compile and binary size delta of a typed handle, gopls
+//	               workspace-load delta and `nixpkgs.Op` completion p95), see nixpkgs.go
 //
 // Fixtures are copied from tests/fixtures/repos into the work directory (-work, default
 // $BOB_BENCH_DIR or ${XDG_CACHE_HOME:-~/.cache}/bob-budgetbench), committed to a fresh git
@@ -127,6 +130,7 @@ func run(group, work string, runs int) error {
 	b.note("host %s, load %s", b.res.Host, b.res.LoadBefore)
 	groups := map[string]func() error{
 		"noop-go":       func() error { return b.noop("go", "B-016", "B-021") },
+		"nixpkgs":       b.nixpkgsSurface,
 		"noop-polyglot": func() error { return b.noop("polyglot", "B-007") },
 		"noop-cc":       func() error { return b.noop("cc", "B-053") },
 		"noop-rust":     func() error { return b.noop("rust", "B-029") },
@@ -561,7 +565,7 @@ func (b *bench) synthetic1000() (string, error) {
 		return "", err
 	}
 	if err := write("bob.go", "//go:build bob\n\npackage big\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\n"+
-		"var _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n"); err != nil {
+		"var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n"); err != nil {
 		return "", err
 	}
 	for i := range 999 {
@@ -577,7 +581,7 @@ import (
 )
 
 var step = bob.Define(func(p *bob.P) *bob.Step {
-	return bob.Run(p, "s", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Tool(p, "coreutils")}, Cmd: []string{"true"}, Env: map[string]string{"N": "%d"}})
+	return bob.Run(p, "s", bob.RunOpts{Tools: []bob.Tool{nixpkgs.Coreutils.Tool(p)}, Cmd: []string{"true"}, Env: map[string]string{"N": "%d"}})
 })
 `, pkg, i)); err != nil {
 			return "", err

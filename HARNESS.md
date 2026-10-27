@@ -257,14 +257,19 @@ claim).
 
 Each fixture is a real git repository (`git init` by the harness from a committed tree, so the
 outer repo does not contain nested `.git` directories). Each has `bob.go` files, a committed
-`bob.lock`, and no `.nix` file. Each is built end-to-end by suite `fixtures` for
+`bob.lock`, and no `.nix` file. **Every fixture is built from per-directory packages and the typed
+surface (ADR 0020, D71/D72, §18):** each directory with sources has its own `bob.go`, no `bob.go`
+references files outside its package region or of a subpackage, one library/binary per directory,
+nixpkgs only through generated handles (`nixpkgs.Openssl.Lib(p)`), Go binaries declared in their
+main package's own `bob.go` and reached from other packages through `bob.Slot`.
+`TestRFW070FixtureLocality` enforces this for every fixture and test repository. Each is built end-to-end by suite `fixtures` for
 `linux-arm64` natively and `linux-amd64` by cross-compilation, in every variant it declares.
 
 | Fixture | Contents | What it proves |
 |---|---|---|
 | `acme` | Go-centric repo with `bob.go` next to the code, several packages, labels, a dev shell, the S1 LSP script `bobtest/lsp/acme.steps` | `bob.go` convention R1–R7, labels, `definedAt`, IR independent of checkout path, gopls/shim/LSP proxy, shell hook (SPEC §1.2–§1.6, §02.7) |
-| `cc` | static lib, shared lib using nixpkgs zlib/openssl, exe, `cc.External` (Meson/Make) | `pkg/cc`, compile_commands.json, header/library errors (§03.1) |
-| `cpp-lib` | small C++ library | embedded static Nix with no host Nix, `env -i` (R-NIX-020/023) |
+| `cc` | per-directory packages: static lib `libs/mathx`, shared lib `libs/pack` using nixpkgs zlib/openssl, exe `app` (headers only through `Deps`), `cc.External` (Make) in `third_party/zstd` | `pkg/cc`, compile_commands.json, header/library errors, per-package modules R-CC-006 and their faults 82–85, 91 (§03.1) |
+| `cpp-lib` | small C++ library at the root (`src/`, `include/`, `test/`) and its tool as its own package `tool/bob.go` | embedded static Nix with no host Nix, `env -i` (R-NIX-020/023); one unit per package |
 | `go` | 3 modules, cgo package linking a cc shared lib, tests, `internal/msg` | `pkg/golang`, go.mod generation and drift detection, incremental budgets (§03.2) |
 | `rust` | S3 demo graph (serde+derive, clap+derive, …; 49 crates), features, build scripts | `pkg/rust`, Cargo.toml generation, crate lock in `bob.lock` (§03.3) |
 | `npm` | `ts-lib` (~200 packages), a Vite site, a native package (better-sqlite3) | own resolver, isolated layout, lifecycle scripts denied/allowed, Vite dev/HMR (§03.4) |
@@ -324,6 +329,13 @@ the BOOTSTRAP and §02 additions:
 | Added fault | Expected |
 |---|---|
 | hand edit of generated `go.mod` (`go get` drift) | BOB-E-1011, exit 3 |
+| **ADR 0020 (D71/D72), faults 82–92:** source `../` into a sibling package (82) / root `bob.go` lists subpackage sources (83) / public headers outside the package (91) | BOB-E-1028 (`outside` / `subpackage`), exit 3, position, hint |
+| second C/C++ unit in one package (84) | BOB-E-1029, exit 3 |
+| hand-written `-I` of another package (85) | BOB-E-1020 (`use Deps to add include paths`) |
+| nixpkgs package named by a string, old API (86) / misspelt handle (87) | BOB-E-1020 compile error with the typed-handle / `did you mean` hint |
+| `bob.go` imports `pkg/nixpkgs/nixext` (88) / assigns to a framework value (89) | BOB-E-1024 R7 / R8 |
+| typed handle missing at the pinned revision (90, hook `BOB_TEST_NIXPKGS_MISSING`) | BOB-E-1001 variant `pin` |
+| unbound typed slot of a Go binary (92) | BOB-E-1020 |
 | `bob.lock` out of date / merge conflict markers | BOB-E-1012 / BOB-E-1019 |
 | npm lifecycle script denied | BOB-E-2013 with the `E-SCRIPT-DENIED` text, no script ran |
 | undeclared npm peer | BOB-E-2014 |
@@ -609,6 +621,16 @@ failing test, duration, date, machine). Gate H needs every row red as expected.
 | 30 | add a GPL dependency | `licence` |
 | 31 | quirks-table entry without justification (BOB-E-9006) | `unit` |
 | 32 | delete a test that covers a requirement | `parity` floor |
+| T1 | add `func Tool(p *bob.P, attr string, …)` back to `pkg/nixpkgs` (stringly-typed API) | `unit` (`TestRFW072TypedSurface`: unclassified raw string) |
+| T2 | move a violation row (`pkg/golang.(*Module).Binary(dir)`) into the allowlist | `protected` (hash change reported) + review |
+| T3 | add `Srcs: bob.Glob("../libs/mathx/src/*.c")` to `cc/app/bob.go` | `unit` (`TestRFW070FixtureLocality`) and `errors` fault 82 |
+| T4 | let a root `bob.go` glob `libs/mathx/src/*.c` | `unit` (`TestRFW070FixtureLocality`), `errors` fault 83 |
+| T5 | define a second `cc.StaticLibrary` in `libs/mathx/bob.go` | `unit` (`TestRFW070FixtureLocality`), `errors` fault 84 |
+| T6 | accept relative `-I` flags in `pkg/cc` (`pathFlag` checks absolute paths only) | `errors` fault 85 |
+| T7 | hand-edit one doc comment in `pkg/nixpkgs/attrs_gen.go` | `unit` (`TestRNIX031GeneratedSurface`: `nixpkgsgen -check`) |
+| T8 | drop the `python3Packages` exclusion from `cmd/nixpkgsgen/exclude.json` | `unit` (`TestRNIX031GeneratedSurface`: excluded handle present) |
+| T9 | make `**` descend into subpackages in `pkg/engine/srcs` | `unit` (`TestRFW070GlobStopsAtSubpackage`) |
+| T10 | write `nixpkgs.Lib(p, "openssl")` in a documented `bob.go` | `docs` (`TestDocsPackageLocality`, after Q2) |
 
 ---
 
@@ -788,7 +810,8 @@ Every suite below is also reachable as `go run ./tools/ci -only <name>`.
 | 39 | `budgets-2c4g` | `go run ./tools/ci -slow -profile 2c4g -only budgets,bench` | slow |
 | 40 | `selfcheck` | `go run ./tools/ci selfcheck` | before Gate H and after any change to the harness |
 
-40 suites: 33 in the gate run, 6 slow, plus selfcheck.
+40 suites: 33 in the gate run, 6 slow, plus selfcheck. The typed-surface and per-package guards of
+§18 run inside `unit` (tests/core), `docs` (tests/docs) and `errors` (faults 82–92).
 
 ---
 
@@ -862,6 +885,7 @@ Plain Go tests (no build tag, no network, no Nix; they also run in the `unit` st
 | `TestEnvironmentVariables` | a `BOB_*` literal of the non-test, non-`bobtest` Go files under `internal/` and `cmd/bob-server/` has no table row in `06-server/03-configuration.md`; one under `pkg/` and `cmd/bob` appears on no page; a page names a `BOB_*` variable that no code reads (`BOB_TEST_*` hooks are excluded) |
 | `TestServerModes` | a mode in bob-server's usage text is not documented in `06-server/` |
 | `TestSnippetsTypeCheck` | the `bob.go` files of a page's example project, or a standalone `verify` block, fail `go vet -tags=bob` in a scratch module whose `github.com/megakuul/bob` is replaced by this checkout (`GOFLAGS=-mod=mod GOPROXY=off`, the repository's `go.sum`) |
+| `TestDocsPackageLocality` | a documented `bob.go` (a page's `file=…/bob.go` blocks as one repository, or a `verify` block) lists a source outside its package or of a subpackage, names a Go package of another directory or a nixpkgs package by string, imports `nixext`, or defines two units in one package (§18; `tests/harness/boblint`). It waits (skips) until `pkg/nixpkgs/attrs_gen.go` exists, because the docs move to the typed API in the same change as the framework (Q2). |
 
 Generated pages are regenerated with `BOB_DOCS_UPDATE=1 go test ./tests/docs`; review the diff.
 Their whole body is generated, because the website renders raw HTML (and so HTML comments) as
@@ -918,4 +942,35 @@ after a docs review narrows the base for later changes.
 ### 17.4 Validation
 
 Mutation results are in `docs/harness-validation.md` §4.
+
+---
+
+## 18. Typed surface and per-package build modules (ADR 0020, owner D71/D72, 2026-10-24)
+
+The owner, verbatim: "I think in the harness I did absolutely specify that everything must be
+typesafe... nixpkgs.Tool(p, "gcc") for example is 100% not typesafe... there must be a generator
+that builds a go prop for every nixpkgs package... i want that cpp is also split up into modules
+same for other systems so you create sub 'bob' files for each package to group it not a central
+one where you hardcode all cpp files used... Please rewrite the harness if it doesnt already
+clearly say this by force". These two rules are **non-negotiable** (AGENTS.md §5.10). The harness
+enforces them with guards that do not depend on a working build, so they hold in every stage:
+
+| Guard | Test / location | Requirement | Fails (hard) on | Red (tolerated) while |
+|---|---|---|---|---|
+| typed public API | `TestRFW072TypedSurface` (`tests/core/typesafe_test.go`) | R-FW-072, R-FW-010 | any exported parameter/field of type `string`, `[]string`, `...string`, `map[string]T` in the L0–L3 packages that the protected allowlist does not classify (categories of SPEC §1.4.5); stale allowlist rows | an audited violation (`typedSurfaceViolations`, docs/review/typesafety-audit.md V01–V31) still exists |
+| generated nixpkgs surface | `TestRNIX031GeneratedSurface` | R-NIX-031, R-FW-032 | wrong header, no `//go:generate`, a handle without the `<Name> is <attr> <version>: … Licence: …` doc, a missing required handle, an excluded set present, string role functions present, `go run ./cmd/nixpkgsgen -check` failing (offline regeneration differs, snapshot rev ≠ `lock.DefaultRev`, handle not in the pinned index) | `pkg/nixpkgs/attrs_gen.go` does not exist yet |
+| LSP | S1 script steps `complete libs/foo/bob.go "nixpkgs.Op"` → `Openssl`, hover with `Licence:` (`TestRFW001…`, tests/core/bobgo_test.go) | R-NIX-031, R-FW-001 | completion/hover missing | the surface does not exist |
+| fixture locality | `TestRFW070FixtureLocality` | R-FW-070, R-FW-071, R-CC-006 | any `bob.go` of `tests/fixtures/repos`, `tests/{core,cli,devenv}/testdata/repos` (except the fault-by-design repos listed in `lintExempt` with reasons) with a `..`/absolute/subpackage path in `bob.Glob/Files/Dir/IncludeDir`, a string argument to a Go `Module` method, a string nixpkgs attribute, a `nixext` import, or two units of one ecosystem in one package | never (green since Q1) |
+| linter self-check | `TestBoblintCatchesViolations` | — | the linter misses one violation class or flags a valid repository | never |
+| `**` stops at subpackages | `TestRFW070GlobStopsAtSubpackage` (cc fixture) | R-FW-070 | a change below `libs/mathx` changes the root step's sources, or a change in a plain subdirectory does not | `build.SourcePaths` / the new API missing |
+| typed slots | `TestRFW071Slots` (repos `define/slot`, `define/slot2`) | R-FW-071 | slot value not the bound constructor's, missing errors for unbound/twice bound | `bob.Slot` missing (the repo does not compile) |
+| bob.go rules | `TestRFW002BobGoRules` cases `r7nixext`, `r8` | R-FW-002 R7/R8 | wrong text | rules not implemented |
+| documented projects | `TestDocsPackageLocality` (tests/docs) | R-FW-070/071, R-NIX-031 | any documented `bob.go` violating the rules | skipped until the surface exists (docs migrate with it) |
+| error quality | faults 82–92 (§5.1) | R-FW-070/071, R-CC-006, R-NIX-031/032, R-FW-002 | wrong code, position, hint, raw Nix text | the feature answers BOB-E-9008 |
+| budgets | rows B-098…B-103 (`tests/budgets/budgets.json`, SPEC Appendix B) | R-NIX-031 | regression beyond tolerance once measured | `status: proposal`, not measured |
+
+The shared linter lives in `tests/harness/boblint` (go/ast only: no type checking, no bob binary).
+Mutation checks T1–T10 are in §10 and `docs/harness-validation.md` §5. The allowlist and the
+violation list are protected (§2.1): moving a row from violation to allowed is a protected change
+that the `protected` stage reports to the owner.
 

@@ -24,12 +24,28 @@ import (
 )
 
 // R-FW-010 (a): passing golang.Binary where bob.Linkable is expected fails go vet -tags=bob
-// with "missing method LinkInfo".
+// with "missing method LinkInfo". The developer's environment (root go.mod with the framework,
+// bob env) exists from before the ill-typed edit: every evaluating command, bob gen and bob env
+// among them, reports an uncompilable bob.go as a definition error (exit 3, R-FW-043 (c)), so
+// they run without lnk/bob.go and the edit comes back before go vet (correction 136).
 func TestRFW010TypedHandles(t *testing.T) {
 	parity.Covers(t, "R-FW-010")
 	dir := repo(t, "typecheck/linkable")
-	if r := bobRun(t, dir, "gen"); harness.Red(t, r) || !exitIs(t, r, 0) {
-		return
+	bad := filepath.Join(dir, "lnk", "bob.go")
+	src, err := os.ReadFile(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(bad); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"gen"}, {"env", "--format", "json"}} {
+		if r := bobRun(t, dir, args...); harness.Red(t, r) || !exitIs(t, r, 0) {
+			return
+		}
+	}
+	if err := os.WriteFile(bad, src, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	r := bobRun(t, dir, "exec", "--", "go", "vet", "-tags=bob", "./...")
 	if harness.Red(t, r) {
@@ -47,7 +63,9 @@ func TestRFW010TypedHandles(t *testing.T) {
 var labelLiteral = regexp.MustCompile(`^(//[A-Za-z0-9_./-]*:[a-z0-9_.-]+|[A-Za-z0-9.-]+\.[a-z]+(/[A-Za-z0-9_.-]+)*//[A-Za-z0-9_./-]*:[a-z0-9_.-]+|nixpkgs:[A-Za-z0-9_.'-]+)(@.*)?$`)
 
 // R-FW-010 (b): the example programs contain no label string literals (constructor names are
-// plain names without "//" or ":").
+// plain names without "//" or ":"), except label patterns of pipelines: elements of a
+// []bob.Pattern literal are the CLI form R-FW-010 allows (SPEC R-FW-010 amended 2026-10-24,
+// ADR 0020; PipelineOpts.Targets/Tests/Releases).
 func TestRFW010NoLabelStringLiterals(t *testing.T) {
 	parity.Covers(t, "R-FW-010")
 	root := filepath.Join(harness.Root(t), "tests", "fixtures", "repos")
@@ -63,6 +81,13 @@ func TestRFW010NoLabelStringLiterals(t *testing.T) {
 			return err
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
+			if cl, ok := n.(*ast.CompositeLit); ok {
+				if at, ok := cl.Type.(*ast.ArrayType); ok {
+					if sel, ok := at.Elt.(*ast.SelectorExpr); ok && sel.Sel.Name == "Pattern" {
+						return false // pipeline label patterns (CLI form)
+					}
+				}
+			}
 			lit, ok := n.(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
 				return true

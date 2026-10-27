@@ -11,7 +11,7 @@ func ExampleStaticLibrary() {
 	_ = bob.Define(func(p *bob.P) *cc.Library {
 		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{
 			Srcs:    bob.Glob("src/*.cpp"),
-			Hdrs:    "include",
+			Hdrs:    bob.IncludeDir("include"),
 			Std:     cc.CXX20,
 			Defines: map[string]string{"FOO_VERSION": "\"1.2\""},
 		})
@@ -24,18 +24,19 @@ func ExampleSharedLibrary() {
 	_ = bob.Define(func(p *bob.P) *cc.Library {
 		return cc.SharedLibrary(p, "crypt", cc.LibraryOpts{
 			Srcs:     bob.Glob("src/*.c"),
-			Hdrs:     "include",
+			Hdrs:     bob.IncludeDir("include"),
 			Std:      cc.C17,
-			Deps:     []cc.Linkable{nixpkgs.Lib(p, "openssl")},
-			PrivDeps: []cc.Linkable{nixpkgs.Lib(p, "zlib")},
+			Deps:     []cc.Linkable{nixpkgs.Openssl.Lib(p)},
+			PrivDeps: []cc.Linkable{nixpkgs.Zlib.Lib(p)},
 		})
 	})
 }
 
-// A program linking a library of the same repository.
+// A program linking the library of another package: foo stands for that package's handle
+// (foo.Lib(p) of libs/foo/bob.go); the program gets the library's headers only through it.
 func ExampleNewBinary() {
 	foo := bob.Define(func(p *bob.P) *cc.Library {
-		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.cpp"), Hdrs: "include"})
+		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.cpp"), Hdrs: bob.IncludeDir("include")})
 	})
 	_ = bob.Define(func(p *bob.P) *cc.Binary {
 		return cc.NewBinary(p, "tool", cc.BinaryOpts{Srcs: bob.Files("tool.cpp"), Deps: []cc.Linkable{foo(p)}})
@@ -45,7 +46,7 @@ func ExampleNewBinary() {
 // A test program: building //<dir>:foo_test runs it, exit status 0 passes.
 func ExampleNewTest() {
 	foo := bob.Define(func(p *bob.P) *cc.Library {
-		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.cpp"), Hdrs: "include"})
+		return cc.StaticLibrary(p, "foo", cc.LibraryOpts{Srcs: bob.Glob("src/*.cpp"), Hdrs: bob.IncludeDir("include")})
 	})
 	_ = bob.Define(func(p *bob.P) *cc.Test {
 		return cc.NewTest(p, "foo_test", cc.BinaryOpts{Srcs: bob.Files("foo_test.cpp"), Deps: []cc.Linkable{foo(p)}})

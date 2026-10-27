@@ -1,0 +1,21 @@
+{
+ "id": "91-hdrs-outside-package",
+ "title": "public headers outside the package directory (R-FW-070, R-CC-006)",
+ "source": "HARNESS.md \u00a75.1 added fault (ADR 0020, D71/D72, Q1 2026-10-24)",
+ "fixture": "cc",
+ "inject": {
+  "kind": "patch",
+  "describe": "libs/pack/bob.go exports the include directory of libs/mathx as its own"
+ },
+ "command": [
+  "build",
+  "//..."
+ ],
+ "code": "BOB-E-1028",
+ "position": "marker",
+ "excerpt": false,
+ "hint": true,
+ "nixver": [],
+ "exit": 3,
+ "forbid": []
+}

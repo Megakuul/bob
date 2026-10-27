@@ -8,6 +8,7 @@ import (
 	"github.com/megakuul/bob/pkg/bob"
 	"github.com/megakuul/bob/pkg/bob/ext"
 	"github.com/megakuul/bob/pkg/nixpkgs"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 	"github.com/megakuul/bob/pkg/output/oci/internal/ocispec"
 )
 
@@ -99,10 +100,10 @@ func NewImage(p *bob.P, name string, opts ImageOpts) *Image {
 	// CA certificates and time zones are data: the host's package serves every platform, so
 	// all images share their layers.
 	if !opts.NoCACerts {
-		spec.CACert = add(nixpkgs.Pkg(p.Host(), "cacert", nixpkgs.Outputs("out")))
+		spec.CACert = add(nixpkgs.Cacert.Pkg(p.Host(), nixext.Outputs(nixext.Out)))
 	}
 	if !opts.NoTZData {
-		spec.TZData = add(nixpkgs.Pkg(p.Host(), "tzdata", nixpkgs.Outputs("out")))
+		spec.TZData = add(nixpkgs.Tzdata.Pkg(p.Host(), nixext.Outputs(nixext.Out)))
 	}
 	img := &Image{Node: ext.New(p, ocispec.KindImage, name, deps, nil, spec)}
 	at := fmt.Sprintf("%s: %s", img.DefinedAt(), img.Label())

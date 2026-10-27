@@ -10,7 +10,7 @@ import (
 // Crate is a staticlib for C consumers (label //rcore:rcore).
 var Crate = bob.Define(func(p *bob.P) *rust.CLib {
 	return rust.StaticLib(p, rust.LibOpts{
-		Headers: "include",
+		Headers: bob.IncludeDir("include"),
 		Deps:    []rust.Dep{rust.Crate("itoa", "1"), rust.Crate("hex", "0.4")},
 	})
 })

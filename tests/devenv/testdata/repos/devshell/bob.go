@@ -7,7 +7,7 @@ import (
 	"github.com/megakuul/bob/pkg/golang"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 // Module is the Go module example.com/devshell (label //:module); its toolchain is part of both shells.
 var Module = bob.Define(func(p *bob.P) *golang.Module {

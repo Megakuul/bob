@@ -45,6 +45,10 @@ BOB-E-1001 definition - exit=3
   message: nixpkgs has no package "{attr}"
   hint:    did you mean {suggest}?
 
+BOB-E-1001 definition pin exit=3
+  message: {pos}: nixpkgs at the pinned revision {rev} has no package "{attr}" (nixpkgs.{name})
+  hint:    bob's typed nixpkgs packages come from {surface}; move the pin with bob lock --update nixpkgs, or use another package
+
 BOB-E-1002 definition - exit=3
   message: nixpkgs package "{attr}" ({version}) is marked broken
   hint:    pin a nixpkgs revision where it builds, or use another package
@@ -120,6 +124,7 @@ BOB-E-1019 definition - exit=3
 
 BOB-E-1020 definition - exit=3
   message: {label}: invalid {option}: {reason}
+  hint:    {hint}
 
 BOB-E-1021 definition - exit=3
   message: {label}: toolchain mismatch: {reason}
@@ -150,6 +155,9 @@ BOB-E-1024 definition R6 exit=3
 BOB-E-1024 definition R7 exit=3
   message: {dir}/bob.go: imports {path}, which build definitions cannot use; bob.go may import the bob framework, the standard library and other bob.go packages
 
+BOB-E-1024 definition R8 exit=3
+  message: {dir}/bob.go:{line}: assigns to {name}, a value of the bob framework; framework values are read-only, declare your own variable
+
 BOB-E-1025 definition outside exit=3
   message: {pos}: source pattern "{pattern}" leaves the repository
 
@@ -162,6 +170,18 @@ BOB-E-1025 definition symlink exit=3
 BOB-E-1026 definition - exit=3
   message: nixpkgs mismatch: {what}
   hint:    {hint}
+
+BOB-E-1028 definition outside exit=3
+  message: {pos}: {label}: "{pattern}" leaves the package directory {dir}/
+  hint:    each bob.go builds only the files below its own directory; give the other directory its own bob.go and depend on its package
+
+BOB-E-1028 definition subpackage exit=3
+  message: {pos}: {label}: "{pattern}" is inside {sub}/, which has its own bob.go
+  hint:    use the package defined in {sub}/bob.go through its handle
+
+BOB-E-1029 definition - exit=3
+  message: {pos}: {label}: {dir}/bob.go already defines the {ecosystem} {kind} {other} at {pos2}; one library or binary per directory package
+  hint:    move {label} into its own directory with its own bob.go and depend on it through its handle
 
 BOB-E-2000 build - exit=1
   message: {label} failed to build
@@ -215,11 +235,11 @@ BOB-E-2012 build - exit=1
 
 BOB-E-2013 build - exit=1
   message: {label}: {package} needs its {script} script ({reason})
-  hint:    add npm.AllowScripts("{package}") to {label}
+  hint:    declare {package} (npm.Dep or npm.Indirect("{package}")) and add npm.AllowScripts(<its handle>) to {label}
 
 BOB-E-2014 build - exit=1
   message: {label}: {package} uses {dep} without declaring it
-  hint:    add npm.Extend("{package}", npm.Peer("{dep}"))
+  hint:    declare both (npm.Dep or npm.Indirect) and add npm.Extend(<handle of {package}>, npm.Peer(<handle of {dep}>))
 
 BOB-E-2015 build - exit=1
   message: {label}: prune pattern "{pattern}" removes {file}, which {user} needs

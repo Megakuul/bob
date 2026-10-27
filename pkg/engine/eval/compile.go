@@ -26,7 +26,9 @@ var compileLineRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCom
 var bobmainRe = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\bbobmain[0-9]+\b`) })
 
 // compileErrors maps the go build output of a failed evaluator build.
-func compileErrors(stderr []byte, g *generated, deps *depSet) error {
+// root is the repository (for the source lines the nixpkgs hints read), fw the framework the
+// evaluator was compiled against (its generated nixpkgs names).
+func compileErrors(stderr []byte, g *generated, deps *depSet, root string, fw *framework) error {
 	var errs ir.Errors
 	var other []string
 	sc := bufio.NewScanner(bytes.NewReader(stderr))
@@ -55,7 +57,15 @@ func compileErrors(stderr []byte, g *generated, deps *depSet) error {
 		}
 		ln, _ := strconv.Atoi(m[2])
 		col, _ := strconv.Atoi(m[3])
-		errs = append(errs, ir.DefinitionError(file, ln, col, "", mapPaths(m[4], g, deps)))
+		msg := mapPaths(m[4], g, deps)
+		e := ir.DefinitionError(file, ln, col, "", msg)
+		if h := nixpkgsHint(msg, root, file, ln, fw); h != "" {
+			// A typed-surface error is a coded error of its own (error[BOB-E-1020] head and a
+			// hint), not a plain compiler line.
+			e.Args["option"] = "nixpkgs package"
+			withHint(e, h)
+		}
+		errs = append(errs, e)
 	}
 	if len(errs) == 0 {
 		// Nothing points into a bob.go: the generated module or the framework broke.

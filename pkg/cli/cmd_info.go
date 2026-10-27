@@ -14,20 +14,23 @@ import (
 	"github.com/megakuul/bob/pkg/engine/lock"
 	"github.com/megakuul/bob/pkg/engine/store"
 	"github.com/megakuul/bob/pkg/engine/translate"
+	"github.com/megakuul/bob/pkg/nixpkgs/nixext"
 )
 
-// runVersion is `bob version [--json]`: bob, the embedded Nix and the default nixpkgs channel.
+// runVersion is `bob version [--json]`: bob, the embedded Nix, the default nixpkgs channel and
+// the nixpkgs revision the typed packages were generated from (R-NIX-032).
 func runVersion(e *env) int {
 	if len(e.a.pos) > 0 {
 		return e.out.fail(diag.New(4, "flag", "bob version", "what", "no arguments"))
 	}
 	data := struct {
-		Bob     string `json:"bob"`
-		Nix     string `json:"nix"`
-		Nixpkgs string `json:"nixpkgs"`
-	}{bobVersion(), nixVersion, lock.DefaultChannel}
+		Bob            string `json:"bob"`
+		Nix            string `json:"nix"`
+		Nixpkgs        string `json:"nixpkgs"`
+		NixpkgsSurface string `json:"nixpkgsSurface"`
+	}{bobVersion(), nixVersion, lock.DefaultChannel, nixext.SurfaceRev}
 	e.out.result(data)
-	e.out.printf("bob %s\nnix %s\nnixpkgs %s\n", data.Bob, data.Nix, data.Nixpkgs)
+	e.out.printf("bob %s\nnix %s\nnixpkgs %s (typed packages from %.12s)\n", data.Bob, data.Nix, data.Nixpkgs, data.NixpkgsSurface)
 	return e.out.finish(0, translate.Counts{}, nil)
 }
 

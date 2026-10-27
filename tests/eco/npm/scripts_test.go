@@ -14,7 +14,7 @@ import (
 	"github.com/megakuul/bob/tests/parity"
 )
 
-const denyWording = "✗ better-sqlite3 needs its install script (native addon). Add npm.AllowScripts(\"better-sqlite3\") to //native:native"
+const denyWording = "✗ better-sqlite3 needs its install script (native addon). Add npm.AllowScripts(<handle of better-sqlite3>) to //native:native"
 
 // R-NPM-004a (denied): without AllowScripts("better-sqlite3") bob lock prints the once-per-lock
 // note, running the program fails with the E-SCRIPT-DENIED text (golden, BOB-E-2013) and no
@@ -24,13 +24,13 @@ func TestRNPM004aScriptsDeniedByDefault(t *testing.T) {
 	home := t.TempDir()
 	dir := harnessFixture(t, "npm")
 	env := ecotest.Registry(t, home)
-	ecotest.ReplaceIn(t, filepath.Join(dir, "native", "bob.go"), `npm.AllowScripts("better-sqlite3", "esbuild")`, `npm.AllowScripts("esbuild")`)
+	ecotest.ReplaceIn(t, filepath.Join(dir, "native", "bob.go"), `npm.AllowScripts(sqlite, esbuild)`, `npm.AllowScripts(esbuild)`)
 
 	lock := ecotest.BobEnv(t, dir, env, "lock")
 	if !ecotest.OK(t, lock) {
 		return
 	}
-	note := regexp.MustCompile(`note: better-sqlite3@\d+\.\d+\.\d+ has an install script; bob does not run it\. If the package needs it: npm\.AllowScripts\("better-sqlite3"\)`)
+	note := regexp.MustCompile(`note: better-sqlite3@\d+\.\d+\.\d+ has an install script; bob does not run it\. If the package needs it: npm\.AllowScripts\(<handle of better-sqlite3>\) \(declare it with npm\.Dep or npm\.Indirect\)`)
 	if n := len(note.FindAllString(lock.Combined(), -1)); n != 1 {
 		t.Errorf("bob lock printed the install-script note %d times, want exactly once:\n%s", n, lock.Combined())
 	}

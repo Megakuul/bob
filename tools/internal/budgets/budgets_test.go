@@ -18,8 +18,8 @@ func TestProposalRowsPresent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.Rows) != 97 {
-		t.Fatalf("got %d Appendix B rows, want 97", len(f.Rows))
+	if len(f.Rows) != 103 {
+		t.Fatalf("got %d Appendix B rows, want 103 (97 + ADR 0020 rows B-098…B-103)", len(f.Rows))
 	}
 	for _, r := range f.Rows {
 		if r.Status != "proposal" || r.Unit == "" || r.Metric == "" || r.Source == "" || len(r.Limit) == 0 ||

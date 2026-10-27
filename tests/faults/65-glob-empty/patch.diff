@@ -8,6 +8,6 @@ index 4a731d7..a92dabb 100644
  	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
 -		Srcs: bob.Glob("src/*.cpp"),
 +		Srcs: bob.Glob("src/*.cc"),
- 		Hdrs: "include",
+ 		Hdrs: bob.IncludeDir("include"),
  		Std:  cc.CXX20,
- 		Deps: []cc.Linkable{nixpkgs.Lib(p, "openssl", nixpkgs.Modules("libcrypto"))},
+ 		Deps: []cc.Linkable{nixpkgs.Openssl.Lib(p, nixpkgs.Modules("libcrypto"))},

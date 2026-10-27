@@ -17,13 +17,13 @@ index 4a731d7..0ef81bf 100644
  var Lib = bob.Define(func(p *bob.P) *cc.Library {
  	return cc.SharedLibrary(p, "foo", cc.LibraryOpts{
 -		Srcs: bob.Glob("src/*.cpp"),
--		Hdrs: "include",
+-		Hdrs: bob.IncludeDir("include"),
 -		Std:  cc.CXX20,
--		Deps: []cc.Linkable{nixpkgs.Lib(p, "openssl", nixpkgs.Modules("libcrypto"))},
+-		Deps: []cc.Linkable{nixpkgs.Openssl.Lib(p, nixpkgs.Modules("libcrypto"))},
 +		Srcs:    bob.Glob("src/*.cpp"),
-+		Hdrs:    "include",
++		Hdrs:    bob.IncludeDir("include"),
 +		Std:     cc.CXX20,
 +		Defines: map[string]string{"BUILD_TIME": strconv.FormatInt(time.Now().UnixNano(), 10)},
-+		Deps:    []cc.Linkable{nixpkgs.Lib(p, "openssl", nixpkgs.Modules("libcrypto"))},
++		Deps:    []cc.Linkable{nixpkgs.Openssl.Lib(p, nixpkgs.Modules("libcrypto"))},
  	})
  })

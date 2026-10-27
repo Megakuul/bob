@@ -11,7 +11,7 @@ import (
 var Crate = bob.Define(func(p *bob.P) *rust.CLib {
 	return rust.StaticLib(p, rust.LibOpts{
 		Name:    "rcore",
-		Headers: "include",
+		Headers: bob.IncludeDir("include"),
 		Deps:    []rust.Dep{rust.Crate("itoa", "1"), rust.Crate("hex", "0.4")},
 	})
 })

@@ -32,6 +32,9 @@ declaration, only that section becomes stale.
   versions your declarations allow.
 - `bob build` and `bob test` never change the lock. With a stale section they stop with
   `BOB-E-1012` and make no network request; `--lock` re-resolves the stale sections first.
+  A section `bob.lock` does not have yet (a new project, a first package of a language) is
+  added as `bob lock` would add it, from the declarations of the whole repository, also when
+  you build a single package.
 - Workers of a bob server and `bob install` never re-resolve: they build exactly what the
   lock says.
 
@@ -93,15 +96,16 @@ bob.lock: 1 change
 ```
 
 To pin nixpkgs to a specific revision, use `bob lock --nixpkgs <40-hex revision>`, or write
-it into `bob.go` as `Nixpkgs: "nixos-26.05@<revision>"`.
+it into `bob.go` as `bob.RepoOpts{Nixpkgs: bob.NixOS2605, NixpkgsRev: "<revision>"}`. A new
+`bob.lock` pins the revision bob's typed nixpkgs packages were generated from, so every `nixpkgs.<Name>` you can write exists at the pin. After moving the pin, a
+package the new revision lacks fails before anything builds (`BOB-E-1001`, with the line of
+the call).
 
-For Go, the version in `golang.Require` is the version: change it in `bob.go` and run
-`bob lock`.
-
-> [!WARNING]
-> `bob lock --update <go module>` currently moves that module to its newest version even
-> though `golang.Require` names an exact one, and a later `bob lock --update` moves it back.
-> For Go modules, edit the version in `bob.go` instead.
+For Go, `golang.Require` names the version `bob lock` starts from, and Go's minimal
+version selection may pick a higher one that another module requires. `bob lock --update
+<module>` moves that module (and what it requires) to its newest release, and `bob lock
+--update` does so for every module `bob.go` requires; `bob.lock` and the generated `go.mod`
+record the result. To go back to the versions written in `bob.go`, run `bob lock --rebuild`.
 
 ## Remove a dependency
 
@@ -132,9 +136,9 @@ nixpkgs revision and resolves every section again from `bob.go`.
 After everything is downloaded, `--offline` (a global flag) turns off the binary caches, so
 builds use only what is in the store.
 
-> [!WARNING]
-> `bob lock --offline` is meant to fail with `BOB-E-3002` when it would need the network. At
-> the time of writing, the Go resolver still downloads new modules with `--offline`.
+`bob lock --offline` keeps every lock section that still matches `bob.go` and changes
+nothing that would need the network: a declaration that is not pinned yet, or `--update`,
+stops it with `BOB-E-3002`.
 
 ## Mirrors and private registries
 

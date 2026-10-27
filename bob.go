@@ -11,7 +11,7 @@ import (
 	"github.com/megakuul/bob/pkg/output/appimage"
 )
 
-var _ = bob.Repo(bob.RepoOpts{Nixpkgs: "nixos-26.05"})
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
 
 // ci is bob's CI pipeline (A153): the three binaries and the web UI, the Go tests that run
 // inside the build sandbox (hermetic below) and svelte-check. The checks that need the
@@ -80,12 +80,12 @@ var Module = bob.Define(func(p *bob.P) *golang.Module {
 	})
 })
 
-// Bob is the bob command (label //cmd/bob:bob). It embeds bob-builder and the static Nix of
+// Bob is the bob command (label //cmd/bob:bob), bound in cmd/bob/bob.go (one binary per
+// directory package, R-FW-071). It embeds bob-builder and the static Nix of
 // pkg/engine/store/{builderbin,nixbin}: go generate ./pkg/engine/store and scripts/fetch-nix.sh
-// write them, scripts/bootstrap.sh runs both.
-var Bob = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/bob", golang.BinaryOpts{CGo: golang.CGoOff})
-})
+// write them, scripts/bootstrap.sh runs both. bob-builder (//cmd/bob-builder:bob-builder) and
+// bob-server (//cmd/bob-server:bob-server) are defined in their own directories' bob.go.
+var Bob = bob.NewSlot[*golang.Binary]()
 
 // AppImage is the bob AppImage of the GitHub release (label //:bob, file bob-<arch>.AppImage,
 // .github/workflows/release.yml): //cmd/bob:bob with its embedded static Nix and builder, for
@@ -94,33 +94,15 @@ var Bob = bob.Define(func(p *bob.P) *golang.Binary {
 // roots, A242).
 var AppImage = bob.Define(func(p *bob.P) *appimage.Bundle {
 	return appimage.NewBundle(p, "bob", appimage.BundleOpts{
-		Program:   Bob(p),
+		Program:   Bob.Get(p),
 		NoCACerts: true,
 		NoIconv:   true,
 	})
 })
 
-// Builder is bob-builder (label //cmd/bob-builder:bob-builder). The copy bob embeds is the one
-// go generate ./pkg/engine/store builds with the flags of R-NIX-015.
-var Builder = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/bob-builder", golang.BinaryOpts{CGo: golang.CGoOff})
-})
-
-// Server is the build and cache server (label //cmd/bob-server:bob-server).
-var Server = bob.Define(func(p *bob.P) *golang.Binary {
-	return Module(p).Binary("./cmd/bob-server", golang.BinaryOpts{CGo: golang.CGoOff})
-})
-
-// Unit declares the test units of pkg/ (//pkg/<dir>:go_test), Internal those of internal/ and
-// Cmd those of cmd/; the ci pipeline runs the hermetic ones.
+// Unit declares the test units of the Go packages of the repository root's region
+// (//<dir>:go_test for pkg/, internal/, cmd/ and tests/; the directories with a bob.go of their
+// own declare theirs); the ci pipeline runs the hermetic ones.
 var Unit = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./pkg/...", golang.TestOpts{Name: "unit", CGo: golang.CGoOff})
-})
-
-var Internal = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./internal/...", golang.TestOpts{Name: "unit-internal", CGo: golang.CGoOff})
-})
-
-var Cmd = bob.Define(func(p *bob.P) *golang.TestSet {
-	return Module(p).Tests("./cmd/...", golang.TestOpts{Name: "unit-cmd", CGo: golang.CGoOff})
+	return Module(p).Tests(golang.TestOpts{Recursive: true, Name: "unit", CGo: golang.CGoOff})
 })

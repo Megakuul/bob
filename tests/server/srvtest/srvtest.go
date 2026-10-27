@@ -377,7 +377,7 @@ func Repo(t testing.TB, pkgs []Pkg) string {
 	}
 	write("go.mod", "module example.com/srv\n\ngo 1.26.0\n")
 	write("bob.lock", "{\n  \"lockVersion\": 1\n}\n")
-	write("bob.go", "//go:build bob\n\npackage srv\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: \"nixos-26.05\"})\n")
+	write("bob.go", "//go:build bob\n\npackage srv\n\nimport \"github.com/megakuul/bob/pkg/bob\"\n\nvar _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})\n")
 	for _, p := range pkgs {
 		write(p.Name+"/bob.go", fmt.Sprintf(`//go:build bob
 
@@ -391,7 +391,7 @@ import (
 // T runs one shell command (label //%s:t).
 var T = bob.Define(func(p *bob.P) *bob.Step {
 	return bob.Run(p, "t", bob.RunOpts{
-		Tools:   []bob.Tool{nixpkgs.Tool(p, "bash"), nixpkgs.Tool(p, "coreutils")},
+		Tools:   []bob.Tool{nixpkgs.Bash.Tool(p), nixpkgs.Coreutils.Tool(p)},
 		Cmd:     []string{"bash", "-c", %q},
 		Outputs: []string{"done"},
 	})

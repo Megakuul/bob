@@ -10,7 +10,7 @@ diff --git a/native/bob.go b/native/bob.go
  
  var noBundle = false
 @@ -23,3 +24,13 @@
- 		Options: []npm.Option{npm.AllowScripts("better-sqlite3", "esbuild")},
+ 		Options: []npm.Option{npm.AllowScripts(sqlite, esbuild)},
  	})
  })
 +

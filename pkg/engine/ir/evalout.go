@@ -54,6 +54,8 @@ type diagLine struct {
 	Label    string `json:"label"`
 	File     string `json:"file"`
 	Line     int    `json:"line"`
+	Col      int    `json:"col,omitempty"`
+	Hint     string `json:"hint,omitempty"` // a hint of the error's own (BOB-E-1020 "{hint}")
 	Msg      string `json:"msg"`
 	// Chain is the path from a requested package to the one the error is about (BOB-E-0006).
 	Chain []string `json:"chain"`
@@ -82,7 +84,7 @@ func Diagnostics(stderr []byte, file func(string) string) (Errors, []string) {
 			}
 			continue
 		}
-		pos := diag.Pos{Line: d.Line}
+		pos := diag.Pos{Line: d.Line, Col: max(d.Col, 0)}
 		if d.File != "" {
 			pos.File = file(d.File)
 		}
@@ -104,6 +106,9 @@ func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
 			if d.Label != "" && args["label"] == "" {
 				args["label"] = d.Label
 			}
+			if d.Hint != "" && len(d.Hint) <= 500 {
+				args["hint"] = d.Hint
+			}
 			e := &diag.Error{Code: diag.Code(n), Severity: diag.SeverityError, Label: args["label"], Args: args}
 			if pos.File != "" {
 				e.DefinedAt = pos
@@ -120,7 +125,16 @@ func evalDiag(d diagLine, pos diag.Pos) *diag.Error {
 		msg = strings.TrimPrefix(msg, fmt.Sprintf("%s:%d: ", pos.File, pos.Line))
 		msg = strings.TrimPrefix(msg, fmt.Sprintf("%s:%d: ", d.File, pos.Line))
 	}
-	return DefinitionError(pos.File, pos.Line, 0, d.Label, msg)
+	e := DefinitionError(pos.File, pos.Line, 0, d.Label, msg)
+	if d.Hint != "" && len(d.Hint) <= 500 {
+		e.Args["hint"] = d.Hint
+	}
+	if d.Label != "" && pos.File != "" {
+		// An error of a package (ext.Errorf with its label): the package's constructor call,
+		// with the column when the evaluator found it.
+		e.DefinedAt = pos
+	}
+	return e
 }
 
 // templateArgs recovers the arguments of code's message template from a rendered message.
