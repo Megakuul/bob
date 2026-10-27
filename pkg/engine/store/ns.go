@@ -107,6 +107,7 @@ func nsChild(a []string) {
 		if _, err := os.Stat(path); err != nil {
 			fail("setup", 127, err)
 		}
+		dropAmbient() // a program of the user's session runs as the user (realuser.go)
 		_, _ = io.WriteString(status, "k")
 		err := syscall.Exec(path, argv, os.Environ())
 		fmt.Fprintf(os.Stderr, "bob: exec %s: %v\n", path, err)
@@ -265,6 +266,13 @@ func prepareNamespace(cmd *exec.Cmd, home string, rest ...string) (*os.File, *os
 		attr.GidMappings = append(attr.GidMappings, syscall.SysProcIDMap{ContainerID: nobody, HostID: nobody, Size: 1})
 	}
 	attr.GidMappingsEnableSetgroups = false
+	if len(rest) > 0 && rest[0] == modeExec && os.Getuid() != 0 && os.Getgid() != 0 {
+		// bob exec: the program is the user's own and runs as the user (realuser.go); the
+		// namespace child keeps CAP_SYS_ADMIN for the mounts until it executes the program.
+		attr.UidMappings = []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}}
+		attr.GidMappings = []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}}
+		attr.AmbientCaps = append(attr.AmbientCaps, capSysAdmin)
+	}
 	cmd.SysProcAttr = attr
 	return r, w, nil
 }
@@ -443,6 +451,7 @@ func hostViewChild(a []string) {
 	if err := mountHostView(home); err != nil {
 		fmt.Fprintf(os.Stderr, "bob: the host Nix store is not available here: %v\n", err)
 	}
+	dropAmbient() // the mounts are done: the program runs as the user (realuser.go)
 	syscall.CloseOnExec(statusFD)
 	if !strings.Contains(path, "/") {
 		p, err := exec.LookPath(path)

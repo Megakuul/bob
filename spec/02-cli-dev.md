@@ -1073,7 +1073,12 @@ Steps:
    are links into the host's store, which bob's namespace otherwise hides. The dev shell's tools
    still come from bob's store (it wins in the overlay). Builds, Nix and shims never see the
    host store, and a `bob` started in the dev shell enters its own clean namespace. A program that
-   cannot be started is `BOB-E-7011` with the cause.
+   cannot be started is `BOB-E-7011` with the cause. These programs, and the tools that `bob exec` and the
+   shims start, run as the user and not as the root of bob's namespace (A561): `id`, `whoami`, the
+   prompt and `/etc/passwd` lookups show the user's own uid, gid and name, and files they create
+   belong to the user. They are started in a user namespace nested in bob's whose id for the user
+   maps to the namespace's root; the mounts stay. A host user who is root is root there. Builds and
+   Nix keep the root mapping.
 7. While the shell runs, watch `bob.go`, `bob.lock` and the §01 eval-key inputs (inotify):
    - on a dependency change, re-lock if needed, re-prepare the tree, swap `node_modules`
      atomically, and restart the affected servers;

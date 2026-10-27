@@ -97,6 +97,14 @@ yet (`--servers-only` reports `dev shell default has no dev servers`). Start the
 shell yourself, for example `bob dev -- sh -c 'cd web && vite'`. (Dev servers are part of the
 Vite live-reload work that is not finished yet; see [Limitations](../07-reference/03-status.md).)
 
+### Who you are in the shell
+
+The dev shell, the command after `--`, hooks, dev servers and the tools of `bob exec` run as you:
+`id`, `whoami` and your prompt show your own user, files you create belong to you, and `git` and
+`ssh` see your own files. bob does this by starting them in a user namespace nested in its own
+(bob's builds still run as the root of their private namespace, which is invisible from the
+shell). A `bob build` inside the dev shell works as usual. If you really are root, you are root.
+
 ## bob exec and the .bob/bin shims
 
 `bob exec -- <tool> [args]` runs one tool of the dev shell, with the tool's own exit status:

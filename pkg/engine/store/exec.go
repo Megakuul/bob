@@ -17,6 +17,9 @@ func StartIn(home string, cmd *exec.Cmd) error {
 		return err
 	}
 	if _, ok := Entered(); ok || inNamespace(home) {
+		if uid, gid, real := realIDs(); real && len(cmd.ExtraFiles) == 0 {
+			asUser(cmd, uid, gid, false) // a program of the user's session runs as the user
+		}
 		return cmd.Start()
 	}
 	path, args := cmd.Path, cmd.Args

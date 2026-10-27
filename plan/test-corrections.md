@@ -1120,3 +1120,7 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
    carries another unit's 7011). New: pkg/cli/cli_test.go TestGitignoreBlock,
    pkg/golang/gen/gomod_explain_test.go TestExplainFrameworkEdit, tests/cli/init_gitignore_test.go with
    tests/goldens/cli/init-gitignore/{go,cc,rust,npm,ocaml}.txt.
+143. APPLIED 2026-10-27 E3, owner bug report (chat 2026-10-27: `bob dev` shell is root): SPEC §02.7.7 step 6 gains a
+    paragraph (A561): programs of the user's session run as the user, not as the namespace's root. No test, golden
+    or protected file changed; new tests pkg/engine/store/hostview_test.go TestHostStoreView (uid/gid/file owner in the
+    session) and TestExecRunsAsUser.
