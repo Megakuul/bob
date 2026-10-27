@@ -55,6 +55,12 @@ func runDev(e *env) int {
 		fmt.Fprintf(e.out.errw, "bob: dev shell %s%s · %.1fs\n", f.Shell, summary(f), time.Since(start).Seconds())
 	}
 	env := append(execEnv(os.Environ(), f, root, ""), devenv.VarDev+"=1", devenv.VarProject+"="+root, "BOB_DEV_SHELL="+f.Shell)
+	// Editors started in the shell find a gopls that sees bob.go (A565); a failure is not fatal.
+	if dir, err := writeToolWrappers(f, root); err != nil {
+		fmt.Fprintf(e.out.errw, "bob: dev tool wrappers: %v\n", err)
+	} else if dir != "" {
+		env = withPathFirst(env, dir)
+	}
 
 	// Hooks run in order before anything else; a failing one stops bob dev with exit 1.
 	for _, h := range f.Hooks {

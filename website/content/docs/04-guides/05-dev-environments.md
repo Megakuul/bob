@@ -238,6 +238,10 @@ skips the file: no completion, no diagnostics. Two things make it work, and `bob
 - **The tag.** The shims in `.bob/bin` (`gopls`, `go`, …) run the tools with `-tags=bob`.
   Start your editor's language server from there: with the shell hook, `.bob/bin` is first on
   `PATH` when you enter the project; or point the editor at it, as below.
+  Inside `bob dev`, the `gopls` on `PATH` is already a wrapper in `.bob/dev-bin` that adds
+  `-tags=bob` to `GOFLAGS`, so an editor started from the dev shell needs no setup. Without
+  the tag gopls treats `bob.go` as a loose file (`command-line-arguments/…/bob.go`) and offers
+  imports of other directories' `bob.go` under that name, not as `<module>/lib/asio`.
 - **The framework module.** `go.mod` requires `github.com/megakuul/bob` and replaces it by
   `./.bob/framework`, a copy of the framework's source that bob keeps current. No proxy or
   network is involved, so a plain gopls resolves `bob.Define` and `nixpkgs.Openssl` as well.
