@@ -7,7 +7,7 @@
           "-std=c17",
           "-O2",
           "-ffile-prefix-map=/nix/store/f1d3sfwli2zmg8jf8xpyhv9nji4l439g-libs-mathx-mathx_test-src=.",
-          "-I/nix/store/fzdahm7v8x29xzh676ccc7mbkcsc548c-cc-mathx/include",
+          "-I/nix/store/ngnljgmr779p86dn3f968w2sc3wmvmn0-cc-mathx/include",
           "-c",
           "libs/mathx/test/mathx_test.c",
           "-o",
@@ -23,7 +23,7 @@
         "-o",
         "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/bin/mathx_test",
         "/build/obj/libs/mathx/test/mathx_test.c.o",
-        "/nix/store/fzdahm7v8x29xzh676ccc7mbkcsc548c-cc-mathx/lib/libmathx.a"
+        "/nix/store/ngnljgmr779p86dn3f968w2sc3wmvmn0-cc-mathx/lib/libmathx.a"
       ],
       "out": "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/bin/mathx_test"
     },
@@ -38,8 +38,8 @@
     "debugOut": false,
     "forbidden": [
       "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0",
-      "/nix/store/9mzv0wvh53ir4jdpfa4hs6kys3bm7y9x-bob-builder-19",
       "/nix/store/f1d3sfwli2zmg8jf8xpyhv9nji4l439g-libs-mathx-mathx_test-src",
+      "/nix/store/ipb41kja92yp0xjqbb0al895y1ckf747-bob-builder-20",
       "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2",
       "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46"
     ],

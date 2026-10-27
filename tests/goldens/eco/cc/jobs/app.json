@@ -7,9 +7,9 @@
           "-std=c17",
           "-O2",
           "-ffile-prefix-map=/nix/store/bi39a27ykprjqgrxp7ls2fg5py225zg3-app-app-src=.",
-          "-I/nix/store/fzdahm7v8x29xzh676ccc7mbkcsc548c-cc-mathx/include",
-          "-I/nix/store/2mjrfjf5npvm9946ag413x0b0pcqww3k-cc-pack/include",
-          "-I/nix/store/va7cmygwzcj89diqhlhrd281r37bk7pw-ccx-zstd/include",
+          "-I/nix/store/ngnljgmr779p86dn3f968w2sc3wmvmn0-cc-mathx/include",
+          "-I/nix/store/fnbxqh45l9zx8bjszfp7j8narpq4fhp7-cc-pack/include",
+          "-I/nix/store/b6ab2l5dvxs4an16jz17ra8ziymqphzy-ccx-zstd/include",
           "-c",
           "app/main.c",
           "-o",
@@ -25,13 +25,13 @@
         "-o",
         "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/bin/app",
         "/build/obj/app/main.c.o",
-        "/nix/store/fzdahm7v8x29xzh676ccc7mbkcsc548c-cc-mathx/lib/libmathx.a",
-        "-L/nix/store/2mjrfjf5npvm9946ag413x0b0pcqww3k-cc-pack/lib",
+        "/nix/store/ngnljgmr779p86dn3f968w2sc3wmvmn0-cc-mathx/lib/libmathx.a",
+        "-L/nix/store/fnbxqh45l9zx8bjszfp7j8narpq4fhp7-cc-pack/lib",
         "-lpack",
-        "-Wl,-rpath,/nix/store/2mjrfjf5npvm9946ag413x0b0pcqww3k-cc-pack/lib",
-        "-L/nix/store/va7cmygwzcj89diqhlhrd281r37bk7pw-ccx-zstd/lib",
+        "-Wl,-rpath,/nix/store/fnbxqh45l9zx8bjszfp7j8narpq4fhp7-cc-pack/lib",
+        "-L/nix/store/b6ab2l5dvxs4an16jz17ra8ziymqphzy-ccx-zstd/lib",
         "-lzstd",
-        "-Wl,-rpath,/nix/store/va7cmygwzcj89diqhlhrd281r37bk7pw-ccx-zstd/lib"
+        "-Wl,-rpath,/nix/store/b6ab2l5dvxs4an16jz17ra8ziymqphzy-ccx-zstd/lib"
       ],
       "out": "/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9/bin/app"
     },
@@ -46,8 +46,8 @@
     "debugOut": false,
     "forbidden": [
       "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0",
-      "/nix/store/9mzv0wvh53ir4jdpfa4hs6kys3bm7y9x-bob-builder-19",
       "/nix/store/bi39a27ykprjqgrxp7ls2fg5py225zg3-app-app-src",
+      "/nix/store/ipb41kja92yp0xjqbb0al895y1ckf747-bob-builder-20",
       "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2",
       "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46"
     ],

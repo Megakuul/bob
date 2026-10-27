@@ -106,6 +106,26 @@ var Test = bob.Define(func(p *bob.P) *cc.Test {
   names and shows each package's version and licence, and a misspelt name does not compile.
   bob adds its headers and links it.
 
+### Header-only libraries and libraries without a pkg-config file
+
+Every nixpkgs library handle (`nixpkgs.Boost.Lib(p)`, `nixpkgs.Eigen.Lib(p)`,
+`nixpkgs.Spdlog.Lib(p)`, `nixpkgs.NlohmannJson.Lib(p)`, …) gives your program its headers and
+its libraries, whatever the package ships:
+
+- headers are found in the include directory of the package's dev output, in the directories its
+  `.pc` file names (Eigen's `include/eigen3`) and in those of the packages it propagates (spdlog
+  brings the headers of fmt);
+- a header-only library (Boost.Asio, nlohmann_json, glm) has no libraries and adds none;
+- a package whose `.pc` file names no libraries (Boost's does not) is linked with every library
+  of its lib output, as far as the program uses it (`--as-needed`), so `boost::thread` works
+  without naming `-lboost_thread`.
+
+The build, clangd (through `compile_commands.json`) and the dev shell resolve the flags with the
+same code, so what compiles in `bob build` also compiles in your editor. A package that ships no
+headers and no libraries at all, such as a program (`nixpkgs.Hello`), is not a library: bob fails
+with `the nixpkgs library hello-… provides nothing to compile or link against`. Use
+`nixpkgs.Hello.Tool(p)` for programs.
+
 bob generates the repository's `go.mod` itself (the `bob.go` files are Go code); you do not
 write one.
 

@@ -1127,3 +1127,8 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
 144. APPLIED 2026-10-27 CI1, owner request (chat 2026-10-27: pipelines fail): BuilderVersion 18 -> 19 (A562): the four
     tests/goldens/eco/cc/jobs/*.json hold the builder store path (aarch64 5lpg8a0v... -> 9mzv0wvh...); no test logic changed.
     New tests: cmd/bob-builder/genbuilders/scrub_test.go, tools/ci/progress_test.go.
+145. APPLIED 2026-10-27 CC1, owner bug (chat 2026-10-27: Boost handle failed in bob build) (A564): BuilderVersion 19 -> 20, so the four
+    tests/goldens/eco/cc/jobs/*.json changed (builder store path and the output paths that depend on it); no test logic changed.
+    pkg/cc/bop/pkgconfig_test.go moved to pkg/engine/pcflags/pcflags_test.go (package and exported names; the fallback test
+    expects the --as-needed wrapper). New tests: TestPkgConfigThinPC, TestPkgConfigHeaderOnly, TestPkgConfigStaticOrder,
+    translate TestEmptyLibraryCause, tests/eco/cc/nixpkgslibs_test.go (TestNixpkgsLibHandles, TestNixpkgsLibProvidesNothing).

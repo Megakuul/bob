@@ -406,7 +406,7 @@ Expected from other sections:
 | L1 sources | `pkg/nixpkgs` | L0 | yes |
 | L2 ecosystem APIs | `pkg/cc`, `pkg/golang`, `pkg/rust`, `pkg/npm`, `pkg/ocaml`, codegen `pkg/proto`, `pkg/connect`, `pkg/graphql`, `pkg/openapi` (§03), `pkg/services/...` | L0, L1, other L2 APIs (acyclic) | yes |
 | L3 output APIs | `pkg/output/oci`, `pkg/output/appimage`, `pkg/output/tarball`, `pkg/release` (§04) | L0–L2 | yes |
-| E0 engine primitives | `pkg/engine/drv`, `pkg/engine/nar`, `pkg/engine/ir` | L0 | **no** |
+| E0 engine primitives | `pkg/engine/drv`, `pkg/engine/nar`, `pkg/engine/ir`, `pkg/engine/pcflags` | L0 | **no** |
 | E1 engine services | `pkg/engine/store`, `pkg/engine/fetch`, `pkg/engine/lock`, `pkg/engine/nixidx`, `pkg/engine/srcs`, `pkg/engine/materialise` | E0, L0; `golang.org/x/sys`, `github.com/klauspost/compress`, `github.com/ulikunitz/xz` | no |
 | E2 generators | `pkg/<eco>/gen` (one per L2/L3 package, implements `engine.Ecosystem`), `pkg/engine` (registry, types) | E0, E1, L0–L3 types | no |
 | E3 orchestration | `pkg/engine/eval`, `pkg/engine/build`, `pkg/engine/translate` | E0–E2, L0 | no |

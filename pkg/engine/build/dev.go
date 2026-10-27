@@ -149,7 +149,7 @@ func dev(ctx context.Context, o Options, shell string) (*DevResult, error) {
 		}
 		_ = eval.DownloadModules(ctx, goRoot, mods)
 	}
-	gen, err := generate(ctx, o.Root, g, lf, idx, false, time.Now())
+	gen, err := generate(engine.WithStoreHome(ctx, st.Home()), o.Root, g, lf, idx, false, time.Now())
 	if err != nil {
 		return nil, err
 	}

@@ -3,12 +3,15 @@ package gen
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/megakuul/bob/pkg/cc/internal/ccspec"
 	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/ir"
+	"github.com/megakuul/bob/pkg/engine/pcflags"
 )
 
 // compileCommand is one entry of compile_commands.json (§03.1.4).
@@ -47,10 +50,11 @@ func compileCommands(ctx context.Context, req engine.PlanRequest) ([]engine.Gene
 	if len(nodes) == 0 {
 		return nil, nil
 	}
-	paths, err := pl.nixpkgsPaths(ctx, nodes)
+	paths, outputs, err := pl.nixpkgsPaths(ctx, nodes)
 	if err != nil {
 		return nil, err
 	}
+	reader := includeReader{home: engine.StoreHome(ctx), paths: paths, outputs: outputs}
 	var entries []compileCommand
 	labels := make([]string, 0, len(nodes))
 	for l := range nodes {
@@ -77,7 +81,7 @@ func compileCommands(ctx context.Context, req engine.PlanRequest) ([]engine.Gene
 		}
 		var deps []string
 		for _, d := range hdeps {
-			deps = append(deps, workingIncludes(d, paths)...)
+			deps = appendNew(deps, workingIncludes(d, reader)...)
 		}
 		own := ownIncludes(n, t)
 		for _, f := range files {
@@ -105,10 +109,11 @@ func compileCommands(ctx context.Context, req engine.PlanRequest) ([]engine.Gene
 
 // nixpkgsPaths looks up the store paths of gcc and of every nixpkgs library the nodes use:
 // attr → its dev output (or out); "gcc" → the cc-wrapper.
-func (pl *planner) nixpkgsPaths(ctx context.Context, nodes map[string]*ir.Node) (map[string]string, error) {
+func (pl *planner) nixpkgsPaths(ctx context.Context, nodes map[string]*ir.Node) (map[string]string, map[string]map[string]string, error) {
 	out := map[string]string{}
+	outputs := map[string]map[string]string{}
 	if pl.req.Nixpkgs == nil {
-		return out, nil
+		return out, outputs, nil
 	}
 	attrs := map[string]bool{"gcc": true}
 	for _, n := range nodes {
@@ -118,7 +123,7 @@ func (pl *planner) nixpkgsPaths(ctx context.Context, nodes map[string]*ir.Node) 
 		}
 		ls, err := pl.headerDeps(n, t)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, l := range ls {
 			if l.kind == libNixpkgs && l.n.Nix != nil {
@@ -133,32 +138,79 @@ func (pl *planner) nixpkgsPaths(ctx context.Context, nodes map[string]*ir.Node) 
 	sort.Strings(list)
 	entries, err := pl.req.Nixpkgs.Lookup(ctx, list)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for a, e := range entries {
 		if o := engine.PickOutput(e.Outputs, "dev", "out"); a != "gcc" && o != "" {
 			out[a] = e.Outputs[o]
+			outputs[a] = e.Outputs
 		}
 		if a == "gcc" {
 			out[a] = e.Outputs[engine.PickOutput(e.Outputs, "out")]
 		}
 	}
-	return out, nil
+	return out, outputs, nil
+}
+
+// includeReader gives workingIncludes what it needs to resolve a nixpkgs library the way the
+// build does: the library's outputs and, when they are in the store already, the store's home.
+type includeReader struct {
+	home    string
+	paths   map[string]string            // attr → dev output (or out)
+	outputs map[string]map[string]string // attr → every output
 }
 
 // workingIncludes are the -I of a dependency in compile_commands.json: bob libraries' public
-// headers in the working tree, nixpkgs libraries' include dir in the store. An External's
+// headers in the working tree, nixpkgs libraries' include dirs in the store. An External's
 // headers exist only once it is built and are left out.
-func workingIncludes(l *lib, paths map[string]string) []string {
+//
+// A nixpkgs library always gets <dev>/include. When its outputs are in the store, its flags
+// are resolved with the code that resolves them in the build (pcflags): the include
+// directories its .pc files name (eigen's <dev>/include/eigen3) and those of the packages it
+// propagates (spdlog's fmt), so clangd sees what the compiler sees.
+func workingIncludes(l *lib, r includeReader) []string {
 	switch l.kind {
 	case libStatic, libShared:
 		if l.t.Hdrs != "" && strings.HasPrefix(l.n.Label, "//") {
 			return []string{"-I" + joinDir(labelDir(l.n.Label), l.t.Hdrs)}
 		}
 	case libNixpkgs:
-		if l.n.Nix != nil && paths[l.n.Nix.Attr] != "" {
-			return []string{"-I" + paths[l.n.Nix.Attr] + "/include"}
+		if l.n.Nix == nil || r.paths[l.n.Nix.Attr] == "" {
+			return nil
 		}
+		dev := r.paths[l.n.Nix.Attr]
+		out := []string{"-I" + dev + "/include"}
+		if r.home == "" {
+			return out
+		}
+		outs := r.outputs[l.n.Nix.Attr]
+		var roots []string
+		for _, o := range []string{"dev", "out", "lib"} {
+			if p, ok := outs[o]; ok {
+				roots = append(roots, p)
+			}
+		}
+		f, err := pcflags.Resolve(pcflags.Config{Roots: roots, Modules: l.n.Nix.Modules, Include: []string{dev + "/include"},
+			Host: func(p string) string { return filepath.Join(r.home, p) }})
+		if err != nil {
+			return out
+		}
+		for _, c := range f.Cflags {
+			if strings.HasPrefix(c, "-I") || strings.HasPrefix(c, "-isystem") || strings.HasPrefix(c, "-D") {
+				out = appendNew(out, c)
+			}
+		}
+		return out
 	}
 	return nil
+}
+
+// appendNew appends the elements of add that s does not have yet.
+func appendNew(s []string, add ...string) []string {
+	for _, a := range add {
+		if !slices.Contains(s, a) {
+			s = append(s, a)
+		}
+	}
+	return s
 }

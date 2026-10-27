@@ -81,7 +81,7 @@ func Check(ctx context.Context, o Options) ([]*diag.Error, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := nativeFilesAt(ctx, o.Root, g, lf, idx)
+	files, err := nativeFilesAt(engine.WithStoreHome(ctx, st.Home()), o.Root, g, lf, idx)
 	if err == nil {
 		files, err = withRootGoMod(files, g, o.Root)
 	}
@@ -151,7 +151,7 @@ func Gen(ctx context.Context, o Options, force bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths, err := generate(ctx, o.Root, g, lf, idx, force, time.Now())
+	paths, err := generate(engine.WithStoreHome(ctx, st.Home()), o.Root, g, lf, idx, force, time.Now())
 	if err != nil {
 		return paths, err
 	}

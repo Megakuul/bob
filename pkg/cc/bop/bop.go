@@ -11,13 +11,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/megakuul/bob/pkg/builder"
+	"github.com/megakuul/bob/pkg/engine/pcflags"
 )
 
 // Kinds returns the C/C++ job kinds (SPEC §03.1.3); cmd/bob-builder adds them to
@@ -153,9 +153,9 @@ func compileLinkKind(c *builder.Ctx, raw json.RawMessage) error {
 		return err
 	}
 	c.Phase("pkg-config")
-	flags := make([]pcFlags, len(a.PkgConfig))
+	flags := make([]pcflags.Flags, len(a.PkgConfig))
 	for i, pc := range a.PkgConfig {
-		if flags[i], err = resolve(pc); err != nil {
+		if flags[i], err = pcflags.Resolve(pcflags.Config{Roots: pc.Roots, Modules: pc.Modules, Include: pc.Include, LibDir: pc.LibDir}); err != nil {
 			return err
 		}
 	}
@@ -173,9 +173,9 @@ func compileLinkKind(c *builder.Ctx, raw json.RawMessage) error {
 			}
 			switch kind {
 			case "@cflags":
-				out = append(out, flags[i].cflags...)
+				out = append(out, flags[i].Cflags...)
 			case "@libs":
-				out = append(out, flags[i].libs...)
+				out = append(out, flags[i].Libs...)
 			default:
 				return nil, builder.Invalidf("argument %q is not @cflags:<i> or @libs:<i>", s)
 			}
@@ -405,11 +405,4 @@ func externalSteps(a ExternalArgs, src, build, jobs string) ([]step, error) {
 		), nil
 	}
 	return nil, builder.Invalidf("cc-external: build system %q is not cmake, autotools, meson or make", a.Build)
-}
-
-// sortedUnique returns s sorted without duplicates.
-func sortedUnique(s []string) []string {
-	out := slices.Clone(s)
-	slices.Sort(out)
-	return slices.Compact(out)
 }
