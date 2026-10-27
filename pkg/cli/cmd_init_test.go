@@ -30,7 +30,7 @@ func TestInitTemplates(t *testing.T) {
 			t.Errorf("%s: no run label", lang)
 		}
 	}
-	for in, want := range map[string]string{"hello-go": "hellogo", "testbober": "testbober", "03-x": "x03x", "func": "xfunc", "main": "xmain", "---": "x"} {
+	for in, want := range map[string]string{"hello-go": "hellogo", "testbober": "testbober", "03-x": "x03x", "func": "xfunc", "main": "xmain", "p": "xp", "bob": "xbob", "---": "x"} {
 		if got := initPackageName(in); got != want {
 			t.Errorf("initPackageName(%q) = %q, want %q", in, got, want)
 		}

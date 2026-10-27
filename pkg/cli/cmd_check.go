@@ -21,6 +21,9 @@ import (
 const (
 	excludeBegin = "# >>> bob generated files (do not edit) >>>"
 	excludeEnd   = "# <<< bob <<<"
+	// The block in .gitignore (A550); go.mod and go.sum are not in it: they are committed.
+	gitignoreBegin = "# >>> bob generated files, not committed (managed by bob; go.mod and go.sum are committed) >>>"
+	gitignoreEnd   = excludeEnd
 )
 
 // runCheck is `bob check [--fix] [--determinism]` (SPEC R-CLI-009): definition errors of
@@ -39,7 +42,17 @@ func runCheck(e *env) int {
 	}
 	o := build.Options{Root: root, Store: st, Offline: e.a.bool("offline")}
 	if e.a.bool("fix") {
-		if _, err := build.Lock(e.ctx, o, build.LockOptions{}); err != nil {
+		// What --fix is about to revert: the generated files edited by hand (1011).
+		var edited []*diag.Error
+		if pre, err := build.Check(e.ctx, o); err == nil {
+			for _, f := range pre {
+				if f.Code == 1011 {
+					edited = append(edited, f)
+				}
+			}
+		}
+		res, err := build.Lock(e.ctx, o, build.LockOptions{})
+		if err != nil {
 			return e.out.fail(err)
 		}
 		paths, err := build.Gen(e.ctx, o, true)
@@ -48,6 +61,9 @@ func runCheck(e *env) int {
 		}
 		if err := writeExclude(root, paths); err != nil {
 			return e.out.fail(err)
+		}
+		if !e.out.json {
+			reportFixed(e.out, res.Changes, edited)
 		}
 	}
 	findings, err := build.Check(e.ctx, o)
@@ -59,6 +75,28 @@ func runCheck(e *env) int {
 		}
 	}
 	return reportFindings(e, findings)
+}
+
+// reportFixed tells what bob check --fix regenerated: the lock changes and every generated file
+// that was edited by hand and is back as bob writes it (the edit is kept under .bob/gen/backup/).
+func reportFixed(o *out, changes []build.LockChange, edited []*diag.Error) {
+	if len(changes) > 0 {
+		printChanges(o, changes)
+	}
+	for _, f := range edited {
+		n := len(f.Excerpt)
+		word := "differences"
+		if n == 1 {
+			word = "difference"
+		}
+		o.printf("fixed %s: restored what bob generates (%d %s; your copy is in .bob/gen/backup/)\n", f.Args["file"], n, word)
+		for _, l := range f.Excerpt {
+			o.printf("  %s\n", l)
+		}
+	}
+	if len(changes) == 0 && len(edited) == 0 {
+		o.printf("fix: nothing to regenerate\n")
+	}
 }
 
 // runGen is `bob gen [--force]` (SPEC §03.0.2): write the generated native files and bob's
@@ -89,6 +127,7 @@ func runGen(e *env) int {
 	if err := writeExclude(root, paths); err != nil {
 		return e.out.fail(err)
 	}
+	e.ensureShims(st, root)
 	e.out.result(struct {
 		Excluded []string `json:"excluded"`
 	}{append([]string{}, paths...)})
@@ -134,19 +173,28 @@ func findingHint(f *diag.Error) string {
 	return f.Hint()
 }
 
-// writeExclude replaces bob's block in .git/info/exclude with .bob/ and paths, keeping every
-// other line.
+// writeExclude replaces bob's blocks in .git/info/exclude and .gitignore with .bob/ and paths,
+// keeping every other line.
 func writeExclude(root string, paths []string) error { return updateExclude(root, paths, true) }
 
-// updateExclude writes bob's block in .git/info/exclude: .bob/ and paths, keeping every other
-// line. With replace the block holds exactly these; otherwise paths are added to it (a build
-// that did not regenerate native files does not know every generated file).
+// updateExclude writes bob's block in .git/info/exclude and in the repository's .gitignore:
+// .bob/ and paths (the files bob generates and does not commit), keeping every other line.
+// With replace the blocks hold exactly these; otherwise paths are added to them (a build that
+// did not regenerate native files does not know every generated file). Both blocks hold the
+// same list (A550): .git/info/exclude is local to a clone, .gitignore reaches everyone who
+// clones the repository (bob init writes it at once).
 func updateExclude(root string, paths []string, replace bool) error {
-	gitDir := filepath.Join(root, ".git")
-	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
-		return nil
+	if fi, err := os.Stat(filepath.Join(root, ".git")); err == nil && fi.IsDir() {
+		if err := updateBlock(filepath.Join(root, ".git", "info", "exclude"), excludeBegin, excludeEnd, paths, replace); err != nil {
+			return err
+		}
 	}
-	p := filepath.Join(gitDir, "info", "exclude")
+	return updateBlock(filepath.Join(root, ".gitignore"), gitignoreBegin, gitignoreEnd, paths, replace)
+}
+
+// updateBlock writes the block delimited by begin and end in the file p (created when missing):
+// .bob/ and paths, one rooted pattern per line, sorted; every other line is kept.
+func updateBlock(p, begin, end string, paths []string, replace bool) error {
 	old, err := os.ReadFile(p)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return diag.New(7002, "reason", p+" cannot be read")
@@ -156,11 +204,11 @@ func updateExclude(root string, paths []string, replace bool) error {
 	in := false
 	for _, l := range strings.Split(strings.TrimRight(string(old), "\n"), "\n") {
 		switch {
-		case l == excludeBegin:
+		case l == begin:
 			in = true
-		case l == excludeEnd:
+		case l == end:
 			in = false
-		case in && !replace:
+		case in && (!replace || strings.HasSuffix(l, "/zz_bob_cgo.go")): // the evaluator owns the cgo stubs
 			paths = append(paths, strings.TrimPrefix(l, "/"))
 		case !in && (l != "" || len(keep) > 0):
 			keep = append(keep, l)
@@ -171,7 +219,7 @@ func updateExclude(root string, paths []string, replace bool) error {
 	for _, l := range keep {
 		b.WriteString(l + "\n")
 	}
-	b.WriteString(excludeBegin + "\n")
+	b.WriteString(begin + "\n")
 	seen := map[string]bool{}
 	for _, x := range paths {
 		if x != "" && !seen[x] && !strings.ContainsAny(x, "\n\r") {
@@ -179,7 +227,7 @@ func updateExclude(root string, paths []string, replace bool) error {
 			fmt.Fprintf(&b, "/%s\n", strings.TrimPrefix(x, "/"))
 		}
 	}
-	b.WriteString(excludeEnd + "\n")
+	b.WriteString(end + "\n")
 	if bytes.Equal(b.Bytes(), old) {
 		return nil
 	}

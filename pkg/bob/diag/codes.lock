@@ -18,7 +18,7 @@
 1008 definition - args=have,label,rev,want hint=-
 1009 definition - args=label hint=-
 1010 definition - args=label,system hint=-
-1011 definition - args=file hint=-
+1011 definition - args=file hint=hint
 1012 definition - args=what hint=-
 1013 definition - args=path hint=-
 1014 definition - args=name,names hint=-

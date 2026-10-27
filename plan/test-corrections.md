@@ -1110,3 +1110,13 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
    website/content/docs/05-cli/02-errors.md gains the row (BOB_DOCS_UPDATE=1). BOB-E-0005 keeps its meaning (bob run of a package
    that is not a binary); the old misleading use for dev start failures is gone. No existing golden line changed.
 
+
+142. APPLIED 2026-10-27 E1, owner additions (chat 2026-10-27): (a) bob init writes a .gitignore block of the
+   not-committed generated files (kept current by bob lock/gen/check --fix), same list as .git/info/exclude;
+   (b) BOB-E-1011 hint for edits bob.go cannot express, and bob check --fix prints what it restored.
+   SPEC §03 "Not-committed files …", O-03-1, §02.3 rows 1011 and 1013 amended (A550). Changes:
+   pkg/bob/diag/codes.go 1011 gains the hint variant "{hint}" (before the default); codes.lock line
+   `1011 … hint=hint`; tests/goldens/diag/codes.golden regenerated with go test -update (it also
+   carries another unit's 7011). New: pkg/cli/cli_test.go TestGitignoreBlock,
+   pkg/golang/gen/gomod_explain_test.go TestExplainFrameworkEdit, tests/cli/init_gitignore_test.go with
+   tests/goldens/cli/init-gitignore/{go,cc,rust,npm,ocaml}.txt.

@@ -1,0 +1,5 @@
+# >>> bob generated files, not committed (managed by bob; go.mod and go.sum are committed) >>>
+/.bob/
+/compile_commands.json
+/zz_bob_cgo.go
+# <<< bob <<<

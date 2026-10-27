@@ -186,7 +186,11 @@ Runs one tool of the dev environment inside bob's namespace, with the tool's exi
 bob editor vscode|nvim|helix|zed|jetbrains [--write]
 ```
 
-Prints what the editor needs to use the project's toolchains.
+Prints what the editor needs to use the project's toolchains. For `nvim` it is `.nvim.lua`
+(read with `:set exrc`), for `helix` `.helix/languages.toml`; both start the language servers of
+the project from `.bob/bin`, and gopls with `-tags=bob`, which is what makes `bob.go` visible
+to it. bob owns these two files: `--write` replaces them when they carry bob's header and
+refuses any other content. `bob init`, `bob lock` and `bob gen` create `.bob/bin` when it is missing.
 
 | Flag | Meaning |
 |---|---|
@@ -204,7 +208,7 @@ lock (`BOB-E-1012`), bob paths that git does not ignore (`BOB-E-1013`). Exit 0 w
 
 | Flag | Meaning |
 |---|---|
-| `--fix` | rewrite the files, add the ignore entries and re-lock |
+| `--fix` | re-lock, rewrite the generated files that were edited by hand, update the ignore block; prints each file restored and its differences (`fixed go.mod: …`), or `fix: nothing to regenerate` |
 | `--determinism` | evaluate `bob.go` twice in separate sandboxes and compare the results |
 
 ### bob gen
@@ -240,6 +244,9 @@ Starts a new project in `dir` (default: the current directory, created when miss
 then locks it (`bob.lock`) and writes the files bob generates (`go.mod`, `Cargo.toml`,
 `package.json`, …). `bob build`, `bob test` and `bob run` work right after it. The Go module
 path is `example.com/<directory name>`; change it in `bob.go` and run `bob lock`.
+
+It also writes a `.gitignore` block with `.bob/` and every generated file that is not committed,
+and the editor shims in `.bob/bin`; your own `.gitignore` lines are kept.
 
 `bob init` never overwrites anything: a directory that already holds `bob.go`, `bob.lock` or
 a file of the template is refused (`BOB-E-0004`) before a file is written.

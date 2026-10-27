@@ -122,6 +122,9 @@ type GeneratedFile struct {
 type DriftLine struct {
 	Op   string // "+" added outside bob, "-" removed outside bob, "~" changed
 	Text string // e.g. "golang.org/x/text v0.20.0  (not declared in bob.go)"
+	// Hint, when set, replaces BOB-E-1011's default hint ("move the change into bob.go"): the
+	// difference is one bob.go cannot express, so the hint says what bob generates and why.
+	Hint string
 }
 
 // LockFreshness is implemented by an Ecosystem whose lock section records the declarations it

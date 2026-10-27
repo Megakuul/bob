@@ -116,6 +116,17 @@ func FrameworkSum() (string, error) {
 	return fw.sumLines(), nil
 }
 
+// FrameworkFiles returns the files of the framework module (module-relative path → content) as
+// the evaluator compiles against it, incl. its go.mod: what bob writes to .bob/framework so a
+// plain go command or gopls resolves the bob.go imports (A550).
+func FrameworkFiles() (map[string][]byte, error) {
+	fw, err := loadFramework()
+	if err != nil {
+		return nil, err
+	}
+	return fw.files, nil
+}
+
 // sumLines are the go.sum lines of the framework module.
 func (fw *framework) sumLines() string {
 	return fmt.Sprintf("%s %s %s\n%s %s/go.mod %s\n", frameworkModule, fw.version, fw.h1, frameworkModule, fw.version, fw.modH1)

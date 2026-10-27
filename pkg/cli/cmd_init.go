@@ -91,6 +91,7 @@ func runInit(e *env) int {
 	if err := writeExclude(dir, gen); err != nil {
 		return e.out.fail(err)
 	}
+	e.ensureShims(st, dir)
 	e.out.result(struct {
 		Dir   string   `json:"dir"`
 		Lang  string   `json:"lang"`
@@ -164,11 +165,15 @@ func initPackageName(name string) string {
 		}
 	}
 	p := b.String()
-	if p == "" || p[0] >= '0' && p[0] <= '9' || token.IsKeyword(p) || p == "main" {
+	if p == "" || p[0] >= '0' && p[0] <= '9' || token.IsKeyword(p) || p == "main" || initReserved[p] {
 		p = "x" + p
 	}
 	return p
 }
+
+// initReserved are names the templates' bob.go files use for something else (the package name
+// is an import alias there: a directory named p would hide the *bob.P parameter).
+var initReserved = map[string]bool{"p": true, "bob": true, "golang": true, "nixpkgs": true, "cc": true, "rust": true, "npm": true, "ocaml": true}
 
 func initLangs() []string {
 	out := make([]string, 0, len(initTemplates))

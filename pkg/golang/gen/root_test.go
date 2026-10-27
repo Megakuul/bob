@@ -44,7 +44,8 @@ func TestRootGoMod(t *testing.T) {
 		t.Fatal(ok, err)
 	}
 	want := engine.GoModHeader + "\n// Edit bob.go and run bob lock.\nmodule example.com/app\n\ngo 1.26.0\n\nrequire (\n" +
-		"\texample.com/dep v1.2.0\n\texample.com/other v0.1.0\n\texample.com/third v2.0.0+incompatible\n\tgithub.com/megakuul/bob v0.0.0-dev\n)\n"
+		"\texample.com/dep v1.2.0\n\texample.com/other v0.1.0\n\texample.com/third v2.0.0+incompatible\n\tgithub.com/megakuul/bob v0.0.0-dev\n)\n" +
+		"\nreplace github.com/megakuul/bob => ./.bob/framework\n"
 	if string(f.Content) != want {
 		t.Errorf("root go.mod:\n%s\nwant:\n%s", f.Content, want)
 	}
@@ -116,5 +117,21 @@ func TestRootGoSumKeepsImportLines(t *testing.T) {
 	f, ok := RootGoSum(&ir.Graph{Module: "example.com/app", BobVersion: "v1.0.0"}, root, "")
 	if want := "example.com/dep v1.0.0 h1:AAA=\nexample.com/dep v1.0.0/go.mod h1:BBB=\n"; !ok || string(f.Content) != want {
 		t.Fatalf("RootGoSum = %q, %v; want %q", f.Content, ok, want)
+	}
+}
+
+// TestFrameworkTree: the framework's source goes below .bob/framework for a repository that
+// requires it (A550); bob's own repository and a graph without a framework version get none.
+func TestFrameworkTree(t *testing.T) {
+	files := map[string][]byte{"go.mod": []byte("module github.com/megakuul/bob\n"), "pkg/bob/bob.go": []byte("package bob\n")}
+	got := FrameworkTree(&ir.Graph{Module: "example.com/app", BobVersion: "v0.0.0-dev"}, files)
+	if len(got) != 2 || got[0].Path != ".bob/framework/go.mod" || got[1].Path != ".bob/framework/pkg/bob/bob.go" || got[0].Committed {
+		t.Errorf("tree = %+v", got)
+	}
+	if n := len(FrameworkTree(&ir.Graph{Module: "github.com/megakuul/bob", BobVersion: "v0.0.0-dev"}, files)); n != 0 {
+		t.Errorf("bob's own repository got %d framework files", n)
+	}
+	if n := len(FrameworkTree(&ir.Graph{Module: "example.com/app"}, files)); n != 0 {
+		t.Errorf("no framework version: %d files", n)
 	}
 }

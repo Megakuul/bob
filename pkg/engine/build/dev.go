@@ -345,6 +345,9 @@ func (res *DevResult) add(root string, prep engine.DevPrep) error {
 		if err := writeNative(root, f); err != nil {
 			return err
 		}
+		if !f.Committed && !strings.HasPrefix(f.Path, BobDir) {
+			res.Generated = append(res.Generated, f.Path) // rust-project.json: kept out of git too
+		}
 	}
 	res.Servers = append(res.Servers, prep.Servers...)
 	res.Realise = append(res.Realise, prep.Realise...)

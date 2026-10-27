@@ -184,9 +184,9 @@ added by §02.
 | 1008 | definition | `{label} needs Go {want} but nixpkgs {rev} provides Go {have}` | lower GoVersion or pin a newer nixpkgs |
 | 1009 | definition | `{label} has no pinned hash in bob.lock` | run bob lock |
 | 1010 | definition | `{label} targets {system}, which this machine cannot build` | build it remotely (bob build --remote) or for this machine's platform |
-| 1011 **new** | definition | `generated file {file} was edited by hand` | move the change into bob.go; bob check --fix regenerates the file |
+| 1011 **new** | definition | `generated file {file} was edited by hand` | move the change into bob.go; bob check --fix regenerates the file; for an edit bob.go cannot express (the framework's `require`/`replace` in go.mod) the hint says what bob generates and why (A550); `bob check --fix` prints each file it restored with its differences |
 | 1012 **new** | definition | `bob.lock is out of date: {what}` | run bob lock |
-| 1013 **new** | definition | `{path} is not ignored by git` | bob check --fix adds it to bob's block in .git/info/exclude (§03.0.2; bob never edits a user's .gitignore) |
+| 1013 **new** | definition | `{path} is not ignored by git` | bob check --fix adds it to bob's block in .git/info/exclude and .gitignore (§03.0.2, A550; lines outside the block are never edited) |
 | 1014 **new** | definition | `no dev shell "{name}" (have: {names})` | — |
 | 1015 **new** | definition | `cannot resolve {ecosystem} dependencies for {root}: {reason}` | relax the conflicting requirement named above |
 | 1016 **new** | definition | `{path} conflicts with generated output of {label}: {reason}` | move or delete the file, or run bob gen --force (keeps a backup) |
@@ -1005,8 +1005,9 @@ snippet to paste by hand).
 
 | Editor | Works after `cd` + start? | What bob provides |
 |---|---|---|
-| Neovim (lspconfig / `vim.lsp`) | yes, with the hook | nothing to configure: `gopls`, `clangd`, `rust-analyzer`, `typescript-language-server` resolve to `.bob/bin`; `GOFLAGS=-tags=bob` is in the gopls shim env (S1: same result as `buildFlags`) |
-| Helix, Emacs (eglot/lsp-mode), Zed, Sublime LSP | yes, with the hook (via `PATH`) | same as Neovim; `bob editor zed` prints `lsp.<server>.binary.path` entries for Zed builds that ignore `PATH` |
+| Neovim (lspconfig / `vim.lsp`) | yes, after `bob editor nvim --write` (or with the hook) | `.nvim.lua` (a file bob owns; read with `:set exrc`) starts `gopls` (always: `bob.go` is Go; with `buildFlags = {'-tags=bob'}`) and the language servers of the ecosystems in use from the project's `.bob/bin`; with the hook they also resolve to `.bob/bin` on `PATH`; `GOFLAGS=-tags=bob` is in the gopls shim env (S1: same result as `buildFlags`) |
+| Helix | yes, after `bob editor helix --write` (or with the hook) | `.helix/languages.toml` (a file bob owns) with the same servers as Neovim's, started from `.bob/bin` |
+| Emacs (eglot/lsp-mode), Zed, Sublime LSP | yes, with the hook (via `PATH`) | as the hook gives Neovim; `bob editor zed` prints `lsp.<server>.binary.path` entries for Zed builds that ignore `PATH` |
 | VS Code: Go, rust-analyzer, clangd extensions | yes, after `bob editor vscode --write` | `.vscode/settings.json` below (absolute paths are not needed: `${workspaceFolder}`) |
 | VS Code: built-in TypeScript/JavaScript | **no**: needs `bob dev -- code --new-window .` | tsserver runs on VS Code's own Node and reads `node_modules` itself (symlinks into `/nix/store`) |
 | JetBrains IDEs | **no**: needs `bob dev -- <ide> .` | the IDE reads SDK/toolchain files itself |
@@ -1066,7 +1067,6 @@ Steps:
    the servers in the foreground with prefixed output (`[web-vite] …`) and no shell.
 6. Start `$SHELL` (else `/bin/sh`) interactively, or `cmd args` after `--`. The user's rc files
    run normally; bob does not touch `PS1`. Prompt integration is left to the user (`BOB_DEV_SHELL`).
-7. While the shell runs, watch `bob.go`, `bob.lock` and the §01 eval-key inputs (inotify):
    The shell, the command, the hooks and the dev servers run in a second mount namespace in which
    `/nix/store` is a read-only overlay of bob's store over the host's own (A551): on NixOS,
    home-manager and nix-profile hosts `$SHELL`, `/bin/sh`, `/usr/bin/env` and the profile links
@@ -1074,6 +1074,7 @@ Steps:
    still come from bob's store (it wins in the overlay). Builds, Nix and shims never see the
    host store, and a `bob` started in the dev shell enters its own clean namespace. A program that
    cannot be started is `BOB-E-7011` with the cause.
+7. While the shell runs, watch `bob.go`, `bob.lock` and the §01 eval-key inputs (inotify):
    - on a dependency change, re-lock if needed, re-prepare the tree, swap `node_modules`
      atomically, and restart the affected servers;
    - if `inside` changed, print once: `bob: dev environment changed; exit and run bob dev again

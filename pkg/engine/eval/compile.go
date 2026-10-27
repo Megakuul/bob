@@ -126,16 +126,25 @@ func mapPaths(s string, g *generated, deps *depSet) string {
 const (
 	excludeBegin = "# >>> bob generated files (do not edit) >>>"
 	excludeEnd   = "# <<< bob <<<"
+	// gitignoreBegin starts the same block in .gitignore (the CLI writes it, cmd_check.go).
+	gitignoreBegin = "# >>> bob generated files, not committed (managed by bob; go.mod and go.sum are committed) >>>"
 )
 
 // excludeFromGit adds the repo-relative path rel to bob's block in .git/info/exclude. Without
 // a .git directory there is nothing to do.
 func excludeFromGit(root, rel string) error {
-	gitDir := filepath.Join(root, ".git")
-	if fi, err := os.Stat(gitDir); err != nil || !fi.IsDir() {
-		return nil
+	if fi, err := os.Stat(filepath.Join(root, ".git")); err == nil && fi.IsDir() {
+		if err := addToBlock(filepath.Join(root, ".git", "info", "exclude"), excludeBegin, excludeEnd, rel); err != nil {
+			return err
+		}
 	}
-	p := filepath.Join(gitDir, "info", "exclude")
+	// bob init writes the same block to .gitignore, so a clone that has the file ignores it too (A550).
+	return addToBlock(filepath.Join(root, ".gitignore"), gitignoreBegin, excludeEnd, rel)
+}
+
+// addToBlock adds the pattern /rel to the block delimited by begin and end in the file p
+// (created when missing; the block is appended when absent).
+func addToBlock(p, begin, end, rel string) error {
 	old, err := os.ReadFile(p)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -145,24 +154,24 @@ func excludeFromGit(root, rel string) error {
 	if len(old) == 0 {
 		lines = nil
 	}
-	begin, end := -1, -1
+	bi, ei := -1, -1
 	for i, l := range lines {
 		switch l {
-		case excludeBegin:
-			begin = i
-		case excludeEnd:
-			if begin >= 0 && end < 0 {
-				end = i
+		case begin:
+			bi = i
+		case end:
+			if bi >= 0 && ei < 0 {
+				ei = i
 			}
 		}
 	}
-	if begin < 0 || end < 0 {
-		lines = append(lines, excludeBegin, entry, excludeEnd)
+	if bi < 0 || ei < 0 {
+		lines = append(lines, begin, entry, end)
 	} else {
-		if slices.Contains(lines[begin+1:end], entry) {
+		if slices.Contains(lines[bi+1:ei], entry) {
 			return nil
 		}
-		lines = append(lines[:end], append([]string{entry}, lines[end:]...)...)
+		lines = append(lines[:ei], append([]string{entry}, lines[ei:]...)...)
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err

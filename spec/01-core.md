@@ -178,6 +178,10 @@ Expected from other sections:
      own version, extracted into its module cache with the matching `go.sum` line. A dependency
      bob repo requiring a newer framework than the running bob → error
      `<module> needs bob <v> or newer; this is bob <v'>` + hint `update bob`.
+     The generated root `go.mod` also carries `replace github.com/megakuul/bob =>
+     ./.bob/framework`, and bob writes that framework source (the same files as the zip, with
+     its own `go.mod`; not committed, rewritten when bob's version changes, A550) so a plain `go`
+     or gopls resolves the `bob.go` imports with no proxy, no network and no bob shim.
   5. Compile: `GOWORK=off CGO_ENABLED=0 GOFLAGS= GOPROXY=off GOTOOLCHAIN=local go build -tags=bob
      -trimpath -modfile=<…> -overlay=<…> -o .bob/eval/bob-eval ./_bobeval` with the pinned Go,
      inside the evaluator sandbox (R-FW-045). Compiler messages naming

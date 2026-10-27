@@ -1,0 +1,3 @@
+# >>> bob generated files, not committed (managed by bob; go.mod and go.sum are committed) >>>
+/.bob/
+# <<< bob <<<

@@ -113,12 +113,20 @@ func goModFiles(m *wsModule, sec *lock.GoSection, declared map[string]bool, loca
 		}
 		b.WriteString(")\n")
 	}
+	wantReplaces := map[string]string{}
 	for _, l := range local {
 		fmt.Fprintf(&b, "\nreplace %s => %s\n", l.path, l.dir)
+		wantReplaces[l.path] = l.dir
+	}
+	for _, r := range bob.reqs {
+		if r.Path == frameworkModule {
+			fmt.Fprintf(&b, "\nreplace %s => %s\n", frameworkModule, FrameworkReplace)
+			wantReplaces[frameworkModule] = FrameworkReplace
+		}
 	}
 	modPath := path.Join(m.dir, "go.mod")
 	files := []engine.GeneratedFile{{Path: modPath, Content: []byte(b.String()), Mode: 0o444, Owner: m.node.Label,
-		Committed: true, Explain: explainGoMod(goLine, withLocal, indirect, bobGo)}}
+		Committed: true, Explain: explainGoMod(goLine, withLocal, indirect, wantReplaces, bobGo)}}
 
 	if sum := mergeSum(goSum(buildList, sec), bob.sum); len(sum) > 0 {
 		files = append(files, engine.GeneratedFile{Path: path.Join(m.dir, "go.sum"), Content: sum, Mode: 0o444,
@@ -209,13 +217,14 @@ func goSum(buildList []resolve.Module, sec *lock.GoSection) []byte {
 type modFile struct {
 	goVersion string
 	require   map[string]string // path → version
+	replace   map[string]string // module → target of its replace directive
 }
 
 // parseGoMod reads the go directive and the requirements of a go.mod (both require forms).
 func parseGoMod(b []byte) modFile {
-	m := modFile{require: map[string]string{}}
+	m := modFile{require: map[string]string{}, replace: map[string]string{}}
 	sc := bufio.NewScanner(bytes.NewReader(b))
-	inBlock := false
+	inBlock, inReplace := false, false
 	for sc.Scan() {
 		line := sc.Text()
 		if i := strings.Index(line, "//"); i >= 0 {
@@ -224,8 +233,18 @@ func parseGoMod(b []byte) modFile {
 		f := strings.Fields(line)
 		switch {
 		case len(f) == 0:
-		case inBlock && f[0] == ")":
-			inBlock = false
+		case (inBlock || inReplace) && f[0] == ")":
+			inBlock, inReplace = false, false
+		case inReplace:
+			if i := slices.Index(f, "=>"); i > 0 && i+1 < len(f) {
+				m.replace[f[0]] = f[i+1]
+			}
+		case f[0] == "replace" && len(f) == 2 && f[1] == "(":
+			inReplace = true
+		case f[0] == "replace":
+			if i := slices.Index(f, "=>"); i > 1 && i+1 < len(f) {
+				m.replace[f[1]] = f[i+1]
+			}
 		case inBlock && len(f) >= 2:
 			m.require[f[0]] = f[1]
 		case f[0] == "go" && len(f) == 2:
@@ -239,9 +258,13 @@ func parseGoMod(b []byte) modFile {
 	return m
 }
 
+// frameworkHint is the hint of a hand edit of the framework's requirement or replace: bob.go has
+// no way to say it.
+const frameworkHint = "bob generates the require and the replace of github.com/megakuul/bob itself (bob's own version, with its source in .bob/framework); bob.go cannot express them, so bob check --fix restores them"
+
 // explainGoMod maps a go.mod edited outside bob to its differences in bob.go terms (R-FW-061);
 // no line means the file declares the same module (only layout or comments differ).
-func explainGoMod(goWant string, direct, indirect []gospec.Requirement, bobGo string) func([]byte) []engine.DriftLine {
+func explainGoMod(goWant string, direct, indirect []gospec.Requirement, replaces map[string]string, bobGo string) func([]byte) []engine.DriftLine {
 	want := map[string]string{}
 	declared := map[string]bool{}
 	for _, r := range direct {
@@ -269,6 +292,8 @@ func explainGoMod(goWant string, direct, indirect []gospec.Requirement, bobGo st
 			w, inWant := want[p]
 			g, inGot := got.require[p]
 			switch {
+			case p == frameworkModule && inWant && (!inGot || w != g):
+				out = append(out, engine.DriftLine{Op: "~", Text: fmt.Sprintf("%s %s → %s", p, w, orNone(g)), Hint: frameworkHint})
 			case inWant && !inGot && len(got.require) == 0:
 				// A skeleton (go mod init, or bob's file from before the requirements were
 				// locked) lacks them all: nothing a user changed.
@@ -280,6 +305,15 @@ func explainGoMod(goWant string, direct, indirect []gospec.Requirement, bobGo st
 				out = append(out, engine.DriftLine{Op: "~", Text: fmt.Sprintf("%s %s → %s  (%s declares %s)", p, w, g, bobGo, w)})
 			case w != g:
 				out = append(out, engine.DriftLine{Op: "~", Text: fmt.Sprintf("%s %s → %s  (bob.lock selects %s)", p, w, g, w)})
+			}
+		}
+		for _, m := range sortedKeys(replaces) {
+			if got.replace[m] != replaces[m] {
+				h := ""
+				if m == frameworkModule {
+					h = frameworkHint
+				}
+				out = append(out, engine.DriftLine{Op: "~", Text: fmt.Sprintf("replace %s => %s → %s", m, orNone(got.replace[m]), replaces[m]), Hint: h})
 			}
 		}
 		return out // empty: the same module in bob.go terms (only layout or comments differ)

@@ -154,6 +154,16 @@ grep -c '"file"' compile_commands.json
 2
 ```
 
+### Why there is a `zz_bob_cgo.go`
+
+`bob.go` is a Go file, so the directory is a Go package that also holds `main.cpp`. The Go
+tools refuse that: `go vet` and gopls report `C++ source files not allowed when not using cgo
+or SWIG` and then show nothing for `bob.go`. bob therefore writes `zz_bob_cgo.go` (build tags
+`bob && cgo`, one line: `import "C"`), which tells the Go tools that the directory uses cgo and
+may hold C and C++ files. The file is generated (it carries no code), is not committed and is
+invisible to bob's own builds. It needs a C compiler on the machine running gopls, which the dev
+shell's `gcc` provides when gopls runs from `.bob/bin` (see [Editors](../04-guides/05-dev-environments.md#editors)).
+
 GCC and the clang tools (clangd, clang-format) of your nixpkgs pin are on `PATH` inside the
 dev shell, without declaring anything:
 
