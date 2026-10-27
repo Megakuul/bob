@@ -217,3 +217,29 @@ func TestComplete(t *testing.T) {
 		t.Errorf("values: %q", got)
 	}
 }
+
+// TestGitignoreBlock: bob writes the same block to .gitignore (created when missing), keeps the
+// user's lines, adds to it without duplicates and keeps the evaluator's cgo stub lines (A550).
+func TestGitignoreBlock(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*.o\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeExclude(root, []string{"compile_commands.json", "app/zz_bob_cgo.go"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeExclude(root, []string{"compile_commands.json"}); err != nil { // bob gen keeps a stub only the evaluator knows
+		t.Fatal(err)
+	}
+	want := "*.o\n" + gitignoreBegin + "\n/.bob/\n/app/zz_bob_cgo.go\n/compile_commands.json\n" + gitignoreEnd + "\n"
+	b, _ := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if string(b) != want {
+		t.Errorf(".gitignore:\n%s\nwant:\n%s", b, want)
+	}
+	if err := updateExclude(root, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if b2, _ := os.ReadFile(filepath.Join(root, ".gitignore")); string(b2) != want {
+		t.Errorf("updating without paths changed the block:\n%s", b2)
+	}
+}

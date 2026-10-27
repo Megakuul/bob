@@ -89,6 +89,7 @@ BOB-E-1010 definition - exit=3
 
 BOB-E-1011 definition - exit=3
   message: generated file {file} was edited by hand
+  hint:    {hint}
   hint:    move the change into bob.go; bob check --fix regenerates the file
 
 BOB-E-1012 definition - exit=3
@@ -372,11 +373,11 @@ BOB-E-7010 store - exit=7
   message: worker cannot isolate builds: {reason}
   hint:    see the worker host requirements
 
-BOB-E-8001 interrupt - exit=130
 BOB-E-7011 store - exit=7
   message: {program} cannot be started in bob's dev environment: {reason}
   hint:    {hint}
 
+BOB-E-8001 interrupt - exit=130
   message: build cancelled
 
 BOB-E-9001 internal - exit=70

@@ -22,7 +22,9 @@ in `~/.local/share/bob`. See [Install bob](../02-install/02-install-bob.md#which
 
 So that your editor type-checks it, completes options and jumps to definitions, and so that a
 dependency is a typed value instead of a string. `bob.go` files have the `bob` build tag, so
-they never mix with your program.
+they never mix with your program. For gopls to see them anyway, start it from the project's
+`.bob/bin` (the shell hook, or `bob editor nvim|helix|vscode --write`); see
+[Editors](../04-guides/05-dev-environments.md#editors).
 
 ## Does bob replace go build, cargo, npm?
 

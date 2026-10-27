@@ -32,6 +32,8 @@ func runLock(e *env) int {
 	if err != nil {
 		return e.out.fail(err)
 	}
+	_ = updateExclude(root, nil, false) // keeps bob's .gitignore block current (adds .bob/)
+	e.ensureShims(st, root)
 	type change struct {
 		Ecosystem string `json:"ecosystem"`
 		Name      string `json:"name"`

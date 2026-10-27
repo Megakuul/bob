@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,11 +67,19 @@ func TestRootGoSumHasFramework(t *testing.T) {
 		t.Fatal(err)
 	}
 	var paths []string
+	tree := 0
 	for _, f := range files {
+		if strings.HasPrefix(f.Path, ".bob/framework/") {
+			tree++ // the framework's source the go.mod replaces it by (A550)
+			continue
+		}
 		paths = append(paths, f.Path)
 		if f.Path == "go.sum" && string(f.Content) != want {
 			t.Errorf("go.sum:\n%s\nwant:\n%s", f.Content, want)
 		}
+	}
+	if tree == 0 {
+		t.Error("no framework source below .bob/framework")
 	}
 	if len(paths) != 2 || paths[0] != "go.mod" || paths[1] != "go.sum" {
 		t.Errorf("root files %v, want go.mod and go.sum", paths)

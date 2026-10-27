@@ -193,7 +193,7 @@ func generate(ctx context.Context, root string, g *ir.Graph, lf *lock.File, idx 
 		}
 		sum := sha256.Sum256(gf.Content)
 		next.Files[gf.Path] = nativeEntry{SHA256: hex.EncodeToString(sum[:]), Owner: gf.Owner}
-		if !gf.Committed {
+		if !gf.Committed && !strings.HasPrefix(gf.Path, BobDir) { // .bob/ is excluded as a whole
 			excluded = append(excluded, gf.Path)
 		}
 	}
@@ -273,8 +273,16 @@ func nativeFilesAt(ctx context.Context, root string, g *ir.Graph, lf *lock.File,
 // golang/gen.RootGoMod, whatever ecosystems the graph uses) unless a Go module of the
 // repository already generates that file.
 func withRootGoMod(files []engine.GeneratedFile, g *ir.Graph, root string) ([]engine.GeneratedFile, error) {
+	// The framework module's source, which the root go.mod replaces the framework by (A550).
+	fwFiles, err := eval.FrameworkFiles()
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, gogen.FrameworkTree(g, fwFiles)...)
+	sortFiles := func() { sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path }) }
 	for _, f := range files {
 		if f.Path == "go.mod" {
+			sortFiles()
 			return files, nil
 		}
 	}
@@ -290,7 +298,7 @@ func withRootGoMod(files []engine.GeneratedFile, g *ir.Graph, root string) ([]en
 	if f, ok := gogen.RootGoSum(g, root, sum); ok {
 		files = append(files, f)
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	sortFiles()
 	return files, nil
 }
 
@@ -352,7 +360,14 @@ func (d drifted) finding() *diag.Error {
 	}
 	e := diag.New(1011, "file", d.f.Path)
 	if d.f.Explain != nil {
-		for _, l := range d.f.Explain(d.onDisk) {
+		lines := d.f.Explain(d.onDisk)
+		for _, l := range lines {
+			if l.Hint != "" {
+				e = diag.New(1011, "file", d.f.Path, "hint", l.Hint)
+				break
+			}
+		}
+		for _, l := range lines {
 			if len(e.Excerpt) == maxExcerpt {
 				break
 			}

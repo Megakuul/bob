@@ -59,7 +59,7 @@ var table = []Entry{
 	}},
 	{1009, one(`{label} has no pinned hash in bob.lock`, "run bob lock")},
 	{1010, one(`{label} targets {system}, which this machine cannot build`, "build it remotely (bob build --remote) or for this machine's platform")},
-	{1011, one(`generated file {file} was edited by hand`, "move the change into bob.go; bob check --fix regenerates the file")},
+	{1011, one(`generated file {file} was edited by hand`, "{hint}", "move the change into bob.go; bob check --fix regenerates the file")},
 	{1012, one(`bob.lock is out of date: {what}`, "run bob lock")},
 	{1013, one(`{path} is not ignored by git`, "bob check --fix adds it to bob's block in .git/info/exclude")},
 	{1014, one(`no dev shell "{name}" (have: {names})`)},

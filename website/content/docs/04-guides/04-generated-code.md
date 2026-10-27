@@ -15,6 +15,11 @@ them fresh, and how to recover when someone edited one.
 | Native tooling files | `go.mod`, `go.sum`, `Cargo.toml`, `Cargo.lock`, `package.json`, `tsconfig.json`, `compile_commands.json`, `.merlin` | `bob gen`, `bob build`, `bob lock`, `bob dev` | yes, commit them (`go.mod`/`go.sum` and the Cargo files make the tree readable for tools) |
 | Materialised codegen | `gen/proto/…`, `gen/graph/…`, `gen/rest/…`, `web/gen/…`, `node_modules/` | `bob gen`, `bob build`, `bob dev` | no: each directory carries its own `.gitignore` with `*` |
 
+Two more files belong to the first kind and are not committed: `.bob/framework/` (the
+framework module's source, which the root `go.mod` replaces `github.com/megakuul/bob` by, so
+gopls and `go vet` resolve the imports of `bob.go` offline), and `zz_bob_cgo.go` next to a Go
+package that also has C or C++ files (see the [C and C++ quickstart](../03-quickstart/02-c-cpp.md#editor-support)).
+
 Both are outputs of `bob.go`. Change `bob.go` (or the schema) and let bob rewrite them; never
 edit them by hand.
 
@@ -148,7 +153,11 @@ error[BOB-E-1016]: gen/rest/items.gen.go conflicts with generated output of //:g
 hand-written file outside the generated directory).
 
 For native files, `bob check` reports a hand edit as `BOB-E-1011` ("generated file go.mod was
-edited by hand"), and `bob check --fix` rewrites the file. `bob build` refuses to run with an
+edited by hand"), and `bob check --fix` rewrites the file and prints what it restored
+(`fixed go.mod: restored what bob generates (2 differences; …)`, one line per difference; your
+copy is kept in `.bob/gen/backup/`). When the edit is one `bob.go` cannot express, such as the
+`require` or `replace` of the framework module in `go.mod`, the hint of `BOB-E-1011` says what bob
+generates and why, instead of pointing to `bob.go`. `bob build` refuses to run with an
 edited native file, so the build never uses a file that differs from `bob.go`.
 
 > [!NOTE]
@@ -157,9 +166,13 @@ edited native file, so the build never uses a file that differs from `bob.go`.
 
 ## Git ignore rules
 
-bob never edits your `.gitignore`. It keeps its own ignore entries in a marked block of
-`.git/info/exclude` (`.bob/` and other paths bob owns) and puts a `.gitignore` with `*` into each
-codegen directory. `bob check` reports a bob path that git does not ignore (`BOB-E-1013`);
+bob keeps its own ignore entries in a marked block (`# >>> bob generated files … >>>` to
+`# <<< bob <<<`) of your `.gitignore` and of `.git/info/exclude`: `.bob/` and every generated
+file that is not committed (`compile_commands.json`, `Cargo.toml`, `package.json`,
+`zz_bob_cgo.go`, …; `go.mod` and `go.sum` are committed and not listed). `bob init` writes the
+block at once; `bob lock`, `bob gen` and `bob check --fix` keep it current. Lines outside the
+block are yours and stay as they are. bob also puts a `.gitignore` with `*` into each codegen
+directory. `bob check` reports a bob path that git does not ignore (`BOB-E-1013`);
 `bob check --fix` adds it.
 
 ## Next steps

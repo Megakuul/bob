@@ -81,6 +81,20 @@ func (e *env) devEnv(st *store.Store, root, shell string, inside bool) (*devenv.
 	return f, b, res, nil
 }
 
+// ensureShims creates the dev shims (.bob/bin) of root when it has none, so an editor started
+// right after bob init, bob lock or bob gen finds the language servers without a prior bob dev
+// (A550). Best effort: a failure (offline, a package not yet buildable) is a note, never an
+// error of the command. It must run inside the namespace (after enterStore).
+func (e *env) ensureShims(st *store.Store, root string) {
+	if _, err := os.Stat(devenv.ShimDir(root)); err == nil {
+		return
+	}
+	quiet := *e
+	if _, _, _, err := quiet.devEnv(st, root, "", true); err != nil && !e.out.json {
+		e.out.printf("note: the editor shims in .bob/bin were not created (%v); run bob dev\n", err)
+	}
+}
+
 // dropShims takes the shim directories of root and of the active project off this process'
 // PATH: the evaluator must not find a shim as its go (outside the namespace the store paths it
 // reports do not exist).

@@ -36,6 +36,29 @@ const (
 	maxBobGoBytes = 1 << 20
 )
 
+// FrameworkDir is the repository-relative directory bob keeps the framework module's source in
+// (A550): the root go.mod replaces github.com/megakuul/bob by it, so the go command and gopls
+// resolve the bob.go imports with no proxy, no network and no bob shim. Not committed.
+const FrameworkDir = ".bob/framework"
+
+// FrameworkReplace is the replace target in the root go.mod, seen from the repository root.
+const FrameworkReplace = "./" + FrameworkDir
+
+// FrameworkTree returns the files of the framework module (module-relative path → content, as
+// the evaluator compiles against it) under FrameworkDir, when the root go.mod of graph g
+// requires the framework; none for bob's own repository, which is the framework.
+func FrameworkTree(g *ir.Graph, files map[string][]byte) []engine.GeneratedFile {
+	if g == nil || g.Module == "" || g.Module == frameworkModule || !resolve.ValidVersion(g.BobVersion) {
+		return nil
+	}
+	out := make([]engine.GeneratedFile, 0, len(files))
+	for _, name := range sortedKeys(files) {
+		out = append(out, engine.GeneratedFile{Path: FrameworkDir + "/" + name, Content: files[name], Mode: 0o444,
+			Owner: "//:bob.go"})
+	}
+	return out
+}
+
 // RootGoMod returns the root go.mod of the repository at root for graph g: module g.Module,
 // go <framework language>.0, and one requirement block with the framework at g.BobVersion
 // (when it is a module version) and the modules of every bob.Import call. ok is false when g
@@ -64,6 +87,9 @@ func RootGoMod(g *ir.Graph, root string) (f engine.GeneratedFile, ok bool, err e
 			fmt.Fprintf(&b, "\t%s %s\n", p, reqs[p])
 		}
 		b.WriteString(")\n")
+	}
+	if reqs[frameworkModule] != "" {
+		fmt.Fprintf(&b, "\nreplace %s => %s\n", frameworkModule, FrameworkReplace)
 	}
 	return engine.GeneratedFile{Path: "go.mod", Content: []byte(b.String()), Mode: 0o444, Owner: "//:bob.go",
 		Committed: true, Explain: explainRoot(g.Module, reqs)}, true, nil

@@ -40,7 +40,7 @@ reused or renumbered. In the messages, `{name}` is filled in with the details of
 | BOB-E-1008 | definition | 3 | `{requirement} needs go {need}, but {module} uses go {go} (set Go in {file})` | `raise the module's Go, or require an older {requirement}` |
 | BOB-E-1009 | definition | 3 | `{label} has no pinned hash in bob.lock` | `run bob lock` |
 | BOB-E-1010 | definition | 3 | `{label} targets {system}, which this machine cannot build` | `build it remotely (bob build --remote) or for this machine's platform` |
-| BOB-E-1011 | definition | 3 | `generated file {file} was edited by hand` | `move the change into bob.go; bob check --fix regenerates the file` |
+| BOB-E-1011 | definition | 3 | `generated file {file} was edited by hand` | `{hint} / move the change into bob.go; bob check --fix regenerates the file` |
 | BOB-E-1012 | definition | 3 | `bob.lock is out of date: {what}` | `run bob lock` |
 | BOB-E-1013 | definition | 3 | `{path} is not ignored by git` | `bob check --fix adds it to bob's block in .git/info/exclude` |
 | BOB-E-1014 | definition | 3 | `no dev shell "{name}" (have: {names})` | — |
