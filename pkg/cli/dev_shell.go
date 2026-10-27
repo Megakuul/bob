@@ -222,6 +222,11 @@ func (s *session) reportExits() int {
 // run runs the shell or command in the foreground and returns its exit status. ^C goes to it
 // from the terminal; SIGTERM and SIGHUP sent to bob are passed on.
 func (s *session) run(argv []string) int {
+	// The program owns the terminal now (a shell, nvim in it): the watcher's re-evaluations
+	// must not draw a status line over it.
+	if s.e.out.liveStop != nil {
+		s.e.out.liveStop()
+	}
 	c := devCommand(s.f, argv, s.env)
 	c.Env = s.env
 	c.Dir = s.e.cwd

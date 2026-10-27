@@ -32,6 +32,7 @@ type out struct {
 	errs     []*diag.Error // errors and warnings reported so far
 	now      func() time.Time
 	phase    func(text string, weak bool) func() // the live status line's phases (nil = no line)
+	liveStop func()                              // ends the live status line for good (nil = no line)
 }
 
 // timeFormat is RFC 3339 UTC with milliseconds (SPEC §02.4).

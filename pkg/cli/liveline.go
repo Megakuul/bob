@@ -98,6 +98,7 @@ func (o *out) attachLive(ctx context.Context, getenv func(string) string) (conte
 	}
 	l := newLiveLine(o.errw, getenv("NO_COLOR") != "")
 	o.phase = l.Begin
+	o.liveStop = l.stop
 	o.w = &lineWriter{l: l, w: o.w}
 	o.errw = &lineWriter{l: l, w: o.errw}
 	return progress.With(ctx, l), l.stop
