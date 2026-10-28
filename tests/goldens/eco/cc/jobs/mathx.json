@@ -44,7 +44,7 @@
     "forbidden": [
       "/nix/store/23jyj7s1b10awhkkilbfxsaq3g9i1gdi-gcc-wrapper-15.3.0",
       "/nix/store/442awqzxq8b57s44vl1wv01r5jr6d32i-libs-mathx-mathx-src",
-      "/nix/store/5lpg8a0vjws6pvnw19kia252za631b0f-bob-builder-18",
+      "/nix/store/ipb41kja92yp0xjqbb0al895y1ckf747-bob-builder-20",
       "/nix/store/mkwyj88yi4v8v01b23gym8kvcbcx1g2r-patchelf-0.15.2",
       "/nix/store/s9niqs1smi2c86ydxiibhsjb3d0j2nfn-binutils-wrapper-2.46"
     ],

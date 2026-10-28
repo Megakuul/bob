@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/megakuul/bob/pkg/engine"
 	"github.com/megakuul/bob/pkg/engine/build/testrun"
 	"github.com/megakuul/bob/pkg/engine/drv"
 	"github.com/megakuul/bob/pkg/engine/eval"
@@ -99,7 +100,7 @@ func (r *runner) run(ctx context.Context) (*Result, error) {
 			return err
 		}
 		if nativeScope(o) {
-			res.Generated, err = generate(ctx, o.Root, g, lf, idx, false, time.Now())
+			res.Generated, err = generate(engine.WithStoreHome(ctx, st.Home()), o.Root, g, lf, idx, false, time.Now())
 		}
 		return err
 	}); err != nil {

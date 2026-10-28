@@ -6,7 +6,11 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -45,6 +49,8 @@ func TestHostStoreView(t *testing.T) {
 		}
 	}
 	t.Setenv("BOB_TEST_HOSTVIEW_CHILD", entries[0].Name())
+	t.Setenv("BOB_TEST_HOSTUID", strconv.Itoa(os.Getuid()))
+	t.Setenv("BOB_TEST_HOSTGID", strconv.Itoa(os.Getgid()))
 	t.Setenv("BOB_TEST_HOSTVIEW_SHELL", filepath.Join(sys, "sw", "bin", "fish"))
 	t.Setenv("BOB_HOME", home)
 	saved := os.Args
@@ -53,6 +59,45 @@ func TestHostStoreView(t *testing.T) {
 	os.Args = saved
 	if err != nil || inside || exit != 0 {
 		t.Fatalf("the child failed: Enter = %v, %d, %v (see its output above)", inside, exit, err)
+	}
+	if fi, err := os.Stat(filepath.Join(home, "made-by-session")); err != nil {
+		t.Errorf("the session's file: %v", err)
+	} else if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
+		t.Errorf("a file made in the dev session belongs to uid %d, want %d", st.Uid, os.Getuid())
+	}
+}
+
+// TestExecRunsAsUser (A561): programs of bob exec (the shims of the dev tools) run as the user,
+// with the user's name from /etc/passwd.
+func TestExecRunsAsUser(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: the namespace's root is the user")
+	}
+	home := filepath.Join(t.TempDir(), "bobhome")
+	if _, err := Open(context.Background(), Config{Home: home}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BOB_HOME", home)
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	c := &exec.Cmd{Path: sh, Args: []string{"sh", "-c", "id -u; id -g; id -un; touch " + filepath.Join(home, "by-exec")}, Stdout: &b, Stderr: os.Stderr}
+	if err := StartIn(home, c); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if want := strconv.Itoa(os.Getuid()) + "\n" + strconv.Itoa(os.Getgid()) + "\n"; !strings.HasPrefix(b.String(), want) {
+		t.Errorf("bob exec runs as %q, want uid/gid %q", b.String(), want)
+	}
+	if u, err := user.Current(); err == nil && !strings.HasSuffix(strings.TrimSpace(b.String()), u.Username) {
+		t.Errorf("bob exec's user name %q, want %s", b.String(), u.Username)
+	}
+	if fi, err := os.Stat(filepath.Join(home, "by-exec")); err != nil || fi.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
+		t.Errorf("file made by bob exec: %v, %v", fi, err)
 	}
 }
 
@@ -95,6 +140,19 @@ func TestHostStoreViewChild(t *testing.T) {
 			t.Errorf("a shell that links into the host store does not start: %v", err)
 		}
 	}
+	// A561: the session runs as the user, not as the namespace's root, in both the view and
+	// the fallback without it; the namespace of the command itself keeps the root mapping.
+	wantUID, wantGID := os.Getenv("BOB_TEST_HOSTUID"), os.Getenv("BOB_TEST_HOSTGID")
+	if got := output(t, run, sh, "sh", "-c", "id -u; id -g; echo $HOME"); !strings.HasPrefix(got, wantUID+"\n"+wantGID+"\n") {
+		t.Errorf("the dev session runs as %q, want uid %s gid %s", strings.Fields(got), wantUID, wantGID)
+	}
+	if os.Getuid() != 0 {
+		t.Errorf("the namespace of the command is not the root mapping: uid %d", os.Getuid())
+	}
+	// A file created in the session belongs to the user on the host (checked by the outer test).
+	if err := run(sh, "sh", "-c", "touch "+filepath.Join(os.Getenv("BOB_HOME"), "made-by-session")); err != nil {
+		t.Errorf("a session cannot create a file in the state home: %v", err)
+	}
 	// The namespace of builds is unchanged by a dev session.
 	if _, err := os.Lstat("/nix/store/" + entry); err == nil {
 		t.Errorf("/nix/store/%s is visible after StartHost", entry)
@@ -112,6 +170,20 @@ func TestHostStoreViewChild(t *testing.T) {
 	if err := run(sh, "sh", "-c", "exit 3"); err == nil {
 		t.Error("the exit status of the program is lost")
 	}
+}
+
+// output runs argv through run (StartHost) with its standard output captured.
+func output(t *testing.T, _ func(...string) error, path string, argv ...string) string {
+	t.Helper()
+	var b strings.Builder
+	c := &exec.Cmd{Path: path, Args: argv, Stdout: &b, Stderr: os.Stderr}
+	if err := StartHost("", c); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	return b.String()
 }
 
 func TestHostStoreViewProbe(t *testing.T) {

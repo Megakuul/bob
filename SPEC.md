@@ -406,7 +406,7 @@ Expected from other sections:
 | L1 sources | `pkg/nixpkgs` | L0 | yes |
 | L2 ecosystem APIs | `pkg/cc`, `pkg/golang`, `pkg/rust`, `pkg/npm`, `pkg/ocaml`, codegen `pkg/proto`, `pkg/connect`, `pkg/graphql`, `pkg/openapi` (§03), `pkg/services/...` | L0, L1, other L2 APIs (acyclic) | yes |
 | L3 output APIs | `pkg/output/oci`, `pkg/output/appimage`, `pkg/output/tarball`, `pkg/release` (§04) | L0–L2 | yes |
-| E0 engine primitives | `pkg/engine/drv`, `pkg/engine/nar`, `pkg/engine/ir` | L0 | **no** |
+| E0 engine primitives | `pkg/engine/drv`, `pkg/engine/nar`, `pkg/engine/ir`, `pkg/engine/pcflags` | L0 | **no** |
 | E1 engine services | `pkg/engine/store`, `pkg/engine/fetch`, `pkg/engine/lock`, `pkg/engine/nixidx`, `pkg/engine/srcs`, `pkg/engine/materialise` | E0, L0; `golang.org/x/sys`, `github.com/klauspost/compress`, `github.com/ulikunitz/xz` | no |
 | E2 generators | `pkg/<eco>/gen` (one per L2/L3 package, implements `engine.Ecosystem`), `pkg/engine` (registry, types) | E0, E1, L0–L3 types | no |
 | E3 orchestration | `pkg/engine/eval`, `pkg/engine/build`, `pkg/engine/translate` | E0–E2, L0 | no |
@@ -3087,7 +3087,12 @@ Steps:
    are links into the host's store, which bob's namespace otherwise hides. The dev shell's tools
    still come from bob's store (it wins in the overlay). Builds, Nix and shims never see the
    host store, and a `bob` started in the dev shell enters its own clean namespace. A program that
-   cannot be started is `BOB-E-7011` with the cause.
+   cannot be started is `BOB-E-7011` with the cause. These programs, and the tools that `bob exec` and the
+   shims start, run as the user and not as the root of bob's namespace (A561): `id`, `whoami`, the
+   prompt and `/etc/passwd` lookups show the user's own uid, gid and name, and files they create
+   belong to the user. They are started in a user namespace nested in bob's whose id for the user
+   maps to the namespace's root; the mounts stay. A host user who is root is root there. Builds and
+   Nix keep the root mapping.
 7. While the shell runs, watch `bob.go`, `bob.lock` and the §01 eval-key inputs (inotify):
    - on a dependency change, re-lock if needed, re-prepare the tree, swap `node_modules`
      atomically, and restart the affected servers;

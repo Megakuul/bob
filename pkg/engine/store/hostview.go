@@ -70,7 +70,15 @@ func StartHost(home string, cmd *exec.Cmd) error {
 		return err
 	}
 	_, entered := Entered()
-	if (!entered && !inNamespace(h)) || !HostViewAvailable(h) || len(cmd.ExtraFiles) > 0 || cmd.Err != nil {
+	if (!entered && !inNamespace(h)) || cmd.Err != nil {
+		return cmd.Start()
+	}
+	// The program runs as the user, not as the namespace's root (realuser.go).
+	uid, gid, real := realIDs()
+	if !HostViewAvailable(h) || len(cmd.ExtraFiles) > 0 {
+		if real {
+			asUser(cmd, uid, gid, false)
+		}
 		return cmd.Start()
 	}
 	path, args := cmd.Path, cmd.Args
@@ -91,6 +99,9 @@ func StartHost(home string, cmd *exec.Cmd) error {
 	}
 	attr.Cloneflags |= syscall.CLONE_NEWNS
 	cmd.SysProcAttr = attr
+	if real {
+		asUser(cmd, uid, gid, true)
+	}
 	err = cmd.Start()
 	w.Close()
 	cmd.Path, cmd.Args, cmd.ExtraFiles = path, args, nil

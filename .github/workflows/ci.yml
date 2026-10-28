@@ -1,10 +1,18 @@
-# CI on GitHub-hosted runners (owner chat decision 2026-10-24, ADR 0002a, plan/progress/N1.md).
+# CI on every push and pull request (A563, plan/progress/CI1.md): three jobs in parallel, no
+# job waits for another, and what a change does not touch is skipped
+# (scripts/ci-changes.sh). The aim is a result in about five minutes, warm.
 #
-# Tools come from the repository's flake (`nix develop`): its Go is the one that reproduces
-# bob-builder bit for bit (pkg/engine/store/builders.go, R-NIX-015), so the `builder` stage holds.
-# The stages that need a live S3 backend, forges, the acceptance repositories or a quiet host
-# (unit as a whole, acceptance, parity, budgets, errors) stay with `go run ./tools/ci` on a
-# developer machine; this workflow runs the ones a hosted runner can run.
+#   checks  the static stages of `go run ./tools/ci` (format, vet, lint, layering, licences,
+#           docs, builder table, goldens, workflow lint, web, website)
+#   unit    the hermetic unit tests, inside a Nix build (nix build .#checks.<system>.unit)
+#   build   nix build .#bob on x86_64, the install path of the Nix docs, and bob doctor
+#
+# Everything that is slow or needs a second architecture (nix flake check on both systems,
+# bob-server, the store tests of the flake variant) runs in full.yml, nightly and on demand.
+# Tools come from the repository's flake: its Go is the one that reproduces bob-builder bit
+# for bit (pkg/engine/store/builders.go, R-NIX-015). The stages that need a live S3 backend,
+# forges, the acceptance repositories or a quiet host (acceptance, parity, budgets, errors)
+# stay with `go run ./tools/ci` on a developer machine.
 name: ci
 
 on:
@@ -21,59 +29,90 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  flake:
-    name: nix flake check (${{ matrix.system }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            system: x86_64-linux
-          - runner: ubuntu-24.04-arm
-            system: aarch64-linux
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+  checks:
+    name: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The change since the last push (docs coupling, what to run) needs the history.
+          fetch-depth: 0
+      - name: What changed
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/ci-changes.sh "$BASE" | tee -a "$GITHUB_OUTPUT"
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
-      # bob, bob-server (with the web UI) and the hermetic unit tests, for this runner's system;
-      # the other system is evaluated only.
-      - name: nix flake check
-        run: nix flake check -L
-      - name: nix build .#default
-        run: nix build -L .#default && ./result/bin/bob version
+      - name: Go caches
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'tools/go.sum') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+      - name: go run ./tools/ci
+        env:
+          BOB_DOCS_BASE: ${{ steps.changes.outputs.base }}
+          STAGES: ${{ steps.changes.outputs.stages }}
+        run: nix develop --command go run ./tools/ci -only "$STAGES"
+
+  unit:
+    name: unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: What changed
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/ci-changes.sh "$BASE" | tee -a "$GITHUB_OUTPUT"
+      - if: steps.changes.outputs.code == 'true'
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # The hermetic list of flake.nix: the packages whose tests pass inside the Nix sandbox.
+      - if: steps.changes.outputs.code == 'true'
+        name: nix build .#checks.x86_64-linux.unit
+        run: nix build -L --no-link .#checks.x86_64-linux.unit
+
+  build:
+    name: nix build .#bob
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: What changed
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/ci-changes.sh "$BASE" | tee -a "$GITHUB_OUTPUT"
+      - if: steps.changes.outputs.code == 'true'
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - if: steps.changes.outputs.code == 'true'
+        name: nix build .#bob
+        run: nix build -L .#bob && ./result/bin/bob version
       # bob's rootless store needs unprivileged user namespaces, which Ubuntu 24.04 restricts
       # with AppArmor (BOB-E-7005 prints this fix).
-      - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # The flake variant against its real static Nix: copy into the state home, namespace,
-      # bob's nix.conf (pkg/engine/store/nixsystem_test.go).
-      - name: Store tests of the flake variant
+      - if: steps.changes.outputs.code == 'true'
+        name: bob doctor
         run: |
-          export BOB_TEST_SYSTEM_NIX="$(nix build --no-link --print-out-paths .#bob.nixStatic)/bin/nix"
-          nix develop --command go test -count=1 -tags nixsystem ./pkg/engine/store \
-            -run 'TestParseNixVersion|TestSystemNix|TestNixVersion|TestOpenLayoutAndOnlyStat'
-      - name: bob doctor (flake variant)
-        run: BOB_HOME="$RUNNER_TEMP/bobhome" ./result/bin/bob doctor
-
-  checks:
-    name: tools/ci stages
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          # builder and docs compare against earlier commits.
-          fetch-depth: 0
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-      - name: go run ./tools/ci
-        run: nix develop --command go run ./tools/ci -only fmt,vet,lint,layering,licence,docs,website,web,builder,golden
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          BOB_HOME="$RUNNER_TEMP/bobhome" ./result/bin/bob doctor

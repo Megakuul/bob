@@ -343,5 +343,23 @@ func goCmd(ctx context.Context, dir string, extraEnv []string, args ...string) (
 	if _, ok := os.LookupEnv("CGO_ENABLED"); !ok {
 		extraEnv = append([]string{"CGO_ENABLED=0"}, extraEnv...)
 	}
-	return command(ctx, dir, extraEnv, "go", args...)
+	out, err := command(ctx, dir, extraEnv, "go", args...)
+	return dropGoProgress(out), err
+}
+
+// dropGoProgress removes the "go: downloading ..." lines the go command prints to stderr when
+// the module cache is cold (a fresh CI runner). command merges stderr into the output, and
+// the stages treat any output of `go list` or `buf format -d` as a finding.
+func dropGoProgress(out string) string {
+	if !strings.Contains(out, "go: ") {
+		return out
+	}
+	var keep []string
+	for _, l := range strings.SplitAfter(out, "\n") {
+		if strings.HasPrefix(l, "go: downloading ") || strings.HasPrefix(l, "go: finding ") || strings.HasPrefix(l, "go: extracting ") {
+			continue
+		}
+		keep = append(keep, l)
+	}
+	return strings.Join(keep, "")
 }

@@ -1120,3 +1120,15 @@ out/fault-candidates/74-unknown-nix-message, see I-B45.md); faults 52/53 (fixtur
    carries another unit's 7011). New: pkg/cli/cli_test.go TestGitignoreBlock,
    pkg/golang/gen/gomod_explain_test.go TestExplainFrameworkEdit, tests/cli/init_gitignore_test.go with
    tests/goldens/cli/init-gitignore/{go,cc,rust,npm,ocaml}.txt.
+143. APPLIED 2026-10-27 E3, owner bug report (chat 2026-10-27: `bob dev` shell is root): SPEC §02.7.7 step 6 gains a
+    paragraph (A561): programs of the user's session run as the user, not as the namespace's root. No test, golden
+    or protected file changed; new tests pkg/engine/store/hostview_test.go TestHostStoreView (uid/gid/file owner in the
+    session) and TestExecRunsAsUser.
+144. APPLIED 2026-10-27 CI1, owner request (chat 2026-10-27: pipelines fail): BuilderVersion 18 -> 19 (A562): the four
+    tests/goldens/eco/cc/jobs/*.json hold the builder store path (aarch64 5lpg8a0v... -> 9mzv0wvh...); no test logic changed.
+    New tests: cmd/bob-builder/genbuilders/scrub_test.go, tools/ci/progress_test.go.
+145. APPLIED 2026-10-27 CC1, owner bug (chat 2026-10-27: Boost handle failed in bob build) (A564): BuilderVersion 19 -> 20, so the four
+    tests/goldens/eco/cc/jobs/*.json changed (builder store path and the output paths that depend on it); no test logic changed.
+    pkg/cc/bop/pkgconfig_test.go moved to pkg/engine/pcflags/pcflags_test.go (package and exported names; the fallback test
+    expects the --as-needed wrapper). New tests: TestPkgConfigThinPC, TestPkgConfigHeaderOnly, TestPkgConfigStaticOrder,
+    translate TestEmptyLibraryCause, tests/eco/cc/nixpkgslibs_test.go (TestNixpkgsLibHandles, TestNixpkgsLibProvidesNothing).

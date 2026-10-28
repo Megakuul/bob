@@ -124,6 +124,21 @@ func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
 	if e := t.compileError(drv, p, lines); e != nil {
 		return e
 	}
+	for _, l := range lines {
+		// pkg/engine/pcflags: a nixpkgs Lib handle with no headers and no libraries.
+		if i := strings.Index(l, " has no pkg-config module, no include directory"); i >= 0 {
+			e := t.pkgErr(cBuildFailed, drv, nil)
+			name := l[:i]
+			if k := strings.LastIndexAny(name, " /"); k >= 0 {
+				name = name[k+1:]
+			}
+			if k := strings.Index(name, "-"); k == 32 {
+				name = name[k+1:]
+			}
+			e.Cause = "the nixpkgs library " + name + " provides nothing to compile or link against; a program belongs in Tool, not Lib"
+			return e
+		}
+	}
 	e := t.pkgErr(cBuildFailed, drv, nil)
 	e.Cause = "the build step exited with status " + exit
 	e.Excerpt = lastN(plainLog(lines), 10)

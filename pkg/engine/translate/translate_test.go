@@ -440,6 +440,18 @@ func TestBuilderDiagnostics(t *testing.T) {
 	}
 }
 
+// A nixpkgs Lib handle that provides no headers and no libraries is named, not reported as an
+// exit status (A564).
+func TestEmptyLibraryCause(t *testing.T) {
+	in := []string{nixLine(t, map[string]any{"action": "start", "id": 1, "type": 105, "fields": []any{fooDrv, "", 1, 1}}),
+		nixLine(t, map[string]any{"action": "result", "id": 1, "type": 101, "fields": []any{"bob-builder: //a:foo: /nix/store/54clm95cr7piy1g6pvsar032v5jxw4wi-hello-2.12.3 has no pkg-config module, no include directory and no lib*.so or lib*.a library: it provides nothing"}}),
+		nixLine(t, msg{Action: "msg", Msg: "Cannot build '" + fooDrv + "'.\n Reason: builder failed with exit code 1."})}
+	r := run(t, fooCtx(), Outcome{ExitCode: 1}, in...)
+	if len(r.Errors) != 1 || r.Errors[0].Cause != "the nixpkgs library hello-2.12.3 provides nothing to compile or link against; a program belongs in Tool, not Lib" {
+		t.Fatalf("%+v", r.Errors)
+	}
+}
+
 // A failing nixpkgs derivation that is not a direct input gets its chain from ChainOf.
 func TestChainOf(t *testing.T) {
 	direct := "/nix/store/0123456789abcdfghijklmnpqrsvwxyz1-openssl-3.drv"
