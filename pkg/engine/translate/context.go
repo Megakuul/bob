@@ -21,6 +21,21 @@ type Context struct {
 	// PreBuilt are bob drvs built while planning (codegen early cutoff, §03.6.3): Nix finds
 	// them valid, but this run built them, so their packages are reported "built".
 	PreBuilt []string `json:"preBuilt,omitempty"`
+	// Exports are the packages that export an include directory (engine.RegisterIncludeDir),
+	// by label; Deps are the direct dependencies (labels) of every package that has an
+	// include-exporting dependency or exports one itself. A missing header that lies in an
+	// exported directory of another package gets a hint (includeHint).
+	Exports map[string]Export `json:"exports,omitempty"`
+	// Root is the repository (empty in a replay): a missing header that exists below it, in a
+	// directory of another package, is explained even when that package is not in the graph.
+	Root string              `json:"-"`
+	Deps map[string][]string `json:"deps,omitempty"`
+}
+
+// Export is a package's exported include directory.
+type Export struct {
+	Dir     string `json:"dir"`     // repo-relative package directory ("" = repository root)
+	Include string `json:"include"` // repo-relative exported include directory
 }
 
 // Pkg is what bob knows about one derivation it generated.

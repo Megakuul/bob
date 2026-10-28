@@ -2,7 +2,9 @@ package translate
 
 import (
 	"encoding/json"
+	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -41,6 +43,104 @@ var (
 
 // classifyLog explains a builder that exited non-zero, from its own log.
 func (t *Translator) classifyLog(drv string, p Pkg, exit string) *diag.Error {
+	e := t.classifyLog1(drv, p, exit)
+	if e != nil && p.Role == "" {
+		t.includeHint(e, p, drv)
+	}
+	return e
+}
+
+// includeHint adds a hint to a failed compile whose header is missing from the sandbox but is a
+// header of another package of the repository: the sandbox holds only a package's own sources
+// and the include directories its Deps export, while the editor resolves quote includes
+// relative to the including file, so `#include "lib/asio/includes/asio.hpp"` builds nowhere
+// but looks fine in clangd.
+func (t *Translator) includeHint(e *diag.Error, p Pkg, drv string) {
+	if len(t.ctx.Exports) == 0 && t.ctx.Root == "" {
+		return
+	}
+	var header string
+	for _, l := range t.logs[drv].lines() {
+		if m := reNoHeader().FindStringSubmatch(l); m != nil {
+			header = path.Clean(strings.TrimPrefix(m[1], "./"))
+			break
+		}
+	}
+	if header == "" {
+		return
+	}
+	labels := make([]string, 0, len(t.ctx.Exports))
+	for l := range t.ctx.Exports {
+		labels = append(labels, l)
+	}
+	slices.Sort(labels)
+	for _, l := range labels {
+		x := t.ctx.Exports[l]
+		if l == p.Label {
+			continue
+		}
+		inside := func(dir string) (string, bool) {
+			if dir == "" {
+				return header, true
+			}
+			r, ok := strings.CutPrefix(header, dir+"/")
+			return r, ok
+		}
+		if rest, ok := inside(x.Include); ok && rest != "" {
+			hint := "write #include \"" + rest + "\": " + l + " exports " + x.Include + "/"
+			if !t.dependsOn(p.Label, l) {
+				hint += "; add " + l + " to Deps first"
+			}
+			t.hints[e] = hint
+			return
+		}
+	}
+	for _, l := range labels {
+		x := t.ctx.Exports[l]
+		if rest, ok := strings.CutPrefix(header, x.Dir+"/"); ok && l != p.Label && x.Dir != "" && rest != "" {
+			t.hints[e] = header + " belongs to " + l + ", which exports only " + x.Include + "/ to its consumers; move the header there, or export its directory with Hdrs: bob.IncludeDir(…)"
+			return
+		}
+	}
+	// A package the build does not know (nothing in this run uses it): the file exists in the
+	// repository below a directory with a bob.go of its own.
+	if t.ctx.Root == "" || strings.HasPrefix(header, "../") || path.IsAbs(header) {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(t.ctx.Root, filepath.FromSlash(header))); err != nil {
+		return
+	}
+	for dir := path.Dir(header); dir != "." && dir != "/"; dir = path.Dir(dir) {
+		if dir == p.SrcDir {
+			return // a file of the package itself
+		}
+		if _, err := os.Stat(filepath.Join(t.ctx.Root, filepath.FromSlash(dir), "bob.go")); err == nil {
+			t.hints[e] = header + " is a file of the package in " + dir + " (" + dir + "/bob.go): list its library in Deps and write the include relative to the directory it exports (Hdrs)"
+			return
+		}
+	}
+}
+
+// dependsOn reports whether package from reaches package to through Deps.
+func (t *Translator) dependsOn(from, to string) bool {
+	seen := map[string]bool{from: true}
+	for todo := []string{from}; len(todo) > 0; {
+		n := todo[0]
+		todo = todo[1:]
+		for _, d := range t.ctx.Deps[n] {
+			if d == to {
+				return true
+			}
+			if !seen[d] {
+				seen[d] = true
+				todo = append(todo, d)
+			}
+		}
+	}
+	return false
+}
+
+func (t *Translator) classifyLog1(drv string, p Pkg, exit string) *diag.Error {
 	raw := t.logs[drv].lines()
 	lines := make([]string, len(raw))
 	for i, l := range raw {

@@ -19,7 +19,16 @@ import (
 	_ "github.com/megakuul/bob/pkg/cc"
 )
 
-func init() { engine.Register(Ecosystem{}) }
+func init() {
+	engine.Register(Ecosystem{})
+	engine.RegisterIncludeDir(ccspec.KindLibrary, func(spec json.RawMessage) string {
+		var t ccspec.Target
+		if json.Unmarshal(spec, &t) != nil {
+			return ""
+		}
+		return t.Hdrs
+	})
+}
 
 // Ecosystem is the C/C++ ecosystem (SPEC §03.1): engine.Ecosystem and engine.LockFreshness.
 type Ecosystem struct{}

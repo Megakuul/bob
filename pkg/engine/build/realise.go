@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -109,7 +110,7 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 	}
 	c := &translate.Context{Packages: map[string]translate.Pkg{}, Outputs: map[string]string{},
 		Sources: srcDirs(srcPaths), Nixpkgs: map[string]string{}, Users: map[string][]string{},
-		Requested: requested, Limits: r.o.Limits}
+		Requested: requested, Limits: r.o.Limits, Root: r.o.Root}
 	c.Limits.LocalBuilds = true
 	pkgOf := func(n *ir.Node, role string) translate.Pkg {
 		pk := translate.Pkg{Label: n.Label, DefinedAt: definedAt(n.DefinedAt), Kind: n.Kind, Role: role,
@@ -118,6 +119,25 @@ func (r *runner) translatorContext(g *ir.Graph, p *planner, srcPaths map[string]
 			pk.SrcDir = n.Srcs[0].Dir
 		}
 		return pk
+	}
+	for _, n := range g.Nodes {
+		if inc := engine.IncludeDirOf(n); inc != "" && strings.HasPrefix(n.Label, "//") {
+			dir, _, _ := strings.Cut(strings.TrimPrefix(n.Label, "//"), ":")
+			if c.Exports == nil {
+				c.Exports = map[string]translate.Export{}
+			}
+			c.Exports[n.Label] = translate.Export{Dir: dir, Include: path.Join(dir, inc)}
+		}
+	}
+	if len(c.Exports) > 0 {
+		c.Deps = map[string][]string{}
+		for _, n := range g.Nodes {
+			for _, d := range n.Deps {
+				if dn := byID[d]; dn != nil {
+					c.Deps[n.Label] = append(c.Deps[n.Label], dn.Label)
+				}
+			}
+		}
 	}
 	for dp, id := range p.drvNode {
 		if p.byPath[dp] != nil {

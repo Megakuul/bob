@@ -198,12 +198,77 @@ gcc (GCC) 15.3.0
 
 ## Libraries of your own
 
-A real project splits code into libraries, one per directory, each with its own `bob.go`:
-`cc.StaticLibrary` and `cc.SharedLibrary` build `lib<name>.a`/`.so` with a public include
-directory (`Hdrs: bob.IncludeDir("include")`), and other packages list them in `Deps`. A
-`bob.go` names only files of its own directory; headers of another library reach you only
-through `Deps`. Third-party projects with their own build system (CMake, Autotools, Meson,
-Make) come in through `cc.External`. See the
+A real project splits code into libraries, one per directory, each with its own `bob.go`. This
+project has a library `asio` in `lib/asio` and the program from above in the root:
+
+```tree
+📁 hello-cc/
+  📄 bob.go
+  📄 main.cpp
+  📁 lib/
+    📁 asio/
+      📄 bob.go
+      📄 asio.cpp
+      📁 includes/
+        📄 asio.hpp
+```
+
+`lib/asio/bob.go` builds the library and exports its `includes` directory:
+
+```go
+//go:build bob
+
+package asio
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/cc"
+)
+
+var Lib = bob.Define(func(p *bob.P) *cc.Library {
+	return cc.StaticLibrary(p, "asio", cc.LibraryOpts{
+		Srcs: bob.Files("asio.cpp"),
+		Hdrs: bob.IncludeDir("includes"), // what consumers get on their include path
+	})
+})
+```
+
+The root `bob.go` imports that package like any Go package (the module name from `go.mod`,
+which is the project directory's name here, then the directory) and puts the library in `Deps`. A library is a function: you call it with `p`:
+
+```go
+import "hello-cc/lib/asio"
+
+var Hello = bob.Define(func(p *bob.P) *cc.Binary {
+	return cc.NewBinary(p, "hello", cc.BinaryOpts{
+		Srcs: bob.Files("main.cpp"),
+		Deps: []cc.Linkable{asio.Lib(p), nixpkgs.Zlib.Lib(p)},
+	})
+})
+```
+
+`main.cpp` includes the header relative to the exported directory, not relative to the
+repository:
+
+```cpp
+#include "asio.hpp"   // lib/asio/includes/asio.hpp
+```
+
+A package sees only its own files and what its `Deps` export. `#include "lib/asio/includes/asio.hpp"`
+therefore fails to build with `fatal error: … No such file or directory`, and bob answers with
+`hint: write #include "asio.hpp": //lib/asio:asio exports lib/asio/includes/` (and, when the
+library is missing from `Deps`, `add //lib/asio:asio to Deps first`).
+
+> [!WARNING]
+> clangd does not know that rule. A quoted include is searched first relative to the file that
+> contains it, so in a file of the repository root clangd resolves `lib/asio/includes/asio.hpp`
+> and shows no error while `bob build` fails. If the editor and the build disagree on an include,
+> trust the build and write the include relative to the exported directory.
+
+`cc.StaticLibrary` and `cc.SharedLibrary` build `lib<name>.a`/`.so`. A `bob.go` names only files
+of its own directory; headers of another library reach you only through `Deps` (`PrivDeps` does not
+pass them on to your own consumers). Third-party projects with their own build system (CMake,
+Autotools, Meson, Make) come in through `cc.External`. See the
 [bob.go reference](../04-guides/01-bob-go-reference.md#c-and-c).
 
 ## Next steps

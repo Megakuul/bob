@@ -154,3 +154,84 @@ func TestNixpkgsLibProvidesNothing(t *testing.T) {
 		t.Errorf("build exited %d with:\n%s", r.Exit, out)
 	}
 }
+
+// A header written with its repository path is outside the package's sandbox: the build fails
+// and says which package exports it and what to write (clangd resolves the include relative to
+// the file and shows no error, so the build is the only place that tells).
+func TestIncludeOfAnotherPackageHint(t *testing.T) {
+	home := t.TempDir()
+	root := t.TempDir()
+	if r := bobIn(t, root, home, "init", "proj", "--lang", "cc"); !ok(t, r) {
+		return
+	}
+	dir := filepath.Join(root, "proj")
+	writeFile(t, filepath.Join(dir, "test.cpp"), "int main() {}\n")
+	writeFile(t, filepath.Join(dir, "lib/asio/includes/asio.hpp"), "inline int asio_v() { return 7; }\n")
+	writeFile(t, filepath.Join(dir, "lib/asio/asio.cpp"), "#include \"asio.hpp\"\n")
+	writeFile(t, filepath.Join(dir, "lib/asio/bob.go"), `//go:build bob
+
+package asio
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/cc"
+)
+
+var Lib = bob.Define(func(p *bob.P) *cc.Library {
+	return cc.StaticLibrary(p, "asio", cc.LibraryOpts{
+		Srcs: bob.Files("asio.cpp"),
+		Hdrs: bob.IncludeDir("includes"),
+	})
+})
+`)
+	rootGo := func(deps string) {
+		writeFile(t, filepath.Join(dir, "bob.go"), `//go:build bob
+
+package proj
+
+import (
+	"github.com/megakuul/bob/pkg/bob"
+	"github.com/megakuul/bob/pkg/cc"
+	"proj/lib/asio"
+)
+
+var _ = bob.Repo(bob.RepoOpts{Nixpkgs: bob.NixOS2605})
+
+var Hello = bob.Define(func(p *bob.P) *cc.Binary {
+	return cc.NewBinary(p, "hello", cc.BinaryOpts{
+		Srcs: bob.Files("main.cpp"),
+		Deps: []cc.Linkable{`+deps+`},
+	})
+})
+
+var Test = bob.Define(func(p *bob.P) *cc.Test {
+	return cc.NewTest(p, "hello_test", cc.BinaryOpts{
+		Srcs: bob.Files("test.cpp"),
+		Deps: []cc.Linkable{asio.Lib(p)}, // the library is in the graph even when Hello does not list it
+	})
+})
+`)
+	}
+	writeFile(t, filepath.Join(dir, "main.cpp"), "#include \"lib/asio/includes/asio.hpp\"\nint main() { return asio_v() - 7; }\n")
+
+	rootGo("asio.Lib(p)")
+	r := bobIn(t, dir, home, "build", "//:hello")
+	out := r.Stdout + r.Stderr
+	if r.Exit == 0 || !strings.Contains(out, `hint: write #include "asio.hpp": //lib/asio:asio exports lib/asio/includes/`) ||
+		strings.Contains(out, "to Deps first") {
+		t.Errorf("with the library in Deps: exit %d:\n%s", r.Exit, out)
+	}
+
+	rootGo("")
+	r = bobIn(t, dir, home, "build", "//:hello")
+	out = r.Stdout + r.Stderr
+	if r.Exit == 0 || !strings.Contains(out, "is a file of the package in lib/asio (lib/asio/bob.go): list its library in Deps") {
+		t.Errorf("without the library in Deps: exit %d:\n%s", r.Exit, out)
+	}
+
+	rootGo("asio.Lib(p)")
+	writeFile(t, filepath.Join(dir, "main.cpp"), "#include \"asio.hpp\"\nint main() { return asio_v() - 7; }\n")
+	if r := bobIn(t, dir, home, "run", "//:hello"); r.Exit != 0 {
+		t.Errorf("the include relative to the exported directory does not build:\n%s%s", r.Stdout, r.Stderr)
+	}
+}
